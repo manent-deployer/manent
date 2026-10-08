@@ -1,0 +1,30 @@
+# Deploy ricorrente: go-dart deploy -f examples/descriptor-scheduled.yml
+# Crea (o aggiorna, se esiste già una schedule con lo stesso nome) una schedule DBOS.
+# A ogni tick viene accodato un deploy con ID "<name>@<orario UTC>", ad es. myapp-nightly@20261010T000000Z.
+apiVersion: go-dart/v1
+application: myapp
+environment: test
+
+schedule:
+  cron: "0 2 * * *"          # 5 campi, oppure 6 con i secondi ("0 0 2 * * *") o "@daily"
+  timezone: Europe/Rome      # opzionale, default: fuso dell'executor
+  name: myapp-nightly        # opzionale, default: <application>-<environment>
+
+artifact:
+  type: application
+  name: myapp
+  version: latest
+  source: https://artifacts.example.com/myapp/myapp-latest.tar.gz
+
+secrets:
+  - name: deploy-key
+    ref: env:DEPLOY_SSH_KEY
+
+deploy:
+  plugin: remote-copy
+  targets:
+    - host: 192.168.1.10
+      user: deploy
+  params:
+    dest_dir: /opt/myapp/releases
+    ssh_key_secret: deploy-key

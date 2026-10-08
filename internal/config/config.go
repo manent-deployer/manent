@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -39,6 +40,8 @@ type DBOS struct {
 	DatabaseURL string `yaml:"database_url"`
 	Queue       string `yaml:"queue"`
 	Concurrency int    `yaml:"concurrency"`
+	// SchedulePollInterval è ogni quanto le modifiche alle schedule vengono rilette dal database.
+	SchedulePollInterval time.Duration `yaml:"schedule_poll_interval"`
 }
 
 // HTTP configura il web server API.

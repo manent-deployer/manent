@@ -101,9 +101,11 @@ func New(cfg *config.Config) (*App, error) {
 		DatabaseURL: cfg.DBOS.DatabaseURL,
 		QueueName:   cfg.DBOS.Queue,
 		Concurrency: cfg.DBOS.Concurrency,
-		Planner:     pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
-		Steps:       reg,
-		Logger:      log,
+
+		SchedulePollInterval: cfg.DBOS.SchedulePollInterval,
+		Planner:              pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
+		Steps:                reg,
+		Logger:               log,
 	})
 	if err != nil {
 		return nil, err

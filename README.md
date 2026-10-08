@@ -19,10 +19,35 @@ Di default DBOS usa SQLite (`sqlite:go-dart.db`); in produzione impostare `DBOS_
 
 | Metodo | Percorso | Descrizione |
 |---|---|---|
-| `POST` | `/api/v1/deployments` | accoda un deploy (body: descrittore JSON), risponde `202` con l'`id` |
+| `POST` | `/api/v1/deployments` | accoda un deploy (body: descrittore JSON), risponde `202` con l'`id`; con `schedule.cron` risponde `201` |
+| `GET` | `/api/v1/deployments?schedule=&limit=` | elenca i deploy più recenti, anche solo quelli di una schedule |
 | `POST` | `/api/v1/deployments/plan` | restituisce gli step che verrebbero eseguiti |
 | `GET` | `/api/v1/deployments/{id}` | stato e risultato del deploy |
+| `POST` | `/api/v1/deployments/{id}/cancel` | annulla un deploy in attesa o in esecuzione |
+| `GET` | `/api/v1/schedules` · `/api/v1/schedules/{nome}` | schedule ricorrenti |
+| `POST` | `/api/v1/schedules/{nome}/pause` · `/resume` | sospende o riattiva una schedule |
+| `DELETE` | `/api/v1/schedules/{nome}` | elimina una schedule |
 | `GET` | `/healthz` | health check |
+
+## Deploy pianificati
+
+Tutti i deploy, anche quelli pianificati, passano dalla coda DBOS `deployments` e ne rispettano la concorrenza.
+
+```yaml
+# Deploy singolo a un orario: resta DELAYED fino ad allora, annullabile con `go-dart cancel <id>`
+schedule:
+  at: 2026-10-10T02:00:00+02:00
+```
+
+```yaml
+# Deploy ricorrente: ri-applicare il descrittore aggiorna la schedule con lo stesso nome
+schedule:
+  cron: "0 2 * * *"        # 5 o 6 campi (con secondi), oppure @daily, @hourly, ...
+  timezone: Europe/Rome
+  name: myapp-nightly      # default: <application>-<environment>
+```
+
+Ogni esecuzione ricorrente riceve l'ID `<nome>@<orario UTC>`. Per elencarle: `go-dart list --schedule myapp-nightly`. Per gestire le schedule: `go-dart schedule list|show|pause|resume|delete`.
 
 ## Pipeline
 

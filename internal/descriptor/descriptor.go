@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,6 +30,20 @@ type Descriptor struct {
 	// Steps attiva o disattiva gli step opzionali per nome.
 	Steps    map[string]bool `json:"steps,omitempty" yaml:"steps,omitempty"`
 	PostTest PostTest        `json:"postTest,omitempty" yaml:"postTest,omitempty"`
+	// Schedule, se presente, pianifica il deploy invece di eseguirlo subito.
+	Schedule *Schedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+}
+
+// Schedule pianifica il deploy: At per un'esecuzione singola, Cron per esecuzioni ricorrenti.
+type Schedule struct {
+	// At è l'orario di un deploy singolo (RFC 3339).
+	At *time.Time `json:"at,omitempty" yaml:"at,omitempty"`
+	// Cron è l'espressione per i deploy ricorrenti, a 5 campi o a 6 campi con i secondi.
+	Cron string `json:"cron,omitempty" yaml:"cron,omitempty"`
+	// Timezone IANA con cui interpretare Cron (default: fuso dell'executor).
+	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
+	// Name identifica la schedule ricorrente; default "<application>-<environment>".
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 }
 
 // Artifact descrive l'artefatto da rilasciare.
@@ -136,7 +153,54 @@ func (d *Descriptor) Validate() error {
 		}
 		seen[s.Name] = true
 	}
+	if d.Schedule != nil {
+		errs = append(errs, d.Schedule.validate(d.ID))
+	}
 	return errors.Join(errs...)
+}
+
+// validate controlla che sia indicato esattamente uno tra At e Cron e che il cron sia valido.
+func (s *Schedule) validate(id string) error {
+	switch {
+	case s.At == nil && s.Cron == "":
+		return errors.New("schedule: indicare at oppure cron")
+	case s.At != nil && s.Cron != "":
+		return errors.New("schedule: at e cron sono alternativi")
+	case s.At != nil && (s.Timezone != "" || s.Name != ""):
+		return errors.New("schedule: timezone e name si usano solo con cron")
+	case s.Cron != "" && id != "":
+		return errors.New("schedule: id non ammesso con cron, ogni esecuzione riceve un ID derivato dal nome della schedule")
+	case s.Cron != "":
+		expr := s.CronExpr()
+		if s.Timezone != "" {
+			expr = "CRON_TZ=" + s.Timezone + " " + expr
+		}
+		if _, err := cronParser.Parse(expr); err != nil {
+			return fmt.Errorf("schedule.cron non valido: %w", err)
+		}
+	}
+	return nil
+}
+
+// cronParser accetta lo stesso formato di DBOS (6 campi, con secondi).
+var cronParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
+// CronExpr restituisce l'espressione nel formato a 6 campi richiesto da DBOS,
+// aggiungendo "0" come campo dei secondi alle espressioni classiche a 5 campi.
+func (s *Schedule) CronExpr() string {
+	expr := strings.TrimSpace(s.Cron)
+	if len(strings.Fields(expr)) == 5 {
+		return "0 " + expr
+	}
+	return expr
+}
+
+// ScheduleName restituisce il nome della schedule ricorrente.
+func (d *Descriptor) ScheduleName() string {
+	if d.Schedule != nil && d.Schedule.Name != "" {
+		return d.Schedule.Name
+	}
+	return d.Application + "-" + d.Environment
 }
 
 // SecretRefByName restituisce il riferimento associato a un nome logico.

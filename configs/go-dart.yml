@@ -7,7 +7,8 @@ dbos:
   # Sovrascrivibile con DBOS_SYSTEM_DATABASE_URL. In produzione: postgres://user:pass@host:5432/godart
   database_url: sqlite:go-dart.db
   queue: deployments
-  concurrency: 4          # deploy concorrenti per executor
+  concurrency: 4          # deploy concorrenti per executor (anche quelli pianificati)
+  schedule_poll_interval: 30s   # ogni quanto le modifiche alle schedule ricorrenti vengono rilette
 
 http:
   listen: ":8080"

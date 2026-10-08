@@ -50,6 +50,8 @@ func newEngine(t *testing.T, steps ...pipeline.Step) *Engine {
 		Planner:     pipeline.ConfigPlanner{Steps: cfgSteps, Registry: reg},
 		Steps:       reg,
 		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+
+		SchedulePollInterval: 200 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -70,10 +72,11 @@ func TestWorkflowEseguePianoInOrdine(t *testing.T) {
 	e := newEngine(t, recordStep{name: "a", runs: &runs}, recordStep{name: "b", runs: &runs})
 	ctx := context.Background()
 
-	id, err := e.Submit(ctx, testDescriptor("deploy-1"))
+	sub, err := e.Submit(ctx, testDescriptor("deploy-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	id := sub.ID
 	res, err := e.Wait(ctx, id)
 	if err != nil {
 		t.Fatal(err)
@@ -107,10 +110,11 @@ func TestWorkflowFallito(t *testing.T) {
 	e := newEngine(t, recordStep{name: "a", runs: &runs, fail: true}, recordStep{name: "b", runs: &runs})
 	ctx := context.Background()
 
-	id, err := e.Submit(ctx, testDescriptor(""))
+	sub, err := e.Submit(ctx, testDescriptor(""))
 	if err != nil {
 		t.Fatal(err)
 	}
+	id := sub.ID
 	if _, err := e.Wait(ctx, id); err == nil {
 		t.Fatal("atteso errore")
 	}
