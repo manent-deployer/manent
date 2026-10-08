@@ -1,0 +1,26 @@
+{
+  "apiVersion": "go-dart/v1",
+  "id": "myapp-1.2.3-test",
+  "application": "myapp",
+  "environment": "test",
+  "artifact": {
+    "type": "application",
+    "name": "myapp",
+    "version": "1.2.3",
+    "source": "https://artifacts.example.com/myapp/myapp-1.2.3.tar.gz"
+  },
+  "secrets": [
+    { "name": "deploy-key", "ref": "env:DEPLOY_SSH_KEY" }
+  ],
+  "deploy": {
+    "policy": "default",
+    "targets": [
+      { "host": "192.168.1.10", "port": 22, "user": "deploy" }
+    ],
+    "params": {
+      "dest_dir": "/opt/myapp/releases",
+      "ssh_key_secret": "deploy-key"
+    }
+  },
+  "steps": { "post-test": false }
+}

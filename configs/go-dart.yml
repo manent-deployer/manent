@@ -1,0 +1,55 @@
+# Configurazione applicativa di go-dart (go-dart -c configs/go-dart.yml ...)
+app:
+  name: go-dart
+  version: 0.1.0
+
+dbos:
+  # Sovrascrivibile con DBOS_SYSTEM_DATABASE_URL. In produzione: postgres://user:pass@host:5432/godart
+  database_url: sqlite:go-dart.db
+  queue: deployments
+  concurrency: 4          # deploy concorrenti per executor
+
+http:
+  listen: ":8080"
+
+logging:
+  level: info             # debug | info | warn | error
+  format: text            # text | json
+
+siem:
+  enabled: false
+  network: udp            # udp | tcp
+  address: siem.example.com:514
+
+# Directory locale dove vengono scaricati gli artefatti (condivisa se più executor)
+workdir: ./work
+
+# Step disponibili, nell'ordine di esecuzione.
+# mode: mandatory (sempre eseguito) | optional (enabled = default, sovrascrivibile dal descrittore)
+pipeline:
+  steps:
+    - name: secrets
+      mode: mandatory
+    - name: artifacts
+      mode: mandatory
+      max_retries: 3
+    - name: qa
+      mode: optional
+      enabled: true
+    - name: deploy
+      mode: mandatory
+      max_retries: 2
+    - name: post-test
+      mode: optional
+      enabled: false
+      max_retries: 5
+    - name: activation
+      mode: optional
+      enabled: true
+
+# Plugin attivi e relativa configurazione
+plugins:
+  remote-copy:
+    known_hosts: ~/.ssh/known_hosts
+    insecure_ignore_host_key: false
+    artifact_types: [application]

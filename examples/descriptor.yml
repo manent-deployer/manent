@@ -1,0 +1,39 @@
+# Descrittore di deploy di esempio (CLI: go-dart deploy -f examples/descriptor.yml)
+apiVersion: go-dart/v1
+# Opzionale: chiave di idempotenza. Lo stesso id non viene eseguito due volte.
+id: myapp-1.2.3-test
+application: myapp
+environment: test
+
+artifact:
+  type: application
+  name: myapp
+  version: 1.2.3
+  source: ./dist/myapp-1.2.3.tar.gz   # percorso locale, file:// o http(s)://
+  # sha256: <hash atteso, verificato dallo step qa>
+
+secrets:
+  - name: deploy-key
+    ref: env:DEPLOY_SSH_KEY            # schemi supportati: env:, file:
+
+deploy:
+  policy: default
+  plugin: remote-copy                  # opzionale: altrimenti scelto dalla policy per tipo artefatto
+  targets:
+    - host: 192.168.1.10
+      port: 22
+      user: deploy
+  params:
+    dest_dir: /opt/myapp/releases
+    ssh_key_secret: deploy-key
+    post_command: "tar -xzf /opt/myapp/releases/myapp-1.2.3.tar.gz -C /opt/myapp/current"
+
+# Attivazione/disattivazione degli step opzionali (gli obbligatori non sono disattivabili)
+steps:
+  qa: true
+  post-test: true
+
+postTest:
+  http:
+    - url: http://192.168.1.10:8080/health
+      expectStatus: 200
