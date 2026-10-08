@@ -9,11 +9,25 @@ Se il processo si interrompe, il deploy riprende dall'ultimo step completato.
 ```sh
 make build
 bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # mostra il piano
-bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml
-bin/go-dart -c configs/go-dart.yml serve                                 # API su :8080
+bin/go-dart -c configs/go-dart.yml serve                                 # API su :8080 + worker
+bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # in un altro terminale
 ```
 
+I deploy li esegue un **worker** (`serve` o `worker`). Gli altri comandi CLI (`deploy`, `status`, `list`, `cancel`, `schedule`) sono client: accodano e leggono lo stato dal database DBOS.
 Di default DBOS usa SQLite (`sqlite:go-dart.db`); in produzione impostare `DBOS_SYSTEM_DATABASE_URL=postgres://...`.
+
+## Scalabilità orizzontale
+
+Più istanze condividono lo stesso Postgres e prelevano i deploy dalla stessa coda:
+
+```sh
+go-dart serve --no-worker       # N istanze API dietro un load balancer
+go-dart worker                  # M worker, ciascuno con un executor_id diverso
+```
+
+- `dbos.executor_id` (default: hostname) deve essere **univoco e stabile**: un worker che si riavvia riprende i deploy interrotti con il proprio ID, dallo step in cui si erano fermati. In Kubernetes usare uno StatefulSet.
+- `dbos.environment_concurrency` (default 1) impedisce deploy contemporanei della stessa application/environment su tutti i worker. `concurrency` limita i deploy per worker, `global_concurrency` il totale.
+- La `workdir` resta locale: se un deploy riprende su un worker che non ha l'artefatto, questo viene riscaricato e ne viene verificato lo sha256.
 
 ## API
 

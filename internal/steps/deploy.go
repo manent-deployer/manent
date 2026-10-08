@@ -50,7 +50,9 @@ type Deploy struct {
 	// La chiave "" è la policy di default.
 	Policies map[string]Policy
 	Secrets  secrets.Provider
-	Logger   *slog.Logger
+	// Artifacts garantisce la presenza dell'artefatto anche se il deploy è stato recuperato su un altro worker.
+	Artifacts ArtifactStore
+	Logger    *slog.Logger
 }
 
 // Name restituisce il nome dello step.
@@ -67,6 +69,15 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	if err != nil {
 		return nil, err
 	}
+	log := s.Logger.With("deployment", in.DeploymentID, "plugin", dep.Name())
+	art := in.Outputs["artifacts"]
+	localPath, refetched, err := s.Artifacts.Ensure(ctx, in.DeploymentID, d.Artifact.Source, art[OutLocalPath], art[OutSHA256])
+	if err != nil {
+		return nil, err
+	}
+	if refetched {
+		log.WarnContext(ctx, "artefatto assente su questo worker, riscaricato", "path", localPath)
+	}
 	req := &plugin.Request{
 		DeploymentID: in.DeploymentID,
 		Application:  d.Application,
@@ -75,8 +86,8 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 			Type:      d.Artifact.Type,
 			Name:      d.Artifact.Name,
 			Version:   d.Artifact.Version,
-			LocalPath: in.Outputs["artifacts"][OutLocalPath],
-			SHA256:    in.Outputs["artifacts"][OutSHA256],
+			LocalPath: localPath,
+			SHA256:    art[OutSHA256],
 		},
 		Params:  d.Deploy.Params,
 		Secrets: secrets.DescriptorResolver{Provider: s.Secrets, Descriptor: d},
@@ -88,7 +99,6 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		return nil, fmt.Errorf("richiesta non valida per il plugin %q: %w", dep.Name(), err)
 	}
 
-	log := s.Logger.With("deployment", in.DeploymentID, "plugin", dep.Name())
 	log.InfoContext(ctx, "deploy avviato", "targets", len(req.Targets))
 	res, err := dep.Deploy(ctx, req)
 	if err != nil {

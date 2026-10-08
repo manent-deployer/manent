@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -153,11 +154,24 @@ func (d *Descriptor) Validate() error {
 		}
 		seen[s.Name] = true
 	}
+	if d.ID != "" && !validName(d.ID) {
+		errs = append(errs, fmt.Errorf("id %q non valido: %s", d.ID, nameRule))
+	}
 	if d.Schedule != nil {
 		errs = append(errs, d.Schedule.validate(d.ID))
+		if d.Schedule.Cron != "" && !validName(d.ScheduleName()) {
+			errs = append(errs, fmt.Errorf("nome schedule %q non valido: %s", d.ScheduleName(), nameRule))
+		}
 	}
 	return errors.Join(errs...)
 }
+
+// nameRe limita ID e nomi di schedule, usati anche come nomi di directory sul worker.
+var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+
+const nameRule = "ammessi lettere, cifre, '.', '_', ':', '-' (max 128, iniziale alfanumerica)"
+
+func validName(s string) bool { return nameRe.MatchString(s) }
 
 // validate controlla che sia indicato esattamente uno tra At e Cron e che il cron sia valido.
 func (s *Schedule) validate(id string) error {

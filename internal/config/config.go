@@ -38,8 +38,18 @@ type App struct {
 // DBOS configura il motore di workflow e la coda dei deploy.
 type DBOS struct {
 	DatabaseURL string `yaml:"database_url"`
-	Queue       string `yaml:"queue"`
-	Concurrency int    `yaml:"concurrency"`
+	// ExecutorID identifica il worker: deve essere univoco tra i nodi e stabile tra i riavvii,
+	// perché all'avvio un worker recupera solo i workflow rimasti in sospeso con il proprio ID.
+	// Default: hostname. La variabile DBOS__VMID ha la precedenza.
+	ExecutorID string `yaml:"executor_id"`
+	Queue      string `yaml:"queue"`
+	// Concurrency è il numero massimo di deploy in esecuzione su ogni worker.
+	Concurrency int `yaml:"concurrency"`
+	// GlobalConcurrency è il numero massimo di deploy in esecuzione su tutti i worker (0 = nessun limite).
+	GlobalConcurrency int `yaml:"global_concurrency"`
+	// EnvironmentConcurrency è il numero massimo di deploy contemporanei della stessa
+	// application/environment su tutti i worker.
+	EnvironmentConcurrency int `yaml:"environment_concurrency"`
 	// SchedulePollInterval è ogni quanto le modifiche alle schedule vengono rilette dal database.
 	SchedulePollInterval time.Duration `yaml:"schedule_poll_interval"`
 }
@@ -80,7 +90,7 @@ type Step struct {
 func Default() *Config {
 	return &Config{
 		App:     App{Name: "go-dart", Version: "0.1.0"},
-		DBOS:    DBOS{DatabaseURL: "sqlite:go-dart.db", Queue: "deployments", Concurrency: 4},
+		DBOS:    DBOS{DatabaseURL: "sqlite:go-dart.db", Queue: "deployments", Concurrency: 4, EnvironmentConcurrency: 1},
 		HTTP:    HTTP{Listen: ":8080"},
 		Logging: Logging{Level: "info", Format: "text"},
 		SIEM:    SIEM{Network: "udp"},
@@ -114,6 +124,13 @@ func Load(path string) (*Config, error) {
 	if url := os.Getenv("DBOS_SYSTEM_DATABASE_URL"); url != "" {
 		cfg.DBOS.DatabaseURL = url
 	}
+	if cfg.DBOS.ExecutorID == "" {
+		host, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("dbos.executor_id non impostato e hostname non disponibile: %w", err)
+		}
+		cfg.DBOS.ExecutorID = host
+	}
 	return cfg, cfg.Validate()
 }
 
@@ -122,6 +139,12 @@ func (c *Config) Validate() error {
 	var errs []error
 	if c.DBOS.DatabaseURL == "" {
 		errs = append(errs, errors.New("dbos.database_url obbligatorio"))
+	}
+	if c.DBOS.Concurrency < 1 || c.DBOS.EnvironmentConcurrency < 1 || c.DBOS.GlobalConcurrency < 0 {
+		errs = append(errs, errors.New("dbos: concurrency ed environment_concurrency devono essere >= 1, global_concurrency >= 0"))
+	}
+	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
+		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
 	}
 	seen := map[string]bool{}
 	for _, s := range c.Pipeline.Steps {

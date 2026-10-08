@@ -3,12 +3,16 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
+
+	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
 	"github.com/joeg-ita/go-dart/internal/artifact"
 	"github.com/joeg-ita/go-dart/internal/config"
@@ -23,10 +27,12 @@ import (
 
 // App contiene i componenti condivisi da CLI e API.
 type App struct {
-	Config *config.Config
-	Logger *slog.Logger
-	Engine *engine.Engine
-	siem   logging.SIEMSender
+	Config  *config.Config
+	Logger  *slog.Logger
+	Service *engine.Engine
+	worker  *engine.Worker // valorizzato in modalità worker
+	client  dbos.Client    // valorizzato in modalità client
+	siem    logging.SIEMSender
 }
 
 // NewLogger crea il logger applicativo con l'eventuale inoltro al SIEM.
@@ -63,26 +69,36 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 	return reg, nil
 }
 
-// NewSteps crea il registry degli step standard.
-func NewSteps(cfg *config.Config, plugins *plugin.Registry, log *slog.Logger) (*pipeline.Registry, error) {
+// NewSteps crea il registry degli step standard. Lo store degli artefatti è condiviso
+// tra lo step artifacts, lo step deploy (che lo riscarica se manca) e la pulizia finale.
+func NewSteps(plugins *plugin.Registry, store *artifact.Store, log *slog.Logger) (*pipeline.Registry, error) {
 	sp := secrets.NewDefaultProvider()
 	stepLog := log.With("component", "step")
 	return pipeline.NewRegistry(
 		steps.Secrets{Provider: sp, Logger: stepLog},
-		steps.Artifacts{Fetcher: artifact.DefaultFetcher{}, WorkDir: cfg.WorkDir, Logger: stepLog},
+		steps.Artifacts{Store: store, Logger: stepLog},
 		steps.QA{Checkers: []steps.Checker{steps.NonEmptyChecker{}, steps.ChecksumChecker{}}, Logger: stepLog},
 		steps.Deploy{
-			Policies: map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
-			Secrets:  sp,
-			Logger:   stepLog,
+			Policies:  map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
+			Secrets:   sp,
+			Artifacts: store,
+			Logger:    stepLog,
 		},
 		steps.PostTest{Client: &http.Client{Timeout: 10 * time.Second}, Logger: stepLog},
 		steps.Activation{Activator: steps.LogActivator{Logger: stepLog}},
 	)
 }
 
-// New costruisce l'applicazione completa e avvia DBOS.
-func New(cfg *config.Config) (*App, error) {
+// components contiene i componenti comuni a worker e client.
+type components struct {
+	log     *slog.Logger
+	siem    logging.SIEMSender
+	steps   *pipeline.Registry
+	store   *artifact.Store
+	planner pipeline.Planner
+}
+
+func newComponents(cfg *config.Config) (*components, error) {
 	log, sender, err := NewLogger(cfg)
 	if err != nil {
 		return nil, err
@@ -91,34 +107,94 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	reg, err := NewSteps(cfg, plugins, log)
+	store := &artifact.Store{Fetcher: artifact.DefaultFetcher{}, WorkDir: cfg.WorkDir}
+	reg, err := NewSteps(plugins, store, log)
 	if err != nil {
 		return nil, err
 	}
-	eng, err := engine.New(engine.Options{
+	return &components{
+		log:     log,
+		siem:    sender,
+		steps:   reg,
+		store:   store,
+		planner: pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
+	}, nil
+}
+
+// NewWorker avvia un worker DBOS che esegue i deploy, con il servizio costruito sul suo contesto.
+// Usato da "serve" e "worker".
+func NewWorker(cfg *config.Config) (*App, error) {
+	c, err := newComponents(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(cfg.DBOS.DatabaseURL, "sqlite:") {
+		c.log.Warn("database SQLite: supporta worker solo sulla stessa macchina; per più nodi usare Postgres")
+	}
+	w, err := engine.NewWorker(engine.WorkerOptions{
 		AppName:     cfg.App.Name,
 		AppVersion:  cfg.App.Version,
 		DatabaseURL: cfg.DBOS.DatabaseURL,
-		QueueName:   cfg.DBOS.Queue,
-		Concurrency: cfg.DBOS.Concurrency,
-
+		ExecutorID:  cfg.DBOS.ExecutorID,
+		Queue: engine.QueueOptions{
+			Name:                 cfg.DBOS.Queue,
+			WorkerConcurrency:    cfg.DBOS.Concurrency,
+			GlobalConcurrency:    cfg.DBOS.GlobalConcurrency,
+			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
+		},
+		Steps:                c.steps,
+		Cleaner:              c.store,
+		Logger:               c.log,
 		SchedulePollInterval: cfg.DBOS.SchedulePollInterval,
-		Planner:              pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
-		Steps:                reg,
-		Logger:               log,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err := eng.Launch(); err != nil {
+	if err := w.Launch(); err != nil {
 		return nil, fmt.Errorf("avvio DBOS: %w", err)
 	}
-	return &App{Config: cfg, Logger: log, Engine: eng, siem: sender}, nil
+	return &App{
+		Config:  cfg,
+		Logger:  c.log,
+		Service: engine.NewService(engine.ServiceOptions{Client: w.Client(), QueueName: cfg.DBOS.Queue, Planner: c.planner, Logger: c.log}),
+		worker:  w,
+		siem:    c.siem,
+	}, nil
 }
 
-// Close arresta DBOS e chiude la connessione al SIEM.
+// NewClient crea un'applicazione che accoda e interroga i deploy senza eseguirli né
+// recuperarli: usata dai comandi CLI e da "serve --no-worker". I deploy richiedono almeno un worker attivo.
+func NewClient(cfg *config.Config) (*App, error) {
+	c, err := newComponents(cfg)
+	if err != nil {
+		return nil, err
+	}
+	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{
+		DatabaseURL: cfg.DBOS.DatabaseURL,
+		AppName:     cfg.App.Name,
+		Logger:      c.log.With("component", "dbos"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connessione al database DBOS: %w", err)
+	}
+	return &App{
+		Config:  cfg,
+		Logger:  c.log,
+		Service: engine.NewService(engine.ServiceOptions{Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner, Logger: c.log}),
+		client:  client,
+		siem:    c.siem,
+	}, nil
+}
+
+// Close arresta il worker (o il client) DBOS e chiude la connessione al SIEM.
 func (a *App) Close() {
-	if err := a.Engine.Shutdown(30 * time.Second); err != nil {
+	var err error
+	if a.worker != nil {
+		err = a.worker.Shutdown(30 * time.Second)
+	} else {
+		err = dbos.Shutdown(a.client, 5*time.Second)
+	}
+	if err != nil {
 		a.Logger.Error("shutdown DBOS", "error", err)
 	}
 	_ = a.siem.Close()

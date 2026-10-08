@@ -65,6 +65,8 @@ func TestSchedule(t *testing.T) {
 		{name: "timezone non valida", yaml: "schedule: {cron: \"0 2 * * *\", timezone: Marte/Base}\n", wantErr: true},
 		{name: "id con cron", yaml: "id: x\nschedule: {cron: \"0 2 * * *\"}\n", wantErr: true},
 		{name: "name con at", yaml: "schedule: {at: 2030-01-01T02:00:00Z, name: n}\n", wantErr: true},
+		{name: "nome schedule con slash", yaml: "schedule: {cron: \"@daily\", name: \"../x\"}\n", wantErr: true},
+		{name: "id con path traversal", yaml: "id: \"../../etc\"\nschedule: {at: 2030-01-01T02:00:00Z}\n", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

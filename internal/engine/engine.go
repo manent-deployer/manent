@@ -6,12 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
-	// Driver SQLite per DBOS, usato con database_url "sqlite:...".
-	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite"
 
 	"github.com/joeg-ita/go-dart/internal/descriptor"
 	"github.com/joeg-ita/go-dart/internal/pipeline"
@@ -104,69 +101,39 @@ type ListFilter struct {
 	Limit    int
 }
 
-// Options configura l'engine.
-type Options struct {
-	AppName     string
-	AppVersion  string
-	DatabaseURL string
-	QueueName   string
-	Concurrency int
-	Planner     pipeline.Planner
-	Steps       *pipeline.Registry
-	Logger      *slog.Logger
-	// SchedulePollInterval è ogni quanto DBOS ricarica le schedule dal database (default 30s).
-	SchedulePollInterval time.Duration
+// ServiceOptions configura il servizio.
+type ServiceOptions struct {
+	// Client è il client DBOS: il contesto di un Worker oppure un client standalone (dbos.NewClient).
+	Client    dbos.Client
+	QueueName string
+	Planner   pipeline.Planner
+	Logger    *slog.Logger
 	// Now restituisce l'ora corrente; sostituibile nei test.
 	Now func() time.Time
 }
 
-// Engine implementa Service sopra DBOS.
+// Engine implementa Service usando solo le API client di DBOS:
+// accoda e interroga i workflow ma non li esegue (lo fanno i Worker).
 type Engine struct {
-	dbos    dbos.Context
-	queue   dbos.Queue
-	planner pipeline.Planner
-	steps   *pipeline.Registry
-	logger  *slog.Logger
-	now     func() time.Time
+	client    dbos.Client
+	queueName string
+	planner   pipeline.Planner
+	logger    *slog.Logger
+	now       func() time.Time
 }
 
-// New crea il contesto DBOS, registra i workflow e la coda dei deploy. Va chiamato Launch prima dell'uso.
-func New(opts Options) (*Engine, error) {
-	ctx, err := dbos.NewContext(context.Background(), dbos.Config{
-		AppName:                  opts.AppName,
-		ApplicationVersion:       opts.AppVersion,
-		DatabaseURL:              opts.DatabaseURL,
-		Logger:                   opts.Logger.With("component", "dbos"),
-		SchedulerPollingInterval: opts.SchedulePollInterval,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("inizializzazione DBOS: %w", err)
-	}
+// NewService crea il servizio sopra un client DBOS.
+func NewService(opts ServiceOptions) *Engine {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	e := &Engine{dbos: ctx, planner: opts.Planner, steps: opts.Steps, logger: opts.Logger.With("component", "engine"), now: opts.Now}
-	dbos.RegisterWorkflow(ctx, e.deployWorkflow, dbos.WithWorkflowName(workflowName))
-	dbos.RegisterWorkflow(ctx, e.scheduledWorkflow, dbos.WithWorkflowName(scheduledWorkflowName))
-
-	qopts := []dbos.QueueOption{}
-	if opts.Concurrency > 0 {
-		qopts = append(qopts, dbos.WithWorkerConcurrency(opts.Concurrency))
+	return &Engine{
+		client:    opts.Client,
+		queueName: opts.QueueName,
+		planner:   opts.Planner,
+		logger:    opts.Logger.With("component", "engine"),
+		now:       opts.Now,
 	}
-	if e.queue, err = dbos.RegisterQueue(ctx, opts.QueueName, qopts...); err != nil {
-		return nil, fmt.Errorf("registrazione coda %q: %w", opts.QueueName, err)
-	}
-	return e, nil
-}
-
-// Launch avvia DBOS (recovery dei workflow interrotti, scheduler, coda).
-func (e *Engine) Launch() error {
-	return dbos.Launch(e.dbos)
-}
-
-// Shutdown arresta DBOS attendendo i workflow in corso fino al timeout.
-func (e *Engine) Shutdown(timeout time.Duration) error {
-	return dbos.Shutdown(e.dbos, timeout)
 }
 
 // Plan delega al planner configurato.
@@ -190,9 +157,9 @@ func (e *Engine) Submit(_ context.Context, d *descriptor.Descriptor) (*Submissio
 		return e.applySchedule(req)
 	}
 
-	opts := []dbos.WorkflowOption{dbos.WithQueue(e.queue)}
+	opts := []dbos.EnqueueOption{dbos.WithEnqueueQueuePartitionKey(partitionKey(d))}
 	if d.ID != "" {
-		opts = append(opts, dbos.WithWorkflowID(d.ID))
+		opts = append(opts, dbos.WithEnqueueWorkflowID(d.ID))
 	}
 	sub := &Submission{State: string(dbos.WorkflowStatusEnqueued)}
 	if d.Schedule != nil && d.Schedule.At != nil {
@@ -200,11 +167,11 @@ func (e *Engine) Submit(_ context.Context, d *descriptor.Descriptor) (*Submissio
 		if delay <= 0 {
 			return nil, fmt.Errorf("%w: schedule.at %s è nel passato", ErrInvalidRequest, d.Schedule.At.Format(time.RFC3339))
 		}
-		opts = append(opts, dbos.WithDelay(delay))
+		opts = append(opts, dbos.WithEnqueueDelay(delay))
 		sub.State = string(dbos.WorkflowStatusDelayed)
 		sub.ScheduledAt = d.Schedule.At
 	}
-	h, err := dbos.RunWorkflow(e.dbos, e.deployWorkflow, req, opts...)
+	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, req, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +182,7 @@ func (e *Engine) Submit(_ context.Context, d *descriptor.Descriptor) (*Submissio
 
 // Status legge lo stato del workflow dal database di sistema DBOS.
 func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
-	h, err := dbos.RetrieveWorkflow[Result](e.dbos, id)
+	h, err := dbos.RetrieveWorkflow[Result](e.client, id)
 	if err != nil {
 		return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 	}
@@ -249,7 +216,7 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 	if f.Schedule != "" {
 		opts = append(opts, dbos.WithFilterWorkflowIDPrefix(scheduledIDPrefix(f.Schedule)))
 	}
-	wfs, err := dbos.ListWorkflows(e.dbos, opts...)
+	wfs, err := dbos.ListWorkflows(e.client, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -260,13 +227,18 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 	return out, nil
 }
 
-// Wait blocca fino alla conclusione del workflow.
-func (e *Engine) Wait(_ context.Context, id string) (*Result, error) {
-	h, err := dbos.RetrieveWorkflow[Result](e.dbos, id)
+// Wait blocca fino alla conclusione del workflow, o fino alla scadenza di ctx se ne ha una.
+// Il deploy viene eseguito da un Worker: senza worker attivi resta in coda.
+func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
+	h, err := dbos.RetrieveWorkflow[Result](e.client, id)
 	if err != nil {
 		return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 	}
-	res, err := h.GetResult()
+	var opts []dbos.GetResultOption
+	if deadline, ok := ctx.Deadline(); ok {
+		opts = append(opts, dbos.WithHandleTimeout(time.Until(deadline)))
+	}
+	res, err := h.GetResult(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +251,7 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 	if _, err := e.Status(ctx, id); err != nil {
 		return err
 	}
-	if err := dbos.CancelWorkflow(e.dbos, id); err != nil {
+	if err := dbos.CancelWorkflow(e.client, id); err != nil {
 		return err
 	}
 	e.logger.Info("deploy annullato", "deployment", id)
@@ -299,32 +271,8 @@ func toStatus(st dbos.WorkflowStatus) Status {
 	return s
 }
 
-// deployWorkflow esegue gli step del piano in ordine, ciascuno come step DBOS.
-// Deve restare deterministico: tutta la logica con effetti esterni è dentro gli step.
-func (e *Engine) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
-	id, err := dbos.GetWorkflowID(ctx)
-	if err != nil {
-		return Result{}, err
-	}
-	res := Result{DeploymentID: id}
-	outputs := map[string]pipeline.Output{}
-
-	for _, ps := range req.Plan {
-		step, ok := e.steps.Get(ps.Name)
-		if !ok {
-			return res, fmt.Errorf("step %q non implementato", ps.Name)
-		}
-		in := pipeline.Input{DeploymentID: id, Descriptor: &req.Descriptor, Outputs: maps.Clone(outputs)}
-		out, err := dbos.RunAsStep(ctx,
-			func(c context.Context) (pipeline.Output, error) { return step.Run(c, in) },
-			dbos.WithStepName(ps.Name),
-			dbos.WithStepMaxRetries(ps.MaxRetries),
-		)
-		if err != nil {
-			return res, fmt.Errorf("step %q: %w", ps.Name, err)
-		}
-		outputs[ps.Name] = out
-		res.Steps = append(res.Steps, StepResult{Name: ps.Name, Output: out})
-	}
-	return res, nil
+// partitionKey è la chiave di partizione della coda: i deploy della stessa
+// application/environment rispettano il limite environment_concurrency su tutti i worker.
+func partitionKey(d *descriptor.Descriptor) string {
+	return d.Application + "/" + d.Environment
 }

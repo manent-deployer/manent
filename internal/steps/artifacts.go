@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 	"strconv"
 
 	"github.com/joeg-ita/go-dart/internal/artifact"
@@ -17,12 +16,18 @@ const (
 	OutSize      = "size"
 )
 
+// ArtifactStore gestisce gli artefatti nella directory di lavoro del worker.
+type ArtifactStore interface {
+	Fetch(ctx context.Context, deploymentID, source string) (*artifact.Fetched, error)
+	// Ensure restituisce il percorso locale dell'artefatto, riscaricandolo se manca su questo worker;
+	// il booleano indica se è stato riscaricato.
+	Ensure(ctx context.Context, deploymentID, source, localPath, sha256 string) (string, bool, error)
+}
+
 // Artifacts recupera l'artefatto nella directory di lavoro del deploy.
-// Nota: con più executor DBOS la WorkDir deve essere su storage condiviso.
 type Artifacts struct {
-	Fetcher artifact.Fetcher
-	WorkDir string
-	Logger  *slog.Logger
+	Store  ArtifactStore
+	Logger *slog.Logger
 }
 
 // Name restituisce il nome dello step.
@@ -30,8 +35,7 @@ func (Artifacts) Name() string { return "artifacts" }
 
 // Run scarica l'artefatto e ne restituisce percorso, hash e dimensione.
 func (a Artifacts) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
-	dest := filepath.Join(a.WorkDir, in.DeploymentID)
-	f, err := a.Fetcher.Fetch(ctx, in.Descriptor.Artifact.Source, dest)
+	f, err := a.Store.Fetch(ctx, in.DeploymentID, in.Descriptor.Artifact.Source)
 	if err != nil {
 		return nil, err
 	}

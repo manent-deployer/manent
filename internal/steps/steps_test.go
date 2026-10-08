@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/joeg-ita/go-dart/internal/artifact"
 	"github.com/joeg-ita/go-dart/internal/descriptor"
 	"github.com/joeg-ita/go-dart/internal/pipeline"
 	"github.com/joeg-ita/go-dart/pkg/plugin"
@@ -74,7 +75,8 @@ func TestDefaultPolicy(t *testing.T) {
 
 func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	dep := &fakeDeployer{name: "app", types: []string{"application"}}
-	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, dep)}}, Logger: discard}
+	store := &fakeStore{path: "/altro-worker/app.tgz"}
+	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, dep)}}, Artifacts: store, Logger: discard}
 	in := pipeline.Input{
 		DeploymentID: "d1",
 		Descriptor: &descriptor.Descriptor{
@@ -87,9 +89,23 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dep.got.Artifact.LocalPath != "/w/app.tgz" || dep.got.Targets[0].Host != "h1" || out["plugin"] != "app" {
+	// Il plugin riceve il percorso garantito dallo store, non quello registrato dallo step artifacts.
+	if dep.got.Artifact.LocalPath != "/altro-worker/app.tgz" || dep.got.Targets[0].Host != "h1" || out["plugin"] != "app" {
 		t.Errorf("richiesta al plugin inattesa: %+v", dep.got)
 	}
+}
+
+// fakeStore simula uno store che riscarica l'artefatto su un altro percorso.
+type fakeStore struct {
+	path string
+}
+
+func (f *fakeStore) Fetch(context.Context, string, string) (*artifact.Fetched, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) Ensure(_ context.Context, _, _, localPath, _ string) (string, bool, error) {
+	return f.path, localPath != f.path, nil
 }
 
 func TestQAChecksum(t *testing.T) {

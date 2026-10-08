@@ -17,6 +17,7 @@ import (
 
 	"github.com/joeg-ita/go-dart/internal/api"
 	"github.com/joeg-ita/go-dart/internal/app"
+	"github.com/joeg-ita/go-dart/internal/artifact"
 	"github.com/joeg-ita/go-dart/internal/config"
 	"github.com/joeg-ita/go-dart/internal/descriptor"
 	"github.com/joeg-ita/go-dart/internal/engine"
@@ -44,7 +45,8 @@ func Run(args []string) error {
 	add("status", "Mostra lo stato di un deploy", &StatusCmd{global: &global})
 	add("list", "Elenca i deploy più recenti", &ListCmd{global: &global})
 	add("cancel", "Annulla un deploy in attesa o in esecuzione", &CancelCmd{global: &global})
-	add("serve", "Avvia il web server API", &ServeCmd{global: &global})
+	add("serve", "Avvia il web server API (e un worker, salvo --no-worker)", &ServeCmd{global: &global})
+	add("worker", "Avvia un worker che esegue i deploy dalla coda", &WorkerCmd{global: &global})
 
 	sched, err := p.AddCommand("schedule", "Gestisce le schedule dei deploy ricorrenti",
 		"Gestisce le schedule dei deploy ricorrenti (create con schedule.cron nel descrittore)", &struct{}{})
@@ -78,9 +80,10 @@ func Run(args []string) error {
 // DeployCmd accoda un deploy e, di default, ne attende la conclusione.
 // I deploy pianificati (schedule nel descrittore) non vengono attesi.
 type DeployCmd struct {
-	global *GlobalOptions
-	File   string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
-	NoWait bool   `long:"no-wait" description:"non attendere la conclusione del deploy"`
+	global  *GlobalOptions
+	File    string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	NoWait  bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
+	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
 }
 
 // Execute implementa flags.Commander.
@@ -89,22 +92,27 @@ func (c *DeployCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	a, err := newApp(c.global)
+	a, err := newClient(c.global)
 	if err != nil {
 		return err
 	}
 	defer a.Close()
 
 	ctx := context.Background()
-	sub, err := a.Engine.Submit(ctx, d)
+	sub, err := a.Service.Submit(ctx, d)
 	if err != nil {
 		return err
 	}
 	if c.NoWait || sub.ID == "" || sub.ScheduledAt != nil {
 		return printJSON(sub)
 	}
-	fmt.Println("deploy accodato:", sub.ID)
-	res, err := a.Engine.Wait(ctx, sub.ID)
+	fmt.Println("deploy accodato:", sub.ID, "(eseguito da un worker: go-dart serve o go-dart worker)")
+	if c.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		defer cancel()
+	}
+	res, err := a.Service.Wait(ctx, sub.ID)
 	if err != nil {
 		return fmt.Errorf("deploy %s fallito: %w", sub.ID, err)
 	}
@@ -135,7 +143,7 @@ func (c *ValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	reg, err := app.NewSteps(cfg, plugins, log)
+	reg, err := app.NewSteps(plugins, &artifact.Store{}, log)
 	if err != nil {
 		return err
 	}
@@ -157,7 +165,7 @@ type StatusCmd struct {
 // Execute implementa flags.Commander.
 func (c *StatusCmd) Execute([]string) error {
 	return withApp(c.global, func(a *app.App) error {
-		st, err := a.Engine.Status(context.Background(), c.Args.ID)
+		st, err := a.Service.Status(context.Background(), c.Args.ID)
 		if err != nil {
 			return err
 		}
@@ -175,7 +183,7 @@ type ListCmd struct {
 // Execute implementa flags.Commander.
 func (c *ListCmd) Execute([]string) error {
 	return withApp(c.global, func(a *app.App) error {
-		deps, err := a.Engine.List(context.Background(), engine.ListFilter{Schedule: c.Schedule, Limit: c.Limit})
+		deps, err := a.Service.List(context.Background(), engine.ListFilter{Schedule: c.Schedule, Limit: c.Limit})
 		if err != nil {
 			return err
 		}
@@ -194,7 +202,7 @@ type CancelCmd struct {
 // Execute implementa flags.Commander.
 func (c *CancelCmd) Execute([]string) error {
 	return withApp(c.global, func(a *app.App) error {
-		if err := a.Engine.Cancel(context.Background(), c.Args.ID); err != nil {
+		if err := a.Service.Cancel(context.Background(), c.Args.ID); err != nil {
 			return err
 		}
 		fmt.Println("deploy annullato:", c.Args.ID)
@@ -210,7 +218,7 @@ type ScheduleListCmd struct {
 // Execute implementa flags.Commander.
 func (c *ScheduleListCmd) Execute([]string) error {
 	return withApp(c.global, func(a *app.App) error {
-		ss, err := a.Engine.ListSchedules(context.Background())
+		ss, err := a.Service.ListSchedules(context.Background())
 		if err != nil {
 			return err
 		}
@@ -241,13 +249,13 @@ func (c *ScheduleCmd) Execute([]string) error {
 		ctx, name := context.Background(), c.Args.Name
 		switch c.op {
 		case opPause:
-			return a.Engine.PauseSchedule(ctx, name)
+			return a.Service.PauseSchedule(ctx, name)
 		case opResume:
-			return a.Engine.ResumeSchedule(ctx, name)
+			return a.Service.ResumeSchedule(ctx, name)
 		case opDelete:
-			return a.Engine.DeleteSchedule(ctx, name)
+			return a.Service.DeleteSchedule(ctx, name)
 		default:
-			s, err := a.Engine.GetSchedule(ctx, name)
+			s, err := a.Service.GetSchedule(ctx, name)
 			if err != nil {
 				return err
 			}
@@ -257,13 +265,19 @@ func (c *ScheduleCmd) Execute([]string) error {
 }
 
 // ServeCmd avvia il server HTTP e lo arresta in modo pulito su SIGINT/SIGTERM.
+// Di default è anche un worker; con --no-worker espone solo le API e lascia l'esecuzione ai worker.
 type ServeCmd struct {
-	global *GlobalOptions
-	Listen string `short:"l" long:"listen" description:"indirizzo di ascolto (sovrascrive la configurazione)"`
+	global   *GlobalOptions
+	Listen   string `short:"l" long:"listen" description:"indirizzo di ascolto (sovrascrive la configurazione)"`
+	NoWorker bool   `long:"no-worker" description:"solo API: accoda i deploy senza eseguirli"`
 }
 
 // Execute implementa flags.Commander.
 func (c *ServeCmd) Execute([]string) error {
+	newApp := newWorker
+	if c.NoWorker {
+		newApp = newClient
+	}
 	a, err := newApp(c.global)
 	if err != nil {
 		return err
@@ -275,9 +289,9 @@ func (c *ServeCmd) Execute([]string) error {
 		addr = c.Listen
 	}
 	gin.SetMode(gin.ReleaseMode)
-	srv := &http.Server{Addr: addr, Handler: api.NewRouter(a.Engine, a.Logger), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: api.NewRouter(a.Service, a.Logger), ReadHeaderTimeout: 10 * time.Second}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalContext()
 	defer stop()
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
@@ -294,9 +308,33 @@ func (c *ServeCmd) Execute([]string) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// withApp avvia l'applicazione, esegue fn e la arresta.
+// WorkerCmd avvia un worker senza API: preleva ed esegue i deploy dalla coda finché non riceve SIGINT/SIGTERM.
+type WorkerCmd struct {
+	global *GlobalOptions
+}
+
+// Execute implementa flags.Commander.
+func (c *WorkerCmd) Execute([]string) error {
+	a, err := newWorker(c.global)
+	if err != nil {
+		return err
+	}
+	defer a.Close()
+	ctx, stop := signalContext()
+	defer stop()
+	<-ctx.Done()
+	a.Logger.Info("arresto worker")
+	return nil
+}
+
+// signalContext è cancellato alla ricezione di SIGINT o SIGTERM.
+func signalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
+// withApp avvia l'applicazione in modalità client, esegue fn e la arresta.
 func withApp(g *GlobalOptions, fn func(*app.App) error) error {
-	a, err := newApp(g)
+	a, err := newClient(g)
 	if err != nil {
 		return err
 	}
@@ -304,12 +342,22 @@ func withApp(g *GlobalOptions, fn func(*app.App) error) error {
 	return fn(a)
 }
 
-func newApp(g *GlobalOptions) (*app.App, error) {
+// newClient crea l'applicazione in modalità client: accoda e interroga senza eseguire deploy.
+func newClient(g *GlobalOptions) (*app.App, error) {
 	cfg, err := config.Load(g.Config)
 	if err != nil {
 		return nil, err
 	}
-	return app.New(cfg)
+	return app.NewClient(cfg)
+}
+
+// newWorker crea l'applicazione in modalità worker: esegue i deploy e recupera i propri workflow interrotti.
+func newWorker(g *GlobalOptions) (*app.App, error) {
+	cfg, err := config.Load(g.Config)
+	if err != nil {
+		return nil, err
+	}
+	return app.NewWorker(cfg)
 }
 
 func printJSON(v any) error {

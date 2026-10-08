@@ -26,6 +26,11 @@ type Step interface {
 	Run(ctx context.Context, in Input) (Output, error)
 }
 
+// Cleaner libera le risorse locali di un deploy al termine del workflow (es. la directory di lavoro).
+type Cleaner interface {
+	Cleanup(ctx context.Context, deploymentID string) error
+}
+
 // Registry contiene gli step disponibili per nome.
 type Registry struct {
 	steps map[string]Step

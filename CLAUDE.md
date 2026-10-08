@@ -18,8 +18,17 @@ go-dart è uno strumento di **deploy as code**: un motore a workflow configurabi
 
 Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor` → `engine.Service` → workflow DBOS → step della pipeline → plugin di deploy.
 
-- `internal/app` è l'unico punto di composizione: collega le implementazioni concrete alle interfacce. I nuovi plugin si registrano in `app.NewPlugins`, i nuovi step in `app.NewSteps`.
-- `internal/engine`: un solo workflow DBOS (`go-dart.deploy`) che esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome dello step e `max_retries` presi dalla configurazione). I deploy vengono accodati sulla coda DBOS (`dbos.queue`). Se il descrittore ha un `id`, questo diventa l'ID del workflow e fa da chiave di idempotenza. Il nome del workflow non va cambiato: DBOS lo usa per recuperare i workflow interrotti.
+- `internal/app` è l'unico punto di composizione: collega le implementazioni concrete alle interfacce. I nuovi plugin si registrano in `app.NewPlugins`, i nuovi step in `app.NewSteps`. Ci sono due modalità:
+  - `app.NewWorker` (comandi `serve` e `worker`): esegue i deploy.
+  - `app.NewClient` (tutti gli altri comandi CLI e `serve --no-worker`): usa `dbos.NewClient`, accoda e interroga ma **non esegue e non recupera** workflow. Un comando CLI non deve mai avviare un `dbos.Context`: con `Launch` recupererebbe i workflow in corso del proprio ExecutorID e li rieseguirebbe.
+- `internal/engine` è diviso in due parti:
+  - `Worker` (`worker.go`) possiede il `dbos.Context`, registra i workflow `go-dart.deploy` e `go-dart.scheduled-deploy` e la coda. Esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome e `max_retries` dalla configurazione), e alla fine, sia in caso di successo sia di errore, esegue lo step `cleanup` (`pipeline.Cleaner`).
+  - `Engine` (`engine.go`, `schedule.go`) implementa `Service` solo con API che accettano un `dbos.Client` (`dbos.Enqueue` per nome del workflow, `RetrieveWorkflow`, `ListWorkflows`, ...), quindi funziona sia sul contesto del worker sia su un client standalone.
+  - Se il descrittore ha un `id`, questo diventa l'ID del workflow e fa da chiave di idempotenza. I nomi dei workflow non vanno cambiati: DBOS li usa per il recovery e per le schedule.
+- Scalabilità orizzontale: più worker condividono lo stesso Postgres.
+  - Ogni worker deve avere un `dbos.executor_id` univoco e stabile (default: hostname), perché al riavvio riprende solo i propri workflow in sospeso. Senza DBOS Conductor, un nodo che non torna con lo stesso ID lascia i suoi deploy in `PENDING`.
+  - La coda è partizionata con chiave `<application>/<environment>`: `environment_concurrency` (default 1) vale su tutti i worker, `concurrency` per singolo worker, `global_concurrency` sul totale. I workflow accodati senza chiave di partizione non vengono mai prelevati: per questo gli scatti delle schedule usano la coda interna di DBOS.
+  - `NewWorker` riprova l'inizializzazione, perché su un Postgres vuoto più worker avviati insieme vanno in race sulla migrazione dello schema DBOS.
 - Pianificazione (sezione `schedule` del descrittore), sempre sulla stessa coda DBOS dei deploy, così vale lo stesso limite di concorrenza:
   - `schedule.at`: il deploy viene accodato subito con `dbos.WithDelay` e resta `DELAYED` fino all'orario; si annulla con `Cancel`.
   - `schedule.cron`: `dbos.ApplySchedules` crea o aggiorna la schedule (upsert per nome, default `<application>-<environment>`). Il descrittore e il piano sono salvati nel `Context` della schedule. A ogni tick il workflow `go-dart.scheduled-deploy` accoda un `go-dart.deploy` figlio con ID deterministico `<schedule>@<tick UTC>`: un tick non genera mai due deploy, e `List` filtra le esecuzioni di una schedule per prefisso dell'ID. Il workflow del tick non attende il figlio, per non occupare uno slot della coda.
@@ -30,7 +39,7 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
 - `internal/steps`: le implementazioni standard degli step (secrets, artifacts, qa, deploy, post-test, activation). Lo step deploy sceglie il plugin tramite una `Policy` (`deploy.policy` del descrittore; la policy di default usa `deploy.plugin`, altrimenti il primo plugin attivo che supporta il tipo di artefatto, in ordine alfabetico).
 - `plugins/remotecopy`: primo plugin. Copia l'artefatto via SSH/SFTP passando da un file `.part` e poi un rename atomico, verifica lo sha256 remoto e può eseguire un `post_command`. L'SSH reale è nascosto dietro le interfacce `Dialer` e `Session`.
 - `internal/logging`: un `*slog.Logger` con un handler fan-out (log applicativo + `rfc5424.Message` inviati al SIEM via UDP o TCP). Lo stesso logger viene passato a DBOS, quindi anche i log di DBOS arrivano al SIEM. Ogni componente riceve il logger per iniezione.
-- Gli artefatti vengono scaricati in `workdir/<deployment-id>`: con più executor DBOS questa directory deve stare su storage condiviso.
+- Gli artefatti vengono scaricati in `workdir/<deployment-id>` (`artifact.Store`). Lo step `deploy` chiama `Store.Ensure`: se il file manca sul worker corrente, lo riscarica e verifica lo sha256 registrato dallo step `artifacts`. Per questo non serve che la `workdir` stia su uno storage condiviso. L'`id` del descrittore e il nome della schedule sono validati con una regex, perché diventano nomi di directory.
 
 ## Convenzioni
 
@@ -47,14 +56,15 @@ make lint                        # gofmt + go vet
 go test ./internal/engine -run TestWorkflowFallito -v   # singolo test
 
 bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # piano, senza DBOS
-bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # --no-wait per non attendere
+bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout
 bin/go-dart -c configs/go-dart.yml status <id>
 bin/go-dart -c configs/go-dart.yml list [--schedule <nome>]
 bin/go-dart -c configs/go-dart.yml cancel <id>
 bin/go-dart -c configs/go-dart.yml schedule list|show|pause|resume|delete [nome]
-bin/go-dart -c configs/go-dart.yml serve                                 # API su :8080
+bin/go-dart -c configs/go-dart.yml serve [--no-worker]                   # API su :8080 (+ worker)
+bin/go-dart -c configs/go-dart.yml worker                                # solo worker
 ```
 
 API: `POST /api/v1/deployments` (202 + id; 201 per una schedule cron), `GET /api/v1/deployments?schedule=&limit=`, `POST /api/v1/deployments/plan`, `GET /api/v1/deployments/:id`, `POST /api/v1/deployments/:id/cancel`, `GET /api/v1/schedules[/:name]`, `POST /api/v1/schedules/:name/pause|resume`, `DELETE /api/v1/schedules/:name`, `GET /healthz`.
 
-I test dell'engine avviano un DBOS reale su SQLite in una directory temporanea, senza bisogno di Postgres. Usano `SchedulePollInterval` basso: con il default di 30s una nuova schedule partirebbe solo dopo il successivo ricaricamento. Il `go.mod` fissa la toolchain 1.27.x: con una Go più vecchia viene scaricata automaticamente (`GOTOOLCHAIN=auto`).
+I test dell'engine avviano un DBOS reale su SQLite in una directory temporanea, senza bisogno di Postgres. `scaling_test.go` avvia più worker sullo stesso file per verificare recovery per ExecutorID, serializzazione per ambiente e assenza di doppi deploy dalle schedule. Usano `SchedulePollInterval` basso: con il default di 30s una nuova schedule partirebbe solo dopo il successivo ricaricamento. Il `go.mod` fissa la toolchain 1.27.x: con una Go più vecchia viene scaricata automaticamente (`GOTOOLCHAIN=auto`).

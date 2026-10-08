@@ -30,17 +30,17 @@ type ScheduleInfo struct {
 }
 
 // applySchedule crea o aggiorna (upsert per nome) la schedule DBOS.
-// Le esecuzioni sono instradate sulla coda dei deploy, quindi ne rispettano la concorrenza.
+// I tick usano la coda interna di DBOS: quella dei deploy è partizionata e non preleva
+// workflow senza chiave di partizione. Il deploy accodato dal tick usa invece la coda dei deploy.
 func (e *Engine) applySchedule(req Request) (*Submission, error) {
 	d := req.Descriptor
 	name := d.ScheduleName()
-	err := dbos.ApplySchedules(e.dbos, []dbos.ScheduleSpec{{
+	err := dbos.ApplySchedules(e.client, []dbos.ScheduleSpec{{
 		ScheduleName: name,
 		WorkflowName: scheduledWorkflowName,
 		Schedule:     d.Schedule.CronExpr(),
 		CronTimezone: d.Schedule.Timezone,
-		Context:      req,
-		QueueName:    e.queue.GetName(),
+		Context:      scheduleContext{Request: req, QueueName: e.queueName},
 	}})
 	if err != nil {
 		return nil, err
@@ -49,16 +49,26 @@ func (e *Engine) applySchedule(req Request) (*Submission, error) {
 	return &Submission{State: StateScheduled, Schedule: name}, nil
 }
 
+// scheduleContext è il valore salvato nella schedule DBOS e passato a ogni tick.
+type scheduleContext struct {
+	Request   Request `json:"request"`
+	QueueName string  `json:"queue_name"`
+}
+
 // scheduledWorkflow è invocato da DBOS a ogni tick della schedule: accoda un deploy
-// con ID deterministico "<schedule>@<orario tick>", così un tick non produce mai due deploy.
-// Non attende il deploy, per non occupare uno slot della coda.
-func (e *Engine) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowInput) (string, error) {
-	req, err := dbos.DecodeScheduleContext[Request](in)
+// con ID deterministico "<schedule>@<orario tick>", così un tick non produce mai due deploy
+// anche se più worker lo eseguono. Non attende il deploy, per non occupare uno slot della coda.
+func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowInput) (string, error) {
+	sc, err := dbos.DecodeScheduleContext[scheduleContext](in)
 	if err != nil {
 		return "", fmt.Errorf("contesto della schedule non valido: %w", err)
 	}
-	id := scheduledIDPrefix(req.Descriptor.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
-	h, err := dbos.RunWorkflow(ctx, e.deployWorkflow, req, dbos.WithQueue(e.queue), dbos.WithWorkflowID(id))
+	d := &sc.Request.Descriptor
+	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
+	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, sc.Request,
+		dbos.WithEnqueueWorkflowID(id),
+		dbos.WithEnqueueQueuePartitionKey(partitionKey(d)),
+	)
 	if err != nil {
 		return "", err
 	}
@@ -72,7 +82,7 @@ func scheduledIDPrefix(schedule string) string {
 
 // ListSchedules elenca le schedule di deploy.
 func (e *Engine) ListSchedules(_ context.Context) ([]ScheduleInfo, error) {
-	ss, err := dbos.ListSchedules(e.dbos, dbos.WithScheduleWorkflowNames(scheduledWorkflowName))
+	ss, err := dbos.ListSchedules(e.client, dbos.WithScheduleWorkflowNames(scheduledWorkflowName))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +95,7 @@ func (e *Engine) ListSchedules(_ context.Context) ([]ScheduleInfo, error) {
 
 // GetSchedule restituisce una schedule per nome.
 func (e *Engine) GetSchedule(ctx context.Context, name string) (*ScheduleInfo, error) {
-	ss, err := dbos.ListSchedules(e.dbos, dbos.WithScheduleWorkflowNames(scheduledWorkflowName), dbos.WithScheduleNames(name))
+	ss, err := dbos.ListSchedules(e.client, dbos.WithScheduleWorkflowNames(scheduledWorkflowName), dbos.WithScheduleNames(name))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +126,7 @@ func (e *Engine) scheduleOp(ctx context.Context, name, verb string, op func(dbos
 	if _, err := e.GetSchedule(ctx, name); err != nil {
 		return err
 	}
-	if err := op(e.dbos, name); err != nil {
+	if err := op(e.client, name); err != nil {
 		return err
 	}
 	e.logger.Info("schedule di deploy "+verb, "schedule", name)
@@ -132,9 +142,9 @@ func toScheduleInfo(s dbos.WorkflowSchedule) ScheduleInfo {
 		Status:      string(s.Status),
 		LastFiredAt: s.LastFiredAt,
 	}
-	if req, err := dbos.DecodeScheduleContext[Request](dbos.ScheduledWorkflowInput{Context: s.Context}); err == nil {
-		info.Application = req.Descriptor.Application
-		info.Environment = req.Descriptor.Environment
+	if sc, err := dbos.DecodeScheduleContext[scheduleContext](dbos.ScheduledWorkflowInput{Context: s.Context}); err == nil {
+		info.Application = sc.Request.Descriptor.Application
+		info.Environment = sc.Request.Descriptor.Environment
 	}
 	return info
 }

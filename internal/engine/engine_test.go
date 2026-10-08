@@ -33,7 +33,10 @@ func (s recordStep) Run(_ context.Context, in pipeline.Input) (pipeline.Output, 
 	return pipeline.Output{"seen": strconv.Itoa(len(in.Outputs))}, nil
 }
 
-func newEngine(t *testing.T, steps ...pipeline.Step) *Engine {
+var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+// testRegistry crea registry e planner con tutti gli step obbligatori.
+func testRegistry(t *testing.T, steps ...pipeline.Step) (*pipeline.Registry, pipeline.Planner) {
 	t.Helper()
 	reg, err := pipeline.NewRegistry(steps...)
 	if err != nil {
@@ -43,24 +46,43 @@ func newEngine(t *testing.T, steps ...pipeline.Step) *Engine {
 	for i, s := range steps {
 		cfgSteps[i] = config.Step{Name: s.Name(), Mode: config.ModeMandatory}
 	}
-	e, err := New(Options{
+	return reg, pipeline.ConfigPlanner{Steps: cfgSteps, Registry: reg}
+}
+
+// workerOpts restituisce le opzioni di un worker di test sul database indicato.
+func workerOpts(dbPath, executorID string, reg *pipeline.Registry) WorkerOptions {
+	return WorkerOptions{
 		AppName:     "go-dart-test",
-		DatabaseURL: "sqlite:" + filepath.Join(t.TempDir(), "dbos.db"),
-		QueueName:   "deployments",
-		Planner:     pipeline.ConfigPlanner{Steps: cfgSteps, Registry: reg},
+		DatabaseURL: "sqlite:" + dbPath,
+		ExecutorID:  executorID,
+		Queue:       QueueOptions{Name: "deployments", WorkerConcurrency: 4, PartitionConcurrency: 1},
 		Steps:       reg,
-		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:      discard,
 
 		SchedulePollInterval: 200 * time.Millisecond,
-	})
+	}
+}
+
+// startWorker avvia un worker e ne pianifica l'arresto a fine test.
+func startWorker(t *testing.T, opts WorkerOptions) *Worker {
+	t.Helper()
+	w, err := NewWorker(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Launch(); err != nil {
+	if err := w.Launch(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = e.Shutdown(5 * time.Second) })
-	return e
+	t.Cleanup(func() { _ = w.Shutdown(5 * time.Second) })
+	return w
+}
+
+// newEngine avvia un singolo worker e restituisce il servizio costruito sul suo contesto.
+func newEngine(t *testing.T, steps ...pipeline.Step) *Engine {
+	t.Helper()
+	reg, planner := testRegistry(t, steps...)
+	w := startWorker(t, workerOpts(filepath.Join(t.TempDir(), "dbos.db"), "w1", reg))
+	return NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
 }
 
 func testDescriptor(id string) *descriptor.Descriptor {
