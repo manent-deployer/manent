@@ -15,25 +15,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jessevdk/go-flags"
 
-	"github.com/joeg-ita/go-dart/internal/api"
-	"github.com/joeg-ita/go-dart/internal/app"
-	"github.com/joeg-ita/go-dart/internal/artifact"
-	"github.com/joeg-ita/go-dart/internal/config"
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/engine"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/api"
+	"github.com/joeg-ita/manent/internal/app"
+	"github.com/joeg-ita/manent/internal/artifact"
+	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/engine"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // GlobalOptions sono le opzioni comuni a tutti i comandi.
 type GlobalOptions struct {
-	Config string `short:"c" long:"config" env:"GODART_CONFIG" description:"file di configurazione YAML"`
+	Config string `short:"c" long:"config" env:"MANENT_CONFIG" description:"file di configurazione YAML"`
 }
 
 // Run esegue la CLI con gli argomenti indicati.
 func Run(args []string) error {
 	var global GlobalOptions
 	p := flags.NewParser(&global, flags.Default)
-	p.LongDescription = "go-dart: deploy as code basato su workflow durevoli DBOS"
+	p.LongDescription = "manent: deploy as code basato su workflow durevoli DBOS"
 
 	add := func(name, short string, cmd any) {
 		if _, err := p.AddCommand(name, short, short, cmd); err != nil {
@@ -106,7 +106,7 @@ func (c *DeployCmd) Execute([]string) error {
 	if c.NoWait || sub.ID == "" || sub.ScheduledAt != nil {
 		return printJSON(sub)
 	}
-	fmt.Println("deploy accodato:", sub.ID, "(eseguito da un worker: go-dart serve o go-dart worker)")
+	fmt.Println("deploy accodato:", sub.ID, "(eseguito da un worker: manent serve o manent worker)")
 	if c.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.Timeout)

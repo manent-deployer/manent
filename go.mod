@@ -1,4 +1,4 @@
-module github.com/joeg-ita/go-dart
+module github.com/joeg-ita/manent
 
 go 1.27.2
 

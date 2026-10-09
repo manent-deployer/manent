@@ -14,7 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 // ErrNotFound indica che per l'applicazione/ambiente non esiste configurazione.

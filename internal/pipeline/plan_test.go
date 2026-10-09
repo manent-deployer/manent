@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/joeg-ita/go-dart/internal/config"
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 // stubStep è uno step vuoto usato nei test.

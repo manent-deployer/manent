@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 // Provider risolve un riferimento (es. "env:VAR", "file:/path") nel valore del segreto.

@@ -1,9 +1,9 @@
-BIN := bin/go-dart
+BIN := bin/manent
 
 .PHONY: build test lint run fmt clean
 
 build:
-	go build -o $(BIN) ./cmd/go-dart
+	go build -o $(BIN) ./cmd/manent
 
 test:
 	go test ./...
@@ -15,7 +15,7 @@ fmt:
 	gofmt -w .
 
 run: build
-	$(BIN) -c configs/go-dart.yml serve
+	$(BIN) -c configs/manent.yml serve
 
 clean:
-	rm -rf bin work go-dart.db*
+	rm -rf bin work manent.db*

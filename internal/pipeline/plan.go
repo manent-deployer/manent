@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/joeg-ita/go-dart/internal/config"
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 // PlannedStep è uno step selezionato per l'esecuzione con le sue opzioni di retry.

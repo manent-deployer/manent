@@ -10,8 +10,8 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // concurrencyStep misura quanti deploy sono in esecuzione insieme, in totale e per ambiente.
@@ -80,7 +80,7 @@ func TestClientNonEseguePrimaDelWorker(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = w.Shutdown(5 * time.Second) })
 
-	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{DatabaseURL: "sqlite:" + db, AppName: "go-dart-test", Logger: discard})
+	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{DatabaseURL: "sqlite:" + db, AppName: "manent-test", Logger: discard})
 	if err != nil {
 		t.Fatal(err)
 	}

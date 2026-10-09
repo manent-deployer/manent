@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // HTTPDoer astrae il client HTTP per facilitare i test.

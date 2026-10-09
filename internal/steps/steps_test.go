@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/joeg-ita/go-dart/internal/artifact"
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
-	"github.com/joeg-ita/go-dart/pkg/plugin"
+	"github.com/joeg-ita/manent/internal/artifact"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))

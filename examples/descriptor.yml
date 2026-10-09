@@ -1,5 +1,5 @@
-# Descrittore di deploy di esempio (CLI: go-dart deploy -f examples/descriptor.yml)
-apiVersion: go-dart/v1
+# Descrittore di deploy di esempio (CLI: manent deploy -f examples/descriptor.yml)
+apiVersion: manent/v1
 # Opzionale: chiave di idempotenza. Lo stesso id non viene eseguito due volte.
 id: myapp-1.2.3-test
 application: myapp

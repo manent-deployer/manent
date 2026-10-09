@@ -16,7 +16,7 @@ import (
 )
 
 // APIVersion è la versione del formato di descrittore supportata.
-const APIVersion = "go-dart/v1"
+const APIVersion = "manent/v1"
 
 // Descriptor rappresenta una richiesta di deploy.
 type Descriptor struct {

@@ -1,4 +1,4 @@
-// Package api espone le funzionalità di go-dart come API HTTP (Gin) con descrittori JSON.
+// Package api espone le funzionalità di manent come API HTTP (Gin) con descrittori JSON.
 package api
 
 import (
@@ -12,8 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/engine"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/engine"
 )
 
 // maxBodySize limita la dimensione di un descrittore JSON.

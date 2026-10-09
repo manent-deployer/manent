@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
-	"github.com/joeg-ita/go-dart/internal/secrets"
-	"github.com/joeg-ita/go-dart/pkg/plugin"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
 // Policy seleziona il plugin di deploy adatto al descrittore.

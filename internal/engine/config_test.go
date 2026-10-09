@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // fakeResolver simula una configurazione di ambiente modificabile durante il test.

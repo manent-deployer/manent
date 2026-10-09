@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 func baseDescriptor() descriptor.Descriptor {
@@ -106,15 +106,15 @@ func fakeConsul(t *testing.T, key, value string, wantToken, wantDC string) *http
 
 func TestConsulProvider(t *testing.T) {
 	yamlCfg := "plugin: remote-copy\ntargets:\n  - {host: h1, user: deploy}\nparams:\n  dest_dir: /opt/app\n"
-	srv := fakeConsul(t, "go-dart/myapp/prod", yamlCfg, "tok", "dc1")
-	p := &ConsulProvider{Address: srv.URL, Token: "tok", Datacenter: "dc1", KeyTemplate: "go-dart/{application}/{environment}"}
+	srv := fakeConsul(t, "manent/myapp/prod", yamlCfg, "tok", "dc1")
+	p := &ConsulProvider{Address: srv.URL, Token: "tok", Datacenter: "dc1", KeyTemplate: "manent/{application}/{environment}"}
 	ctx := context.Background()
 
 	doc, err := p.Get(ctx, "myapp", "prod")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.Source != "consul:go-dart/myapp/prod" || doc.Revision != "42" || doc.Config.Targets[0].Host != "h1" {
+	if doc.Source != "consul:manent/myapp/prod" || doc.Revision != "42" || doc.Config.Targets[0].Host != "h1" {
 		t.Errorf("documento inatteso: %+v", doc)
 	}
 	if _, err := p.Get(ctx, "myapp", "test"); !errors.Is(err, ErrNotFound) {
@@ -127,8 +127,8 @@ func TestConsulProvider(t *testing.T) {
 }
 
 func TestConsulProviderValoreNonValido(t *testing.T) {
-	srv := fakeConsul(t, "go-dart/myapp/prod", "plugin: x\ncampo_sconosciuto: 1\n", "", "")
-	p := &ConsulProvider{Address: srv.URL, KeyTemplate: "go-dart/{application}/{environment}"}
+	srv := fakeConsul(t, "manent/myapp/prod", "plugin: x\ncampo_sconosciuto: 1\n", "", "")
+	p := &ConsulProvider{Address: srv.URL, KeyTemplate: "manent/{application}/{environment}"}
 	if _, err := p.Get(context.Background(), "myapp", "prod"); err == nil {
 		t.Fatal("atteso errore per campo sconosciuto")
 	}

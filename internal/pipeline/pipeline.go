@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 // Output è il risultato di uno step. Viene persistito da DBOS: non deve mai contenere segreti.

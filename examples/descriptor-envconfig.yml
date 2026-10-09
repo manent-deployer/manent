@@ -1,7 +1,7 @@
 # Descrittore minimale: plugin, target, parametri e segreti arrivano dalla configurazione
-# di ambiente (Consul: go-dart/myapp/test, oppure examples/envconfig/myapp/test.yml).
-# Mostra il deploy effettivo con: go-dart -c <config> validate -f examples/descriptor-envconfig.yml
-apiVersion: go-dart/v1
+# di ambiente (Consul: manent/myapp/test, oppure examples/envconfig/myapp/test.yml).
+# Mostra il deploy effettivo con: manent -c <config> validate -f examples/descriptor-envconfig.yml
+apiVersion: manent/v1
 application: myapp
 environment: test
 

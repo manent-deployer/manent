@@ -13,7 +13,7 @@ import (
 )
 
 // sdID è l'identificativo dello structured data RFC 5424 usato per gli attributi slog.
-const sdID = "godart@32473"
+const sdID = "manent@32473"
 
 // Options configura la costruzione del logger.
 type Options struct {

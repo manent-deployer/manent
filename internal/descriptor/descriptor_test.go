@@ -31,10 +31,10 @@ func TestParseJSONEsempio(t *testing.T) {
 
 func TestValidateErrori(t *testing.T) {
 	tests := map[string]string{
-		"campo sconosciuto": "apiVersion: go-dart/v1\nfoo: bar\n",
-		"campi obbligatori": "apiVersion: go-dart/v1\n",
+		"campo sconosciuto": "apiVersion: manent/v1\nfoo: bar\n",
+		"campi obbligatori": "apiVersion: manent/v1\n",
 		"apiVersion errata": "apiVersion: v0\napplication: a\n",
-		"segreto duplicato": "apiVersion: go-dart/v1\nsecrets:\n  - {name: a, ref: env:A}\n  - {name: a, ref: env:B}\n",
+		"segreto duplicato": "apiVersion: manent/v1\nsecrets:\n  - {name: a, ref: env:A}\n  - {name: a, ref: env:B}\n",
 	}
 	for name, in := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestValidateErrori(t *testing.T) {
 }
 
 func TestSchedule(t *testing.T) {
-	base := "apiVersion: go-dart/v1\napplication: app\nenvironment: prod\n" +
+	base := "apiVersion: manent/v1\napplication: app\nenvironment: prod\n" +
 		"artifact: {type: application, name: app, source: ./app.tgz}\n" +
 		"deploy: {targets: [{host: h1}]}\n"
 	tests := []struct {

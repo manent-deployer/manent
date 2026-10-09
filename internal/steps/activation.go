@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // Activator rende operativo in esercizio il rilascio (switch del traffico, apertura change, ...).

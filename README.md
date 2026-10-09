@@ -1,4 +1,6 @@
-# go-dart
+# manent
+
+> Il nome **manent** viene dal latino *manere*, "rimanere, restare saldo": vuole esprimere l'immutabilità dell'artefatto, che resta così com'è stato testato, validato e portato in esercizio.
 
 Strumento di **deploy as code** basato su workflow durevoli [DBOS](https://github.com/dbos-inc/dbos-transact-golang).
 Un descrittore di deploy (YAML da CLI, JSON da API) attiva una pipeline di step configurabili: segreti, artefatti, QA, deploy tramite plugin, test post deploy e attivazione in esercizio.
@@ -8,21 +10,21 @@ Se il processo si interrompe, il deploy riprende dall'ultimo step completato.
 
 ```sh
 make build
-bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # mostra il piano
-bin/go-dart -c configs/go-dart.yml serve                                 # API su :8080 + worker
-bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # in un altro terminale
+bin/manent -c configs/manent.yml validate -f examples/descriptor.yml   # mostra il piano
+bin/manent -c configs/manent.yml serve                                 # API su :8080 + worker
+bin/manent -c configs/manent.yml deploy -f examples/descriptor.yml     # in un altro terminale
 ```
 
 I deploy li esegue un **worker** (`serve` o `worker`). Gli altri comandi CLI (`deploy`, `status`, `list`, `cancel`, `schedule`) sono client: accodano e leggono lo stato dal database DBOS.
-Di default DBOS usa SQLite (`sqlite:go-dart.db`); in produzione impostare `DBOS_SYSTEM_DATABASE_URL=postgres://...`.
+Di default DBOS usa SQLite (`sqlite:manent.db`); in produzione impostare `DBOS_SYSTEM_DATABASE_URL=postgres://...`.
 
 ## Scalabilità orizzontale
 
 Più istanze condividono lo stesso Postgres e prelevano i deploy dalla stessa coda:
 
 ```sh
-go-dart serve --no-worker       # N istanze API dietro un load balancer
-go-dart worker                  # M worker, ciascuno con un executor_id diverso
+manent serve --no-worker       # N istanze API dietro un load balancer
+manent worker                  # M worker, ciascuno con un executor_id diverso
 ```
 
 - `dbos.executor_id` (default: hostname) deve essere **univoco e stabile**: un worker che si riavvia riprende i deploy interrotti con il proprio ID, dallo step in cui si erano fermati. In Kubernetes usare uno StatefulSet.
@@ -48,7 +50,7 @@ go-dart worker                  # M worker, ciascuno con un executor_id diverso
 Tutti i deploy, anche quelli pianificati, passano dalla coda DBOS `deployments` e ne rispettano la concorrenza.
 
 ```yaml
-# Deploy singolo a un orario: resta DELAYED fino ad allora, annullabile con `go-dart cancel <id>`
+# Deploy singolo a un orario: resta DELAYED fino ad allora, annullabile con `manent cancel <id>`
 schedule:
   at: 2026-10-10T02:00:00+02:00
 ```
@@ -61,28 +63,28 @@ schedule:
   name: myapp-nightly      # default: <application>-<environment>
 ```
 
-Ogni esecuzione ricorrente riceve l'ID `<nome>@<orario UTC>`. Per elencarle: `go-dart list --schedule myapp-nightly`. Per gestire le schedule: `go-dart schedule list|show|pause|resume|delete`.
+Ogni esecuzione ricorrente riceve l'ID `<nome>@<orario UTC>`. Per elencarle: `manent list --schedule myapp-nightly`. Per gestire le schedule: `manent schedule list|show|pause|resume|delete`.
 
 ## Configurazione di ambiente (Consul)
 
 Plugin, target, parametri del plugin e riferimenti ai segreti di ogni ambiente possono essere gestiti in un sistema di configurazione invece che nel descrittore. Il descrittore indica solo applicazione, ambiente e artefatto ([esempio](examples/descriptor-envconfig.yml)).
 
 ```yaml
-# configs/go-dart.yml
+# configs/manent.yml
 envconfig:
   provider: consul                          # none | consul | file
   required: true
   consul:
     address: http://consul:8500             # default: CONSUL_HTTP_ADDR
-    key: "go-dart/{application}/{environment}"
+    key: "manent/{application}/{environment}"
     # token ACL: CONSUL_HTTP_TOKEN oppure token_file
 ```
 
 Il valore della chiave Consul è YAML o JSON ([esempio](examples/envconfig/myapp/test.yml)):
 
 ```sh
-consul kv put go-dart/myapp/test @examples/envconfig/myapp/test.yml
-go-dart -c configs/go-dart.yml validate -f examples/descriptor-envconfig.yml   # mostra il deploy effettivo
+consul kv put manent/myapp/test @examples/envconfig/myapp/test.yml
+manent -c configs/manent.yml validate -f examples/descriptor-envconfig.yml   # mostra il deploy effettivo
 ```
 
 - **Quando viene letta:** all'inizio di ogni deploy, quindi un deploy pianificato usa la configurazione valida al momento dell'esecuzione. Una volta letta resta la stessa anche se il deploy viene ripreso dopo un crash. Il risultato riporta la chiave e il `ModifyIndex` usati.
@@ -91,7 +93,7 @@ go-dart -c configs/go-dart.yml validate -f examples/descriptor-envconfig.yml   #
 
 ## Pipeline
 
-Gli step e il loro ordine si definiscono in `configs/go-dart.yml` (`pipeline.steps`).
+Gli step e il loro ordine si definiscono in `configs/manent.yml` (`pipeline.steps`).
 Gli step `mandatory` vengono sempre eseguiti. Quelli `optional` hanno un default in configurazione che il descrittore può sovrascrivere:
 
 ```yaml
@@ -102,7 +104,7 @@ steps:
 
 ## Scrivere un plugin di deploy
 
-Un plugin implementa `plugin.Deployer` del package `github.com/joeg-ita/go-dart/pkg/plugin`:
+Un plugin implementa `plugin.Deployer` del package `github.com/joeg-ita/manent/pkg/plugin`:
 
 ```go
 type Deployer interface {

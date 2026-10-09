@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/go-dart/pkg/plugin"
+	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
 // fakeSession registra le operazioni eseguite e simula sha256sum.

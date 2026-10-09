@@ -2,9 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Progetto go-dart
+# Progetto manent
 
-go-dart è uno strumento di **deploy as code**: un motore a workflow configurabili che esegue una pipeline di deploy a step.
+manent è uno strumento di **deploy as code**: un motore a workflow configurabili che esegue una pipeline di deploy a step.
+Il nome viene dal latino *manere* ("rimanere, restare saldo") ed esprime l'immutabilità dell'artefatto, che resta così com'è stato testato, validato e portato in esercizio.
 
 ## Requisiti tecnici
 
@@ -22,7 +23,7 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
   - `app.NewWorker` (comandi `serve` e `worker`): esegue i deploy.
   - `app.NewClient` (tutti gli altri comandi CLI e `serve --no-worker`): usa `dbos.NewClient`, accoda e interroga ma **non esegue e non recupera** workflow. Un comando CLI non deve mai avviare un `dbos.Context`: con `Launch` recupererebbe i workflow in corso del proprio ExecutorID e li rieseguirebbe.
 - `internal/engine` è diviso in due parti:
-  - `Worker` (`worker.go`) possiede il `dbos.Context`, registra i workflow `go-dart.deploy` e `go-dart.scheduled-deploy` e la coda. Esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome e `max_retries` dalla configurazione), e alla fine, sia in caso di successo sia di errore, esegue lo step `cleanup` (`pipeline.Cleaner`).
+  - `Worker` (`worker.go`) possiede il `dbos.Context`, registra i workflow `manent.deploy` e `manent.scheduled-deploy` e la coda. Esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome e `max_retries` dalla configurazione), e alla fine, sia in caso di successo sia di errore, esegue lo step `cleanup` (`pipeline.Cleaner`).
   - `Engine` (`engine.go`, `schedule.go`) implementa `Service` solo con API che accettano un `dbos.Client` (`dbos.Enqueue` per nome del workflow, `RetrieveWorkflow`, `ListWorkflows`, ...), quindi funziona sia sul contesto del worker sia su un client standalone.
   - Se il descrittore ha un `id`, questo diventa l'ID del workflow e fa da chiave di idempotenza. I nomi dei workflow non vanno cambiati: DBOS li usa per il recovery e per le schedule.
 - Scalabilità orizzontale: più worker condividono lo stesso Postgres.
@@ -36,7 +37,7 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
   - La configurazione viene persistita da DBOS: deve contenere solo riferimenti ai segreti. Il token Consul si legge da `CONSUL_HTTP_TOKEN` o da `token_file`, mai dal file di configurazione.
 - Pianificazione (sezione `schedule` del descrittore), sempre sulla stessa coda DBOS dei deploy, così vale lo stesso limite di concorrenza:
   - `schedule.at`: il deploy viene accodato subito con `dbos.WithDelay` e resta `DELAYED` fino all'orario; si annulla con `Cancel`.
-  - `schedule.cron`: `dbos.ApplySchedules` crea o aggiorna la schedule (upsert per nome, default `<application>-<environment>`). Il descrittore e il piano sono salvati nel `Context` della schedule. A ogni tick il workflow `go-dart.scheduled-deploy` accoda un `go-dart.deploy` figlio con ID deterministico `<schedule>@<tick UTC>`: un tick non genera mai due deploy, e `List` filtra le esecuzioni di una schedule per prefisso dell'ID. Il workflow del tick non attende il figlio, per non occupare uno slot della coda.
+  - `schedule.cron`: `dbos.ApplySchedules` crea o aggiorna la schedule (upsert per nome, default `<application>-<environment>`). Il descrittore e il piano sono salvati nel `Context` della schedule. A ogni tick il workflow `manent.scheduled-deploy` accoda un `manent.deploy` figlio con ID deterministico `<schedule>@<tick UTC>`: un tick non genera mai due deploy, e `List` filtra le esecuzioni di una schedule per prefisso dell'ID. Il workflow del tick non attende il figlio, per non occupare uno slot della coda.
   - Le espressioni cron a 5 campi vengono convertite nel formato a 6 campi (con i secondi) richiesto da DBOS (`Schedule.CronExpr`).
 - `internal/pipeline`: contratto `Step` e `ConfigPlanner`. Il piano viene calcolato **prima** di avviare il workflow e gli viene passato come input. Regole: gli step obbligatori non sono disattivabili; quelli opzionali partono dal default di configurazione e il descrittore (`steps:`) può sovrascriverlo; l'ordine segue sempre `pipeline.steps` della configurazione.
 - Gli step si scambiano dati solo tramite `pipeline.Output` (`map[string]string`), che DBOS persiste. **Gli output non devono mai contenere segreti**: lo step `secrets` si limita a verificare che i riferimenti siano risolvibili, mentre i plugin leggono i valori al momento dell'uso tramite `plugin.SecretResolver`.
@@ -55,19 +56,19 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
 ## Comandi
 
 ```sh
-make build                       # bin/go-dart
+make build                       # bin/manent
 make test                        # go test ./...
 make lint                        # gofmt + go vet
 go test ./internal/engine -run TestWorkflowFallito -v   # singolo test
 
-bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # piano e deploy effettivo (legge Consul; --offline per evitarlo)
-bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout
-bin/go-dart -c configs/go-dart.yml status <id>
-bin/go-dart -c configs/go-dart.yml list [--schedule <nome>]
-bin/go-dart -c configs/go-dart.yml cancel <id>
-bin/go-dart -c configs/go-dart.yml schedule list|show|pause|resume|delete [nome]
-bin/go-dart -c configs/go-dart.yml serve [--no-worker]                   # API su :8080 (+ worker)
-bin/go-dart -c configs/go-dart.yml worker                                # solo worker
+bin/manent -c configs/manent.yml validate -f examples/descriptor.yml   # piano e deploy effettivo (legge Consul; --offline per evitarlo)
+bin/manent -c configs/manent.yml deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout
+bin/manent -c configs/manent.yml status <id>
+bin/manent -c configs/manent.yml list [--schedule <nome>]
+bin/manent -c configs/manent.yml cancel <id>
+bin/manent -c configs/manent.yml schedule list|show|pause|resume|delete [nome]
+bin/manent -c configs/manent.yml serve [--no-worker]                   # API su :8080 (+ worker)
+bin/manent -c configs/manent.yml worker                                # solo worker
 ```
 
 API: `POST /api/v1/deployments` (202 + id; 201 per una schedule cron), `GET /api/v1/deployments?schedule=&limit=`, `POST /api/v1/deployments/plan`, `GET /api/v1/deployments/:id`, `POST /api/v1/deployments/:id/cancel`, `GET /api/v1/schedules[/:name]`, `POST /api/v1/schedules/:name/pause|resume`, `DELETE /api/v1/schedules/:name`, `GET /healthz`.

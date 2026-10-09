@@ -11,8 +11,8 @@ import (
 	// Driver SQLite per DBOS, usato con database_url "sqlite:...".
 	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // QueueOptions configura la coda partizionata dei deploy.

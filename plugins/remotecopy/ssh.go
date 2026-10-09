@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/joeg-ita/go-dart/pkg/plugin"
+	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
 // SSHDialer apre sessioni SSH/SFTP reali.

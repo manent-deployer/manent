@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/go-dart/internal/config"
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // recordStep registra le esecuzioni e può fallire su richiesta.
@@ -52,7 +52,7 @@ func testRegistry(t *testing.T, steps ...pipeline.Step) (*pipeline.Registry, pip
 // workerOpts restituisce le opzioni di un worker di test sul database indicato.
 func workerOpts(dbPath, executorID string, reg *pipeline.Registry) WorkerOptions {
 	return WorkerOptions{
-		AppName:     "go-dart-test",
+		AppName:     "manent-test",
 		DatabaseURL: "sqlite:" + dbPath,
 		ExecutorID:  executorID,
 		Queue:       QueueOptions{Name: "deployments", WorkerConcurrency: 4, PartitionConcurrency: 1},

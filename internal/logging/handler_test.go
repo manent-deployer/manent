@@ -17,7 +17,7 @@ func (f *fakeSender) Close() error                 { return nil }
 func TestLoggerScriveSuAppESIEM(t *testing.T) {
 	var out bytes.Buffer
 	siem := &fakeSender{}
-	log := New(Options{AppName: "go-dart", Level: "info", Output: &out, SIEM: siem})
+	log := New(Options{AppName: "manent", Level: "info", Output: &out, SIEM: siem})
 
 	log.With("deployment", "d1").WithGroup("step").Warn("step fallito", "name", "qa")
 	log.Debug("ignorato")

@@ -1,5 +1,5 @@
 # Configurazione di deploy di myapp nell'ambiente test.
-# Con provider consul il contenuto è il valore della chiave go-dart/myapp/test (YAML o JSON).
+# Con provider consul il contenuto è il valore della chiave manent/myapp/test (YAML o JSON).
 # Solo riferimenti ai segreti, mai valori: la configurazione viene salvata nello storico del deploy.
 plugin: remote-copy
 policy: default

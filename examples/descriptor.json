@@ -1,5 +1,5 @@
 {
-  "apiVersion": "go-dart/v1",
+  "apiVersion": "manent/v1",
   "id": "myapp-1.2.3-test",
   "application": "myapp",
   "environment": "test",

@@ -10,15 +10,15 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // Nomi stabili con cui i workflow sono registrati in DBOS.
 // Non vanno cambiati: i workflow in corso e le schedule li riferiscono per nome.
 const (
-	workflowName          = "go-dart.deploy"
-	scheduledWorkflowName = "go-dart.scheduled-deploy"
+	workflowName          = "manent.deploy"
+	scheduledWorkflowName = "manent.scheduled-deploy"
 )
 
 // Stati di una Submission oltre a quelli DBOS.
@@ -258,7 +258,7 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// toStatus converte lo stato DBOS nel formato esposto da go-dart.
+// toStatus converte lo stato DBOS nel formato esposto da manent.
 func toStatus(st dbos.WorkflowStatus) Status {
 	s := Status{ID: st.ID, State: string(st.Status), CreatedAt: st.CreatedAt, UpdatedAt: st.UpdatedAt}
 	if !st.DelayUntil.IsZero() {

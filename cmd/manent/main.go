@@ -1,10 +1,10 @@
-// Comando go-dart: strumento di deploy as code, utilizzabile come CLI o come server API.
+// Comando manent: strumento di deploy as code, utilizzabile come CLI o come server API.
 package main
 
 import (
 	"os"
 
-	"github.com/joeg-ita/go-dart/internal/cli"
+	"github.com/joeg-ita/manent/internal/cli"
 )
 
 func main() {

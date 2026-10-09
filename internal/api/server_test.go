@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/joeg-ita/go-dart/internal/descriptor"
-	"github.com/joeg-ita/go-dart/internal/engine"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/engine"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // mockService implementa engine.Service per i test degli handler.
@@ -84,7 +84,7 @@ func (m *mockService) Status(_ context.Context, id string) (*engine.Status, erro
 func (m *mockService) Wait(context.Context, string) (*engine.Result, error) { return nil, nil }
 
 const validJSON = `{
-  "apiVersion": "go-dart/v1",
+  "apiVersion": "manent/v1",
   "application": "app",
   "environment": "test",
   "artifact": {"type": "application", "name": "app", "version": "1.0.0", "source": "/tmp/app.tar.gz"},
@@ -116,7 +116,7 @@ func TestSubmit(t *testing.T) {
 }
 
 func TestSubmitDescrittoreNonValido(t *testing.T) {
-	w := do(newTestRouter(&mockService{}), http.MethodPost, "/api/v1/deployments", `{"apiVersion":"go-dart/v1","campo":1}`)
+	w := do(newTestRouter(&mockService{}), http.MethodPost, "/api/v1/deployments", `{"apiVersion":"manent/v1","campo":1}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("atteso 400, ricevuto %d", w.Code)
 	}

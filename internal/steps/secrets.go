@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/joeg-ita/go-dart/internal/pipeline"
-	"github.com/joeg-ita/go-dart/internal/secrets"
+	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/secrets"
 )
 
 // Secrets verifica che tutti i segreti dichiarati siano risolvibili.

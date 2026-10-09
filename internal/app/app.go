@@ -1,4 +1,4 @@
-// Package app compone tutti i componenti di go-dart a partire dalla configurazione.
+// Package app compone tutti i componenti di manent a partire dalla configurazione.
 // È l'unico punto in cui le implementazioni concrete vengono collegate alle interfacce.
 package app
 
@@ -16,16 +16,16 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/go-dart/internal/artifact"
-	"github.com/joeg-ita/go-dart/internal/config"
-	"github.com/joeg-ita/go-dart/internal/engine"
-	"github.com/joeg-ita/go-dart/internal/envconfig"
-	"github.com/joeg-ita/go-dart/internal/logging"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
-	"github.com/joeg-ita/go-dart/internal/secrets"
-	"github.com/joeg-ita/go-dart/internal/steps"
-	"github.com/joeg-ita/go-dart/pkg/plugin"
-	"github.com/joeg-ita/go-dart/plugins/remotecopy"
+	"github.com/joeg-ita/manent/internal/artifact"
+	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/engine"
+	"github.com/joeg-ita/manent/internal/envconfig"
+	"github.com/joeg-ita/manent/internal/logging"
+	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/joeg-ita/manent/internal/steps"
+	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/joeg-ita/manent/plugins/remotecopy"
 )
 
 // App contiene i componenti condivisi da CLI e API.

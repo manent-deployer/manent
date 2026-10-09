@@ -10,7 +10,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/joeg-ita/go-dart/pkg/plugin"
+	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
 // Name è il nome con cui il plugin si registra.

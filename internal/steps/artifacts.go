@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/joeg-ita/go-dart/internal/artifact"
-	"github.com/joeg-ita/go-dart/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/artifact"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // Chiavi dell'output dello step artifacts, lette dagli step successivi.

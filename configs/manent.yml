@@ -1,14 +1,14 @@
-# Configurazione applicativa di go-dart (go-dart -c configs/go-dart.yml ...)
+# Configurazione applicativa di manent (manent -c configs/manent.yml ...)
 app:
-  name: go-dart
+  name: manent
   version: 0.1.0
 
 dbos:
-  # Sovrascrivibile con DBOS_SYSTEM_DATABASE_URL. Con più nodi serve Postgres: postgres://user:pass@host:5432/godart
-  database_url: sqlite:go-dart.db
+  # Sovrascrivibile con DBOS_SYSTEM_DATABASE_URL. Con più nodi serve Postgres: postgres://user:pass@host:5432/manent
+  database_url: sqlite:manent.db
   # ID del worker: univoco tra i nodi e stabile tra i riavvii (es. nome del pod di uno StatefulSet).
   # Al riavvio un worker riprende solo i deploy interrotti con il proprio ID. Default: hostname; DBOS__VMID ha la precedenza.
-  # executor_id: go-dart-0
+  # executor_id: manent-0
   queue: deployments
   concurrency: 4                # deploy in esecuzione su ogni worker
   global_concurrency: 0         # deploy in esecuzione su tutti i worker (0 = nessun limite)
@@ -40,7 +40,7 @@ envconfig:
   consul:
     address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
     datacenter: ""
-    key: "go-dart/{application}/{environment}"
+    key: "manent/{application}/{environment}"
     # token: da CONSUL_HTTP_TOKEN oppure da file
     # token_file: /run/secrets/consul-token
   file:

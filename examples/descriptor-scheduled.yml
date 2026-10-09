@@ -1,7 +1,7 @@
-# Deploy ricorrente: go-dart deploy -f examples/descriptor-scheduled.yml
+# Deploy ricorrente: manent deploy -f examples/descriptor-scheduled.yml
 # Crea (o aggiorna, se esiste già una schedule con lo stesso nome) una schedule DBOS.
 # A ogni tick viene accodato un deploy con ID "<name>@<orario UTC>", ad es. myapp-nightly@20261010T000000Z.
-apiVersion: go-dart/v1
+apiVersion: manent/v1
 application: myapp
 environment: test
 

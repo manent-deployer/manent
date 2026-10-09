@@ -1,4 +1,4 @@
-// Package config gestisce la configurazione applicativa statica di go-dart.
+// Package config gestisce la configurazione applicativa statica di manent.
 package config
 
 import (
@@ -126,8 +126,8 @@ type Step struct {
 // Default restituisce una configurazione funzionante per lo sviluppo locale.
 func Default() *Config {
 	return &Config{
-		App:     App{Name: "go-dart", Version: "0.1.0"},
-		DBOS:    DBOS{DatabaseURL: "sqlite:go-dart.db", Queue: "deployments", Concurrency: 4, EnvironmentConcurrency: 1},
+		App:     App{Name: "manent", Version: "0.1.0"},
+		DBOS:    DBOS{DatabaseURL: "sqlite:manent.db", Queue: "deployments", Concurrency: 4, EnvironmentConcurrency: 1},
 		HTTP:    HTTP{Listen: ":8080"},
 		Logging: Logging{Level: "info", Format: "text"},
 		SIEM:    SIEM{Network: "udp"},
@@ -135,7 +135,7 @@ func Default() *Config {
 		EnvConfig: EnvConfig{
 			Provider:   EnvProviderNone,
 			MaxRetries: 3,
-			Consul:     ConsulConfig{Key: "go-dart/{application}/{environment}"},
+			Consul:     ConsulConfig{Key: "manent/{application}/{environment}"},
 			File:       FileConfig{Path: "./envconfig/{application}/{environment}.yml"},
 		},
 		Pipeline: Pipeline{Steps: []Step{
