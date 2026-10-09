@@ -3,11 +3,13 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/joeg-ita/go-dart/internal/artifact"
 	"github.com/joeg-ita/go-dart/internal/config"
 	"github.com/joeg-ita/go-dart/internal/engine"
+	"github.com/joeg-ita/go-dart/internal/envconfig"
 	"github.com/joeg-ita/go-dart/internal/logging"
 	"github.com/joeg-ita/go-dart/internal/pipeline"
 	"github.com/joeg-ita/go-dart/internal/secrets"
@@ -89,13 +92,48 @@ func NewSteps(plugins *plugin.Registry, store *artifact.Store, log *slog.Logger)
 	)
 }
 
+// NewResolver crea il resolver della configurazione di ambiente in base al provider configurato.
+func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
+	ec := cfg.EnvConfig
+	r := envconfig.Resolver{Required: ec.Required}
+	switch ec.Provider {
+	case config.EnvProviderConsul:
+		addr := ec.Consul.Address
+		if addr == "" {
+			addr = cmp.Or(os.Getenv("CONSUL_HTTP_ADDR"), "http://127.0.0.1:8500")
+		}
+		if !strings.Contains(addr, "://") {
+			addr = "http://" + addr
+		}
+		token := os.Getenv("CONSUL_HTTP_TOKEN")
+		if ec.Consul.TokenFile != "" {
+			b, err := os.ReadFile(ec.Consul.TokenFile)
+			if err != nil {
+				return r, fmt.Errorf("lettura token Consul: %w", err)
+			}
+			token = strings.TrimSpace(string(b))
+		}
+		r.Provider = &envconfig.ConsulProvider{
+			Address:     addr,
+			Token:       token,
+			Datacenter:  ec.Consul.Datacenter,
+			KeyTemplate: ec.Consul.Key,
+			Client:      &http.Client{Timeout: 10 * time.Second},
+		}
+	case config.EnvProviderFile:
+		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path}
+	}
+	return r, nil
+}
+
 // components contiene i componenti comuni a worker e client.
 type components struct {
-	log     *slog.Logger
-	siem    logging.SIEMSender
-	steps   *pipeline.Registry
-	store   *artifact.Store
-	planner pipeline.Planner
+	log      *slog.Logger
+	siem     logging.SIEMSender
+	steps    *pipeline.Registry
+	store    *artifact.Store
+	planner  pipeline.Planner
+	resolver envconfig.Resolver
 }
 
 func newComponents(cfg *config.Config) (*components, error) {
@@ -107,17 +145,22 @@ func newComponents(cfg *config.Config) (*components, error) {
 	if err != nil {
 		return nil, err
 	}
+	resolver, err := NewResolver(cfg)
+	if err != nil {
+		return nil, err
+	}
 	store := &artifact.Store{Fetcher: artifact.DefaultFetcher{}, WorkDir: cfg.WorkDir}
 	reg, err := NewSteps(plugins, store, log)
 	if err != nil {
 		return nil, err
 	}
 	return &components{
-		log:     log,
-		siem:    sender,
-		steps:   reg,
-		store:   store,
-		planner: pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
+		log:      log,
+		siem:     sender,
+		steps:    reg,
+		store:    store,
+		planner:  pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
+		resolver: resolver,
 	}, nil
 }
 
@@ -143,6 +186,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
 		},
 		Steps:                c.steps,
+		Resolver:             c.resolver,
+		ResolverRetries:      cfg.EnvConfig.MaxRetries,
 		Cleaner:              c.store,
 		Logger:               c.log,
 		SchedulePollInterval: cfg.DBOS.SchedulePollInterval,

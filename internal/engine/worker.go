@@ -11,6 +11,7 @@ import (
 	// Driver SQLite per DBOS, usato con database_url "sqlite:...".
 	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite"
 
+	"github.com/joeg-ita/go-dart/internal/descriptor"
 	"github.com/joeg-ita/go-dart/internal/pipeline"
 )
 
@@ -35,6 +36,10 @@ type WorkerOptions struct {
 	ExecutorID string
 	Queue      QueueOptions
 	Steps      *pipeline.Registry
+	// Resolver, se presente, produce il descrittore effettivo dalla configurazione di ambiente.
+	Resolver ConfigResolver
+	// ResolverRetries sono i tentativi aggiuntivi dello step config (es. Consul non raggiungibile).
+	ResolverRetries int
 	// Cleaner, se presente, libera le risorse locali al termine di ogni deploy.
 	Cleaner pipeline.Cleaner
 	Logger  *slog.Logger
@@ -42,15 +47,28 @@ type WorkerOptions struct {
 	SchedulePollInterval time.Duration
 }
 
+// ConfigResolver recupera la configurazione di ambiente e la fonde con il descrittore.
+type ConfigResolver interface {
+	Resolve(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)
+}
+
+// resolvedConfig è l'output persistito dello step config.
+type resolvedConfig struct {
+	Descriptor descriptor.Descriptor `json:"descriptor"`
+	Meta       pipeline.Output       `json:"meta"`
+}
+
 // Worker esegue i workflow di deploy prelevandoli dalla coda condivisa.
 // Più worker possono condividere lo stesso database di sistema (Postgres) per scalare orizzontalmente.
 type Worker struct {
-	dbos    dbos.Context
-	queue   dbos.Queue
-	steps   *pipeline.Registry
-	cleaner pipeline.Cleaner
-	logger  *slog.Logger
-	id      string
+	dbos            dbos.Context
+	queue           dbos.Queue
+	steps           *pipeline.Registry
+	resolver        ConfigResolver
+	resolverRetries int
+	cleaner         pipeline.Cleaner
+	logger          *slog.Logger
+	id              string
 }
 
 // NewWorker crea il contesto DBOS, registra i workflow e la coda. Va chiamato Launch prima dell'uso.
@@ -70,10 +88,12 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		return nil, fmt.Errorf("inizializzazione DBOS: %w", err)
 	}
 	w := &Worker{
-		dbos:    ctx,
-		steps:   opts.Steps,
-		cleaner: opts.Cleaner,
-		id:      dbos.GetExecutorID(ctx),
+		dbos:            ctx,
+		steps:           opts.Steps,
+		resolver:        opts.Resolver,
+		resolverRetries: opts.ResolverRetries,
+		cleaner:         opts.Cleaner,
+		id:              dbos.GetExecutorID(ctx),
 	}
 	w.logger = opts.Logger.With("component", "worker", "executor", w.id)
 	dbos.RegisterWorkflow(ctx, w.deployWorkflow, dbos.WithWorkflowName(workflowName))
@@ -131,15 +151,15 @@ func (w *Worker) Shutdown(timeout time.Duration) error {
 	return dbos.Shutdown(w.dbos, timeout)
 }
 
-// deployWorkflow esegue gli step del piano in ordine, ciascuno come step DBOS,
-// e al termine (con successo o errore) libera le risorse locali del deploy.
+// deployWorkflow risolve la configurazione di ambiente, esegue gli step del piano in ordine
+// (ciascuno come step DBOS) e al termine, con successo o errore, libera le risorse locali.
 // Deve restare deterministico: tutta la logica con effetti esterni è dentro gli step.
 func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	id, err := dbos.GetWorkflowID(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	res, runErr := w.runPlan(ctx, id, req)
+	res, runErr := w.run(ctx, id, req)
 	if w.cleaner != nil {
 		if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 			return "", w.cleaner.Cleanup(c, id)
@@ -150,9 +170,23 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	return res, runErr
 }
 
-// runPlan esegue gli step del piano fermandosi al primo errore.
-func (w *Worker) runPlan(ctx dbos.Context, id string, req Request) (Result, error) {
+// run esegue lo step config e poi gli step del piano, fermandosi al primo errore.
+// La configurazione di ambiente è letta in uno step DBOS: è quella valida al momento
+// dell'esecuzione (anche per i deploy pianificati) e, una volta registrata, resta la stessa
+// anche se il deploy viene ripreso dopo un crash.
+func (w *Worker) run(ctx dbos.Context, id string, req Request) (Result, error) {
 	res := Result{DeploymentID: id}
+	if w.resolver != nil {
+		rc, err := dbos.RunAsStep(ctx, func(c context.Context) (resolvedConfig, error) {
+			d, meta, err := w.resolver.Resolve(c, req.Descriptor)
+			return resolvedConfig{Descriptor: d, Meta: meta}, err
+		}, dbos.WithStepName("config"), dbos.WithStepMaxRetries(w.resolverRetries))
+		if err != nil {
+			return res, fmt.Errorf("step %q: %w", "config", err)
+		}
+		req.Descriptor = rc.Descriptor
+		res.Steps = append(res.Steps, StepResult{Name: "config", Output: rc.Meta})
+	}
 	outputs := map[string]pipeline.Output{}
 	for _, ps := range req.Plan {
 		step, ok := w.steps.Get(ps.Name)

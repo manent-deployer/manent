@@ -19,14 +19,15 @@ const (
 
 // Config è la configurazione completa dell'applicazione.
 type Config struct {
-	App      App                       `yaml:"app"`
-	DBOS     DBOS                      `yaml:"dbos"`
-	HTTP     HTTP                      `yaml:"http"`
-	Logging  Logging                   `yaml:"logging"`
-	SIEM     SIEM                      `yaml:"siem"`
-	WorkDir  string                    `yaml:"workdir"`
-	Pipeline Pipeline                  `yaml:"pipeline"`
-	Plugins  map[string]map[string]any `yaml:"plugins"`
+	App       App                       `yaml:"app"`
+	DBOS      DBOS                      `yaml:"dbos"`
+	HTTP      HTTP                      `yaml:"http"`
+	Logging   Logging                   `yaml:"logging"`
+	SIEM      SIEM                      `yaml:"siem"`
+	WorkDir   string                    `yaml:"workdir"`
+	EnvConfig EnvConfig                 `yaml:"envconfig"`
+	Pipeline  Pipeline                  `yaml:"pipeline"`
+	Plugins   map[string]map[string]any `yaml:"plugins"`
 }
 
 // App identifica l'applicazione.
@@ -72,6 +73,42 @@ type SIEM struct {
 	Address string `yaml:"address"`
 }
 
+// Provider di configurazione di ambiente supportati.
+const (
+	EnvProviderNone   = "none"
+	EnvProviderConsul = "consul"
+	EnvProviderFile   = "file"
+)
+
+// EnvConfig configura il sistema da cui leggere la configurazione di deploy di ogni ambiente.
+type EnvConfig struct {
+	// Provider è none, consul o file.
+	Provider string `yaml:"provider"`
+	// Required fa fallire il deploy se per l'ambiente non esiste configurazione.
+	Required bool `yaml:"required"`
+	// MaxRetries sono i tentativi aggiuntivi in caso di errore di lettura.
+	MaxRetries int          `yaml:"max_retries"`
+	Consul     ConsulConfig `yaml:"consul"`
+	File       FileConfig   `yaml:"file"`
+}
+
+// ConsulConfig configura la lettura dal KV store di Consul.
+// Il token ACL non va scritto nel file: si legge da CONSUL_HTTP_TOKEN o da token_file.
+type ConsulConfig struct {
+	// Address dell'agent (default CONSUL_HTTP_ADDR o http://127.0.0.1:8500).
+	Address    string `yaml:"address"`
+	Datacenter string `yaml:"datacenter"`
+	// Key è il modello di chiave, con {application} e {environment}.
+	Key       string `yaml:"key"`
+	TokenFile string `yaml:"token_file"`
+}
+
+// FileConfig configura la lettura da file locali.
+type FileConfig struct {
+	// Path è il modello di percorso, con {application} e {environment}.
+	Path string `yaml:"path"`
+}
+
 // Pipeline elenca gli step disponibili nell'ordine di esecuzione.
 type Pipeline struct {
 	Steps []Step `yaml:"steps"`
@@ -95,6 +132,12 @@ func Default() *Config {
 		Logging: Logging{Level: "info", Format: "text"},
 		SIEM:    SIEM{Network: "udp"},
 		WorkDir: "./work",
+		EnvConfig: EnvConfig{
+			Provider:   EnvProviderNone,
+			MaxRetries: 3,
+			Consul:     ConsulConfig{Key: "go-dart/{application}/{environment}"},
+			File:       FileConfig{Path: "./envconfig/{application}/{environment}.yml"},
+		},
 		Pipeline: Pipeline{Steps: []Step{
 			{Name: "secrets", Mode: ModeMandatory},
 			{Name: "artifacts", Mode: ModeMandatory, MaxRetries: 3},
@@ -142,6 +185,11 @@ func (c *Config) Validate() error {
 	}
 	if c.DBOS.Concurrency < 1 || c.DBOS.EnvironmentConcurrency < 1 || c.DBOS.GlobalConcurrency < 0 {
 		errs = append(errs, errors.New("dbos: concurrency ed environment_concurrency devono essere >= 1, global_concurrency >= 0"))
+	}
+	switch c.EnvConfig.Provider {
+	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
+	default:
+		errs = append(errs, fmt.Errorf("envconfig.provider %q non supportato (none|consul|file)", c.EnvConfig.Provider))
 	}
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))

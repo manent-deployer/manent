@@ -119,10 +119,12 @@ func (c *DeployCmd) Execute([]string) error {
 	return printJSON(res)
 }
 
-// ValidateCmd valida il descrittore senza avviare DBOS.
+// ValidateCmd valida il descrittore senza avviare DBOS e mostra il deploy effettivo,
+// cioè il descrittore fuso con la configurazione di ambiente (es. letta da Consul).
 type ValidateCmd struct {
-	global *GlobalOptions
-	File   string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	global  *GlobalOptions
+	File    string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	Offline bool   `long:"offline" description:"non leggere la configurazione di ambiente"`
 }
 
 // Execute implementa flags.Commander.
@@ -151,7 +153,25 @@ func (c *ValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	return printJSON(map[string]any{"valid": true, "plan": plan})
+	out := map[string]any{"valid": true, "plan": plan}
+	if !c.Offline {
+		resolver, err := app.NewResolver(cfg)
+		if err != nil {
+			return err
+		}
+		eff, meta, err := resolver.Resolve(context.Background(), *d)
+		if err != nil {
+			return err
+		}
+		names := make([]string, len(eff.Secrets))
+		for i, s := range eff.Secrets {
+			names[i] = s.Name
+		}
+		out["config"] = meta
+		out["deploy"] = eff.Deploy
+		out["secrets"] = names
+	}
+	return printJSON(out)
 }
 
 // StatusCmd mostra lo stato di un deploy.

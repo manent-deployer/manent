@@ -29,6 +29,11 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
   - Ogni worker deve avere un `dbos.executor_id` univoco e stabile (default: hostname), perché al riavvio riprende solo i propri workflow in sospeso. Senza DBOS Conductor, un nodo che non torna con lo stesso ID lascia i suoi deploy in `PENDING`.
   - La coda è partizionata con chiave `<application>/<environment>`: `environment_concurrency` (default 1) vale su tutti i worker, `concurrency` per singolo worker, `global_concurrency` sul totale. I workflow accodati senza chiave di partizione non vengono mai prelevati: per questo gli scatti delle schedule usano la coda interna di DBOS.
   - `NewWorker` riprova l'inizializzazione, perché su un Postgres vuoto più worker avviati insieme vanno in race sulla migrazione dello schema DBOS.
+- Configurazione di ambiente (`internal/envconfig`): plugin, policy, target, parametri e riferimenti ai segreti di ogni application/environment arrivano da un `Provider` (`consul` via API HTTP del KV, `file`, `none`), configurato in `envconfig`.
+  - Il worker la legge nello step DBOS `config`, eseguito prima del piano (`Worker.run`), e passa a tutti gli step il descrittore **effettivo**. Così i deploy pianificati usano la configurazione valida al momento dell'esecuzione, e un deploy ripreso dopo un crash riusa quella già registrata.
+  - Nel risultato lo step `config` riporta `source` e `revision` (`ModifyIndex` di Consul).
+  - Regole di fusione (`envconfig.Merge`): la configurazione di ambiente è autorevole. Il descrittore può solo aggiungere ciò che non vi è definito, e i valori in conflitto sono un errore, mai una sovrascrittura. Per questo `deploy.targets` non è più obbligatorio nel descrittore: il controllo "almeno un target" avviene dopo la fusione.
+  - La configurazione viene persistita da DBOS: deve contenere solo riferimenti ai segreti. Il token Consul si legge da `CONSUL_HTTP_TOKEN` o da `token_file`, mai dal file di configurazione.
 - Pianificazione (sezione `schedule` del descrittore), sempre sulla stessa coda DBOS dei deploy, così vale lo stesso limite di concorrenza:
   - `schedule.at`: il deploy viene accodato subito con `dbos.WithDelay` e resta `DELAYED` fino all'orario; si annulla con `Cancel`.
   - `schedule.cron`: `dbos.ApplySchedules` crea o aggiorna la schedule (upsert per nome, default `<application>-<environment>`). Il descrittore e il piano sono salvati nel `Context` della schedule. A ogni tick il workflow `go-dart.scheduled-deploy` accoda un `go-dart.deploy` figlio con ID deterministico `<schedule>@<tick UTC>`: un tick non genera mai due deploy, e `List` filtra le esecuzioni di una schedule per prefisso dell'ID. Il workflow del tick non attende il figlio, per non occupare uno slot della coda.
@@ -55,7 +60,7 @@ make test                        # go test ./...
 make lint                        # gofmt + go vet
 go test ./internal/engine -run TestWorkflowFallito -v   # singolo test
 
-bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # piano, senza DBOS
+bin/go-dart -c configs/go-dart.yml validate -f examples/descriptor.yml   # piano e deploy effettivo (legge Consul; --offline per evitarlo)
 bin/go-dart -c configs/go-dart.yml deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout
 bin/go-dart -c configs/go-dart.yml status <id>
 bin/go-dart -c configs/go-dart.yml list [--schedule <nome>]

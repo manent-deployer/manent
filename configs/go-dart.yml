@@ -30,6 +30,22 @@ siem:
 # Directory locale dove vengono scaricati gli artefatti (condivisa se più executor)
 workdir: ./work
 
+# Configurazione di deploy di ogni ambiente (plugin, target, parametri, riferimenti ai segreti),
+# letta all'inizio di ogni deploy e fusa con il descrittore: il descrittore può solo aggiungere
+# ciò che non è definito qui, i valori in conflitto fanno fallire il deploy.
+envconfig:
+  provider: none          # none | consul | file
+  required: false         # true: fallisce se per l'ambiente non esiste configurazione
+  max_retries: 3
+  consul:
+    address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
+    datacenter: ""
+    key: "go-dart/{application}/{environment}"
+    # token: da CONSUL_HTTP_TOKEN oppure da file
+    # token_file: /run/secrets/consul-token
+  file:
+    path: "./examples/envconfig/{application}/{environment}.yml"
+
 # Step disponibili, nell'ordine di esecuzione.
 # mode: mandatory (sempre eseguito) | optional (enabled = default, sovrascrivibile dal descrittore)
 pipeline:

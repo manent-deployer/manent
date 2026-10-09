@@ -63,6 +63,32 @@ schedule:
 
 Ogni esecuzione ricorrente riceve l'ID `<nome>@<orario UTC>`. Per elencarle: `go-dart list --schedule myapp-nightly`. Per gestire le schedule: `go-dart schedule list|show|pause|resume|delete`.
 
+## Configurazione di ambiente (Consul)
+
+Plugin, target, parametri del plugin e riferimenti ai segreti di ogni ambiente possono essere gestiti in un sistema di configurazione invece che nel descrittore. Il descrittore indica solo applicazione, ambiente e artefatto ([esempio](examples/descriptor-envconfig.yml)).
+
+```yaml
+# configs/go-dart.yml
+envconfig:
+  provider: consul                          # none | consul | file
+  required: true
+  consul:
+    address: http://consul:8500             # default: CONSUL_HTTP_ADDR
+    key: "go-dart/{application}/{environment}"
+    # token ACL: CONSUL_HTTP_TOKEN oppure token_file
+```
+
+Il valore della chiave Consul è YAML o JSON ([esempio](examples/envconfig/myapp/test.yml)):
+
+```sh
+consul kv put go-dart/myapp/test @examples/envconfig/myapp/test.yml
+go-dart -c configs/go-dart.yml validate -f examples/descriptor-envconfig.yml   # mostra il deploy effettivo
+```
+
+- **Quando viene letta:** all'inizio di ogni deploy, quindi un deploy pianificato usa la configurazione valida al momento dell'esecuzione. Una volta letta resta la stessa anche se il deploy viene ripreso dopo un crash. Il risultato riporta la chiave e il `ModifyIndex` usati.
+- **Chi prevale:** la configurazione di ambiente. Il descrittore può aggiungere parametri e segreti non definiti, ma un valore in conflitto fa fallire il deploy.
+- **Segreti:** la configurazione deve contenere solo **riferimenti** ai segreti (es. `env:DEPLOY_SSH_KEY`), perché viene salvata nello storico del deploy.
+
 ## Pipeline
 
 Gli step e il loro ordine si definiscono in `configs/go-dart.yml` (`pipeline.steps`).

@@ -65,10 +65,12 @@ type SecretRef struct {
 }
 
 // Deploy contiene la policy, l'eventuale plugin esplicito, i target e i parametri del plugin.
+// Tutti i campi possono arrivare dalla configurazione di ambiente (internal/envconfig):
+// il descrittore può solo aggiungere ciò che lì non è definito.
 type Deploy struct {
 	Policy  string            `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Plugin  string            `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Targets []Target          `json:"targets" yaml:"targets"`
+	Targets []Target          `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
@@ -127,17 +129,14 @@ func (d *Descriptor) Validate() error {
 	if d.APIVersion != APIVersion {
 		errs = append(errs, fmt.Errorf("apiVersion deve essere %q", APIVersion))
 	}
-	if d.Application == "" {
-		errs = append(errs, errors.New("application obbligatorio"))
+	if !validName(d.Application) {
+		errs = append(errs, fmt.Errorf("application %q non valido: %s", d.Application, nameRule))
 	}
-	if d.Environment == "" {
-		errs = append(errs, errors.New("environment obbligatorio"))
+	if !validName(d.Environment) {
+		errs = append(errs, fmt.Errorf("environment %q non valido: %s", d.Environment, nameRule))
 	}
 	if d.Artifact.Type == "" || d.Artifact.Name == "" || d.Artifact.Source == "" {
 		errs = append(errs, errors.New("artifact.type, artifact.name e artifact.source obbligatori"))
-	}
-	if len(d.Deploy.Targets) == 0 {
-		errs = append(errs, errors.New("deploy.targets deve contenere almeno un target"))
 	}
 	for i, t := range d.Deploy.Targets {
 		if t.Host == "" {

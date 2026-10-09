@@ -1,0 +1,16 @@
+# Configurazione di deploy di myapp nell'ambiente test.
+# Con provider consul il contenuto è il valore della chiave go-dart/myapp/test (YAML o JSON).
+# Solo riferimenti ai segreti, mai valori: la configurazione viene salvata nello storico del deploy.
+plugin: remote-copy
+policy: default
+targets:
+  - host: 192.168.1.10
+    port: 22
+    user: deploy
+params:
+  dest_dir: /opt/myapp/releases
+  ssh_key_secret: deploy-key
+  post_command: "systemctl restart myapp"
+secrets:
+  - name: deploy-key
+    ref: env:DEPLOY_SSH_KEY
