@@ -19,7 +19,7 @@ make lint         # gofmt + go vet
 make fmt          # gofmt -w
 make proto        # rigenera il codice gRPC dei plugin esterni
 make docs         # sito della documentazione in docs/site
-make docs-serve   # anteprima della documentazione con ricarica automatica
+make docs-serve   # anteprima con ricarica automatica su http://<host>:8000/manent/ (DOCS_ADDR per cambiarlo)
 make clean        # rimuove binari, directory di lavoro, database SQLite e sito generato
 ```
 

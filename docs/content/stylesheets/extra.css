@@ -250,7 +250,13 @@ body {
   color: #0a0e17;
   font-weight: 700;
 }
-.md-typeset .mn-hero .md-button:hover { border-color: var(--mn-cyan); color: var(--mn-cyan); }
+/* Material colora lo sfondo in hover con l'accento: il testo deve restare leggibile. */
+.md-typeset .mn-hero .md-button:not(.md-button--primary):hover,
+.md-typeset .mn-hero .md-button:not(.md-button--primary):focus {
+  background-color: var(--md-accent-fg-color--transparent);
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
+}
 .md-typeset .mn-hero .md-button--primary:hover { color: #0a0e17; filter: brightness(1.1); box-shadow: 0 0 24px -4px rgba(34, 211, 238, 0.6); }
 
 /* Finestra di terminale */
@@ -318,3 +324,8 @@ body {
 .md-nav__title { background: transparent !important; box-shadow: none !important; }
 /* Il terminale della home è un'illustrazione: niente pulsante di copia. */
 .mn-terminal .md-clipboard { display: none; }
+
+/* Permalink dei titoli: "#" discreto, visibile solo passando sul titolo o con il focus. */
+.md-typeset .headerlink { color: var(--md-default-fg-color--lighter); opacity: 0; }
+.md-typeset :is(h2, h3, h4, h5, h6):hover .headerlink,
+.md-typeset .headerlink:focus { opacity: 1; }

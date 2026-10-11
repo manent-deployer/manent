@@ -16,7 +16,7 @@ docs/
 python3 -m venv docs/.venv
 docs/.venv/bin/pip install -r docs/requirements.txt
 PATH="$PWD/docs/.venv/bin:$PATH" make docs        # genera docs/site
-PATH="$PWD/docs/.venv/bin:$PATH" make docs-serve  # anteprima su http://127.0.0.1:8000 con ricarica automatica
+PATH="$PWD/docs/.venv/bin:$PATH" make docs-serve  # anteprima su http://<host>:8000/manent/ (tutte le interfacce; DOCS_ADDR=127.0.0.1:8000 solo locale)
 ```
 
 La build usa `strict: true`: un link interno rotto o una pagina fuori dal menu fanno fallire la generazione.

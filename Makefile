@@ -92,8 +92,11 @@ proto:
 docs:
 	cd docs && mkdocs build --strict
 
+# Anteprima con ricarica automatica, raggiungibile dalle altre macchine della rete
+# (http://<host>:8000/manent/). DOCS_ADDR=127.0.0.1:8000 la limita a questa macchina.
+DOCS_ADDR ?= 0.0.0.0:8000
 docs-serve:
-	cd docs && mkdocs serve
+	cd docs && mkdocs serve -a $(DOCS_ADDR)
 
 clean:
 	rm -rf bin work manent.db* docs/site

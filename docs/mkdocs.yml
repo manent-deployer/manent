@@ -132,7 +132,7 @@ markdown_extensions:
   - tables
   - def_list
   - toc:
-      permalink: true
+      permalink: "#"
   - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true

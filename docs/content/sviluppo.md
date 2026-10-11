@@ -19,7 +19,7 @@ make lint         # gofmt + go vet
 make fmt          # gofmt -w
 make proto        # regenerates the gRPC code of external plugins
 make docs         # documentation site in docs/site
-make docs-serve   # documentation preview with live reload
+make docs-serve   # documentation preview with live reload on http://<host>:8000/manent/ (DOCS_ADDR to change it)
 make clean        # removes binaries, working directory, SQLite database and generated site
 ```
 
