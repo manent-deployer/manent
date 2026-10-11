@@ -93,7 +93,7 @@ dockers_v2:
       org.opencontainers.image.source: https://github.com/joeg-ita/manent
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
-      org.opencontainers.image.licenses: GPL-3.0
+      org.opencontainers.image.licenses: AGPL-3.0-only
   - id: client
     ids: [manent]
     images: [ghcr.io/joeg-ita/manent]

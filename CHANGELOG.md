@@ -51,6 +51,7 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- Licenza cambiata da GPL-3.0 ad AGPL-3.0.
 - **Incompatibile:** la CLI è divisa in due binari. `manent` è il client: parla solo con l'API
   (`--server`, `MANENT_SERVER` o `~/.config/manent/client.yml`, default `http://127.0.0.1:8080`)
   e non contiene il motore, i plugin né i driver di database. `manent-server` contiene `serve`,
