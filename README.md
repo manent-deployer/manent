@@ -370,4 +370,4 @@ manent avvia il processo al primo deploy e comunica con lui via gRPC ([hashicorp
 
 ## Licenza
 
-AGPL-3.0, vedi [LICENSE](LICENSE).
+Apache-2.0, vedi [LICENSE](LICENSE).
