@@ -1,0 +1,134 @@
+# Laboratorio dei casi d'uso di manent (test/usecases/run.sh): Postgres, API, worker, client e
+# target SSH/HTTP in due region (eu-1 con tre AZ, us-1 con due), su reti separate.
+#
+# - Profilo di default: API e due worker senza region, che raggiungono tutti i target (UC1-UC4).
+# - Profilo "regions": un orchestratore e un worker per region con region_routing (UC5). Ogni
+#   worker di region vede solo la rete dei suoi target; l'orchestratore le vede entrambe perché
+#   gli health gate dei rollout sono letti da lui.
+# - Profilo "tools": il client manent, eseguito con "docker compose run --rm client ...".
+#
+# File generati da run.sh in .work: binari (bin), chiave SSH (keys), artefatti (artifacts),
+# descrittori (uc) e configurazioni dei worker di region (config).
+name: manent-uc
+
+x-manent: &manent
+  image: manent-uc:dev
+  build:
+    context: .work/bin
+    dockerfile: ../../image/Dockerfile
+  environment:
+    DBOS_SYSTEM_DATABASE_URL: postgres://manent:manent@postgres:5432/manent?sslmode=disable
+  depends_on:
+    postgres:
+      condition: service_healthy
+  # Il drain all'arresto attende i deploy in corso fino a dbos.drain_timeout (60s).
+  stop_grace_period: 75s
+
+x-worker-volumes: &worker-volumes
+  - ./config/manent.yml:/etc/manent/manent.yml:ro
+  - ./config/envconfig:/etc/manent/envconfig:ro
+  - ./.work/keys:/keys:ro
+  - ./.work/artifacts:/srv/artifacts:ro
+
+x-target: &target
+  image: manent-uc-target:dev
+  build: target
+  volumes:
+    - ./.work/keys:/keys:ro
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: manent
+      POSTGRES_PASSWORD: manent
+      POSTGRES_DB: manent
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "manent"]
+      interval: 1s
+      retries: 30
+    networks: [core]
+
+  api:
+    <<: *manent
+    command: ["api"]
+    hostname: api
+    # L'API (client DBOS) non migra lo schema: su un database vuoto attende che lo faccia un worker.
+    restart: on-failure
+    ports: ["127.0.0.1:18080:8080"]
+    volumes:
+      - ./config/manent.yml:/etc/manent/manent.yml:ro
+      - ./config/envconfig:/etc/manent/envconfig:ro
+    networks: [core]
+
+  worker-1:
+    <<: *manent
+    command: ["worker"]
+    hostname: worker-1
+    volumes: *worker-volumes
+    networks: [core, eu1, us1]
+
+  worker-2:
+    <<: *manent
+    command: ["worker"]
+    hostname: worker-2
+    volumes: *worker-volumes
+    networks: [core, eu1, us1]
+
+  orchestrator:
+    <<: *manent
+    profiles: [regions]
+    command: ["worker"]
+    hostname: orchestrator
+    volumes:
+      - ./.work/config/orchestrator.yml:/etc/manent/manent.yml:ro
+      - ./config/envconfig:/etc/manent/envconfig:ro
+      - ./.work/keys:/keys:ro
+      - ./.work/artifacts:/srv/artifacts:ro
+    networks: [core, eu1, us1]
+
+  worker-eu1:
+    <<: *manent
+    profiles: [regions]
+    command: ["worker"]
+    hostname: worker-eu1
+    volumes:
+      - ./.work/config/worker-eu1.yml:/etc/manent/manent.yml:ro
+      - ./config/envconfig:/etc/manent/envconfig:ro
+      - ./.work/keys:/keys:ro
+      - ./.work/artifacts:/srv/artifacts:ro
+    networks: [core, eu1]
+
+  worker-us1:
+    <<: *manent
+    profiles: [regions]
+    command: ["worker"]
+    hostname: worker-us1
+    volumes:
+      - ./.work/config/worker-us1.yml:/etc/manent/manent.yml:ro
+      - ./config/envconfig:/etc/manent/envconfig:ro
+      - ./.work/keys:/keys:ro
+      - ./.work/artifacts:/srv/artifacts:ro
+    networks: [core, us1]
+
+  client:
+    image: manent-uc:dev
+    profiles: [tools]
+    entrypoint: ["/usr/local/bin/manent"]
+    environment:
+      MANENT_SERVER: http://api:8080
+      MANENT_TOKEN: ${MANENT_TOKEN:-uc-ci-token}
+    volumes:
+      - ./.work/uc:/uc:ro
+    networks: [core]
+
+  eu1-a: {<<: *target, hostname: eu1-a, networks: [eu1]}
+  eu1-b: {<<: *target, hostname: eu1-b, networks: [eu1]}
+  eu1-c: {<<: *target, hostname: eu1-c, networks: [eu1]}
+  us1-a: {<<: *target, hostname: us1-a, networks: [us1]}
+  us1-b: {<<: *target, hostname: us1-b, networks: [us1]}
+
+networks:
+  core: {}
+  eu1: {}
+  us1: {}

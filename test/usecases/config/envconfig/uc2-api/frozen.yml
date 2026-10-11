@@ -1,0 +1,17 @@
+# UC2: ambiente in freeze (governance.freezes).
+# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+plugin: remote-copy
+targets:
+  - {host: us1-b, user: deploy, labels: {region: us-1, az: us-1b}}
+params:
+  dest_dir: /home/deploy/apps/uc2-api
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  # Guasti simulati dai casi d'uso: $HOME/fault/uc2-api.sleep (attesa) e .fail (errore).
+  post_command: 'f=$HOME/fault/uc2-api; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
+  rollback_command: "true"
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

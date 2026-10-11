@@ -45,6 +45,11 @@ func (q QA) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
 	return out, nil
 }
 
+// DryRun coincide con Run: i controlli leggono solo l'artefatto locale.
+func (q QA) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
+	return q.Run(ctx, in)
+}
+
 // ChecksumChecker confronta lo SHA-256 dichiarato con quello calcolato dallo step artifacts.
 type ChecksumChecker struct{}
 

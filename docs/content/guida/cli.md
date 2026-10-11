@@ -1,0 +1,143 @@
+# CLI
+
+manent has two binaries:
+
+| Binary | For whom | What it does |
+|---|---|---|
+| `manent` | Developers, release managers, CI pipelines | Client: reads YAML descriptors and talks **only to the server API**. It contains no engine, plugins or database drivers. |
+| `manent-server` | Platform | API, workers and database operations. See [manent-server](../operazioni/server.md). |
+
+This page describes the client.
+
+```sh
+manent [-c <client.yml>] [--server <url>] [--token-file <file>] [--ca-file <pem>] <command> [options]
+```
+
+## Client configuration { #configurazione-del-client }
+
+Every command goes through the API: the server's [authentication, permissions and audit](../operazioni/accesso.md) always apply.
+
+```yaml title="~/.config/manent/client.yml"
+server: https://manent.example.com
+token_file: ~/.config/manent/token    # OIDC or static token
+ca_file: /etc/ssl/certs/corporate-ca.pem   # only if the server's CA is not among the system ones
+timeout: 60s                          # per request
+```
+
+| Setting | Option | Variable | File | Default |
+|---|---|---|---|---|
+| Configuration file | `-c`, `--config` | `MANENT_CLIENT_CONFIG` | | `$XDG_CONFIG_HOME/manent/client.yml` or `~/.config/manent/client.yml`, if it exists |
+| Server | `--server` | `MANENT_SERVER` | `server` | `http://127.0.0.1:8080` (local `manent-server serve`) |
+| Token | | `MANENT_TOKEN` | | |
+| Token file | `--token-file` | `MANENT_TOKEN_FILE` | `token_file` | |
+| Server CA | `--ca-file` | `MANENT_CA_FILE` | `ca_file` | system CAs |
+
+The option wins over the variable, which wins over the file. For the token: `--token-file` (or `MANENT_TOKEN_FILE`), then `MANENT_TOKEN`, then the file's `token_file`. The token is never passed as an option, because it would stay in the shell history.
+
+```sh
+export MANENT_SERVER=https://manent.example.com
+export MANENT_TOKEN=…
+manent deploy -f release.yml
+```
+
+In a CI pipeline you can use the `ghcr.io/joeg-ita/manent` image, which contains only the client.
+
+## Deploy
+
+### `deploy`
+
+Enqueues a deploy from a YAML descriptor and, by default, waits for it to finish.
+
+```sh
+manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
+```
+
+| Option | Description |
+|---|---|
+| `-f`, `--file` | YAML descriptor (required). |
+| `--no-wait` | Prints the ID and exits immediately, without waiting. |
+| `--timeout` | Maximum wait (e.g. `30m`). When it expires the command exits, but the deploy continues. |
+| `--dry-run` | Runs the deploy as a [simulation](dry-run.md). |
+
+Scheduled deploys (`schedule` in the descriptor) and those [awaiting approval](governance.md#approvazioni) are not waited for: the command prints the state and exits.
+
+### `validate`
+
+Checks the descriptor on the server with the same checks as enqueuing (descriptor policy, environment configuration, callbacks, artifact source, rollback) and shows the plan and the effective deploy, i.e. the descriptor merged with the environment configuration. It enqueues nothing and does not contact secrets, artifact or targets. Requires the `deployment.read` permission.
+
+```sh
+manent validate -f examples/descriptor.yml
+```
+
+The output also lists the names of the declared secrets, the [governance](governance.md) rule that applies and any active freeze. If the environment configuration cannot be reached, the server reports it in `warnings` and the check is left to the worker. To check a manent configuration before installing it there is [`manent-server validate`](../operazioni/server.md#validate).
+
+### `status`
+
+```sh
+manent status <id>
+```
+
+Prints state, dates and, for finished deploys, the result of each step or the error.
+
+### `list`
+
+```sh
+manent list [-s <schedule>] [-a <application>] [-e <environment>] [--state SUCCESS] [-n 20]
+```
+
+Lists deploys from the most recent, including those awaiting approval or rejected. With `--schedule` it shows only the runs of a recurring schedule. Filters (and permissions) do not reduce the number of results: the list keeps going through older deploys up to `-n`.
+
+### `cancel`
+
+```sh
+manent cancel <id>
+```
+
+A queued, scheduled or awaiting-approval deploy is removed. A running deploy stops at the start of the next step: the step in progress still completes.
+
+## Governance
+
+See [Release governance](governance.md).
+
+```sh
+manent inventory [-a <application>] [-e <environment>]
+manent promote -a <application> --from <environment> --to <environment> [--version <v>] [--deploy-file <yaml>]
+manent rollback -a <application> -e <environment> [--to <version>]
+manent approve <id> [-m <comment>]
+manent reject <id> -m <reason>
+manent freezes [-a <application>] [-e <environment>]
+```
+
+`promote` and `rollback` also accept `--id`, `--dry-run`, `--freeze-override <reason>`, `--no-wait` and `--timeout`, with the same meaning as for `deploy`.
+
+## Logs, timeline and metrics
+
+```sh
+manent logs [-f] [--json] <id>         # deploy log; -f follows it until completion
+manent steps <id>                      # recorded steps with times, duration, outputs and errors
+manent dora [--since 30d] [-a <application>] [-e <environment>]
+```
+
+See [Observability](../operazioni/osservabilita.md).
+
+## Schedules
+
+```sh
+manent schedule list
+manent schedule show <name>
+manent schedule pause <name>
+manent schedule resume <name>
+manent schedule delete <name>
+```
+
+Schedules are created with a descriptor containing `schedule.cron`. See [Scheduled deploys](pianificazione.md).
+
+## Version
+
+```sh
+manent version     # client version, commit and build date
+```
+
+## Exit codes
+
+The command exits with code `0` if the operation succeeds and with a non-zero code on error, including a deploy that ended with an error when `deploy` waits for its outcome.

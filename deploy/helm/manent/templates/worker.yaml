@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "manent.fullname" . }}-worker
+  labels:
+    {{- include "manent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  serviceName: {{ include "manent.fullname" . }}-worker
+  replicas: {{ .Values.worker.replicas }}
+  podManagementPolicy: {{ .Values.worker.podManagementPolicy }}
+  selector:
+    matchLabels:
+      {{- include "manent.selector" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "manent.selector" (dict "root" . "component" "worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "manent.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "manent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["worker"]
+          env:
+            {{- include "manent.env" . | nindent 12 }}
+          ports:
+            - {name: metrics, containerPort: 9090}
+          {{- include "manent.probes" (dict "port" "metrics") | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "manent.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "manent.volumes" . | nindent 8 }}
+        - name: work
+          emptyDir:
+            sizeLimit: {{ .Values.worker.workdir.sizeLimit }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# Service headless del StatefulSet, usato anche per lo scrape delle metriche dei worker.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "manent.fullname" . }}-worker
+  labels:
+    {{- include "manent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  clusterIP: None
+  selector:
+    {{- include "manent.selector" (dict "root" . "component" "worker") | nindent 4 }}
+  ports:
+    - {name: metrics, port: 9090, targetPort: metrics}

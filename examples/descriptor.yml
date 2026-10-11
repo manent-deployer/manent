@@ -15,6 +15,8 @@ artifact:
 secrets:
   - name: deploy-key
     ref: env:DEPLOY_SSH_KEY            # schemi supportati: env:, file:
+  - name: callback-key
+    ref: env:MANENT_CALLBACK_KEY
 
 deploy:
   policy: default
@@ -27,6 +29,30 @@ deploy:
     dest_dir: /opt/myapp/releases
     ssh_key_secret: deploy-key
     post_command: "tar -xzf /opt/myapp/releases/myapp-1.2.3.tar.gz -C /opt/myapp/current"
+
+# Callback (opzionali): ricevono in POST l'esito di ogni step e del deploy.
+# L'autenticazione riferisce un segreto della sezione secrets, mai il valore.
+callbacks:
+  - url: https://ci.example.com/hooks/manent
+    auth:
+      type: hmac                       # bearer | basic (con username) | header (con header) | hmac
+      secret: callback-key
+  - url: https://chat.example.com/hooks/deploy
+    events: [deployment]               # step | deployment (default: tutti)
+
+# Rollback automatico (opzionale): se ammesso per il tipo di artefatto (rollback.artifact_types
+# in manent.yml), in caso di fallimento riporta i target alla release precedente.
+# Con remote-copy richiede il layout releases: aggiungere in deploy.params
+#   layout: releases                  # <dest_dir>/releases/<versione> + symlink <dest_dir>/current
+#   keep_releases: "5"
+#   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+#   post_command: "systemctl restart myapp"
+# rollback:
+#   enabled: true
+#   on: [deploy, post-test]           # default: deploy, post-test, activation
+
+# Dry-run (opzionale): simula il deploy senza modificare i target (equivale a "deploy --dry-run").
+# dryRun: true
 
 # Pianificazione (opzionale). Senza schedule il deploy parte subito.
 # Deploy singolo a un orario (es. finestra di manutenzione): resta DELAYED nella coda DBOS fino ad allora.

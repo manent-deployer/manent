@@ -4,11 +4,13 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/joeg-ita/manent/internal/artifact"
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/secrets"
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
@@ -95,6 +97,52 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	}
 }
 
+// dryDeployer supporta il dry-run e registra se è stato eseguito il deploy reale.
+type dryDeployer struct {
+	fakeDeployer
+	dry bool
+}
+
+func (f *dryDeployer) DryRun(_ context.Context, r *plugin.Request) (*plugin.Result, error) {
+	f.dry = true
+	return &plugin.Result{Plugin: f.name, Targets: []plugin.TargetResult{{Host: r.Targets[0].Host, Status: plugin.StatusReady}}}, nil
+}
+
+func TestDeployDryRun(t *testing.T) {
+	in := pipeline.Input{
+		DeploymentID: "d1",
+		Descriptor: &descriptor.Descriptor{
+			Artifact: descriptor.Artifact{Type: "application"},
+			Deploy:   descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}},
+		},
+		Outputs: map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/app.tgz", OutSHA256: "abc"}},
+	}
+
+	// Plugin con DryRun: viene chiamato al posto di Deploy.
+	dep := &dryDeployer{fakeDeployer: fakeDeployer{name: "app", types: []string{"application"}}}
+	reg := plugin.NewRegistry()
+	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
+	_ = reg.Activate(dep.name, nil, discard)
+	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}}, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard}
+	out, err := s.DryRun(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dep.dry || dep.got != nil || out["dry_run"] != "checked" || out["result"] == "" {
+		t.Fatalf("dry-run inatteso: dry=%v deploy=%v out=%v", dep.dry, dep.got != nil, out)
+	}
+
+	// Plugin senza DryRun: solo validazione, nessun deploy.
+	plain := &fakeDeployer{name: "app", types: []string{"application"}}
+	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, plain)}
+	if out, err = s.DryRun(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if plain.got != nil || out["dry_run"] != "validated" {
+		t.Fatalf("dry-run inatteso: deploy=%v out=%v", plain.got != nil, out)
+	}
+}
+
 // fakeStore simula uno store che riscarica l'artefatto su un altro percorso.
 type fakeStore struct {
 	path string
@@ -120,5 +168,94 @@ func TestQAChecksum(t *testing.T) {
 	in.Outputs["artifacts"][OutSHA256] = "def"
 	if _, err := q.Run(context.Background(), in); err == nil {
 		t.Fatal("QA doveva fallire per checksum diverso")
+	}
+}
+
+func TestSecretsCallbackNonDichiarato(t *testing.T) {
+	s := Secrets{Provider: secrets.NewDefaultProvider(), Logger: discard}
+	in := pipeline.Input{Descriptor: &descriptor.Descriptor{
+		Callbacks: []descriptor.Callback{{URL: "https://ci.example.com", Auth: &descriptor.CallbackAuth{Type: "bearer", Secret: "ci-token"}}},
+	}}
+	if _, err := s.Run(context.Background(), in); err == nil {
+		t.Fatal("atteso errore: segreto del callback non dichiarato")
+	}
+}
+
+// rollbackDeployer legge la release corrente e registra il rollback.
+type rollbackDeployer struct {
+	fakeDeployer
+	current  *plugin.Release
+	restored string
+}
+
+func (f *rollbackDeployer) CurrentRelease(context.Context, *plugin.Request) (*plugin.Release, error) {
+	return f.current, nil
+}
+
+func (f *rollbackDeployer) Rollback(_ context.Context, _ *plugin.Request, prev plugin.Release) (*plugin.Result, error) {
+	f.restored = prev.Version
+	return &plugin.Result{Plugin: f.name}, nil
+}
+
+func TestDeployCheckpointECompensate(t *testing.T) {
+	on := true
+	in := pipeline.Input{
+		DeploymentID: "d1",
+		Descriptor: &descriptor.Descriptor{
+			Artifact: descriptor.Artifact{Type: "application"},
+			Deploy:   descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}},
+			Rollback: &descriptor.Rollback{Enabled: &on, Locator: plugin.PluginLocatorName},
+		},
+		Outputs: map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/app.tgz"}},
+	}
+	dep := &rollbackDeployer{fakeDeployer: fakeDeployer{name: "app", types: []string{"application"}}, current: &plugin.Release{Version: "1.0.0"}}
+	reg := plugin.NewRegistry()
+	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
+	_ = reg.Activate(dep.name, nil, discard)
+	s := Deploy{
+		Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}},
+		Locators: map[string]plugin.ReleaseLocator{plugin.PluginLocatorName: plugin.PluginLocator{}},
+		Logger:   discard,
+	}
+	cp, err := s.Checkpoint(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp[OutPreviousVersion] != "1.0.0" || cp[OutLocator] != "plugin" {
+		t.Fatalf("checkpoint inatteso: %v", cp)
+	}
+	out, err := s.Compensate(context.Background(), in, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dep.restored != "1.0.0" || out[pipeline.OutRollback] != pipeline.RollbackCompleted {
+		t.Fatalf("rollback inatteso: restored=%q out=%v", dep.restored, out)
+	}
+
+	// Primo deploy: nessuna release precedente, la compensazione non chiama il plugin.
+	dep.current, dep.restored = nil, ""
+	if cp, err = s.Checkpoint(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if out, err = s.Compensate(context.Background(), in, cp); err != nil {
+		t.Fatal(err)
+	}
+	if dep.restored != "" || out[pipeline.OutRollback] != pipeline.RollbackSkipped {
+		t.Fatalf("compensazione inattesa: %v", out)
+	}
+
+	// Plugin senza Rollbacker: il checkpoint fallisce prima del deploy.
+	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "app", types: []string{"application"}})}
+	if _, err := s.Checkpoint(context.Background(), in); err == nil || !strings.Contains(err.Error(), "non lo supporta") {
+		t.Fatalf("atteso errore di rollback non supportato, ricevuto %v", err)
+	}
+}
+
+func TestActivationCompensate(t *testing.T) {
+	a := Activation{Activator: LogActivator{Logger: discard}}
+	in := pipeline.Input{DeploymentID: "d1", Descriptor: &descriptor.Descriptor{}}
+	out, err := a.Compensate(context.Background(), in, nil)
+	if err != nil || out[pipeline.OutRollback] != pipeline.RollbackCompleted {
+		t.Fatalf("compensazione inattesa: %v %v", out, err)
 	}
 }

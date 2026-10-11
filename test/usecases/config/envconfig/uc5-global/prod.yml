@@ -1,0 +1,36 @@
+# UC5: rollout multi-region (eu-1, us-1) con i passi sui worker di region, onFailure rollback-wave.
+# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+  - {host: us1-a, user: deploy, labels: {region: us-1, az: us-1a}}
+  - {host: us1-b, user: deploy, labels: {region: us-1, az: us-1b}}
+params:
+  dest_dir: /home/deploy/apps/uc5-global
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  # Guasti simulati dai casi d'uso: $HOME/fault/uc5-global.sleep (attesa) e .fail (errore).
+  post_command: 'f=$HOME/fault/uc5-global; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
+  rollback_command: "true"
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id
+rollback:
+  enabled: true
+rollout:
+  regions: [eu-1, us-1]
+  waves:
+    - {name: canary, select: "az=eu-1a", bake: 2s}
+    - {name: resto, select: "az!=eu-1a", by: az, parallelRegions: 2, bake: 2s}
+  maxUnavailable: "1"
+  onFailure: rollback-wave
+  approvalsBetween: [canary]
+  health:
+    interval: 1s
+    failuresToStop: 1
+    probes:
+      - {url: "http://{host}:8080/uc5-global/current/healthz"}

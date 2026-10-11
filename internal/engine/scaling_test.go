@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/testdb"
 )
 
 // concurrencyStep misura quanti deploy sono in esecuzione insieme, in totale e per ambiente.
@@ -71,7 +71,7 @@ func envDescriptor(env string) *descriptor.Descriptor {
 func TestClientNonEseguePrimaDelWorker(t *testing.T) {
 	var n atomic.Int32
 	reg, planner := testRegistry(t, countStep{&n})
-	db := filepath.Join(t.TempDir(), "dbos.db")
+	db := testdb.URL(t)
 
 	// Il worker crea lo schema del database ma non è ancora avviato.
 	w, err := NewWorker(workerOpts(db, "w1", reg))
@@ -80,7 +80,7 @@ func TestClientNonEseguePrimaDelWorker(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = w.Shutdown(5 * time.Second) })
 
-	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{DatabaseURL: "sqlite:" + db, AppName: "manent-test", Logger: discard})
+	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{DatabaseURL: db, AppName: "manent-test", Logger: discard})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestClientNonEseguePrimaDelWorker(t *testing.T) {
 func TestDueWorkerSerializzanoPerAmbiente(t *testing.T) {
 	step := &concurrencyStep{running: map[string]int{}, sleep: 400 * time.Millisecond}
 	reg, planner := testRegistry(t, step)
-	db := filepath.Join(t.TempDir(), "dbos.db")
+	db := testdb.URL(t)
 
 	// Un deploy alla volta per worker: due ambienti in parallelo richiedono due worker.
 	opts1, opts2 := workerOpts(db, "w1", reg), workerOpts(db, "w2", reg)
@@ -164,7 +164,7 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 	step := &blockOnceStep{started: make(chan struct{}), release: make(chan struct{})}
 	t.Cleanup(func() { close(step.release) })
 	reg, planner := testRegistry(t, step)
-	db := filepath.Join(t.TempDir(), "dbos.db")
+	db := testdb.URL(t)
 	ctx := context.Background()
 
 	// w1 avvia il deploy e "muore" a metà step.
@@ -201,10 +201,25 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 	}
 }
 
+// idStep conta le esecuzioni di ogni deploy.
+type idStep struct {
+	mu   sync.Mutex
+	runs map[string]int
+}
+
+func (*idStep) Name() string { return "count" }
+
+func (s *idStep) Run(_ context.Context, in pipeline.Input) (pipeline.Output, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runs[in.DeploymentID]++
+	return pipeline.Output{}, nil
+}
+
 func TestScheduleConDueWorkerUnDeployPerTick(t *testing.T) {
-	var n atomic.Int32
-	reg, planner := testRegistry(t, countStep{&n})
-	db := filepath.Join(t.TempDir(), "dbos.db")
+	step := &idStep{runs: map[string]int{}}
+	reg, planner := testRegistry(t, step)
+	db := testdb.URL(t)
 	w1 := startWorker(t, workerOpts(db, "w1", reg))
 	startWorker(t, workerOpts(db, "w2", reg))
 	svc := NewService(ServiceOptions{Client: w1.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
@@ -217,6 +232,8 @@ func TestScheduleConDueWorkerUnDeployPerTick(t *testing.T) {
 	if err := svc.DeleteSchedule(ctx, "tick"); err != nil {
 		t.Fatal(err)
 	}
+	// Un tick già partito può accodare il suo deploy anche dopo la cancellazione della schedule.
+	time.Sleep(2 * time.Second)
 	deps, err := svc.List(ctx, ListFilter{Schedule: "tick"})
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +243,17 @@ func TestScheduleConDueWorkerUnDeployPerTick(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(deps) < 2 || int(n.Load()) != len(deps) {
-		t.Errorf("ogni tick deve produrre un solo deploy: %d deploy, %d esecuzioni", len(deps), n.Load())
+	step.mu.Lock()
+	defer step.mu.Unlock()
+	if len(deps) < 2 {
+		t.Fatalf("attesi almeno 2 deploy dai tick, ricevuti %d", len(deps))
+	}
+	for _, d := range deps {
+		if n := step.runs[d.ID]; n != 1 {
+			t.Errorf("deploy %s eseguito %d volte", d.ID, n)
+		}
+	}
+	if len(step.runs) != len(deps) {
+		t.Errorf("deploy eseguiti %d, elencati %d", len(step.runs), len(deps))
 	}
 }

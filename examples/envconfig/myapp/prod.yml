@@ -1,0 +1,45 @@
+# Configurazione di deploy di myapp in produzione: 3 region × 3 AZ rilasciate a ondate.
+# Vedi docs/content/guida/ondate.md. Solo riferimenti ai segreti, mai valori.
+plugin: remote-copy
+targets:
+  - {host: eu1-a-01.internal, user: deploy, labels: {region: eu-1, az: eu-1a, canary: "true"}}
+  - {host: eu1-a-02.internal, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b-01.internal, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c-01.internal, user: deploy, labels: {region: eu-1, az: eu-1c}}
+  - {host: eu2-a-01.internal, user: deploy, labels: {region: eu-2, az: eu-2a}}
+  - {host: eu2-b-01.internal, user: deploy, labels: {region: eu-2, az: eu-2b}}
+  - {host: eu2-c-01.internal, user: deploy, labels: {region: eu-2, az: eu-2c}}
+  - {host: us1-a-01.internal, user: deploy, labels: {region: us-1, az: us-1a}}
+  - {host: us1-b-01.internal, user: deploy, labels: {region: us-1, az: us-1b}}
+  - {host: us1-c-01.internal, user: deploy, labels: {region: us-1, az: us-1c}}
+params:
+  dest_dir: /opt/myapp
+  layout: releases
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  post_command: "systemctl restart myapp"
+secrets:
+  - name: deploy-key
+    ref: vault:secret/data/myapp/prod#ssh_key
+rollback:
+  enabled: true
+rollout:
+  regions: [eu-1, eu-2, us-1]
+  waves:
+    - {name: canary, select: "canary=true", bake: 15m}
+    - {name: eu-1, select: "region=eu-1, canary!=true", by: az, bake: 10m}
+    - {name: resto, select: "region in (eu-2, us-1)", by: az, parallelRegions: 2, bake: 10m}
+  maxUnavailable: 50%
+  onFailure: rollback-wave
+  approvalsBetween: [canary]
+  health:
+    interval: 30s
+    failuresToStop: 2
+    probes:
+      - {url: "https://{host}/healthz"}
+    metrics:
+      - name: error-rate
+        query: 'sum(rate(http_requests_total{app="{application}",code=~"5..",az="{az}"}[5m])) / sum(rate(http_requests_total{app="{application}",az="{az}"}[5m]))'
+        max: 0.01
+    alerts:
+      blockOn: ["severity=critical"]

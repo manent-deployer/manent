@@ -103,3 +103,68 @@ func TestParseYAMLEsempioSchedulato(t *testing.T) {
 		t.Errorf("schedule inattesa: %+v", d.Schedule)
 	}
 }
+
+func TestDryRunConSchedule(t *testing.T) {
+	base := "apiVersion: manent/v1\napplication: app\nenvironment: prod\n" +
+		"artifact: {type: application, name: app, source: ./app.tgz}\ndryRun: true\n"
+	if _, err := ParseYAML([]byte(base)); err != nil {
+		t.Fatalf("dry-run senza schedule deve essere valido: %v", err)
+	}
+	if _, err := ParseYAML([]byte(base + "schedule: {at: 2030-01-01T02:00:00+01:00}\n")); err == nil {
+		t.Fatal("atteso errore: dryRun con schedule")
+	}
+}
+
+func TestCallbacks(t *testing.T) {
+	base := "apiVersion: manent/v1\napplication: app\nenvironment: prod\n" +
+		"artifact: {type: application, name: app, source: ./app.tgz}\n"
+	tests := map[string]struct {
+		yaml    string
+		wantErr bool
+	}{
+		"senza auth":         {yaml: "callbacks: [{url: https://ci.example.com/hook}]\n"},
+		"bearer con eventi":  {yaml: "callbacks: [{url: https://ci.example.com/hook, events: [step], auth: {type: bearer, secret: tok}}]\n"},
+		"url relativo":       {yaml: "callbacks: [{url: /hook}]\n", wantErr: true},
+		"schema non http":    {yaml: "callbacks: [{url: \"file:///etc/passwd\"}]\n", wantErr: true},
+		"credenziali in url": {yaml: "callbacks: [{url: \"https://u:p@ci.example.com/\"}]\n", wantErr: true},
+		"evento sconosciuto": {yaml: "callbacks: [{url: https://ci.example.com, events: [tutto]}]\n", wantErr: true},
+		"auth senza secret":  {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: bearer}}]\n", wantErr: true},
+		"basic senza user":   {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: basic, secret: tok}}]\n", wantErr: true},
+		"header senza nome":  {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: header, secret: tok}}]\n", wantErr: true},
+		"tipo sconosciuto":   {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: oauth, secret: tok}}]\n", wantErr: true},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseYAML([]byte(base + tt.yaml))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("errore %v, atteso errore=%v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRollback(t *testing.T) {
+	base := "apiVersion: manent/v1\napplication: app\nenvironment: prod\n" +
+		"artifact: {type: application, name: app, source: ./app.tgz}\n"
+	d, err := ParseYAML([]byte(base + "rollback: {enabled: true, on: [deploy, post-test], locator: cmdb}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Rollback.IsEnabled() || !d.Rollback.Triggers("post-test") || d.Rollback.Triggers("activation") {
+		t.Errorf("rollback inatteso: %+v", d.Rollback)
+	}
+	for _, bad := range []string{
+		"rollback: {on: [deploy, deploy]}\n",
+		"rollback: {on: [\"\"]}\n",
+		"rollback: {locator: \"../x\"}\n",
+		"rollback: {mode: auto}\n",
+	} {
+		if _, err := ParseYAML([]byte(base + bad)); err == nil {
+			t.Errorf("atteso errore per %q", bad)
+		}
+	}
+	var nilRB *Rollback
+	if nilRB.IsEnabled() || nilRB.Triggers("deploy") {
+		t.Error("un rollback assente non deve essere attivo")
+	}
+}

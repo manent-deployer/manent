@@ -1,0 +1,187 @@
+# Sito della documentazione di manent: make docs (build in docs/site) o make docs-serve.
+site_name: manent
+site_description: Deploy as code on durable DBOS workflows
+site_url: https://joeg-ita.github.io/manent/
+repo_url: https://github.com/joeg-ita/manent
+repo_name: joeg-ita/manent
+edit_uri: edit/main/docs/content/
+copyright: Distributed under the license in the repository's LICENSE file
+
+docs_dir: content
+site_dir: site
+strict: true
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  # Scuro di default; i colori sono in stylesheets/extra.css.
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light theme
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark theme
+  features:
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/joeg-ita/manent
+
+plugins:
+  - search:
+      lang: [en, it]
+  # Inglese di default (pagina.md, alla radice); italiano in pagina.it.md, servito sotto /it/.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: false
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: it
+          name: Italiano
+          build: true
+          site_description: Deploy as code su workflow durevoli DBOS
+          copyright: Distribuito con la licenza indicata nel file LICENSE del repository
+          theme:
+            palette:
+              - scheme: slate
+                primary: custom
+                accent: custom
+                toggle:
+                  icon: material/weather-sunny
+                  name: Tema chiaro
+              - scheme: default
+                primary: custom
+                accent: custom
+                toggle:
+                  icon: material/weather-night
+                  name: Tema scuro
+          nav_translations:
+            Quick start: Avvio rapido
+            Concepts: Concetti
+            Architecture: Architettura
+            Pipeline and steps: Pipeline e step
+            Guide: Guida
+            Deploy descriptor: Descrittore di deploy
+            CLI (manent client): CLI (client manent)
+            HTTP API: API HTTP
+            Scheduled deploys: Deploy pianificati
+            Environment configuration: Configurazione di ambiente
+            Callbacks: Callback
+            Release governance: Governance dei rilasci
+            Wave rollouts: Rilasci a ondate
+            Operations: Operazioni
+            Installation: Installazione
+            Configuring manent: Configurazione di manent
+            Scalability: Scalabilità
+            Recovery, shutdown and retention: Recovery, arresto e retention
+            Versions and upgrades: Versioni e aggiornamenti
+            Observability: Osservabilità
+            Logs and SIEM: Log e SIEM
+            Security: Sicurezza
+            Authentication, permissions and audit: Autenticazione, permessi e audit
+            Secrets and artifact sources: Segreti e sorgenti degli artefatti
+            Plugins: Plugin
+            Writing a plugin: Scrivere un plugin
+            External plugins: Plugin esterni
+            Use cases: Casi d'uso
+            Development: Sviluppo
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Quick start: avvio-rapido.md
+  - Concepts:
+      - Architecture: concetti/architettura.md
+      - Pipeline and steps: concetti/pipeline.md
+  - Guide:
+      - Deploy descriptor: guida/descrittore.md
+      - CLI (manent client): guida/cli.md
+      - HTTP API: guida/api.md
+      - Scheduled deploys: guida/pianificazione.md
+      - Environment configuration: guida/configurazione-ambiente.md
+      - Dry-run: guida/dry-run.md
+      - Callbacks: guida/callback.md
+      - Rollback: guida/rollback.md
+      - Release governance: guida/governance.md
+      - Wave rollouts: guida/ondate.md
+  - Operations:
+      - Installation: operazioni/installazione.md
+      - manent-server: operazioni/server.md
+      - Configuring manent: operazioni/configurazione.md
+      - Scalability: operazioni/scalabilita.md
+      - Recovery, shutdown and retention: operazioni/affidabilita.md
+      - Versions and upgrades: operazioni/aggiornamenti.md
+      - Observability: operazioni/osservabilita.md
+      - Logs and SIEM: operazioni/log-siem.md
+      - Security: operazioni/sicurezza.md
+      - Authentication, permissions and audit: operazioni/accesso.md
+      - Secrets and artifact sources: operazioni/segreti-artefatti.md
+  - Plugins:
+      - Writing a plugin: plugins/index.md
+      - remote-copy: plugins/remote-copy.md
+      - External plugins: plugins/esterni.md
+  - Use cases: casi-uso.md
+  - Development: sviluppo.md

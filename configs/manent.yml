@@ -1,6 +1,8 @@
 # Configurazione applicativa di manent (manent -c configs/manent.yml ...)
 app:
   name: manent
+  # Versione dei workflow DBOS (non del binario): un worker riprende solo i workflow della
+  # propria versione. Va cambiata solo quando le note di rilascio lo indicano.
   version: 0.1.0
 
 dbos:
@@ -14,6 +16,42 @@ dbos:
   global_concurrency: 0         # deploy in esecuzione su tutti i worker (0 = nessun limite)
   environment_concurrency: 1    # deploy contemporanei della stessa application/environment su tutti i worker
   schedule_poll_interval: 30s   # ogni quanto le modifiche alle schedule ricorrenti vengono rilette
+  # All'arresto il worker smette di prelevare deploy e attende quelli in corso fino a questo tempo.
+  drain_timeout: 2m
+  # Rilasci a ondate su più region (docs: Rilasci a ondate): ogni worker dichiara la sua region
+  # ed esegue solo i passi sui target di quella region.
+  # region: eu-1
+  # region_routing: true
+
+# Health gate dei rilasci a ondate.
+rollout:
+  # prometheus_url: http://prometheus:9090
+  # alertmanager_url: http://alertmanager:9093
+  check_timeout: 30s
+
+# Registro dei worker e recovery dei workflow di un worker perso (docs: Recovery, arresto e retention).
+recovery:
+  heartbeat_interval: 15s
+  stale_after: 1m
+  # Con un valore > 0 i workflow in sospeso di un worker della stessa versione arrestato o senza
+  # heartbeat da questo tempo vengono ripresi da un altro worker. 0 = solo manent-server admin recover.
+  auto_recover_after: 0s
+
+# Pulizia dello storico dei workflow: 0 = mai. Le ultime keep_releases release di ogni ambiente restano.
+retention:
+  max_age: 0s         # es. 2160h (90 giorni)
+  keep_releases: 10
+  interval: 1h
+
+# Metriche, sonde e tracing (docs: Osservabilità).
+observability:
+  # listen: ":9090"   # /metrics, /healthz, /readyz su una porta dedicata (necessaria ai worker)
+  metrics: true
+  tracing:
+    enabled: false
+    # endpoint: otel-collector:4318   # default OTEL_EXPORTER_OTLP_ENDPOINT
+    # insecure: true
+    sample_ratio: 1
 
 http:
   listen: ":8080"
@@ -46,6 +84,123 @@ envconfig:
   file:
     path: "./examples/envconfig/{application}/{environment}.yml"
 
+# Callback HTTP indicati nei descrittori (sezione callbacks): ricevono l'esito degli step e del deploy.
+callbacks:
+  timeout: 10s
+  max_retries: 3          # tentativi aggiuntivi; un callback non consegnato non fa fallire il deploy
+  allow_http: false       # di default solo https
+  allowed_hosts: []       # host ammessi, anche "*.example.com"; vuoto = tutti
+
+# Rollback automatico: se un deploy fallisce, gli step già eseguiti vengono annullati
+# riportando l'ambiente alla release precedente. La policy è per tipo di artefatto:
+# allowed indica se il rollback è possibile, enabled è il default (descrittore e
+# configurazione di ambiente possono cambiarlo, nei limiti di allowed).
+# I tipi non elencati non ammettono rollback.
+rollback:
+  locator: plugin          # come individuare la release precedente: plugin = letta dai target
+  artifact_types:
+    application:
+      allowed: true
+      enabled: false       # true per attivarlo di default (remote-copy richiede layout: releases)
+      on: [deploy, post-test, activation]   # step il cui fallimento avvia il rollback
+    migration:
+      allowed: false       # le migration di database di norma non sono reversibili
+
+# Autenticazione dell'API. none = nessuna autenticazione né permessi: solo sviluppo.
+# In produzione: mode enabled con OIDC (utenti) e/o token statici (CI).
+auth:
+  mode: none
+  # oidc:
+  #   issuer: https://sso.example.com/realms/corp
+  #   audience: manent                  # client ID atteso nel claim aud
+  #   username_claim: preferred_username
+  #   groups_claim: groups
+  # tokens:                             # solo lo sha256 del token: printf '%s' "$TOKEN" | sha256sum
+  #   - name: ci-pipeline
+  #     sha256: "<sha256 esadecimale>"
+  #     groups: [ci]
+  #     expires_at: 2027-06-30T00:00:00Z  # opzionale
+  # tokens_file: /etc/manent/tokens.yml   # stesso formato (chiave tokens), riletto quando cambia: revoca senza riavvio
+
+# Permessi per applicazione e ambiente (con auth.mode enabled).
+# Ruoli predefiniti: viewer, tester (+ dry-run), approver (viewer + approvazioni),
+# deployer (+ deploy, cancel e rollback manuale), operator (+ schedule), admin (tutto, anche le deroghe al freeze).
+rbac:
+  roles: {}                             # ruoli aggiuntivi: nome -> [azioni]
+  bindings: []
+  # - groups: [team-a]
+  #   role: deployer
+  #   applications: ["team-a-*"]
+  #   environments: [dev, test]
+  # - groups: [release-managers]
+  #   role: operator
+  #   applications: ["*"]
+  #   environments: [prod]
+  # - groups: [cab]                     # change advisory board: approva i deploy in produzione
+  #   role: approver
+  #   applications: ["*"]
+  #   environments: [prod]
+  # - subjects: ["token:ci-pipeline"]
+  #   role: deployer
+  #   applications: ["*"]
+  #   environments: [test]
+
+# Audit: oltre al log e al SIEM, opzionalmente un file JSON Lines in sola aggiunta, con una
+# catena di hash verificabile con "manent-server audit verify".
+audit:
+  file: ""
+  # max_size_mb: 100                    # rotazione (0 = nessuna)
+  # hmac_key_ref: "vault:secret/data/manent/audit#key"   # catena non ricalcolabile senza la chiave
+
+# Regole di rilascio: promozione obbligatoria, approvazioni e finestre di freeze.
+governance:
+  rules: []                             # vale la prima regola che corrisponde
+  # - name: produzione
+  #   applications: ["*"]
+  #   environments: [prod]
+  #   requires: [preprod]               # lo stesso artefatto deve essere già stato rilasciato in preprod
+  #   approvals: {required: 1, timeout: 72h}   # allow_self: false (default)
+  freezes: []
+  # - name: fine-anno
+  #   reason: chiusura contabile
+  #   applications: ["*"]
+  #   environments: [prod]
+  #   from: 2026-12-20T00:00:00+01:00
+  #   to: 2027-01-07T00:00:00+01:00
+  # - name: weekend
+  #   applications: ["*"]
+  #   environments: [prod]
+  #   cron: "0 18 * * FRI"              # inizio di ogni occorrenza (5 campi)
+  #   duration: 62h
+  #   timezone: Europe/Rome
+
+# Cosa può aggiungere un descrittore alla configurazione di ambiente.
+# Se la sezione manca non ci sono limiti (solo sviluppo). Esempio per la produzione:
+# descriptor_policy:
+#   params:
+#     remote-copy: [dest_dir, verify_checksum, keep_releases]   # mai i comandi (post_command, ...)
+#   secret_refs: ["vault:secret/data/{application}/*"]
+#   targets: false
+
+# Provider di segreti aggiuntivi a env: e file:.
+secrets:
+  vault:
+    enabled: false
+    # address: https://vault.example.com:8200   # default VAULT_ADDR
+    # auth: approle                            # token (VAULT_TOKEN o token_file) | approle | kubernetes
+    # approle: {role_id: manent, secret_id_file: /etc/manent/vault-secret-id}
+    # kubernetes: {role: manent}
+
+# Download degli artefatti: sorgenti ammesse e relative credenziali.
+artifacts:
+  timeout: 30m
+  allow_unlisted: true                  # false in produzione: solo le sorgenti elencate
+  sources: []
+  # - prefix: https://nexus.example.com/repository/releases/
+  #   auth: {type: basic, username: manent, secret_ref: "vault:secret/data/manent/nexus#password"}
+  #   ca_file: /etc/ssl/certs/corp-ca.pem
+  # - prefix: file:///srv/artifacts/
+
 # Step disponibili, nell'ordine di esecuzione.
 # mode: mandatory (sempre eseguito) | optional (enabled = default, sovrascrivibile dal descrittore)
 pipeline:
@@ -75,3 +230,13 @@ plugins:
     known_hosts: ~/.ssh/known_hosts
     insecure_ignore_host_key: false
     artifact_types: [application]
+  # Plugin esterno: binario separato avviato da manent al primo deploy (make plugins).
+  # Le altre chiavi, oltre a external, sono la configurazione passata al plugin.
+  # remote-copy-ext:
+  #   external:
+  #     command: bin/manent-plugin-remote-copy
+  #     sha256: "<sha256 del binario>"     # verificato all'attivazione e a ogni avvio
+  #     env: {}                           # il plugin non eredita l'ambiente del worker
+  #     start_timeout: 1m
+  #   known_hosts: ~/.ssh/known_hosts
+  #   artifact_types: [application]

@@ -1,0 +1,77 @@
+package engine
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/governance"
+)
+
+func TestValidate(t *testing.T) {
+	_, planner := testRegistry(t, artifactStep{})
+	gov, err := governance.New(
+		[]governance.Rule{{Name: "prod", Applications: []string{"*"}, Environments: []string{"prod"}, Requires: []string{"test"}, Approvals: governance.Approvals{Required: 2}}},
+		[]governance.Window{{Name: "sempre", Applications: []string{"*"}, Environments: []string{"prod"}, From: time.Now().Add(-time.Hour), To: time.Now().Add(time.Hour)}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Validate non accede al database: basta un Engine senza client.
+	e := NewService(ServiceOptions{Planner: planner, Logger: discard, Resolver: newFakeResolver("r7"), Governance: gov})
+	ctx := context.Background()
+
+	d := appDescriptor("prod", "1.0.0")
+	d.Secrets = []descriptor.SecretRef{{Name: "chiave", Ref: "vault:segreto/chiave"}}
+	v, err := e.Validate(ctx, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.Valid || len(v.Plan) != 1 || v.Config["revision"] != "r7" || v.Deploy.Params["version"] != "r7" {
+		t.Errorf("deploy effettivo inatteso: %+v", v)
+	}
+	if len(v.Secrets) != 1 || v.Secrets[0] != "chiave" {
+		t.Errorf("segreti: attesi solo i nomi, ricevuto %v", v.Secrets)
+	}
+	if g := v.Governance; g == nil || g.Rule != "prod" || g.Approvals != 2 || g.Freeze == nil || g.Freeze.Name != "sempre" {
+		t.Errorf("governance inattesa: %+v", v.Governance)
+	}
+
+	// Policy violata: richiesta non valida. Configurazione irraggiungibile: solo un avviso.
+	e.resolver = policyResolver{}
+	d.Application = "vietata"
+	if _, err := e.Validate(ctx, d); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("atteso ErrInvalidRequest, ricevuto %v", err)
+	}
+	d.Application = "irraggiungibile"
+	if v, err := e.Validate(ctx, d); err != nil || len(v.Warnings) != 1 {
+		t.Errorf("configurazione irraggiungibile: %+v %v", v, err)
+	}
+}
+
+func TestValidateRollout(t *testing.T) {
+	_, planner := testRegistry(t, waveStep{name: "deploy", log: &waveLog{}})
+	e := NewService(ServiceOptions{Planner: planner, Logger: discard, Resolver: newFakeResolver("r1"), Health: &fakeChecker{}})
+	d := waveDescriptor("v-ondate")
+	v, err := e.Validate(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Rollout == nil || v.Rollout.Status != "planned" || len(v.Rollout.Stages) != 4 || v.Rollout.Stages[3].Name != "resto/eu-2b+us-1b" {
+		t.Fatalf("piano a ondate: %+v", v.Rollout)
+	}
+	// Un target senza ondata rende la richiesta non valida.
+	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "ap-1a", Labels: map[string]string{"region": "ap-1", "az": "ap-1a"}})
+	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a non appartiene") {
+		t.Errorf("target scoperto: %v", err)
+	}
+	// Un onFailure con rollback senza rollback attivo è rifiutato.
+	d = waveDescriptor("v-ondate-2")
+	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
+	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback attivo") {
+		t.Errorf("rollback non attivo: %v", err)
+	}
+}

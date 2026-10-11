@@ -54,6 +54,20 @@ func TestDeployPianificatoAt(t *testing.T) {
 	if time.Now().Before(at) || n.Load() != 1 {
 		t.Errorf("deploy eseguito prima dell'orario o più volte (esecuzioni: %d)", n.Load())
 	}
+
+	// Reinvio dello stesso descrittore dopo l'orario (es. una CI che riprova): restituisce il
+	// deploy esistente invece di rifiutare l'orario come passato.
+	again, err := e.Submit(ctx, scheduled(descriptor.Schedule{At: &at}, "at-1"))
+	if err != nil {
+		t.Fatalf("reinvio dopo l'orario: %v", err)
+	}
+	if again.ID != sub.ID || again.State != "SUCCESS" || n.Load() != 1 {
+		t.Errorf("reinvio non idempotente: %+v (esecuzioni: %d)", again, n.Load())
+	}
+	// Un altro id con l'orario passato resta un errore.
+	if _, err := e.Submit(ctx, scheduled(descriptor.Schedule{At: &at}, "at-2")); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("atteso ErrInvalidRequest, ricevuto %v", err)
+	}
 }
 
 func TestDeployPianificatoNelPassato(t *testing.T) {

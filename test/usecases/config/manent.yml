@@ -1,0 +1,106 @@
+# Configurazione di manent per i casi d'uso (test/usecases): API e worker condividono questo file;
+# run.sh ne ricava le varianti dei worker di region aggiungendo dbos.region e dbos.region_routing.
+# Tempi ridotti (heartbeat, recovery, gate) perché gli scenari durino pochi minuti.
+app:
+  name: manent
+  version: 0.1.0
+
+dbos:
+  # Il database arriva da DBOS_SYSTEM_DATABASE_URL (compose.yml); l'executor_id è l'hostname.
+  queue: deployments
+  concurrency: 4
+  environment_concurrency: 1
+  schedule_poll_interval: 2s
+  drain_timeout: 60s
+
+recovery:
+  heartbeat_interval: 2s
+  stale_after: 6s
+  auto_recover_after: 10s
+
+rollout:
+  check_timeout: 5s
+
+http:
+  listen: ":8080"
+
+logging:
+  level: info
+  format: text
+
+workdir: /tmp/manent-work
+
+envconfig:
+  provider: file
+  required: false
+  file:
+    path: /etc/manent/envconfig/{application}/{environment}.yml
+
+# Solo le sorgenti del laboratorio: gli artefatti sono nel volume condiviso /srv/artifacts.
+artifacts:
+  allow_unlisted: false
+  sources:
+    - prefix: file:///srv/artifacts/
+
+rollback:
+  locator: plugin
+  artifact_types:
+    application:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+
+# Token statici di prova (uc-<nome>-token): solo lo sha256 in configurazione.
+auth:
+  mode: enabled
+  tokens:
+    - {name: ci, sha256: 31e75ebb1d5ad71fa4787f839f5a21751fbc7e26547e461ec36c3872ad11a969, groups: [ci]}
+    - {name: cab, sha256: 747b88c3090b64b426e37f0d042f64d8f6d0eee1e997afa7d135045fae31489a, groups: [cab]}
+    - {name: admin, sha256: ee6d41bedd050de5a3e01118d65033dd5b2a1d72c5c874c3b9b5d4257bb45301, groups: [admins]}
+    - {name: viewer, sha256: b55ac51de6e0593e2f297b5c930d2ab09889ab8ddbe773841a36e281d7664c6e, groups: [viewers]}
+
+rbac:
+  bindings:
+    - {groups: [ci], role: operator, applications: ["*"], environments: ["*"]}
+    - {groups: [cab], role: approver, applications: ["*"], environments: ["*"]}
+    - {groups: [admins], role: admin, applications: ["*"], environments: ["*"]}
+    - {groups: [viewers], role: viewer, applications: ["*"], environments: ["*"]}
+
+governance:
+  rules:
+    # UC2: in produzione solo artefatti già rilasciati in test, con un'approvazione.
+    - name: uc2-produzione
+      applications: [uc2-api]
+      environments: [prod]
+      requires: [test]
+      approvals: {required: 1, timeout: 1h}
+    # Le approvazioni tra le ondate (UC4, UC5) non richiedono una regola: senza, ne basta una
+    # e scadono dopo 72 ore. Una regola con approvals imporrebbe anche un'approvazione prima del deploy.
+  freezes:
+    - name: uc2-congelato
+      reason: ambiente congelato per il caso d'uso
+      applications: [uc2-api]
+      environments: [frozen]
+      from: 2020-01-01T00:00:00Z
+      to: 2100-01-01T00:00:00Z
+    - name: uc5-us-congelata
+      reason: freeze della sola region us-1
+      applications: [uc5-global]
+      environments: [prod-us-freeze]
+      regions: [us-1]
+      from: 2020-01-01T00:00:00Z
+      to: 2100-01-01T00:00:00Z
+
+pipeline:
+  steps:
+    - {name: secrets, mode: mandatory}
+    - {name: artifacts, mode: mandatory, max_retries: 2}
+    - {name: qa, mode: optional, enabled: true}
+    - {name: deploy, mode: mandatory, max_retries: 1}
+    - {name: post-test, mode: optional, enabled: false, max_retries: 1}
+    - {name: activation, mode: optional, enabled: true}
+
+plugins:
+  remote-copy:
+    insecure_ignore_host_key: true   # laboratorio: chiavi host rigenerate a ogni avvio
+    artifact_types: [application]

@@ -1,0 +1,10 @@
+bin/
+work/
+docs/site/
+docs/.venv/
+*.db
+*.db-shm
+*.db-wal
+.git/
+.idea/
+.vscode/

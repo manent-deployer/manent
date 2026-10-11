@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
 // ErrNotFound indica che per l'applicazione/ambiente non esiste configurazione.
@@ -28,6 +30,11 @@ type EnvConfig struct {
 	Targets []descriptor.Target    `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string      `json:"params,omitempty" yaml:"params,omitempty"`
 	Secrets []descriptor.SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	// Rollback impone il rollback automatico dell'ambiente (es. sempre attivo in produzione),
+	// nei limiti della policy del tipo di artefatto.
+	Rollback *descriptor.Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
+	// Rollout è la strategia di rilascio a ondate dell'ambiente.
+	Rollout *descriptor.Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
 }
 
 // Document è una configurazione letta dal provider, con i metadati per l'audit.
@@ -78,7 +85,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	d.Deploy.Plugin = pick("deploy.plugin", c.Plugin, d.Deploy.Plugin)
 
 	if len(c.Targets) > 0 {
-		if len(d.Deploy.Targets) > 0 && !slices.Equal(c.Targets, d.Deploy.Targets) {
+		if len(d.Deploy.Targets) > 0 && !slices.EqualFunc(c.Targets, d.Deploy.Targets, descriptor.Target.Equal) {
 			errs = append(errs, errors.New("deploy.targets definiti sia nella configurazione di ambiente sia nel descrittore"))
 		}
 		d.Deploy.Targets = slices.Clone(c.Targets)
@@ -108,6 +115,35 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	}
 	d.Secrets = secrets
 
+	if c.Rollback != nil {
+		rb := descriptor.Rollback{}
+		if d.Rollback != nil {
+			rb = *d.Rollback
+		}
+		if e := c.Rollback.Enabled; e != nil {
+			if rb.Enabled != nil && *rb.Enabled != *e {
+				errs = append(errs, fmt.Errorf("rollback.enabled: %t nella configurazione di ambiente, %t nel descrittore", *e, *rb.Enabled))
+			}
+			rb.Enabled = e
+		}
+		if len(c.Rollback.On) > 0 {
+			if len(rb.On) > 0 && !slices.Equal(rb.On, c.Rollback.On) {
+				errs = append(errs, errors.New("rollback.on definito sia nella configurazione di ambiente sia nel descrittore"))
+			}
+			rb.On = slices.Clone(c.Rollback.On)
+		}
+		rb.Locator = pick("rollback.locator", c.Rollback.Locator, rb.Locator)
+		d.Rollback = &rb
+	}
+
+	if c.Rollout != nil {
+		// La strategia dell'ambiente è autorevole: il descrittore può solo ripeterla identica.
+		if d.Rollout != nil && !reflect.DeepEqual(*d.Rollout, *c.Rollout) {
+			errs = append(errs, errors.New("rollout definito sia nella configurazione di ambiente sia nel descrittore"))
+		}
+		r := *c.Rollout
+		d.Rollout = &r
+	}
 	if len(d.Deploy.Targets) == 0 {
 		errs = append(errs, errors.New("nessun target di deploy: né nella configurazione di ambiente né nel descrittore"))
 	}
@@ -123,6 +159,8 @@ type Resolver struct {
 	Provider Provider
 	// Required fa fallire il deploy se per l'ambiente non esiste configurazione.
 	Required bool
+	// Policy, se presente, limita ciò che il descrittore può aggiungere.
+	Policy *DescriptorPolicy
 }
 
 // Resolve legge la configurazione di ambiente e la fonde con il descrittore.
@@ -145,9 +183,14 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			}
 		}
 	}
+	// Policy e fusione dipendono solo da descrittore e configurazione: un nuovo tentativo
+	// darebbe lo stesso errore.
+	if err := r.Policy.Check(d, cfg); err != nil {
+		return d, nil, pipeline.Permanent(err)
+	}
 	eff, err := Merge(d, cfg)
 	if err != nil {
-		return d, nil, err
+		return d, nil, pipeline.Permanent(err)
 	}
 	meta["targets"] = strconv.Itoa(len(eff.Deploy.Targets))
 	return eff, meta, nil

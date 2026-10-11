@@ -2,6 +2,10 @@ package artifact
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,5 +55,78 @@ func TestStoreEnsureECleanup(t *testing.T) {
 		if err := w1.Cleanup(ctx, id); err == nil {
 			t.Errorf("Cleanup(%q) doveva fallire", id)
 		}
+	}
+}
+
+// mapProvider è un secrets.Provider in memoria.
+type mapProvider map[string]string
+
+func (m mapProvider) Resolve(_ context.Context, ref string) (string, error) {
+	v, ok := m[ref]
+	if !ok {
+		return "", errors.New("riferimento sconosciuto")
+	}
+	return v, nil
+}
+
+func TestSorgentiConCredenziali(t *testing.T) {
+	var gotAuth, gotKey string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth, gotKey = r.Header.Get("Authorization"), r.Header.Get("X-Api-Key")
+		_, _ = w.Write([]byte("contenuto"))
+	}))
+	defer srv.Close()
+
+	sp := mapProvider{"vault:nexus#password": "pw", "env:API_KEY": "k"}
+	srcs, err := NewSources([]Source{
+		{Prefix: srv.URL + "/releases/", Auth: &SourceAuth{Type: AuthBasic, Username: "manent", SecretRef: "vault:nexus#password"}},
+		{Prefix: srv.URL + "/releases/special/", Auth: &SourceAuth{Type: AuthHeader, Header: "X-Api-Key", SecretRef: "env:API_KEY"}},
+	}, false, sp, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := DefaultFetcher{Sources: srcs}
+	dir := t.TempDir()
+	if _, err := f.Fetch(context.Background(), srv.URL+"/releases/app-1.0.tgz", dir); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Basic " + base64.StdEncoding.EncodeToString([]byte("manent:pw")); gotAuth != want {
+		t.Errorf("Authorization = %q, atteso %q", gotAuth, want)
+	}
+	// Vince il prefisso più lungo.
+	if _, err := f.Fetch(context.Background(), srv.URL+"/releases/special/app.tgz", dir); err != nil {
+		t.Fatal(err)
+	}
+	if gotKey != "k" || gotAuth != "" {
+		t.Errorf("credenziali inattese: auth=%q key=%q", gotAuth, gotKey)
+	}
+	// Sorgenti non elencate: rifiutate, sia URL sia percorsi locali.
+	for _, src := range []string{srv.URL + "/altro/app.tgz", "/etc/passwd", "file:///etc/passwd"} {
+		if err := srcs.Check(src); err == nil {
+			t.Errorf("%s: sorgente non elencata ammessa", src)
+		}
+	}
+	if _, err := f.Fetch(context.Background(), "/etc/passwd", dir); err == nil {
+		t.Error("download da una sorgente non elencata eseguito")
+	}
+}
+
+func TestSorgentiFile(t *testing.T) {
+	dir := t.TempDir()
+	srcs, err := NewSources([]Source{{Prefix: "file://" + filepath.ToSlash(dir) + "/"}}, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srcs.Check(filepath.Join(dir, "app.tgz")); err != nil {
+		t.Errorf("percorso nella directory ammessa rifiutato: %v", err)
+	}
+	if err := srcs.Check(filepath.Join(dir, "..", "fuori.tgz")); err == nil {
+		t.Error("percorso fuori dalla directory ammessa accettato")
+	}
+	if _, err := NewSources([]Source{{Prefix: "ftp://x/"}}, false, nil, nil); err == nil {
+		t.Error("atteso errore per un prefisso non supportato")
+	}
+	if _, err := NewSources([]Source{{Prefix: "https://x/", Auth: &SourceAuth{Type: AuthBasic, SecretRef: "env:X"}}}, false, nil, nil); err == nil {
+		t.Error("atteso errore per basic senza username")
 	}
 }

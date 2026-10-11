@@ -28,6 +28,8 @@ type Fetcher interface {
 // DefaultFetcher supporta percorsi locali, file:// e http(s)://.
 type DefaultFetcher struct {
 	Client *http.Client
+	// Sources, se presente, limita le sorgenti ammesse e fornisce le credenziali.
+	Sources *Sources
 }
 
 // Fetch copia l'artefatto in destDir calcolandone lo SHA-256.
@@ -65,15 +67,26 @@ func (f DefaultFetcher) Fetch(ctx context.Context, source, destDir string) (*Fet
 
 // open apre la sorgente e restituisce il nome file di destinazione.
 func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser, string, error) {
+	if err := f.Sources.Check(source); err != nil {
+		return nil, "", err
+	}
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
-		client := f.Client
-		if client == nil {
-			client = http.DefaultClient
-		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 		if err != nil {
 			return nil, "", err
 		}
+		client, err := f.Sources.prepare(ctx, req, source)
+		if err != nil {
+			return nil, "", err
+		}
+		if client == nil {
+			client = f.Client
+		}
+		if client == nil {
+			client = http.DefaultClient
+		}
+		// Le credenziali non seguono un redirect verso un altro host: net/http rimuove
+		// Authorization e gli header sensibili quando il dominio cambia.
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, "", err

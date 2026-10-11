@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/testdb"
 )
 
 // fakeResolver simula una configurazione di ambiente modificabile durante il test.
@@ -53,7 +53,7 @@ func TestConfigLettaAlMomentoDellEsecuzione(t *testing.T) {
 	step := &paramStep{}
 	reg, planner := testRegistry(t, step)
 	resolver := newFakeResolver("v1")
-	opts := workerOpts(filepath.Join(t.TempDir(), "dbos.db"), "w1", reg)
+	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Resolver = resolver
 	w := startWorker(t, opts)
 	svc := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
@@ -84,7 +84,7 @@ func TestConfigStabileDopoRecovery(t *testing.T) {
 	step := &paramStep{}
 	reg, planner := testRegistry(t, block, step)
 	resolver := newFakeResolver("v1")
-	db := filepath.Join(t.TempDir(), "dbos.db")
+	db := testdb.URL(t)
 	ctx := context.Background()
 
 	opts := workerOpts(db, "w1", reg)
@@ -121,7 +121,7 @@ func TestConfigNonDisponibileFermaIlDeploy(t *testing.T) {
 	reg, planner := testRegistry(t, countStep{&n})
 	resolver := newFakeResolver("v1")
 	resolver.fail.Store(true)
-	opts := workerOpts(filepath.Join(t.TempDir(), "dbos.db"), "w1", reg)
+	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Resolver = resolver
 	w := startWorker(t, opts)
 	svc := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})

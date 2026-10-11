@@ -6,3 +6,6 @@
 .DS_Store
 .idea/
 .vscode/
+/docs/site/
+/docs/.venv/
+/test/usecases/.work/

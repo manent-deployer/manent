@@ -11,21 +11,23 @@ Il nome viene dal latino *manere* ("rimanere, restare saldo") ed esprime l'immut
 
 - Linguaggio: Go >= 1.27
 - Workflow, step, code (queueing), retry e scheduling: **DBOS** (`github.com/dbos-inc/dbos-transact-golang/dbos`). Seguire le linee guida in [dbos-skills.md](./dbos-skills.md).
-- CLI: `github.com/jessevdk/go-flags` — accetta descrittori di deploy in **YAML**.
+- CLI: `github.com/jessevdk/go-flags` — accetta descrittori di deploy in **YAML**. Due binari: `cmd/manent` (client, `internal/clientcli`, parla solo con l'API) e `cmd/manent-server` (`internal/servercli`: `serve`, `api`, `worker`, `admin`, `audit verify`, `validate` locale).
 - Web server API: `github.com/gin-gonic/gin` — accetta descrittori di deploy in **JSON**.
 - CLI e API devono condividere lo stesso core (stesso modello di descrittore, stesso motore di workflow); cambia solo il formato di input.
 
 ## Architettura
 
-Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor` → `engine.Service` → workflow DBOS → step della pipeline → plugin di deploy.
+Flusso: client `manent` (`internal/clientcli`, YAML → JSON via `internal/apiclient`) o chiamata diretta all'API (`internal/api`, JSON) → `descriptor` → `service.Service` (implementato da `engine.Engine`, avvolto da `authz.Guard`) → workflow DBOS → step della pipeline → plugin di deploy.
+
+- **Contratto client/server** (`internal/service`): interfacce del servizio, richieste, risposte, errori, `Terminal`, `ParseSince`. Non deve dipendere da engine, DBOS o altro codice del server: `engine` lo riusa con alias (`engine/contract.go`), `apiclient` lo implementa sull'API. `internal/clientcli/deps_test.go` fallisce se `cmd/manent` importa DBOS, pgx, SQLite, SSH, go-plugin, Gin, Prometheus, OpenTelemetry, engine, app, steps, secrets, extplugin o plugins. Un nuovo metodo del servizio va aggiunto in `service`, `engine`, `authz.Guard`, `api`, `apiclient` e nei servizi finti dei test.
 
 - `internal/app` è l'unico punto di composizione: collega le implementazioni concrete alle interfacce. I nuovi plugin si registrano in `app.NewPlugins`, i nuovi step in `app.NewSteps`. Ci sono due modalità:
   - `app.NewWorker` (comandi `serve` e `worker`): esegue i deploy.
-  - `app.NewClient` (tutti gli altri comandi CLI e `serve --no-worker`): usa `dbos.NewClient`, accoda e interroga ma **non esegue e non recupera** workflow. Un comando CLI non deve mai avviare un `dbos.Context`: con `Launch` recupererebbe i workflow in corso del proprio ExecutorID e li rieseguirebbe.
+  - `app.NewClient` (`manent-server api`/`serve --no-worker` e `admin`): usa `dbos.NewClient`, accoda e interroga ma **non esegue e non recupera** workflow. Un comando che non è `serve` o `worker` non deve mai avviare un `dbos.Context`: con `Launch` recupererebbe i workflow in corso del proprio ExecutorID e li rieseguirebbe.
 - `internal/engine` è diviso in due parti:
-  - `Worker` (`worker.go`) possiede il `dbos.Context`, registra i workflow `manent.deploy` e `manent.scheduled-deploy` e la coda. Esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome e `max_retries` dalla configurazione), e alla fine, sia in caso di successo sia di errore, esegue lo step `cleanup` (`pipeline.Cleaner`).
+  - `Worker` (`worker.go`) possiede il `dbos.Context`, registra i workflow `manent.deploy`, `manent.scheduled-deploy` e `manent.approval` e le code (deploy e `<coda>-approvals`). Esegue in ordine i `PlannedStep`, ciascuno con `dbos.RunAsStep` (nome e `max_retries` dalla configurazione), e alla fine, sia in caso di successo sia di errore, esegue lo step `cleanup` (`pipeline.Cleaner`).
   - `Engine` (`engine.go`, `schedule.go`) implementa `Service` solo con API che accettano un `dbos.Client` (`dbos.Enqueue` per nome del workflow, `RetrieveWorkflow`, `ListWorkflows`, ...), quindi funziona sia sul contesto del worker sia su un client standalone.
-  - Se il descrittore ha un `id`, questo diventa l'ID del workflow e fa da chiave di idempotenza. I nomi dei workflow non vanno cambiati: DBOS li usa per il recovery e per le schedule.
+  - Se il descrittore ha un `id`, questo diventa l'ID del workflow e fa da chiave di idempotenza. I nomi dei workflow (`manent.deploy`, `manent.scheduled-deploy`, `manent.approval`, `manent.deploy-pass`) non vanno cambiati: DBOS li usa per il recovery e per le schedule.
 - Scalabilità orizzontale: più worker condividono lo stesso Postgres.
   - Ogni worker deve avere un `dbos.executor_id` univoco e stabile (default: hostname), perché al riavvio riprende solo i propri workflow in sospeso. Senza DBOS Conductor, un nodo che non torna con lo stesso ID lascia i suoi deploy in `PENDING`.
   - La coda è partizionata con chiave `<application>/<environment>`: `environment_concurrency` (default 1) vale su tutti i worker, `concurrency` per singolo worker, `global_concurrency` sul totale. I workflow accodati senza chiave di partizione non vengono mai prelevati: per questo gli scatti delle schedule usano la coda interna di DBOS.
@@ -41,9 +43,68 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
   - Le espressioni cron a 5 campi vengono convertite nel formato a 6 campi (con i secondi) richiesto da DBOS (`Schedule.CronExpr`).
 - `internal/pipeline`: contratto `Step` e `ConfigPlanner`. Il piano viene calcolato **prima** di avviare il workflow e gli viene passato come input. Regole: gli step obbligatori non sono disattivabili; quelli opzionali partono dal default di configurazione e il descrittore (`steps:`) può sovrascriverlo; l'ordine segue sempre `pipeline.steps` della configurazione.
 - Gli step si scambiano dati solo tramite `pipeline.Output` (`map[string]string`), che DBOS persiste. **Gli output non devono mai contenere segreti**: lo step `secrets` si limita a verificare che i riferimenti siano risolvibili, mentre i plugin leggono i valori al momento dell'uso tramite `plugin.SecretResolver`.
-- `pkg/plugin` è l'unico package pubblico: il contratto `Deployer` e il `Registry` di factory. I plugin dei team esterni dipendono solo da qui. `Deploy` deve essere idempotente, perché può essere rieseguito dai retry o da una recovery.
+- `pkg/plugin` è l'unico package pubblico: il contratto `Deployer`, le interfacce opzionali (`DryRunner`, `ReleaseInspector`, `Rollbacker`), i `ReleaseLocator` e il `Registry` di factory. I plugin dei team esterni dipendono solo da qui. `Deploy` e `Rollback` devono essere idempotenti, perché possono essere rieseguiti dai retry o da una recovery.
+- Dry-run (`dryRun` nel descrittore, `deploy --dry-run`, `?dry_run=true`): stesso workflow, eseguito da un worker.
+  - Nel `Worker.run` uno step viene eseguito con `DryRun` solo se implementa `pipeline.DryRunner`, altrimenti viene saltato. Il default è quindi sicuro: uno step nuovo non produce effetti in dry-run se non lo prevede esplicitamente.
+  - Lo step `deploy` valida la richiesta e chiama `plugin.DryRunner` se il plugin lo implementa.
+  - Con un `id` nel descrittore, l'ID del workflow diventa `<id>.dry-run`, per non consumare la chiave di idempotenza del deploy reale. Il dry-run non è ammesso con `schedule`.
+- Callback (`callbacks` nel descrittore, `internal/callback`): eventi `deployment` (`started`, poi l'esito finale dopo il `cleanup`) e `step` (`config` e ogni step del piano, `skipped` in dry-run).
+  - Ogni invio è uno step DBOS (`callback:<evento>:<indice>`, retry da `callbacks.max_retries`) emesso dal workflow con un numero di sequenza deterministico. L'`id` `<deployment>:<sequence>` fa da chiave di deduplica per il destinatario, perché dopo una recovery un invio in corso può essere ripetuto. Un callback fallito non fa mai fallire il deploy.
+  - L'auth (`bearer`, `basic`, `header`, `hmac`) riferisce un segreto per nome: viene risolto solo al momento dell'invio, e lo step `secrets` verifica che sia dichiarato.
+  - `callback.Policy` (https e `allowed_hosts` da configurazione) protegge da SSRF: è applicata sia da `Engine.Submit` sia al momento dell'invio. Il client HTTP non segue i redirect.
+- Rollback (`rollback` nel descrittore, nella configurazione di ambiente e in `manent.yml`, `internal/rollback`):
+  - **Policy per tipo di artefatto** (`rollback.artifact_types.<tipo>`): `allowed` dice se è possibile, `enabled` è il default, `on` sono gli step il cui fallimento lo avvia. I tipi non elencati non lo ammettono; `migration` è esclusa di default. Descrittore ed envconfig possono cambiare `enabled`, `on` e `locator` entro `allowed`, con le regole di fusione di `envconfig.Merge`.
+  - La decisione viene presa nello step `config` (`rollback.Policy.Apply` sul descrittore effettivo) e salvata in `d.Rollback`; `Engine.Submit` e `validate` la verificano già prima, solo per rifiutare subito un rollback non ammesso.
+  - `Worker.run` esegue, prima di ogni `pipeline.Compensator` che implementa `pipeline.Checkpointer`, lo step DBOS `checkpoint:<step>`: è separato apposta, perché i retry dello step non devono rileggere uno stato già modificato. Se fallisce uno step in `on`, compensa in ordine inverso gli step avviati, compreso quello fallito (`rollback:<step>`), e si ferma alla prima compensazione fallita. Il deploy resta comunque in errore (`engine.RollbackError`, esito anche nel campo `rollback` dell'evento finale dei callback). In dry-run i checkpoint vengono eseguiti, le compensazioni mai.
+  - Lo step `deploy`: il checkpoint verifica `plugin.CanRollback` e chiede al `plugin.ReleaseLocator` (registrati per nome in `app.NewLocators`; `plugin` usa `plugin.ReleaseInspector`) la release in esercizio; la compensazione chiama `plugin.Rollbacker`. `activation` si compensa con `steps.Deactivator`, se l'Activator lo implementa.
+- Accesso (`internal/auth`, `internal/authz`, `internal/audit`):
+  - **Identità** `auth.Principal` nel context, nella forma `<metodo>:<nome>` (`oidc:alice`, `token:ci`, `cli:<utente OS>`, `none:anonymous`).
+  - **API:** il middleware autentica il bearer con `auth.Chain`: prima i token statici (solo sha256 in configurazione, confronto a tempo costante), poi la verifica OIDC con go-oidc, la cui discovery avviene in `serve`. Con `auth.mode: none` imposta l'identità anonima.
+  - **CLI:** il client `manent` usa sempre `internal/apiclient` (server da `--server`/`MANENT_SERVER`/`client.yml`, default `http://127.0.0.1:8080`; token da `--token-file`/`MANENT_TOKEN_FILE`, `MANENT_TOKEN`, `token_file`; CA da `ca_file`). `manent-server admin` lavora sul database con `cliContext()` (`cli:<utente OS>`), fuori dal Guard.
+  - **Token statici:** `auth.tokens` (con `expires_at`) e `auth.tokens_file` (`auth.TokenFile`, riletto al più ogni 5s se cambiano mtime o dimensione; un file non valido lascia i token precedenti, un file rimosso li revoca).
+  - **Permessi:** `authz.Guard` avvolge l'`engine.Service` (è `App.Service`), quindi l'RBAC per applicazione e ambiente vale per API e CLI. Restituisce `engine.ErrForbidden` (403) e registra nell'audit le azioni che modificano lo stato e quelle negate. `Plan` richiede `deployment.read`. `List` passa i permessi come `ListFilter.Match`: l'engine scorre lo storico a pagine (al più `maxListScan`) finché non raggiunge il limite. 
+  - **Audit su file** (`audit.FileRecorder`): catena di hash (`prev_hash`, `hash` calcolato sulla riga senza il campo `hash`, HMAC con `audit.hmac_key_ref`), ripresa dall'ultima riga all'avvio, rotazione per dimensione che prosegue la catena; `audit.Verify` e `manent-server audit verify`. Un file per processo.
+  - **Richiedente:** `Engine.Submit` salva l'identità in `Request.RequestedBy` e come utente autenticato del workflow DBOS (`WithEnqueueAuthenticatedUser`). I tick delle schedule la riusano. Il worker la inserisce negli eventi dei callback e registra l'esito finale nell'audit in uno step DBOS (`audit`).
+- Policy sui descrittori (`envconfig.DescriptorPolicy`, `descriptor_policy` in configurazione): limita parametri per plugin, riferimenti ai segreti (pattern con `{application}`/`{environment}`) e target che il descrittore può aggiungere all'envconfig. Viene verificata in `Resolver.Resolve` prima di `Merge`. `Engine.Submit` chiama già il resolver (`ServiceOptions.Resolver`): un errore permanente (policy, fusione, nessun target) è `ErrInvalidRequest`; un errore transitorio (provider irraggiungibile) lascia la verifica al worker. I default sono permissivi e applicati in `config.applyDefaults`, non in `Default()`, perché YAML fonderebbe le mappe invece di sostituirle; `Config.SecurityWarnings` li segnala all'avvio di serve e worker.
+- Errori permanenti: `pipeline.Permanent(err)` più `dbos.WithStepRetryPredicate(pipeline.Retryable)` su tutti gli step. Policy, fusione e rollback non ammesso falliscono subito, senza retry. La validazione del plugin non è marcata permanente, perché per un plugin esterno può essere un problema di connessione.
+- Segreti: `secrets.SchemeProvider` (`env:`, `file:`, `vault:`), costruito in `app.NewSecretProvider` e condiviso da step, callback e sorgenti degli artefatti. `secrets.Vault`:
+  - API HTTP diretta, senza libreria Vault;
+  - KV v1/v2, con riconoscimento automatico di `data.data`;
+  - login token/AppRole/Kubernetes, con token in cache fino all'80% del lease e un nuovo login se riceve 403.
+- Sorgenti degli artefatti (`artifact.Sources`, `artifacts` in configurazione): credenziali per prefisso di URL (il più lungo vince) risolte dal secret provider a ogni download, CA dedicate e allowlist (`allow_unlisted`). I percorsi locali si normalizzano in `file://` più il percorso assoluto pulito. La verifica avviene in `Engine.Submit` (422) e nel fetcher del worker.
+- Governance (`internal/governance`, sezione `governance`, `engine/approval.go`, `engine/inventory.go`):
+  - **Attributi DBOS** su ogni workflow (`attributes()`: application, environment, artifact, version, kind, source, dry_run, approval) e, al termine del deploy, `recordAttributes` aggiunge outcome, sha256 (output dello step `artifacts`) e rollback con `dbos.SetWorkflowAttributes`. `toStatus` li legge (fallback sulla chiave di partizione per i workflow vecchi). Il filtro per attributi di DBOS funziona solo su Postgres: i filtri sono applicati in memoria da `Engine.scan`.
+  - **Regole:** vale la prima `governance.Rule` che corrisponde; `Engine.govern` (solo deploy reali, non dry-run) verifica freeze, `requires` (`findRelease` + `sameArtifact`) e salva le approvazioni richieste in `Request.Approval`.
+  - **Approvazioni:** `enqueueApproval` accoda `manent.approval` con ID `<deploy-id>.approval` sulla coda `approvalQueue(queue)`, non partizionata e senza limiti (un'attesa non deve occupare slot né bloccare l'ambiente). Il workflow pubblica lo stato con `SetEvent`, riceve le `Decision` con `Recv` (scarta auto-approvazioni e duplicati), alla scadenza va in `expired`; se approvato accoda il deploy con lo stesso ID. Status/List/Wait/Cancel di un ID senza deploy guardano il workflow di approvazione. `Decide` invia con `dbos.Send`; permesso e divieto di auto-approvazione sono in `Guard.Decide`. I tick delle schedule con `Request.Approval` accodano un'approvazione.
+  - **Freeze:** all'accodamento in `govern` e all'avvio nello step `config` (`resolveConfig`, errore permanente), salvo `descriptor.FreezeOverride` (permesso `deployment.freeze-override`, non con cron).
+  - **Promozione e rollback manuale:** `Promote` e `Rollback` ripartono dal `Request` registrato (`loadRequest`), fissano `artifact.sha256` a quello rilasciato, non copiano `deploy.targets` (promozione) e passano da `submit` con `kind` `promotion`/`rollback` e `source`. Il rollback manuale richiede `RollbackPolicy.Allowed(tipo)`. Se dopo l'ultimo deploy riuscito uno è fallito lasciando i target modificati (`leftChanged`), il rollback di default (e `--to`) ripristina quella versione. `Engine.alreadyScheduled` rende idempotente il reinvio con `id` e `schedule.at` passato.
+- Operatività (`internal/cluster`, `engine/admin.go`, `engine/maintenance.go`, `engine/retention.go`):
+  - **Registro dei worker** (`cluster.Registry`, tabelle `manent.executors`/`manent.leases` su Postgres, `manent_*` su SQLite, aperte con una connessione database/sql propria sullo stesso `database_url`). `Worker.Launch` chiama `Register` **prima** di `dbos.Launch`: se è in corso una recovery dei suoi workflow (claim senza `recovery_done_at`), attende. `Claim` riesce solo su un executor arrestato o senza heartbeat: registrazione e rivendicazione si escludono, così un workflow non viene ripreso due volte.
+  - **Recovery** (`Admin.Recover`): stessa versione → `ResumeWorkflow` sulla coda originale (la partizione resta); versione diversa → `CancelWorkflow` + `RewindWorkflow` con la nuova versione, coda e partizione, dallo step successivo all'ultimo registrato (`--from-start` da 0). `Worker.maintain` invia heartbeat e, con `recovery.auto_recover_after`, sotto il lease `recovery` riprende i worker della stessa versione persi. `manent-server admin executors|recover|prune` lavorano sul database.
+  - **Drain** (`Worker.Drain`): `ListenQueues` su una coda inesistente, poi attesa dei `manent.deploy` PENDING dell'executor fino a `dbos.drain_timeout`; `/readyz` risponde 503 (`App.draining`).
+  - **Retention** (`Admin.Prune`, lease `retention`): elimina i workflow conclusi (`CompletedBefore`) tranne gli ultimi `keep_releases` deploy riusciti per applicazione/ambiente e le loro approvazioni; mai `WithDeleteChildren` (i deploy dei tick sono figli).
+  - `app.version` è la **versione dei workflow** DBOS, distinta da quella del binario (`internal/version`, ldflags).
+- Osservabilità (`internal/telemetry`, `internal/deploylog`, `engine/insight.go`):
+  - `instrument` avvolge il corpo di ogni step DBOS (config, checkpoint, step, rollback): marca il context con `deploylog.WithStep`, apre una span figlia di quella del deploy e registra `StepAttempt`. `deploylog.Handler` (in `app.NewLogger`) scrive nello stream DBOS `log` del workflow i record emessi con quel context: **nel codice degli step i log vanno emessi con `...Context(ctx, ...)`**. Al più 500 righe per step.
+  - La traccia della richiesta (`Request.TraceParent`, W3C) arriva al worker; le schedule cron la azzerano. `recordMetrics` legge `StartedAt` con il context radice del worker, non con quello del workflow (non deve diventare uno step).
+  - `InsightService` (`Steps`, `Logs`, `DORA`) fa parte di `engine.Service`; il Guard richiede `deployment.read`. Metriche di stato (`telemetry.StateCollector`, cache 15s) da `Admin.WorkflowCounts`/`ExecutorList`. `observability.listen` serve `/metrics`, `/healthz`, `/readyz` (`App.OpsHandler`).
+- Rilasci a ondate (`internal/labels`, `internal/rollout`, `engine/rollout.go`, `descriptor.Rollout`, `envconfig.EnvConfig.Rollout`):
+  - **Modello:** `descriptor.Target.Labels` (`region`, `az` riservate), `Rollout` con `waves` (selettori `labels.Parse`), `by`, `parallelRegions`, `bake`, `maxUnavailable`, `onFailure`, `approvalsBetween`, `health`. In `envconfig.Merge` la strategia dell'ambiente è autorevole (il descrittore può solo ripeterla identica).
+  - **Piano:** `rollout.Build` (puro, ricalcolato identico dopo una recovery) → stadi (passi eseguiti insieme, poi bake + gate) → passi (`<ondata>/<region>/<az>`) → lotti di `maxUnavailable`. `checkRollout` lo verifica nello step `config`, in `Engine.inspect` (Submit/Validate, solo con la configurazione di ambiente letta) e in `runRollout`.
+  - **Esecuzione** (`Worker.runRollout`): `splitPlan` divide il piano in step iniziali, step per passo (da `deploy` ad `activation`) e finali; `execStep` esegue uno step con nome DBOS `<step>@<passo>#<lotto>` e targets del lotto (per i deploy senza rollout nomi invariati: compatibilità della versione dei workflow). Gate: `dbos.Sleep` durevole a intervalli + `RunAsStep("gate@...")` con `rollout.Checker` (`HTTPChecker`: sonde solo su `{host}`, Prometheus, Alertmanager; nessun dato = rosso). `onFailure` con `undo` per passo (checkpoint in `startedStep`, serializzabile). Freeze per region (`Governance.FrozenIn`) e approvazioni tra ondate (`Recv` su `rollout-approval`, `Engine.Decide` invia al deploy se `Status.Rollout` è `paused-approval`). Stato pubblicato con `SetEvent("rollout")`; `attrRolloutProgress` negli attributi; `InventoryEntry.Drift`.
+  - **Region** (`dbos.region`, `dbos.region_routing`): i passi con region diventano figli `manent.deploy-pass` (`RunWorkflow` con ID `<id>.pass.<passo>` sulla coda `<queue>.<region>`, partizione `app/env/region`, `RetrieveQueue` per l'errore "nessun worker registrato"); i worker con region ascoltano solo coda dei deploy, approvazioni e la propria (`ListenQueues`); il figlio non invia callback (`events.silent`), i suoi log sono copiati nello stream del deploy con `deploylog.Copy`, pulisce la workdir alla fine. Un figlio non fallisce mai: restituisce `passOutput.Error` e gli step avviati per un eventuale rollback. Con il routing anche le sonde del gate sui target di una region girano su un suo worker (`readGate`: figlio `manent.gate-probe` per lettura, ID `<id>.gate.<stadio>#<n>.<region>`); metriche e allarmi restano all'orchestratore.
 - `internal/steps`: le implementazioni standard degli step (secrets, artifacts, qa, deploy, post-test, activation). Lo step deploy sceglie il plugin tramite una `Policy` (`deploy.policy` del descrittore; la policy di default usa `deploy.plugin`, altrimenti il primo plugin attivo che supporta il tipo di artefatto, in ordine alfabetico).
-- `plugins/remotecopy`: primo plugin. Copia l'artefatto via SSH/SFTP passando da un file `.part` e poi un rename atomico, verifica lo sha256 remoto e può eseguire un `post_command`. L'SSH reale è nascosto dietro le interfacce `Dialer` e `Session`.
+- Plugin esterni (`hashicorp/go-plugin` su gRPC): un plugin può essere un binario separato, configurato con la chiave `external` in `plugins.<nome>`.
+  - `pkg/plugin/external` è l'SDK pubblico: il protocollo (`proto/deployer.proto`, rigenerato con `make proto`), `Serve(factory)` per il main del plugin e il `Client` lato host. Il plugin riusa la stessa `plugin.Factory` di un plugin interno (vedi `cmd/manent-plugin-remote-copy`).
+  - `internal/extplugin` gestisce il processo. `app.NewPlugins` registra ogni plugin `external` con il suo nome di configurazione.
+  - Il processo parte al primo uso, non all'attivazione, così i comandi CLI non lo avviano mai. Viene riavviato se termina e arrestato da `Registry.Close` alla chiusura dell'app.
+  - Il binario viene verificato con `sha256` sia all'attivazione sia a ogni avvio.
+  - Il processo non eredita l'ambiente del worker (`SkipHostEnv`, solo `PATH`, `HOME`, `TMPDIR`, `TZ`, `LANG` più `external.env`): le variabili del worker possono contenere segreti.
+  - I segreti arrivano solo tramite il servizio `Secrets` servito sul broker di go-plugin, per la durata di una chiamata `Deploy`/`DryRun`.
+  - `DryRun` di un plugin esterno che non lo implementa restituisce `plugin.ErrDryRunUnsupported`, che lo step `deploy` tratta come un plugin senza `DryRunner`.
+  - Il plugin dichiara in `Configure` le interfacce opzionali che implementa (`capabilities`): `Process.RollbackSupported` le usa per `plugin.CanRollback`. `CurrentRelease` e `Rollback` sono RPC aggiunte in modo compatibile (UNIMPLEMENTED nei plugin vecchi), senza cambiare `ProtocolVersion`.
+  - Nel plugin lo stdout è riservato a go-plugin. I log vanno scritti con il logger della Factory (`external.Logger`), che usa lo stderr originale in formato hclog JSON e li fa arrivare a `slog` e al SIEM.
+- `plugins/remotecopy`: primo plugin. Copia l'artefatto via SSH/SFTP passando da un file `.part` e poi un rename atomico, verifica lo sha256 remoto e può eseguire un `post_command`. L'SSH reale è nascosto dietro le interfacce `Dialer` e `Session`. Con `layout: releases` usa `<dest_dir>/releases/<versione>` e il symlink `current` (switch atomico con `mv -T`, pulizia oltre `keep_releases` che non tocca mai la release attiva e la precedente): solo così implementa `CurrentRelease` e `Rollback`.
 - `internal/logging`: un `*slog.Logger` con un handler fan-out (log applicativo + `rfc5424.Message` inviati al SIEM via UDP o TCP). Lo stesso logger viene passato a DBOS, quindi anche i log di DBOS arrivano al SIEM. Ogni componente riceve il logger per iniezione.
 - Gli artefatti vengono scaricati in `workdir/<deployment-id>` (`artifact.Store`). Lo step `deploy` chiama `Store.Ensure`: se il file manca sul worker corrente, lo riscarica e verifica lo sha256 registrato dallo step `artifacts`. Per questo non serve che la `workdir` stia su uno storage condiviso. L'`id` del descrittore e il nome della schedule sono validati con una regex, perché diventano nomi di directory.
 
@@ -56,21 +117,40 @@ Flusso: CLI (`internal/cli`, YAML) o API (`internal/api`, JSON) → `descriptor`
 ## Comandi
 
 ```sh
-make build                       # bin/manent
+make build                       # bin/manent (client) e bin/manent-server (versione da git describe)
 make test                        # go test ./...
+make test-postgres               # stessi test su Postgres (MANENT_TEST_DATABASE_URL; avvia un container)
+make test-e2e                    # remote-copy contro sshd reale in Docker (scripts/e2e-ssh.sh)
+make test-load                   # carico e caos (MANENT_TEST_LOAD=1)
+make test-usecases               # casi d'uso end-to-end su Docker Compose (test/usecases; CASES="uc1 uc4", KEEP=1)
+make image                       # immagine container (Dockerfile)
 make lint                        # gofmt + go vet
+make plugins                     # plugin esterni in bin/ (manent-plugin-remote-copy)
+make proto                       # rigenera il codice gRPC dei plugin esterni (protoc, protoc-gen-go, protoc-gen-go-grpc)
+make docs                        # sito statico della documentazione in docs/site (MkDocs Material)
 go test ./internal/engine -run TestWorkflowFallito -v   # singolo test
 
-bin/manent -c configs/manent.yml validate -f examples/descriptor.yml   # piano e deploy effettivo (legge Consul; --offline per evitarlo)
-bin/manent -c configs/manent.yml deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout
-bin/manent -c configs/manent.yml status <id>
-bin/manent -c configs/manent.yml list [--schedule <nome>]
-bin/manent -c configs/manent.yml cancel <id>
-bin/manent -c configs/manent.yml schedule list|show|pause|resume|delete [nome]
-bin/manent -c configs/manent.yml serve [--no-worker]                   # API su :8080 (+ worker)
-bin/manent -c configs/manent.yml worker                                # solo worker
+bin/manent-server -c configs/manent.yml validate -f examples/descriptor.yml   # piano e deploy effettivo (legge Consul; --offline per evitarlo)
+bin/manent deploy -f examples/descriptor.yml     # client: richiede un worker attivo; --no-wait, --timeout, --dry-run
+bin/manent status <id>
+bin/manent list [--schedule <nome>]
+bin/manent cancel <id>
+bin/manent approve|reject <id> [-m commento]
+bin/manent promote -a <app> --from <env> --to <env> [--deploy-file deploy.yml]
+bin/manent rollback -a <app> -e <env> [--to <versione>]
+bin/manent inventory|freezes [-a <app>] [-e <env>]
+bin/manent-server -c configs/manent.yml audit verify [file]
+bin/manent logs [-f] <id> | steps <id> | dora [--since 30d]
+bin/manent-server -c configs/manent.yml admin executors | recover --executor <id> | recover --from-version <v> | prune [--dry-run]
+bin/manent version
+MANENT_SERVER=https://manent.example.com MANENT_TOKEN=... bin/manent list   # client verso un server remoto
+bin/manent schedule list|show|pause|resume|delete [nome]
+bin/manent-server -c configs/manent.yml serve [--no-worker]                   # API su :8080 (+ worker); api = serve --no-worker
+bin/manent-server -c configs/manent.yml worker                                # solo worker
 ```
 
-API: `POST /api/v1/deployments` (202 + id; 201 per una schedule cron), `GET /api/v1/deployments?schedule=&limit=`, `POST /api/v1/deployments/plan`, `GET /api/v1/deployments/:id`, `POST /api/v1/deployments/:id/cancel`, `GET /api/v1/schedules[/:name]`, `POST /api/v1/schedules/:name/pause|resume`, `DELETE /api/v1/schedules/:name`, `GET /healthz`.
+API: `POST /api/v1/deployments[?dry_run=true]` (202 + id; 201 per una schedule cron), `GET /api/v1/deployments?schedule=&application=&environment=&state=&limit=`, `POST /api/v1/deployments/plan|validate`, `GET /api/v1/deployments/:id[/steps|/logs?offset=]`, `POST /api/v1/deployments/:id/cancel|approve|reject`, `POST /api/v1/promotions`, `POST /api/v1/rollbacks`, `GET /api/v1/inventory`, `GET /api/v1/freezes`, `GET /api/v1/metrics/dora`, `GET /api/v1/schedules[/:name]`, `POST /api/v1/schedules/:name/pause|resume`, `DELETE /api/v1/schedules/:name`, `GET /healthz|/readyz|/metrics` (senza autenticazione).
 
-I test dell'engine avviano un DBOS reale su SQLite in una directory temporanea, senza bisogno di Postgres. `scaling_test.go` avvia più worker sullo stesso file per verificare recovery per ExecutorID, serializzazione per ambiente e assenza di doppi deploy dalle schedule. Usano `SchedulePollInterval` basso: con il default di 30s una nuova schedule partirebbe solo dopo il successivo ricaricamento. Il `go.mod` fissa la toolchain 1.27.x: con una Go più vecchia viene scaricata automaticamente (`GOTOOLCHAIN=auto`).
+La documentazione utente è in `docs/content` (sito MkDocs, configurato in `docs/mkdocs.yml`): va aggiornata insieme alle funzionalità, in inglese (`pagina.md`, lingua di default) e in italiano (`pagina.it.md`, plugin mkdocs-static-i18n; vedi `docs/README.md`). I test di `internal/extplugin` compilano `testdata/fakeplugin` e avviano processi reali.
+
+I test dell'engine avviano un DBOS reale su SQLite in una directory temporanea (`internal/testdb`); con `MANENT_TEST_DATABASE_URL` ogni test crea ed elimina un proprio database Postgres. `recovery_test.go` simula la caduta di un worker con `crashRegistry` (arresto non registrato). `scaling_test.go` avvia più worker sullo stesso file per verificare recovery per ExecutorID, serializzazione per ambiente e assenza di doppi deploy dalle schedule. Usano `SchedulePollInterval` basso: con il default di 30s una nuova schedule partirebbe solo dopo il successivo ricaricamento. Il `go.mod` fissa la toolchain 1.27.x: con una Go più vecchia viene scaricata automaticamente (`GOTOOLCHAIN=auto`).

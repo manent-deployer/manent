@@ -1,0 +1,112 @@
+// Protocollo tra manent (host) e i plugin di deploy esterni, eseguiti come processi separati
+// tramite github.com/hashicorp/go-plugin. Rigenerare con "make proto".
+syntax = "proto3";
+
+package manent.plugin.v1;
+
+option go_package = "github.com/joeg-ita/manent/pkg/plugin/external/proto;pluginpb";
+
+// Deployer è implementato dal plugin. Rispecchia plugin.Deployer e le interfacce opzionali
+// plugin.DryRunner, plugin.ReleaseInspector e plugin.Rollbacker.
+service Deployer {
+  // Configure costruisce il deployer con la configurazione di manent.yml. È la prima chiamata
+  // dopo l'avvio del processo e viene ripetuta a ogni riavvio.
+  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+  rpc Supports(SupportsRequest) returns (SupportsResponse);
+  rpc Validate(DeployRequest) returns (Empty);
+  rpc Deploy(DeployRequest) returns (DeployResponse);
+  // DryRun restituisce UNIMPLEMENTED se il plugin non supporta il dry-run.
+  rpc DryRun(DeployRequest) returns (DeployResponse);
+  // CurrentRelease legge dai target la release in esercizio; UNIMPLEMENTED se non supportato.
+  rpc CurrentRelease(DeployRequest) returns (CurrentReleaseResponse);
+  // Rollback riporta i target alla release indicata; UNIMPLEMENTED se non supportato.
+  rpc Rollback(RollbackRequest) returns (DeployResponse);
+}
+
+// Secrets è servito da manent per la durata di una chiamata Deploy o DryRun, tramite il broker
+// di go-plugin: il plugin legge i segreti solo quando servono e non li riceve mai in anticipo.
+service Secrets {
+  rpc Secret(SecretRequest) returns (SecretResponse);
+}
+
+message Empty {}
+
+message ConfigureRequest {
+  // Configurazione del plugin in JSON (sezione plugins.<nome> senza la chiave external).
+  bytes config_json = 1;
+}
+
+message ConfigureResponse {
+  string name = 1;
+  // Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback".
+  // Un plugin compilato con un SDK precedente non ne dichiara nessuna.
+  repeated string capabilities = 2;
+}
+
+message SupportsRequest {
+  string artifact_type = 1;
+}
+
+message SupportsResponse {
+  bool supported = 1;
+}
+
+message Artifact {
+  string type = 1;
+  string name = 2;
+  string version = 3;
+  // Percorso locale sul worker: il plugin gira sulla stessa macchina.
+  string local_path = 4;
+  string sha256 = 5;
+}
+
+message Target {
+  string host = 1;
+  int32 port = 2;
+  string user = 3;
+}
+
+message DeployRequest {
+  string deployment_id = 1;
+  string application = 2;
+  string environment = 3;
+  Artifact artifact = 4;
+  repeated Target targets = 5;
+  map<string, string> params = 6;
+  // ID del broker su cui è servito Secrets (0 = nessun resolver, es. in Validate).
+  uint32 secrets_broker_id = 7;
+}
+
+message TargetResult {
+  string host = 1;
+  string status = 2;
+  map<string, string> details = 3;
+}
+
+message DeployResponse {
+  string plugin = 1;
+  repeated TargetResult targets = 2;
+}
+
+message SecretRequest {
+  string name = 1;
+}
+
+message SecretResponse {
+  string value = 1;
+}
+
+message Release {
+  string version = 1;
+  map<string, string> details = 2;
+}
+
+message CurrentReleaseResponse {
+  // Assente se sui target non c'è nessuna release (primo deploy).
+  Release release = 1;
+}
+
+message RollbackRequest {
+  DeployRequest request = 1;
+  Release previous = 2;
+}

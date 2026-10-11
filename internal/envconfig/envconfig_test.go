@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
@@ -173,5 +174,113 @@ func TestEsempio(t *testing.T) {
 	}
 	if doc.Config.Plugin != "remote-copy" || len(doc.Config.Targets) != 1 || len(doc.Config.Secrets) != 1 {
 		t.Errorf("esempio inatteso: %+v", doc.Config)
+	}
+}
+
+func TestMergeRollback(t *testing.T) {
+	on, off := true, false
+	base := descriptor.Descriptor{Deploy: descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}}}
+
+	// L'ambiente impone il rollback; il descrittore aggiunge gli step.
+	d := base
+	d.Rollback = &descriptor.Rollback{On: []string{"post-test"}}
+	eff, err := Merge(d, EnvConfig{Rollback: &descriptor.Rollback{Enabled: &on, Locator: "cmdb"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !eff.Rollback.IsEnabled() || eff.Rollback.Locator != "cmdb" || !eff.Rollback.Triggers("post-test") {
+		t.Errorf("rollback effettivo inatteso: %+v", eff.Rollback)
+	}
+
+	// Il descrittore non può disattivare un rollback imposto dall'ambiente.
+	d.Rollback = &descriptor.Rollback{Enabled: &off}
+	if _, err := Merge(d, EnvConfig{Rollback: &descriptor.Rollback{Enabled: &on}}); err == nil {
+		t.Error("atteso conflitto su rollback.enabled")
+	}
+
+	// Senza rollback nell'ambiente il descrittore resta invariato.
+	eff, err = Merge(d, EnvConfig{})
+	if err != nil || eff.Rollback.IsEnabled() {
+		t.Errorf("rollback inatteso: %+v %v", eff.Rollback, err)
+	}
+}
+
+func TestDescriptorPolicy(t *testing.T) {
+	pol := &DescriptorPolicy{
+		Params:     map[string][]string{"*": {"verify_checksum"}, "remote-copy": {"dest_dir", "keep_*"}},
+		SecretRefs: []string{"vault:secret/data/{application}/*"},
+	}
+	d := baseDescriptor()
+	d.Deploy.Plugin = "remote-copy"
+	d.Deploy.Params = map[string]string{"dest_dir": "/opt/a", "keep_releases": "3", "verify_checksum": "false"}
+	d.Secrets = []descriptor.SecretRef{{Name: "key", Ref: "vault:secret/data/myapp/prod#ssh"}}
+	env := EnvConfig{Targets: []descriptor.Target{{Host: "h1"}}}
+	if err := pol.Check(d, env); err != nil {
+		t.Fatalf("descrittore ammesso rifiutato: %v", err)
+	}
+
+	// Comandi, segreti di altre applicazioni e target: non ammessi dal descrittore.
+	d.Deploy.Params["post_command"] = "rm -rf /"
+	d.Secrets = append(d.Secrets, descriptor.SecretRef{Name: "altro", Ref: "vault:secret/data/other/prod#ssh"}, descriptor.SecretRef{Name: "env", Ref: "env:CONSUL_HTTP_TOKEN"})
+	d.Deploy.Targets = []descriptor.Target{{Host: "evil"}}
+	err := pol.Check(d, EnvConfig{})
+	for _, want := range []string{"deploy.params.post_command", "secrets.altro", "secrets.env", "deploy.targets"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("atteso errore su %s, ricevuto %v", want, err)
+		}
+	}
+
+	// Ciò che la configurazione di ambiente definisce non è soggetto alla policy.
+	env = EnvConfig{
+		Params:  map[string]string{"post_command": "rm -rf /"},
+		Secrets: []descriptor.SecretRef{{Name: "altro", Ref: "vault:secret/data/other/prod#ssh"}, {Name: "env", Ref: "env:CONSUL_HTTP_TOKEN"}},
+		Targets: []descriptor.Target{{Host: "evil"}},
+	}
+	if err := pol.Check(d, env); err != nil {
+		t.Errorf("valori della configurazione di ambiente rifiutati: %v", err)
+	}
+
+	// Policy assente: nessun limite.
+	if err := (*DescriptorPolicy)(nil).Check(d, EnvConfig{}); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestMergeRollout(t *testing.T) {
+	c, err := Parse([]byte(`
+targets:
+  - {host: h1, labels: {region: eu-1, az: eu-1a}}
+rollout:
+  waves:
+    - {name: tutto, select: "region=eu-1", by: az, bake: 5m}
+  onFailure: stop
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := descriptor.Descriptor{Application: "app", Environment: "prod"}
+	got, err := Merge(d, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rollout == nil || got.Rollout.Waves[0].Bake != "5m" || got.Deploy.Targets[0].Labels["az"] != "eu-1a" {
+		t.Fatalf("fusione: %+v", got)
+	}
+	// Lo stesso rollout ripetuto nel descrittore è ammesso, uno diverso no.
+	d.Rollout = c.Rollout
+	if _, err := Merge(d, c); err != nil {
+		t.Fatalf("rollout identico rifiutato: %v", err)
+	}
+	other := *c.Rollout
+	other.OnFailure = "rollback-all"
+	d.Rollout = &other
+	if _, err := Merge(d, c); err == nil {
+		t.Fatal("rollout diverso dal descrittore accettato")
+	}
+	// Target con etichette diverse: conflitto.
+	d.Rollout = nil
+	d.Deploy.Targets = []descriptor.Target{{Host: "h1", Labels: map[string]string{"region": "us-1"}}}
+	if _, err := Merge(d, c); err == nil {
+		t.Fatal("target con etichette diverse accettati")
 	}
 }

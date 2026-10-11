@@ -1,0 +1,28 @@
+# API di manent senza worker (manent-server api).
+[Unit]
+Description=manent API
+Documentation=https://github.com/joeg-ita/manent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manent
+Group=manent
+EnvironmentFile=/etc/manent/manent.env
+Environment=MANENT_CONFIG=/etc/manent/manent.yml
+ExecStart=/usr/local/bin/manent-server api
+WorkingDirectory=/var/lib/manent
+Restart=on-failure
+RestartSec=5s
+StateDirectory=manent
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/manent /var/log/manent
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

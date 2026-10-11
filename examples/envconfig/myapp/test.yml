@@ -14,3 +14,8 @@ params:
 secrets:
   - name: deploy-key
     ref: env:DEPLOY_SSH_KEY
+# L'ambiente può imporre il rollback automatico (il descrittore non può disattivarlo),
+# nei limiti della policy del tipo di artefatto in manent.yml.
+# rollback:
+#   enabled: true
+#   locator: plugin

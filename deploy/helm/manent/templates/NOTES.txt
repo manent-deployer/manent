@@ -1,0 +1,9 @@
+manent {{ .Chart.AppVersion }} installato.
+
+API:     kubectl port-forward svc/{{ include "manent.fullname" . }}-api 8080:{{ .Values.api.service.port }}
+Worker:  {{ .Values.worker.replicas }} pod ({{ include "manent.fullname" . }}-worker-N, executor_id = nome del pod)
+
+Stato dei worker e recovery:
+  kubectl exec {{ include "manent.fullname" . }}-worker-0 -- manent-server admin executors
+
+Client (sviluppatori e CI): MANENT_SERVER=<url dell'API> manent list

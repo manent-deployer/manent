@@ -1,7 +1,9 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"sync"
@@ -64,4 +66,20 @@ func (r *Registry) Active() []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// Close rilascia le risorse dei plugin attivi che le possiedono (es. il processo di un plugin
+// esterno), cioè quelli che implementano io.Closer.
+func (r *Registry) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var errs []error
+	for name, d := range r.active {
+		if c, ok := d.(io.Closer); ok {
+			if err := c.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("plugin %q: %w", name, err))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }

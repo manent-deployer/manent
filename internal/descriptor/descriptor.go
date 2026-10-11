@@ -6,13 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
+
+	"github.com/joeg-ita/manent/internal/labels"
 )
 
 // APIVersion è la versione del formato di descrittore supportata.
@@ -33,6 +38,134 @@ type Descriptor struct {
 	PostTest PostTest        `json:"postTest,omitempty" yaml:"postTest,omitempty"`
 	// Schedule, se presente, pianifica il deploy invece di eseguirlo subito.
 	Schedule *Schedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	// DryRun esegue la pipeline in simulazione: gli step senza effetti sugli ambienti vengono
+	// eseguiti, il plugin si limita alle verifiche e gli altri step vengono saltati.
+	DryRun bool `json:"dryRun,omitempty" yaml:"dryRun,omitempty"`
+	// Callbacks sono gli endpoint HTTP a cui notificare l'esito degli step e del deploy.
+	Callbacks []Callback `json:"callbacks,omitempty" yaml:"callbacks,omitempty"`
+	// Rollback richiede o esclude il rollback automatico in caso di fallimento.
+	// Se è ammesso lo decide la policy del tipo di artefatto.
+	Rollback *Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
+	// FreezeOverride è il motivo (es. il numero dell'incidente) con cui il deploy deroga a una
+	// finestra di freeze. Richiede un permesso specifico ed è registrato nell'audit.
+	FreezeOverride string `json:"freezeOverride,omitempty" yaml:"freezeOverride,omitempty"`
+	// Rollout, se presente, rilascia a ondate (region, AZ) con health gate tra un passo e
+	// l'altro. Di norma sta nella configurazione di ambiente, autorevole.
+	Rollout *Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
+}
+
+// Rollback configura il rollback automatico. Nel descrittore effettivo (dopo lo step config)
+// è sempre valorizzato con la decisione finale, già verificata con la policy.
+type Rollback struct {
+	// Enabled attiva o disattiva il rollback; se assente vale il default della policy.
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	// On elenca gli step il cui fallimento avvia il rollback.
+	On []string `json:"on,omitempty" yaml:"on,omitempty"`
+	// Locator è la strategia con cui individuare la release a cui tornare (default "plugin").
+	Locator string `json:"locator,omitempty" yaml:"locator,omitempty"`
+}
+
+// IsEnabled indica se il rollback è attivo.
+func (r *Rollback) IsEnabled() bool {
+	return r != nil && r.Enabled != nil && *r.Enabled
+}
+
+// Triggers indica se il fallimento dello step indicato avvia il rollback.
+func (r *Rollback) Triggers(step string) bool {
+	return r.IsEnabled() && slices.Contains(r.On, step)
+}
+
+// validate controlla i nomi degli step e del locator.
+func (r *Rollback) validate() error {
+	var errs []error
+	seen := map[string]bool{}
+	for i, s := range r.On {
+		if s == "" || seen[s] {
+			errs = append(errs, fmt.Errorf("rollback.on[%d]: nome di step vuoto o duplicato", i))
+		}
+		seen[s] = true
+	}
+	if r.Locator != "" && !validName(r.Locator) {
+		errs = append(errs, fmt.Errorf("rollback.locator %q non valido: %s", r.Locator, nameRule))
+	}
+	return errors.Join(errs...)
+}
+
+// Tipi di evento notificati ai callback.
+const (
+	// CallbackEventStep è l'esito di un singolo step (anche config).
+	CallbackEventStep = "step"
+	// CallbackEventDeployment è l'avvio e l'esito finale del deploy.
+	CallbackEventDeployment = "deployment"
+)
+
+// Tipi di autenticazione dei callback.
+const (
+	CallbackAuthBearer = "bearer" // Authorization: Bearer <segreto>
+	CallbackAuthBasic  = "basic"  // Authorization: Basic <username>:<segreto>
+	CallbackAuthHeader = "header" // <header>: <segreto>
+	CallbackAuthHMAC   = "hmac"   // firma HMAC-SHA256 del body con il segreto
+)
+
+// Callback è un endpoint HTTP che riceve in POST gli eventi del deploy.
+type Callback struct {
+	URL string `json:"url" yaml:"url"`
+	// Events filtra gli eventi inviati ("step", "deployment"); vuoto = tutti.
+	Events []string      `json:"events,omitempty" yaml:"events,omitempty"`
+	Auth   *CallbackAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
+}
+
+// CallbackAuth descrive l'autenticazione verso il callback. Il descrittore è persistito da DBOS:
+// contiene solo il nome logico del segreto (sezione secrets), risolto al momento dell'invio.
+type CallbackAuth struct {
+	Type   string `json:"type" yaml:"type"`
+	Secret string `json:"secret" yaml:"secret"`
+	// Username per il tipo basic.
+	Username string `json:"username,omitempty" yaml:"username,omitempty"`
+	// Header è il nome dell'header per il tipo header (es. X-Api-Key).
+	Header string `json:"header,omitempty" yaml:"header,omitempty"`
+}
+
+// Wants indica se il callback deve ricevere gli eventi del tipo indicato.
+func (c Callback) Wants(event string) bool {
+	return len(c.Events) == 0 || slices.Contains(c.Events, event)
+}
+
+// validate controlla URL, eventi e autenticazione del callback.
+func (c Callback) validate(i int) error {
+	var errs []error
+	u, err := url.Parse(c.URL)
+	switch {
+	case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
+		errs = append(errs, fmt.Errorf("callbacks[%d].url deve essere un URL http(s) assoluto", i))
+	case u.User != nil:
+		// Le credenziali nell'URL verrebbero persistite: vanno passate con auth.
+		errs = append(errs, fmt.Errorf("callbacks[%d].url non deve contenere credenziali, usare auth", i))
+	}
+	for _, e := range c.Events {
+		if e != CallbackEventStep && e != CallbackEventDeployment {
+			errs = append(errs, fmt.Errorf("callbacks[%d].events: %q non valido (step|deployment)", i, e))
+		}
+	}
+	if a := c.Auth; a != nil {
+		switch a.Type {
+		case CallbackAuthBearer, CallbackAuthHMAC:
+		case CallbackAuthBasic:
+			if a.Username == "" {
+				errs = append(errs, fmt.Errorf("callbacks[%d].auth.username obbligatorio con basic", i))
+			}
+		case CallbackAuthHeader:
+			if a.Header == "" {
+				errs = append(errs, fmt.Errorf("callbacks[%d].auth.header obbligatorio con header", i))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("callbacks[%d].auth.type %q non valido (bearer|basic|header|hmac)", i, a.Type))
+		}
+		if a.Secret == "" {
+			errs = append(errs, fmt.Errorf("callbacks[%d].auth.secret obbligatorio: nome di un segreto della sezione secrets", i))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Schedule pianifica il deploy: At per un'esecuzione singola, Cron per esecuzioni ricorrenti.
@@ -79,6 +212,13 @@ type Target struct {
 	Host string `json:"host" yaml:"host"`
 	Port int    `json:"port,omitempty" yaml:"port,omitempty"`
 	User string `json:"user,omitempty" yaml:"user,omitempty"`
+	// Labels classificano il target; region e az sono riservate e usate dal rollout a ondate.
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+}
+
+// Equal confronta due target, etichette comprese.
+func (t Target) Equal(o Target) bool {
+	return t.Host == o.Host && t.Port == o.Port && t.User == o.User && maps.Equal(t.Labels, o.Labels)
 }
 
 // PostTest raccoglie i controlli da eseguire dopo il deploy.
@@ -142,6 +282,12 @@ func (d *Descriptor) Validate() error {
 		if t.Host == "" {
 			errs = append(errs, fmt.Errorf("deploy.targets[%d].host obbligatorio", i))
 		}
+		if err := labels.ValidLabels(t.Labels); err != nil {
+			errs = append(errs, fmt.Errorf("deploy.targets[%d]: %w", i, err))
+		}
+	}
+	if d.Rollout != nil {
+		errs = append(errs, d.Rollout.Validate())
 	}
 	seen := map[string]bool{}
 	for i, s := range d.Secrets {
@@ -153,10 +299,28 @@ func (d *Descriptor) Validate() error {
 		}
 		seen[s.Name] = true
 	}
+	if len(d.Callbacks) > maxCallbacks {
+		errs = append(errs, fmt.Errorf("callbacks: al massimo %d", maxCallbacks))
+	}
+	for i, c := range d.Callbacks {
+		errs = append(errs, c.validate(i))
+	}
+	if d.Rollback != nil {
+		errs = append(errs, d.Rollback.validate())
+	}
+	if len(d.FreezeOverride) > maxOverride {
+		errs = append(errs, fmt.Errorf("freezeOverride: al massimo %d caratteri", maxOverride))
+	}
+	if d.FreezeOverride != "" && d.Schedule != nil && d.Schedule.Cron != "" {
+		errs = append(errs, errors.New("freezeOverride non ammesso con schedule.cron: la deroga vale per un singolo deploy"))
+	}
 	if d.ID != "" && !validName(d.ID) {
 		errs = append(errs, fmt.Errorf("id %q non valido: %s", d.ID, nameRule))
 	}
 	if d.Schedule != nil {
+		if d.DryRun {
+			errs = append(errs, errors.New("dryRun non ammesso con schedule: il dry-run viene eseguito subito"))
+		}
 		errs = append(errs, d.Schedule.validate(d.ID))
 		if d.Schedule.Cron != "" && !validName(d.ScheduleName()) {
 			errs = append(errs, fmt.Errorf("nome schedule %q non valido: %s", d.ScheduleName(), nameRule))
@@ -164,6 +328,12 @@ func (d *Descriptor) Validate() error {
 	}
 	return errors.Join(errs...)
 }
+
+// maxOverride limita la lunghezza del motivo di una deroga al freeze.
+const maxOverride = 500
+
+// maxCallbacks limita i callback di un deploy: ogni evento genera una chiamata per callback.
+const maxCallbacks = 5
 
 // nameRe limita ID e nomi di schedule, usati anche come nomi di directory sul worker.
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)

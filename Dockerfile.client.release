@@ -1,0 +1,6 @@
+# Immagine del solo client nei rilasci (GoReleaser), ad esempio per le pipeline di CI.
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/manent /usr/local/bin/
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/manent"]

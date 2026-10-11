@@ -4,35 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 )
-
-// ScheduleService gestisce le schedule dei deploy ricorrenti.
-type ScheduleService interface {
-	ListSchedules(ctx context.Context) ([]ScheduleInfo, error)
-	GetSchedule(ctx context.Context, name string) (*ScheduleInfo, error)
-	PauseSchedule(ctx context.Context, name string) error
-	ResumeSchedule(ctx context.Context, name string) error
-	DeleteSchedule(ctx context.Context, name string) error
-}
-
-// ScheduleInfo descrive una schedule ricorrente.
-type ScheduleInfo struct {
-	Name        string     `json:"name"`
-	Cron        string     `json:"cron"`
-	Timezone    string     `json:"timezone,omitempty"`
-	Status      string     `json:"status"`
-	Application string     `json:"application"`
-	Environment string     `json:"environment"`
-	LastFiredAt *time.Time `json:"last_fired_at,omitempty"`
-}
 
 // applySchedule crea o aggiorna (upsert per nome) la schedule DBOS.
 // I tick usano la coda interna di DBOS: quella dei deploy è partizionata e non preleva
 // workflow senza chiave di partizione. Il deploy accodato dal tick usa invece la coda dei deploy.
 func (e *Engine) applySchedule(req Request) (*Submission, error) {
+	// Le esecuzioni non appartengono alla traccia della richiesta che ha creato la schedule.
+	req.TraceParent = ""
 	d := req.Descriptor
 	name := d.ScheduleName()
 	err := dbos.ApplySchedules(e.client, []dbos.ScheduleSpec{{
@@ -45,7 +26,7 @@ func (e *Engine) applySchedule(req Request) (*Submission, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.logger.Info("schedule di deploy applicata", "schedule", name, "cron", d.Schedule.CronExpr(), "application", d.Application, "environment", d.Environment)
+	e.logger.Info("schedule di deploy applicata", "schedule", name, "cron", d.Schedule.CronExpr(), "application", d.Application, "environment", d.Environment, "requested_by", req.RequestedBy)
 	return &Submission{State: StateScheduled, Schedule: name}, nil
 }
 
@@ -65,10 +46,15 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 	}
 	d := &sc.Request.Descriptor
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
-	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, sc.Request,
-		dbos.WithEnqueueWorkflowID(id),
-		dbos.WithEnqueueQueuePartitionKey(partitionKey(d)),
-	)
+	// I deploy della schedule risultano richiesti da chi l'ha creata. Se l'ambiente richiedeva
+	// approvazioni alla creazione della schedule, ogni esecuzione va approvata.
+	if sc.Request.Approval != nil {
+		if err := enqueueApproval(ctx, sc.QueueName, sc.Request, id); err != nil {
+			return "", err
+		}
+		return id, nil
+	}
+	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, sc.Request, deployOptions(sc.Request, id)...)
 	if err != nil {
 		return "", err
 	}
@@ -145,6 +131,7 @@ func toScheduleInfo(s dbos.WorkflowSchedule) ScheduleInfo {
 	if sc, err := dbos.DecodeScheduleContext[scheduleContext](dbos.ScheduledWorkflowInput{Context: s.Context}); err == nil {
 		info.Application = sc.Request.Descriptor.Application
 		info.Environment = sc.Request.Descriptor.Environment
+		info.RequestedBy = sc.Request.RequestedBy
 	}
 	return info
 }

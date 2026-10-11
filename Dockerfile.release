@@ -1,0 +1,10 @@
+# Immagine del server nei rilasci (GoReleaser): usa i binari già compilati per la piattaforma.
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/manent-server ${TARGETPLATFORM}/manent ${TARGETPLATFORM}/manent-plugin-remote-copy /usr/local/bin/
+WORKDIR /var/lib/manent
+ENV MANENT_CONFIG=/etc/manent/manent.yml
+EXPOSE 8080 9090
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/manent-server"]
+CMD ["serve"]

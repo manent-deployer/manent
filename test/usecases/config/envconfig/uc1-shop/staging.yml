@@ -1,0 +1,19 @@
+# UC1: tre AZ della region eu-1, rilasciate insieme.
+# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc1-shop
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  # Guasti simulati dai casi d'uso: $HOME/fault/uc1-shop.sleep (attesa) e .fail (errore).
+  post_command: 'f=$HOME/fault/uc1-shop; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
+  rollback_command: "true"
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

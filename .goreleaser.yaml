@@ -1,0 +1,116 @@
+# Rilascio di manent (GoReleaser v2): binari, immagine, checksum firmati e SBOM.
+# Eseguito dal workflow .github/workflows/release.yml su un tag vX.Y.Z.
+version: 2
+project_name: manent
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  # Client: parla solo con l'API, per sviluppatori e CI.
+  - id: manent
+    main: ./cmd/manent
+    binary: manent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: &ldflags
+      - -s -w
+      - -X github.com/joeg-ita/manent/internal/version.Version={{ .Version }}
+      - -X github.com/joeg-ita/manent/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/joeg-ita/manent/internal/version.Date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+  # Server: API, worker e operazioni di piattaforma.
+  - id: manent-server
+    main: ./cmd/manent-server
+    binary: manent-server
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+  - id: manent-plugin-remote-copy
+    main: ./cmd/manent-plugin-remote-copy
+    binary: manent-plugin-remote-copy
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: client
+    ids: [manent]
+    name_template: "manent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [LICENSE, README.md, CHANGELOG.md]
+  - id: server
+    ids: [manent-server, manent, manent-plugin-remote-copy]
+    name_template: "manent-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - configs/manent.yml
+      - deploy/systemd/*
+
+checksum:
+  name_template: checksums.txt
+
+# SBOM SPDX di ogni archivio (richiede syft).
+sboms:
+  - artifacts: archive
+
+# Firma keyless (Sigstore) del file dei checksum: verifica con cosign verify-blob.
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    signature: "${artifact}.sig"
+    args:
+      - sign-blob
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+
+dockers_v2:
+  - id: server
+    ids: [manent-server, manent, manent-plugin-remote-copy]
+    images: [ghcr.io/joeg-ita/manent-server]
+    tags: ["{{ .Version }}", "latest"]
+    dockerfile: Dockerfile.release
+    platforms: [linux/amd64, linux/arm64]
+    labels: &labels
+      org.opencontainers.image.source: https://github.com/joeg-ita/manent
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: GPL-3.0
+  - id: client
+    ids: [manent]
+    images: [ghcr.io/joeg-ita/manent]
+    tags: ["{{ .Version }}", "latest"]
+    dockerfile: Dockerfile.client.release
+    platforms: [linux/amd64, linux/arm64]
+    labels: *labels
+
+docker_signs:
+  - cmd: cosign
+    artifacts: manifests
+    args: [sign, "${artifact}@${digest}", --yes]
+
+changelog:
+  disable: true
+
+release:
+  # Le note di rilascio sono la sezione della versione in CHANGELOG.md
+  # (goreleaser release --release-notes, vedi release.yml).
+  draft: false

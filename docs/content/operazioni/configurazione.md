@@ -1,0 +1,212 @@
+# Configuring manent
+
+manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Every value not set takes the default listed below; unknown keys are an error. The complete example file is `configs/manent.yml`.
+
+## Reference
+
+### `app`
+
+| Key | Default | Description |
+|---|---|---|
+| `name` | `manent` | Name of the DBOS application and `APP-NAME` of the messages sent to the SIEM. |
+| `version` | `0.1.0` | Workflow version recorded by DBOS: a worker resumes only the workflows of its own version. It is not the binary version and should be changed only when the release notes say so. See [Versions and upgrades](aggiornamenti.md). |
+
+### `dbos`
+
+| Key | Default | Description |
+|---|---|---|
+| `database_url` | `sqlite:manent.db` | DBOS system database. In production Postgres: `postgres://user:pass@host:5432/manent`. |
+| `executor_id` | hostname | Worker ID: must be unique among nodes and stable across restarts. See [Scalability](scalabilita.md). |
+| `queue` | `deployments` | Name of the deploy queue. |
+| `concurrency` | `4` | Deploys running concurrently on each worker. |
+| `global_concurrency` | `0` | Deploys running across all workers (`0` = no limit). |
+| `environment_concurrency` | `1` | Concurrent deploys of the same application/environment across all workers. Cannot exceed `global_concurrency`. |
+| `schedule_poll_interval` | `30s` | How often workers reload recurring schedules. |
+| `region` | | Worker region: with `region_routing` it runs the [wave rollout](../guida/ondate.md#esecuzione-nelle-region) passes for that region. |
+| `region_routing` | `false` | Runs rollout passes on the workers of the targets' region, as child workflows. In multi-region setups it must be enabled on all workers. |
+| `drain_timeout` | `2m` | On shutdown the worker stops picking up deploys and waits for those in progress up to this time (`0` = does not wait). See [drain](affidabilita.md#arresto-ordinato-drain). |
+
+### `http`
+
+| Key | Default | Description |
+|---|---|---|
+| `listen` | `:8080` | API address (can be overridden with `serve --listen`). |
+
+### `logging` and `siem`
+
+| Key | Default | Description |
+|---|---|---|
+| `logging.level` | `info` | `debug`, `info`, `warn`, `error`. |
+| `logging.format` | `text` | `text` or `json`. |
+| `siem.enabled` | `false` | Forwards every log to the SIEM in RFC 5424. |
+| `siem.network` | `udp` | `udp` or `tcp`. |
+| `siem.address` | | `host:port` of the collector. |
+
+See [Logs and SIEM](log-siem.md).
+
+### `workdir`
+
+Default `./work`. Local directory into which each deploy downloads the artifact (`workdir/<deployment-id>`). It does not need to be shared between workers.
+
+### `envconfig`
+
+| Key | Default | Description |
+|---|---|---|
+| `provider` | `none` | `none`, `consul` or `file`. |
+| `required` | `false` | Makes the deploy fail if there is no configuration for the environment. |
+| `max_retries` | `3` | Additional read attempts. |
+| `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
+| `consul.datacenter` | | Consul datacenter. |
+| `consul.key` | `manent/{application}/{environment}` | KV key template. |
+| `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
+| `file.path` | `./envconfig/{application}/{environment}.yml` | Path template for the `file` provider. |
+
+See [Environment configuration](../guida/configurazione-ambiente.md).
+
+### `callbacks`
+
+| Key | Default | Description |
+|---|---|---|
+| `timeout` | `10s` | Timeout of each call. |
+| `max_retries` | `3` | Additional attempts of each delivery. |
+| `allow_http` | `false` | Allows `http` callbacks. |
+| `allowed_hosts` | `[]` | Allowed hosts, including `*.domain`; empty = all. |
+
+See [Callbacks](../guida/callback.md).
+
+### `rollback`
+
+| Key | Default | Description |
+|---|---|---|
+| `locator` | `plugin` | Default strategy to find the release to go back to. |
+| `artifact_types.<type>.allowed` | `application`: `true`, `migration`: `false` | Rollback is possible for the type. Types not listed do not allow it. |
+| `artifact_types.<type>.enabled` | `false` | Default for deploys of the type. Requires `allowed`. |
+| `artifact_types.<type>.on` | `[deploy, post-test, activation]` | Steps whose failure triggers rollback. |
+| `artifact_types.<type>.locator` | | Type-specific locator. |
+
+See [Rollback](../guida/rollback.md).
+
+### `auth`, `rbac`, `audit`
+
+| Key | Default | Description |
+|---|---|---|
+| `auth.mode` | `none` | `none`: no authentication or permissions (development only). `enabled`: bearer token required and RBAC. |
+| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`. |
+| `auth.tokens` | `[]` | Static tokens: `name`, `sha256` (never the token), `groups`, `expires_at`. |
+| `auth.tokens_file` | | YAML file with more tokens (same format, `tokens` key), reloaded when it changes: revocation without restart. |
+| `rbac.roles` | `{}` | Additional roles: name → list of actions. |
+| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`). |
+| `audit.file` | | JSON Lines file of audit entries, with a hash chain, in addition to the log and the SIEM. |
+| `audit.max_size_mb` | `0` | Size beyond which the file is rotated (`0` = no rotation). |
+| `audit.hmac_key_ref` | | Reference to the key (at least 16 bytes) that turns the chain into an HMAC. |
+
+See [Authentication, permissions and audit](accesso.md).
+
+### `governance`
+
+| Key | Default | Description |
+|---|---|---|
+| `governance.rules` | `[]` | Rules per application and environment (the first match applies): `name`, `applications`, `environments`, `requires` (environments to promote from), `approvals` (`required`, `allow_self`, `timeout`, default `72h`). |
+| `governance.freezes` | `[]` | Freeze windows: `name`, `reason`, `applications`, `environments` and `from`/`to` or `cron` (5 fields), `duration`, `timezone`. |
+
+See [Release governance](../guida/governance.md).
+
+### `descriptor_policy`
+
+| Key | Default | Description |
+|---|---|---|
+| `params` | `{"*": ["*"]}` | Parameters the descriptor may set, per plugin. |
+| `secret_refs` | `["*"]` | Secret references the descriptor may declare. |
+| `targets` | `true` | Targets given by the descriptor. |
+
+See [Security](sicurezza.md#cosa-puo-chiedere-un-descrittore).
+
+### `secrets` and `artifacts`
+
+| Key | Default | Description |
+|---|---|---|
+| `secrets.vault.enabled` | `false` | Enables the `vault:` scheme. |
+| `secrets.vault.address`, `namespace`, `auth`, `token_file`, `approle`, `kubernetes`, `ca_file`, `timeout` | | Vault connection and login. |
+| `artifacts.timeout` | `30m` | Maximum duration of a download. |
+| `artifacts.allow_unlisted` | `true` | Allows sources not listed in `artifacts.sources`. |
+| `artifacts.sources` | `[]` | `prefix`, `auth` (`type`, `username`, `header`, `secret_ref`), `ca_file`. |
+
+See [Secrets and artifact sources](segreti-artefatti.md).
+
+### `pipeline`
+
+Ordered list of steps, with `name`, `mode` (`mandatory` or `optional`), `enabled` (default of optional steps) and `max_retries`. See [Pipeline and steps](../concetti/pipeline.md).
+
+### `plugins`
+
+Plugins to enable, each with its own configuration:
+
+```yaml
+plugins:
+  remote-copy:                       # plugin compiled into manent
+    known_hosts: ~/.ssh/known_hosts
+    artifact_types: [application]
+  k8s-deploy:                        # external plugin
+    external:
+      command: /opt/manent/plugins/k8s-deploy
+      sha256: "3f1c…"
+    artifact_types: [container]
+```
+
+See [remote-copy](../plugins/remote-copy.md) and [External plugins](../plugins/esterni.md).
+
+### `rollout`
+
+Health gate of [wave rollouts](../guida/ondate.md#health-gate).
+
+| Key | Default | Description |
+|---|---|---|
+| `prometheus_url` | | Prometheus API for `rollout.health.metrics` (e.g. `http://prometheus:9090`). Without it, a rollout with metrics is rejected. |
+| `alertmanager_url` | | Alertmanager API for `rollout.health.alerts`. |
+| `check_timeout` | `30s` | Maximum time of each gate reading. |
+
+### `observability`
+
+| Key | Default | Description |
+|---|---|---|
+| `listen` | | Address of a server with `/metrics`, `/healthz` and `/readyz` (e.g. `:9090`). Needed by workers, which have no API. |
+| `metrics` | `true` | Prometheus metrics. |
+| `tracing.enabled` | `false` | Exports OpenTelemetry traces over OTLP/HTTP. |
+| `tracing.endpoint` | | Collector, e.g. `otel-collector:4318`; empty: `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| `tracing.insecure` | `false` | Uses `http` instead of `https` (endpoint without scheme). |
+| `tracing.sample_ratio` | `1` | Fraction of traces sampled, if the request does not already carry a decision. |
+
+See [Observability](osservabilita.md).
+
+### `recovery`
+
+| Key | Default | Description |
+|---|---|---|
+| `heartbeat_interval` | `15s` | How often a worker updates the registry. |
+| `stale_after` | `1m` | Heartbeat delay beyond which a worker is considered lost (at least twice `heartbeat_interval`). |
+| `auto_recover_after` | `0s` | If greater than zero, the pending workflows of a worker of the same version that has stopped, or has sent no heartbeat for this long, are resumed by another worker. At least `stale_after`. |
+
+See [Recovery, shutdown and retention](affidabilita.md).
+
+### `retention`
+
+Like all durations in the configuration, values are written with the unit (`0s`, `10m`, `2160h`): a number without a unit is not valid.
+
+| Key | Default | Description |
+|---|---|---|
+| `max_age` | `0s` | Workflows finished more than this long ago are deleted (`0s` = never; otherwise at least `24h`). |
+| `keep_releases` | `10` | Successful deploys always kept per application and environment. |
+| `interval` | `1h` | How often a worker runs the cleanup. |
+
+## Environment variables
+
+| Variable | Effect |
+|---|---|
+| `MANENT_CONFIG` | Configuration file, alternative to `-c`. |
+| `DBOS_SYSTEM_DATABASE_URL` | Overrides `dbos.database_url`. |
+| `DBOS__VMID` | Overrides `dbos.executor_id`. |
+| `CONSUL_HTTP_ADDR` | Consul address, if `envconfig.consul.address` is empty. |
+| `CONSUL_HTTP_TOKEN` | Consul ACL token. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Trace collector, if `observability.tracing.endpoint` is empty. The other `OTEL_EXPORTER_OTLP_*` variables (headers, certificates) also apply. |
+
+Secrets with an `env:NAME` reference are read from the worker's environment variables.

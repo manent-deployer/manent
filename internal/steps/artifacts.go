@@ -46,3 +46,9 @@ func (a Artifacts) Run(ctx context.Context, in pipeline.Input) (pipeline.Output,
 		OutSize:      strconv.FormatInt(f.Size, 10),
 	}, nil
 }
+
+// DryRun coincide con Run: l'artefatto viene scaricato solo nella directory di lavoro del worker,
+// che la pulizia finale rimuove.
+func (a Artifacts) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
+	return a.Run(ctx, in)
+}

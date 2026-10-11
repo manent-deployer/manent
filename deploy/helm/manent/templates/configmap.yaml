@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "manent.fullname" . }}
+  labels:
+    {{- include "manent.labels" . | nindent 4 }}
+data:
+  manent.yml: |
+    {{- $cfg := deepCopy .Values.config }}
+    {{- $obs := default dict $cfg.observability }}
+    {{- $_ := set $obs "listen" ":9090" }}
+    {{- $_ := set $cfg "observability" $obs }}
+    {{- $_ := set $cfg "workdir" "/var/lib/manent/work" }}
+    {{- toYaml $cfg | nindent 4 }}

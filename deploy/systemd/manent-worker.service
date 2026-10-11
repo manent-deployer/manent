@@ -1,0 +1,35 @@
+# Worker di manent: esegue i deploy dalla coda.
+# Installazione: docs/content/operazioni/installazione.md
+[Unit]
+Description=manent worker
+Documentation=https://github.com/joeg-ita/manent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manent
+Group=manent
+# DBOS_SYSTEM_DATABASE_URL e gli eventuali segreti (CONSUL_HTTP_TOKEN, ...).
+EnvironmentFile=/etc/manent/manent.env
+Environment=MANENT_CONFIG=/etc/manent/manent.yml
+ExecStart=/usr/local/bin/manent-server worker
+WorkingDirectory=/var/lib/manent
+# All'arresto il worker smette di prelevare deploy e attende quelli in corso per
+# dbos.drain_timeout: il timeout di systemd deve superarlo.
+TimeoutStopSec=6min
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=5s
+# executor_id = hostname (default): deve restare lo stesso tra i riavvii.
+StateDirectory=manent
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/manent /var/log/manent
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

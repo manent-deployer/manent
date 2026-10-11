@@ -1,0 +1,102 @@
+# Valori di default del chart di manent. Vedi docs/content/operazioni/installazione.md.
+
+image:
+  # Immagine del server (manent-server, con anche il client manent).
+  repository: ghcr.io/joeg-ita/manent-server
+  # Default: appVersion del chart.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Database di sistema DBOS (Postgres). L'URL, con la password, sta in un Secret esistente:
+#   kubectl create secret generic manent-db --from-literal=url='postgres://manent:...@pg:5432/manent'
+database:
+  existingSecret: manent-db
+  key: url
+
+# Configurazione di manent (manent.yml), resa in una ConfigMap. dbos.database_url arriva dal
+# Secret tramite DBOS_SYSTEM_DATABASE_URL; executor_id dal nome del pod (DBOS__VMID).
+# observability.listen è fissato a :9090 dal chart, per le sonde e le metriche dei worker.
+config:
+  app:
+    name: manent
+    version: "0.1.0"
+  dbos:
+    queue: deployments
+    concurrency: 4
+    environment_concurrency: 1
+    drain_timeout: 5m
+  logging:
+    level: info
+    format: json
+  recovery:
+    heartbeat_interval: 15s
+    stale_after: 1m
+    # Con worker in StatefulSet un pod rimosso (scale down) non torna: i suoi workflow in
+    # sospeso vengono ripresi da un altro worker dopo questo tempo.
+    auto_recover_after: 10m
+  retention:
+    max_age: 2160h   # 90 giorni
+    keep_releases: 10
+  observability:
+    metrics: true
+
+api:
+  enabled: true
+  replicas: 2
+  # Argomenti di manent-server: solo API, l'esecuzione è dei worker.
+  args: ["api"]
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  replicas: 2
+  # Il nome del pod (manent-worker-0, -1, ...) è l'executor_id: stabile tra i riavvii, così
+  # ogni worker riprende i propri deploy interrotti.
+  podManagementPolicy: Parallel
+  # Deve superare dbos.drain_timeout: il worker smette di prelevare deploy e attende quelli in corso.
+  terminationGracePeriodSeconds: 360
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Directory di lavoro per gli artefatti scaricati (non serve che sia condivisa).
+  workdir:
+    sizeLimit: 10Gi
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Variabili, volumi e mount aggiuntivi per API e worker: segreti (token Vault, chiavi SSH,
+# token Consul, CA), file dei token dell'API, known_hosts.
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# ServiceMonitor del Prometheus Operator per API e worker.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}

@@ -4,6 +4,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 )
 
@@ -18,6 +19,17 @@ type Deployer interface {
 	// Deploy esegue il deploy. Deve essere idempotente: in caso di recovery può essere rieseguito.
 	Deploy(ctx context.Context, req *Request) (*Result, error)
 }
+
+// DryRunner è un'interfaccia opzionale del Deployer: in modalità dry-run il plugin verifica
+// che il deploy sia eseguibile (raggiungibilità dei target, credenziali, permessi) senza
+// modificare nulla. Se il plugin non la implementa, in dry-run viene chiamato solo Validate.
+type DryRunner interface {
+	DryRun(ctx context.Context, req *Request) (*Result, error)
+}
+
+// ErrDryRunUnsupported può essere restituito da DryRun quando il supporto si scopre solo a
+// runtime (es. un plugin esterno): manent lo tratta come un plugin senza DryRunner.
+var ErrDryRunUnsupported = errors.New("dry-run non supportato dal plugin")
 
 // Factory costruisce un Deployer a partire dalla sua configurazione applicativa.
 type Factory func(cfg map[string]any, logger *slog.Logger) (Deployer, error)
@@ -73,4 +85,8 @@ type Result struct {
 const (
 	StatusDeployed = "deployed"
 	StatusFailed   = "failed"
+	// StatusReady indica, in dry-run, un target su cui il deploy risulta eseguibile.
+	StatusReady = "ready"
+	// StatusRolledBack indica un target riportato alla release precedente.
+	StatusRolledBack = "rolled_back"
 )
