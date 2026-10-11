@@ -1,0 +1,121 @@
+# kubernetes
+
+Il plugin `kubernetes` rilascia manifest su uno o più cluster Kubernetes. Usa il server-side apply, attende che i workload completino il rollout e conserva nel cluster lo storico delle release, da cui torna alla precedente. Parla direttamente con l'API del cluster: sul worker non servono `kubectl` né `helm`.
+
+## L'artefatto sono i manifest
+
+L'artefatto è un file di manifest (YAML o JSON, anche con più documenti separati da `---`) oppure un archivio `.tar.gz` di file `.yaml`, `.yml` e `.json`, letti in ordine di nome. È l'artefatto verificato con lo sha256 e promosso tra gli ambienti: lo stesso file va in test e in produzione.
+
+```yaml
+artifact:
+  type: kubernetes
+  name: shop
+  version: "1.4.0"
+  source: https://nexus.example.com/repository/manifests/shop-1.4.0.yaml
+  sha256: 8c1f…
+```
+
+Per i chart Helm o le configurazioni Kustomize si rilascia l'output già generato in CI (`helm template`, `kustomize build`): l'artefatto resta immutabile e verificabile.
+
+### Variabili
+
+Ciò che cambia tra gli ambienti arriva dalla [configurazione di ambiente](../guida/configurazione-ambiente.md), non dai manifest. Nei manifest si possono usare queste variabili:
+
+| Variabile | Valore |
+|---|---|
+| `${MANENT_APPLICATION}`, `${MANENT_ENVIRONMENT}`, `${MANENT_VERSION}` | Applicazione, ambiente e versione del deploy. |
+| `${MANENT_NAMESPACE}` | Il parametro `namespace`. |
+| `${MANENT_DEPLOYMENT}` | ID del deploy. |
+| `${NOME}` | Il parametro `var.NOME`, ad esempio `var.REPLICAS: "3"` per `${REPLICAS}`. |
+
+Le altre `${...}` restano invariate, perché possono far parte di script contenuti nei manifest.
+
+## Configurazione
+
+```yaml title="manent.yml"
+plugins:
+  kubernetes:
+    # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent dentro il cluster
+    insecure_skip_tls_verify: false      # true solo in sviluppo
+    artifact_types: [kubernetes]         # default
+```
+
+## Target e credenziali
+
+Ogni target è il server API di un cluster: `host` (o un URL `https://…`) e `port` (default 6443). Le etichette `region` e `az` permettono di rilasciare un cluster alla volta con i [rilasci a ondate](../guida/ondate.md).
+
+| Parametro | Descrizione |
+|---|---|
+| `token_secret` | Segreto con il bearer token, ad esempio quello di un ServiceAccount. |
+| `client_cert_secret`, `client_key_secret` | In alternativa al token: certificato client e chiave PEM. |
+| `ca_secret` | Segreto con la CA del cluster (PEM). Default: `ca_file` del plugin o le CA di sistema. |
+
+Con manent in esecuzione nel cluster, il token del service account si legge con il secret provider `file:`:
+
+```yaml title="envconfig/shop/prod.yml"
+plugin: kubernetes
+targets:
+  - {host: kubernetes.default.svc, port: 443, labels: {region: eu-1}}
+params:
+  namespace: shop-prod
+  token_secret: kube-token
+  var.REPLICAS: "4"
+secrets:
+  - {name: kube-token, ref: "file:/var/run/secrets/kubernetes.io/serviceaccount/token"}
+```
+
+I permessi del token decidono cosa manent può modificare: un Role limitato al namespace dell'applicazione è la scelta tipica. Oltre agli oggetti dei manifest, servono i permessi su ConfigMap nel namespace per lo storico delle release.
+
+## Parametri del deploy
+
+| Parametro | Default | Descrizione |
+|---|---|---|
+| `namespace` | `default` | Namespace degli oggetti che non ne indicano uno, e dello storico. |
+| `wait_timeout` | `5m` | Attesa del rollout dei workload. |
+| `prune` | `false` | `true`: dopo il deploy elimina gli oggetti della release precedente che i nuovi manifest non contengono più. I Namespace non vengono mai eliminati. |
+| `keep_releases` | `5` | Release conservate nello storico (minimo 2). |
+| `require_image_digest` | `false` | `true`: rifiuta i workload con immagini non fissate al digest (`image@sha256:…`). |
+| `var.NOME` | | Valore di `${NOME}` nei manifest. |
+
+## Funzionamento
+
+Per ogni cluster, in sequenza:
+
+1. legge i manifest, sostituisce le variabili e verifica ogni oggetto con la discovery del cluster (apiVersion e kind esistenti). Agli oggetti senza namespace assegna `namespace`;
+2. aggiunge le etichette `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/environment` e le annotazioni `manent.io/version` e `manent.io/deployment`;
+3. applica prima i Namespace, poi salva la release nello storico, poi applica gli altri oggetti in ordine di dipendenza (CRD, permessi, ConfigMap e Secret, Service, workload). Il server-side apply usa il field manager `manent` ed è idempotente;
+4. attende il rollout di Deployment, StatefulSet e DaemonSet. Un Deployment oltre il suo `progressDeadlineSeconds` fallisce subito, senza attendere `wait_timeout`;
+5. con `prune`, elimina gli oggetti rimossi dai manifest;
+6. aggiorna la release in esercizio ed elimina dallo storico le release oltre `keep_releases`.
+
+Per bloccare un deploy che non parte senza aspettare il timeout conviene impostare `progressDeadlineSeconds` nei Deployment.
+
+## Storico e rollback
+
+Lo storico è fatto di ConfigMap nel namespace:
+
+- `manent-<app>-<env>`: la release in esercizio;
+- `manent-<app>-<env>-<versione>`: gli oggetti applicati da ogni release, compressi (al più circa 900 KiB per release).
+
+Il **rollback** riapplica su ogni cluster gli oggetti salvati della release precedente, ne attende il rollout e, con `prune`, elimina gli oggetti creati solo dalla release fallita. Non serve riscaricare l'artefatto precedente. La release in esercizio (locator `plugin`) si legge dallo storico; cluster con release diverse fermano il deploy nel checkpoint.
+
+Il tipo di artefatto `kubernetes` ammette il rollback (`rollback.artifact_types.kubernetes.allowed: true` nei default).
+
+## Dry-run
+
+In [dry-run](../guida/dry-run.md), per ogni cluster: versione e credenziali, poi ogni oggetto viene applicato con `dryRun=All`. Il cluster lo valida con schema, admission webhook e RBAC, ma non salva nulla. Gli oggetti in un namespace che i manifest stessi creerebbero non sono verificabili e vengono contati in `objects_skipped`.
+
+## Risultato
+
+```json
+{
+  "plugin": "kubernetes",
+  "targets": [
+    {
+      "host": "k8s-eu1.example.com",
+      "status": "deployed",
+      "details": {"namespace": "shop-prod", "objects": "4", "release": "manent-shop-prod-1-4-0-1a2b3c4d", "previous": "1.3.0", "pruned": "ConfigMap/shop-prod/shop-legacy"}
+    }
+  ]
+}
+```

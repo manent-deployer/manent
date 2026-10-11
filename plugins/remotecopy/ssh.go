@@ -119,13 +119,19 @@ func (s *sshSession) Upload(ctx context.Context, localPath, remotePath string) e
 
 // Run esegue un comando remoto restituendo stdout; in caso di errore include stderr.
 func (s *sshSession) Run(ctx context.Context, cmd string) (string, error) {
+	return s.RunStdin(ctx, cmd, nil)
+}
+
+// RunStdin esegue un comando remoto passandogli stdin (es. una password, che così non compare
+// nella riga di comando visibile sul target).
+func (s *sshSession) RunStdin(ctx context.Context, cmd string, stdin io.Reader) (string, error) {
 	sess, err := s.client.NewSession()
 	if err != nil {
 		return "", err
 	}
 	defer sess.Close()
 	var stdout, stderr bytes.Buffer
-	sess.Stdout, sess.Stderr = &stdout, &stderr
+	sess.Stdout, sess.Stderr, sess.Stdin = &stdout, &stderr, stdin
 	done := make(chan error, 1)
 	go func() { done <- sess.Run(cmd) }()
 	select {

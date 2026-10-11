@@ -104,6 +104,7 @@ Flusso: client `manent` (`internal/clientcli`, YAML → JSON via `internal/apicl
   - `DryRun` di un plugin esterno che non lo implementa restituisce `plugin.ErrDryRunUnsupported`, che lo step `deploy` tratta come un plugin senza `DryRunner`.
   - Il plugin dichiara in `Configure` le interfacce opzionali che implementa (`capabilities`): `Process.RollbackSupported` le usa per `plugin.CanRollback`. `CurrentRelease` e `Rollback` sono RPC aggiunte in modo compatibile (UNIMPLEMENTED nei plugin vecchi), senza cambiare `ProtocolVersion`.
   - Nel plugin lo stdout è riservato a go-plugin. I log vanno scritti con il logger della Factory (`external.Logger`), che usa lo stderr originale in formato hclog JSON e li fa arrivare a `slog` e al SIEM.
+- `plugins/container` (Docker/Podman via SSH, riusa `remotecopy.Dialer`/`Session`; release dalle etichette `manent.version` e immagine) e `plugins/kubernetes` (client REST proprio in `client.go`: discovery, server-side apply con field manager `manent`, attesa del rollout; storico in ConfigMap `manent-<app>-<env>[-<versione>]` per CurrentRelease e Rollback). Le immagini arrivano come sorgente `oci://` (`internal/artifact/oci.go`): il digest del manifest è lo sha256 dell'artefatto e in locale c'è solo il riferimento fissato al digest, letto con `plugin.ImageReference`.
 - `plugins/remotecopy`: primo plugin. Copia l'artefatto via SSH/SFTP passando da un file `.part` e poi un rename atomico, verifica lo sha256 remoto e può eseguire un `post_command`. L'SSH reale è nascosto dietro le interfacce `Dialer` e `Session`. Con `layout: releases` usa `<dest_dir>/releases/<versione>` e il symlink `current` (switch atomico con `mv -T`, pulizia oltre `keep_releases` che non tocca mai la release attiva e la precedente): solo così implementa `CurrentRelease` e `Rollback`.
 - `internal/logging`: un `*slog.Logger` con un handler fan-out (log applicativo + `rfc5424.Message` inviati al SIEM via UDP o TCP). Lo stesso logger viene passato a DBOS, quindi anche i log di DBOS arrivano al SIEM. Ogni componente riceve il logger per iniezione.
 - Gli artefatti vengono scaricati in `workdir/<deployment-id>` (`artifact.Store`). Lo step `deploy` chiama `Store.Ensure`: se il file manca sul worker corrente, lo riscarica e verifica lo sha256 registrato dallo step `artifacts`. Per questo non serve che la `workdir` stia su uno storage condiviso. L'`id` del descrittore e il nome della schedule sono validati con una regex, perché diventano nomi di directory.
@@ -122,7 +123,7 @@ make test                        # go test ./...
 make test-postgres               # stessi test su Postgres (MANENT_TEST_DATABASE_URL; avvia un container)
 make test-e2e                    # remote-copy contro sshd reale in Docker (scripts/e2e-ssh.sh)
 make test-load                   # carico e caos (MANENT_TEST_LOAD=1)
-make test-usecases               # casi d'uso end-to-end su Docker Compose (test/usecases; CASES="uc1 uc4", KEEP=1)
+make test-usecases               # casi d'uso end-to-end su Docker Compose (test/usecases; CASES="uc1 uc4", KEEP=1); UC6/UC7 avviano registry, VM con Docker e k3s
 make image                       # immagine container (Dockerfile)
 make lint                        # gofmt + go vet
 make plugins                     # plugin esterni in bin/ (manent-plugin-remote-copy)

@@ -56,8 +56,8 @@ type Sources struct {
 func NewSources(list []Source, allowUnlisted bool, sp secrets.Provider, client *http.Client) (*Sources, error) {
 	s := &Sources{AllowUnlisted: allowUnlisted, Secrets: sp, Client: client}
 	for i, src := range list {
-		if !strings.HasPrefix(src.Prefix, "https://") && !strings.HasPrefix(src.Prefix, "http://") && !strings.HasPrefix(src.Prefix, "file:///") {
-			return nil, fmt.Errorf("artifacts.sources[%d]: prefix deve iniziare con https://, http:// o file:///", i)
+		if !strings.HasPrefix(src.Prefix, "https://") && !strings.HasPrefix(src.Prefix, "http://") && !strings.HasPrefix(src.Prefix, "file:///") && !IsOCI(src.Prefix) {
+			return nil, fmt.Errorf("artifacts.sources[%d]: prefix deve iniziare con https://, http://, file:///, oci:// o oci+http://", i)
 		}
 		if a := src.Auth; a != nil {
 			if strings.HasPrefix(src.Prefix, "file:") {
@@ -107,10 +107,10 @@ func clientWithCA(base *http.Client, caFile string) (*http.Client, error) {
 	return c, nil
 }
 
-// normalize porta la sorgente nella forma confrontata con i prefissi: gli URL http(s) restano
-// invariati, i percorsi locali diventano "file://" più il percorso assoluto ripulito.
+// normalize porta la sorgente nella forma confrontata con i prefissi: gli URL http(s) e le
+// immagini oci restano invariati, i percorsi locali diventano "file://" più il percorso assoluto ripulito.
 func normalize(source string) (string, error) {
-	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") || IsOCI(source) {
 		return source, nil
 	}
 	abs, err := filepath.Abs(strings.TrimPrefix(source, "file://"))

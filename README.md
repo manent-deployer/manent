@@ -326,6 +326,16 @@ steps:
   post-test: true
 ```
 
+## Plugin disponibili
+
+| Plugin | Artefatto | Target |
+|---|---|---|
+| `remote-copy` | file (`application`), copiato via SSH/SFTP con layout `releases` e symlink `current` | server e VM |
+| `container` | immagine di un registry (`oci://registry/repo:tag`), avviata per digest con Docker o Podman via SSH | server e VM |
+| `kubernetes` | manifest YAML/JSON o archivio `.tar.gz`, applicati con server-side apply e attesa del rollout | cluster Kubernetes |
+
+Tutti e tre supportano dry-run, lettura della release in esercizio e rollback. Per le immagini, il digest del manifest diventa lo sha256 dell'artefatto: promozioni e rollback rilasciano esattamente l'immagine verificata.
+
 ## Scrivere un plugin di deploy
 
 Un plugin implementa `plugin.Deployer` del package `github.com/joeg-ita/manent/pkg/plugin`:

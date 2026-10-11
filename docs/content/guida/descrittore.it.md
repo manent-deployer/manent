@@ -87,7 +87,7 @@ Il descrittore dichiara **cosa** rilasciare e **dove**. La CLI lo legge in YAML,
 | `type` | sì | Tipo di artefatto (es. `application`). Determina quali plugin possono gestirlo. |
 | `name` | sì | Nome dell'artefatto. |
 | `version` | no | Versione, riportata ai plugin e nei log. |
-| `source` | sì | Da dove scaricarlo: percorso locale, `file://` oppure `http(s)://`. |
+| `source` | sì | Da dove scaricarlo: percorso locale, `file://`, `http(s)://` oppure un'immagine di container `oci://registry/repository:tag` (vedi il plugin [container](../plugins/container.md)). |
 | `sha256` | no | Hash atteso, verificato dallo step `qa`. |
 
 ### `secrets`

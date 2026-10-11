@@ -43,6 +43,8 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 	"github.com/joeg-ita/manent/internal/version"
 	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/joeg-ita/manent/plugins/container"
+	"github.com/joeg-ita/manent/plugins/kubernetes"
 	"github.com/joeg-ita/manent/plugins/remotecopy"
 )
 
@@ -110,8 +112,14 @@ func recorder(m *telemetry.Metrics) telemetry.Recorder {
 // (chiave "external" in configurazione) sono registrati automaticamente con il loro nome.
 func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) {
 	reg := plugin.NewRegistry()
-	if err := reg.Register(remotecopy.Name, remotecopy.Factory); err != nil {
-		return nil, err
+	for name, f := range map[string]plugin.Factory{
+		remotecopy.Name: remotecopy.Factory,
+		container.Name:  container.Factory,
+		kubernetes.Name: kubernetes.Factory,
+	} {
+		if err := reg.Register(name, f); err != nil {
+			return nil, err
+		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Plugins)) {
 		pc := cfg.Plugins[name]

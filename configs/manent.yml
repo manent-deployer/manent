@@ -103,6 +103,14 @@ rollback:
       allowed: true
       enabled: false       # true per attivarlo di default (remote-copy richiede layout: releases)
       on: [deploy, post-test, activation]   # step il cui fallimento avvia il rollback
+    container:             # immagini rilasciate con il plugin container (Docker/Podman su VM)
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    kubernetes:            # manifest rilasciati con il plugin kubernetes
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
     migration:
       allowed: false       # le migration di database di norma non sono reversibili
 
@@ -179,6 +187,8 @@ governance:
 # descriptor_policy:
 #   params:
 #     remote-copy: [dest_dir, verify_checksum, keep_releases]   # mai i comandi (post_command, ...)
+#     container: [container_name, wait_timeout]                 # mai run_args e command
+#     kubernetes: [wait_timeout, "var.*"]                        # namespace e credenziali solo dall'envconfig
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
 
@@ -200,6 +210,8 @@ artifacts:
   #   auth: {type: basic, username: manent, secret_ref: "vault:secret/data/manent/nexus#password"}
   #   ca_file: /etc/ssl/certs/corp-ca.pem
   # - prefix: file:///srv/artifacts/
+  # - prefix: oci://registry.example.com/team/   # immagini dei container (digest = sha256)
+  #   auth: {type: basic, username: manent, secret_ref: "vault:secret/data/manent/registry#password"}
 
 # Step disponibili, nell'ordine di esecuzione.
 # mode: mandatory (sempre eseguito) | optional (enabled = default, sovrascrivibile dal descrittore)
@@ -230,6 +242,16 @@ plugins:
     known_hosts: ~/.ssh/known_hosts
     insecure_ignore_host_key: false
     artifact_types: [application]
+  # Immagini di container su server e VM via SSH, con Docker o Podman (artefatti oci://).
+  container:
+    known_hosts: ~/.ssh/known_hosts
+    insecure_ignore_host_key: false
+    artifact_types: [container]
+  # Manifest su cluster Kubernetes con server-side apply (un target per cluster).
+  kubernetes:
+    # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent nel cluster
+    insecure_skip_tls_verify: false
+    artifact_types: [kubernetes]
   # Plugin esterno: binario separato avviato da manent al primo deploy (make plugins).
   # Le altre chiavi, oltre a external, sono la configurazione passata al plugin.
   # remote-copy-ext:

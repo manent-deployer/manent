@@ -87,7 +87,7 @@ The descriptor declares **what** to release and **where**. The CLI reads it as Y
 | `type` | yes | Artifact type (e.g. `application`). Determines which plugins can handle it. |
 | `name` | yes | Artifact name. |
 | `version` | no | Version, passed to plugins and shown in logs. |
-| `source` | yes | Where to download it from: local path, `file://` or `http(s)://`. |
+| `source` | yes | Where to download it from: local path, `file://`, `http(s)://` or a container image `oci://registry/repository:tag` (see the [container](../plugins/container.md) plugin). |
 | `sha256` | no | Expected hash, checked by the `qa` step. |
 
 ### `secrets`

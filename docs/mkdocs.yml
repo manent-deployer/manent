@@ -182,6 +182,8 @@ nav:
   - Plugins:
       - Writing a plugin: plugins/index.md
       - remote-copy: plugins/remote-copy.md
+      - container: plugins/container.md
+      - kubernetes: plugins/kubernetes.md
       - External plugins: plugins/esterni.md
   - Use cases: casi-uso.md
   - Development: sviluppo.md

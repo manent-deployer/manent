@@ -25,7 +25,8 @@ type Fetcher interface {
 	Fetch(ctx context.Context, source, destDir string) (*Fetched, error)
 }
 
-// DefaultFetcher supporta percorsi locali, file:// e http(s)://.
+// DefaultFetcher supporta percorsi locali, file://, http(s):// e immagini dei registry
+// (oci://, oci+http://).
 type DefaultFetcher struct {
 	Client *http.Client
 	// Sources, se presente, limita le sorgenti ammesse e fornisce le credenziali.
@@ -35,6 +36,9 @@ type DefaultFetcher struct {
 // Fetch copia l'artefatto in destDir calcolandone lo SHA-256.
 // La scrittura passa da un file temporaneo per restare idempotente in caso di retry.
 func (f DefaultFetcher) Fetch(ctx context.Context, source, destDir string) (*Fetched, error) {
+	if IsOCI(source) {
+		return f.fetchOCI(ctx, source, destDir)
+	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return nil, err
 	}

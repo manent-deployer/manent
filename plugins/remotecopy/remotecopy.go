@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"path"
@@ -64,6 +65,12 @@ type Session interface {
 	Upload(ctx context.Context, localPath, remotePath string) error
 	Run(ctx context.Context, cmd string) (string, error)
 	Close() error
+}
+
+// StdinRunner è implementato dalle sessioni che possono passare dati sullo stdin di un comando
+// (es. una password), senza farli comparire nella riga di comando remota.
+type StdinRunner interface {
+	RunStdin(ctx context.Context, cmd string, stdin io.Reader) (string, error)
 }
 
 // Dialer apre sessioni verso gli host remoti; astratto per poterlo sostituire nei test.
@@ -523,6 +530,9 @@ func (p *Plugin) resolveAuth(ctx context.Context, req *plugin.Request) (Auth, er
 	}
 	return a, nil
 }
+
+// ShellQuote racchiude un argomento tra apici singoli per la shell remota.
+func ShellQuote(s string) string { return shellQuote(s) }
 
 // shellQuote racchiude un argomento tra apici singoli per la shell remota.
 func shellQuote(s string) string {

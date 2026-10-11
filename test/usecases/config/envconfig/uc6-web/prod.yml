@@ -1,0 +1,25 @@
+# UC6: container su due VM in due AZ, rollback automatico e rilascio a ondate (canary su vm-a).
+# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+plugin: container
+targets:
+  - {host: vm-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: vm-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  container_name: uc6-web
+  run_args: "-p 8080:8080"
+  ssh_key_secret: deploy-key
+  wait_timeout: 40s
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id
+rollback:
+  enabled: true
+rollout:
+  waves:
+    - {name: canary, select: "az=eu-1a", bake: 2s}
+    - {name: resto, select: "az!=eu-1a", bake: 2s}
+  onFailure: rollback-all
+  health:
+    interval: 1s
+    probes:
+      - {url: "http://{host}:8080/healthz"}

@@ -185,7 +185,8 @@ type Artifact struct {
 	Type    string `json:"type" yaml:"type"`
 	Name    string `json:"name" yaml:"name"`
 	Version string `json:"version" yaml:"version"`
-	// Source indica dove recuperare l'artefatto (percorso locale, file://, http(s)://).
+	// Source indica dove recuperare l'artefatto (percorso locale, file://, http(s)://) o
+	// l'immagine di un registry (oci://registry/repository:tag, oci+http:// per un registry in chiaro).
 	Source string `json:"source" yaml:"source"`
 	// SHA256 atteso, verificato dallo step di QA se presente.
 	SHA256 string `json:"sha256,omitempty" yaml:"sha256,omitempty"`

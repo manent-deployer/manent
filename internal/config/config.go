@@ -438,6 +438,8 @@ func Default() *Config {
 		// che di norma non sono reversibili.
 		Rollback: Rollback{Locator: "plugin", ArtifactTypes: map[string]RollbackType{
 			"application": {Allowed: true},
+			"container":   {Allowed: true},
+			"kubernetes":  {Allowed: true},
 			"migration":   {Allowed: false},
 		}},
 		Pipeline: Pipeline{Steps: []Step{

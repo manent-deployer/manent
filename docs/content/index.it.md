@@ -84,7 +84,7 @@ artifact:
 
     ---
 
-    Il deploy vero e proprio è delegato a plugin, compilati dentro manent o distribuiti come binari separati che comunicano via gRPC.
+    Il deploy vero e proprio è delegato a plugin: [remote-copy](plugins/remote-copy.md) per file via SSH, [container](plugins/container.md) per Docker e Podman su VM, [kubernetes](plugins/kubernetes.md) per i cluster. Se ne scrivono di nuovi, anche come binari separati via gRPC.
 
     [:octicons-arrow-right-24: Scrivere un plugin](plugins/index.md)
 

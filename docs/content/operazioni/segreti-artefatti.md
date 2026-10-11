@@ -50,7 +50,7 @@ descriptor_policy:
 
 ## Artifact sources
 
-The worker downloads the artifact from `artifact.source`: a local path, `file://` or `http(s)://`. The `artifacts` section decides which sources are allowed and with which credentials.
+The worker downloads the artifact from `artifact.source`: a local path, `file://` or `http(s)://`. For container images (`oci://`, `oci+http://` for a plain-HTTP registry) it reads only the manifest and uses its digest as the artifact's sha256: see the [container](../plugins/container.md) plugin. The `artifacts` section decides which sources are allowed and with which credentials.
 
 ```yaml title="manent.yml"
 artifacts:
@@ -75,7 +75,7 @@ artifacts:
 |---|---|
 | `timeout` | Maximum duration of a download (default `30m`). |
 | `allow_unlisted` | `true` (default): sources not listed are allowed too, without credentials. `false`: only those matching a `prefix`. |
-| `sources[].prefix` | URL prefix: `https://`, `http://` or `file:///`. If several prefixes match, the longest wins. |
+| `sources[].prefix` | URL prefix: `https://`, `http://`, `file:///`, `oci://` or `oci+http://`. If several prefixes match, the longest wins. For a registry, `basic` credentials are also used to obtain a token when the registry requires one. |
 | `sources[].auth.type` | `basic` (with `username`), `bearer`, `header` (with `header`). |
 | `sources[].auth.secret_ref` | Reference of the secret (password, token or API key), read at every download. |
 | `sources[].ca_file` | Additional CAs for the source. |

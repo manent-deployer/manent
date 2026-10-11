@@ -3,12 +3,14 @@
 #
 # - Profilo di default: API e due worker senza region, che raggiungono tutti i target (UC1-UC4).
 # - Profilo "regions": un orchestratore e un worker per region con region_routing (UC5). Ogni
-#   worker di region vede solo la rete dei suoi target; l'orchestratore le vede entrambe perché
-#   gli health gate dei rollout sono letti da lui.
+#   worker di region vede solo la rete dei suoi target, l'orchestratore nessuna: passi e sonde
+#   dell'health gate sono eseguiti dai worker di region.
+# - Profilo "containers": registry delle immagini e due VM con Docker (UC6, plugin container).
+# - Profilo "kubernetes": registry e un cluster k3s (UC7, plugin kubernetes).
 # - Profilo "tools": il client manent, eseguito con "docker compose run --rm client ...".
 #
 # File generati da run.sh in .work: binari (bin), chiave SSH (keys), artefatti (artifacts),
-# descrittori (uc) e configurazioni dei worker di region (config).
+# descrittori (uc), configurazioni dei worker di region (config) e credenziali di k3s (k3s).
 name: manent-uc
 
 x-manent: &manent
@@ -29,12 +31,23 @@ x-worker-volumes: &worker-volumes
   - ./config/envconfig:/etc/manent/envconfig:ro
   - ./.work/keys:/keys:ro
   - ./.work/artifacts:/srv/artifacts:ro
+  - ./.work/k3s:/k3s:ro
 
 x-target: &target
   image: manent-uc-target:dev
   build: target
   volumes:
     - ./.work/keys:/keys:ro
+
+x-vm: &vm
+  image: manent-uc-vm:dev
+  build: vm
+  profiles: [containers]
+  privileged: true
+  volumes:
+    - ./.work/keys:/keys:ro
+    - /var/lib/docker
+  networks: [eu1]
 
 services:
   postgres:
@@ -85,7 +98,7 @@ services:
       - ./config/envconfig:/etc/manent/envconfig:ro
       - ./.work/keys:/keys:ro
       - ./.work/artifacts:/srv/artifacts:ro
-    networks: [core, eu1, us1]
+    networks: [core]
 
   worker-eu1:
     <<: *manent
@@ -127,6 +140,36 @@ services:
   eu1-c: {<<: *target, hostname: eu1-c, networks: [eu1]}
   us1-a: {<<: *target, hostname: us1-a, networks: [us1]}
   us1-b: {<<: *target, hostname: us1-b, networks: [us1]}
+
+  # Registry delle immagini: i worker risolvono i digest su core, VM e k3s scaricano le
+  # immagini; run.sh vi carica le immagini di prova dall'host (127.0.0.1:15000).
+  registry:
+    image: registry:2.8.3
+    profiles: [containers, kubernetes]
+    hostname: registry
+    ports: ["127.0.0.1:15000:5000"]
+    networks: [core, eu1]
+
+  vm-a: {<<: *vm, hostname: vm-a}
+  vm-b: {<<: *vm, hostname: vm-b}
+
+  # Cluster Kubernetes a un nodo. Token statico per manent (.work/k3s/tokens.csv) e certificato
+  # valido anche per il nome "k3s".
+  k3s:
+    image: rancher/k3s:v1.31.4-k3s1
+    profiles: [kubernetes]
+    hostname: k3s
+    privileged: true
+    command:
+      - server
+      - --disable=traefik,metrics-server,servicelb
+      - --tls-san=k3s
+      - --kube-apiserver-arg=token-auth-file=/k3s/tokens.csv
+    tmpfs: [/run, /var/run]
+    volumes:
+      - ./.work/k3s:/k3s:ro
+      - ./k3s/registries.yaml:/etc/rancher/k3s/registries.yaml:ro
+    networks: [core]
 
 networks:
   core: {}

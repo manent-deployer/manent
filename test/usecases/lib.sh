@@ -9,6 +9,9 @@ FAILURES=""
 
 dc() { docker compose -f "$UC_DIR/compose.yml" "$@"; }
 
+# dcp: come dc, con i profili containers e kubernetes attivi (registry, VM e k3s di UC6/UC7).
+dcp() { dc --profile containers --profile kubernetes "$@"; }
+
 # as <ruolo> <comando...>: esegue il comando con il token di un altro ruolo (cab, admin, viewer).
 # Subshell: in sh POSIX "AS=x funzione" lascerebbe AS impostata dopo la chiamata.
 as() { (AS=$1; shift; "$@"); }
@@ -56,21 +59,42 @@ artifact() {
 sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 
 # descriptor <file> <id> <app> <env> <versione> [yaml aggiuntivo]: scrive .work/uc/<file>.yml
-# e stampa il percorso nel container del client.
+# per un artefatto application e stampa il percorso nel container del client.
 descriptor() {
+  art_descriptor "$1" "$2" "$3" "$4" "$5" application "file:///srv/artifacts/$3-$5.tar.gz" "${6:-}"
+}
+
+# art_descriptor <file> <id> <app> <env> <versione> <tipo> <sorgente> [yaml aggiuntivo]
+art_descriptor() {
   cat >"$WORK/uc/$1.yml" <<EOF
 apiVersion: manent/v1
 id: $2
 application: $3
 environment: $4
 artifact:
-  type: application
+  type: $6
   name: $3
   version: "$5"
-  source: file:///srv/artifacts/$3-$5.tar.gz
-${6:-}
+  source: $7
+${8:-}
 EOF
   echo "/uc/$1.yml"
+}
+
+# image <nome> <tag> [broken] [versione]: costruisce l'applicazione di prova (webapp), la
+# carica nel registry del laboratorio come uc/<nome>:<tag> e stampa il digest (senza sha256:).
+# Un'immagine "broken" non ha /healthz: HEALTHCHECK e readinessProbe restano rossi.
+image() {
+  healthy=true; [ "${3:-}" = broken ] && healthy=false
+  ref=127.0.0.1:15000/uc/$1:$2
+  docker build -q --build-arg VERSION="${4:-$2}" --build-arg HEALTHY=$healthy -t "$ref" "$UC_DIR/webapp" >/dev/null &&
+    docker push -q "$ref" >/dev/null &&
+    docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref" | grep "^127.0.0.1:15000/uc/$1@" | head -1 | sed 's/.*@sha256://'
+}
+
+# wait_registry: attende che il registry del laboratorio risponda dall'host.
+wait_registry() {
+  t=0; until curl -fs http://127.0.0.1:15000/v2/ >/dev/null 2>&1; do t=$((t + 1)); [ "$t" -gt 60 ] && return 1; sleep 1; done
 }
 
 # submit <descrittore> [opzioni]: accoda senza attendere e stampa l'ID.
@@ -130,3 +154,72 @@ runs() { dc exec -T "$1" sh -c "cat /home/deploy/fault/$2.log 2>/dev/null | grep
 
 # steps <id>: nomi degli step eseguiti, separati da spazi.
 step_names() { manent status "$1" | jq -r '[.result.steps[]?.name] | join(" ")'; }
+
+# vm_version <vm> <container>: versione (etichetta manent.version) del container ("none" se assente).
+vm_version() {
+  v=$(dcp exec -T "$1" docker inspect -f '{{index .Config.Labels "manent.version"}}' "$2" 2>/dev/null) || { echo none; return; }
+  echo "$v"
+}
+
+# vm_image <vm> <container>: digest dell'immagine del container.
+vm_image() { dcp exec -T "$1" docker inspect -f '{{.Config.Image}}' "$2" 2>/dev/null | sed 's/.*@sha256://'; }
+
+# vm_get <vm> <porta> <percorso>: risposta dell'applicazione sulla VM ("" se non risponde).
+vm_get() { dcp exec -T "$1" wget -q -O - "http://127.0.0.1:$2$3" 2>/dev/null | tr -d '\r\n'; }
+
+# kube <argomenti>: kubectl nel cluster k3s del laboratorio.
+kube() { dcp exec -T k3s kubectl "$@"; }
+
+# k8s_manifest <app> <versione> <digest> [extra]: scrive i manifest <app>-<versione>.yaml in
+# .work/artifacts (Namespace, Deployment con readinessProbe, Service; con "extra" anche una
+# ConfigMap in più) e ne stampa lo sha256. L'immagine è fissata al digest; namespace e
+# repliche arrivano dalla configurazione di ambiente (${MANENT_NAMESPACE}, var.REPLICAS).
+k8s_manifest() {
+  f=$WORK/artifacts/$1-$2.yaml
+  cat >"$f" <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: \${MANENT_NAMESPACE}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $1
+spec:
+  replicas: \${REPLICAS}
+  progressDeadlineSeconds: 25
+  selector:
+    matchLabels: {app: $1}
+  template:
+    metadata:
+      labels: {app: $1}
+    spec:
+      containers:
+        - name: web
+          image: ${K8S_IMAGE:-registry:5000/uc/api@sha256:$3}
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 2
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: $1
+spec:
+  selector: {app: $1}
+  ports: [{port: 80, targetPort: 8080}]
+EOF
+  if [ "${4:-}" = extra ]; then
+    printf -- '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: %s-extra\ndata:\n  version: "%s"\n' "$1" "$2" >>"$f"
+  fi
+  sha "$f"
+}
+
+# k8s_image <namespace> <deployment>: digest dell'immagine del Deployment.
+k8s_image() { kube -n "$1" get deploy "$2" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | sed 's/.*@sha256://'; }
+
+# k8s_ready <namespace> <deployment>: repliche pronte.
+k8s_ready() { kube -n "$1" get deploy "$2" -o jsonpath='{.status.readyReplicas}' 2>/dev/null; }

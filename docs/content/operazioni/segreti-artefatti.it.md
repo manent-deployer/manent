@@ -50,7 +50,7 @@ descriptor_policy:
 
 ## Sorgenti degli artefatti
 
-Il worker scarica l'artefatto da `artifact.source`: un percorso locale, `file://` o `http(s)://`. La sezione `artifacts` stabilisce quali sorgenti sono ammesse e con quali credenziali.
+Il worker scarica l'artefatto da `artifact.source`: un percorso locale, `file://` o `http(s)://`. Per le immagini dei container (`oci://`, `oci+http://` per un registry in chiaro) legge solo il manifest e ne usa il digest come sha256 dell'artefatto: vedi il plugin [container](../plugins/container.md). La sezione `artifacts` stabilisce quali sorgenti sono ammesse e con quali credenziali.
 
 ```yaml title="manent.yml"
 artifacts:
@@ -75,7 +75,7 @@ artifacts:
 |---|---|
 | `timeout` | Durata massima di un download (default `30m`). |
 | `allow_unlisted` | `true` (default): sono ammesse anche le sorgenti non elencate, senza credenziali. `false`: solo quelle che corrispondono a un `prefix`. |
-| `sources[].prefix` | Prefisso dell'URL: `https://`, `http://` o `file:///`. Se più prefissi corrispondono vince il più lungo. |
+| `sources[].prefix` | Prefisso dell'URL: `https://`, `http://`, `file:///`, `oci://` o `oci+http://`. Se più prefissi corrispondono vince il più lungo. Per un registry, le credenziali `basic` servono anche a ottenere il token quando il registry lo richiede. |
 | `sources[].auth.type` | `basic` (con `username`), `bearer`, `header` (con `header`). |
 | `sources[].auth.secret_ref` | Riferimento del segreto (password, token o API key), letto a ogni download. |
 | `sources[].ca_file` | CA aggiuntive per la sorgente. |

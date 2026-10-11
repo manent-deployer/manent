@@ -14,6 +14,17 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Plugin `container`: rilascia immagini su server e VM via SSH con Docker o Podman (pull per
+  digest, attesa di HEALTHCHECK o avvio stabile, release e rollback dalle etichette del container,
+  login al registry con la password sullo stdin).
+- Plugin `kubernetes`: applica manifest (YAML, JSON o `.tar.gz`) su uno o più cluster con
+  server-side apply, senza kubectl né client-go; attende il rollout dei workload, conserva lo
+  storico delle release in ConfigMap per il rollback, `prune`, `require_image_digest`, variabili
+  `${...}` dalla configurazione di ambiente e dry-run lato server.
+- Sorgenti `oci://` e `oci+http://` per le immagini dei container: manent risolve il digest del
+  manifest (anche con token alla Docker Hub) e lo usa come sha256 dell'artefatto.
+- Casi d'uso UC6 (container su VM) e UC7 (Kubernetes su k3s) con registry e VM con Docker nel
+  laboratorio.
 - Casi d'uso end-to-end su Docker Compose (`make test-usecases`, `test/usecases`): API, worker,
   client e target SSH in due region, da un deploy pianificato ai rilasci a ondate multi-region,
   con fallimenti, rollback, recovery e governance.

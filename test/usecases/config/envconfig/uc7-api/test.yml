@@ -1,0 +1,20 @@
+# UC7: manifest sul cluster k3s, namespace uc7-test.
+# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+plugin: kubernetes
+targets:
+  - {host: k3s, port: 6443, labels: {region: eu-1}}
+params:
+  namespace: uc7-test
+  token_secret: kube-token
+  ca_secret: kube-ca
+  wait_timeout: 90s
+  prune: "true"
+  keep_releases: "3"
+  require_image_digest: "true"
+  var.REPLICAS: "1"
+secrets:
+  - name: kube-token
+    ref: file:/k3s/token
+  - name: kube-ca
+    ref: file:/k3s/ca.crt
+

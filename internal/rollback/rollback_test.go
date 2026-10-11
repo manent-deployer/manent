@@ -53,7 +53,7 @@ func TestApplyNonAmmesso(t *testing.T) {
 		t.Errorf("atteso rollback disattivato senza errore: %+v %v", d.Rollback, err)
 	}
 	// Tipo non elencato: non ammesso.
-	if _, err := p.Apply(descriptorOf("container", &descriptor.Rollback{Enabled: ptr(true)})); err == nil {
+	if _, err := p.Apply(descriptorOf("firmware", &descriptor.Rollback{Enabled: ptr(true)})); err == nil {
 		t.Error("atteso errore per un tipo non elencato")
 	}
 }

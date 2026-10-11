@@ -22,16 +22,16 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes down -v"
   else
-    dc --profile regions --profile tools down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
 log "preparazione"
 rm -rf "$WORK"
-mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config"
+mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config" "$WORK/k3s"
 arch=$(docker info --format '{{.Architecture}}')
 case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) goarch=$arch ;; esac
 (cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server)
@@ -46,12 +46,16 @@ region_config() {
   awk -v region="$2" '{ print } /^dbos:/ { if (region != "") print "  region: " region; print "  region_routing: true" }' \
     config/manent.yml >"$WORK/config/$1.yml"
 }
+# Credenziali del cluster k3s (UC7): token statico con i permessi di amministratore del cluster.
+printf 'uc-k8s-token\n' >"$WORK/k3s/token"
+printf 'uc-k8s-token,manent,manent,system:masters\n' >"$WORK/k3s/tokens.csv"
+
 region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
-dc --profile regions build -q
+dc --profile regions --profile tools --profile containers --profile kubernetes down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile containers build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0
 until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do

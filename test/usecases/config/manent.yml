@@ -36,16 +36,26 @@ envconfig:
   file:
     path: /etc/manent/envconfig/{application}/{environment}.yml
 
-# Solo le sorgenti del laboratorio: gli artefatti sono nel volume condiviso /srv/artifacts.
+# Solo le sorgenti del laboratorio: gli artefatti sono nel volume condiviso /srv/artifacts,
+# le immagini dei container nel registry in chiaro (UC6, UC7).
 artifacts:
   allow_unlisted: false
   sources:
     - prefix: file:///srv/artifacts/
+    - prefix: oci+http://registry:5000/uc/
 
 rollback:
   locator: plugin
   artifact_types:
     application:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    container:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    kubernetes:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
@@ -104,3 +114,8 @@ plugins:
   remote-copy:
     insecure_ignore_host_key: true   # laboratorio: chiavi host rigenerate a ogni avvio
     artifact_types: [application]
+  container:
+    insecure_ignore_host_key: true
+    artifact_types: [container]
+  kubernetes:
+    artifact_types: [kubernetes]     # CA del cluster da ca_secret (envconfig)
