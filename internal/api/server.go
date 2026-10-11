@@ -2,6 +2,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,8 @@ type Server struct {
 	authn   auth.Authenticator
 	logger  *slog.Logger
 	metrics telemetry.Recorder
+	// eventInterval è l'intervallo con cui lo stream SSE rilegge stato e log.
+	eventInterval time.Duration
 }
 
 // Options sono le dipendenze facoltative del router.
@@ -43,6 +46,12 @@ type Options struct {
 	MetricsHandler http.Handler
 	// Ready, se presente, è verificato da /readyz (es. raggiungibilità del database).
 	Ready func(context.Context) error
+	// UI, se presente, serve l'interfaccia web per i percorsi non gestiti dall'API.
+	UI http.Handler
+	// UIConfig, se presente, è servita su /ui/config.json senza autenticazione.
+	UIConfig *UIConfig
+	// EventInterval è l'intervallo di aggiornamento dello stream SSE (default 1s).
+	EventInterval time.Duration
 }
 
 // NewRouter crea il router Gin con tutte le rotte. Con authn nil l'autenticazione è
@@ -54,9 +63,12 @@ func NewRouter(svc engine.Service, authn auth.Authenticator, logger *slog.Logger
 
 // NewRouterWith crea il router con le opzioni indicate.
 func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Logger, o Options) *gin.Engine {
-	s := &Server{svc: svc, authn: authn, logger: logger.With("component", "api"), metrics: o.Metrics}
+	s := &Server{svc: svc, authn: authn, logger: logger.With("component", "api"), metrics: o.Metrics, eventInterval: o.EventInterval}
 	if s.metrics == nil {
 		s.metrics = telemetry.Noop{}
+	}
+	if s.eventInterval <= 0 {
+		s.eventInterval = time.Second
 	}
 	r := gin.New()
 	r.Use(gin.Recovery(), s.trace(), s.accessLog())
@@ -73,6 +85,9 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.GET("/deployments/:id", s.status)
 	v1.GET("/deployments/:id/steps", s.steps)
 	v1.GET("/deployments/:id/logs", s.logs)
+	v1.GET("/deployments/:id/events", s.events)
+	v1.GET("/approvals", s.approvals)
+	v1.GET("/me", s.me)
 	v1.GET("/metrics/dora", s.dora)
 	v1.POST("/deployments/:id/cancel", s.cancel)
 	v1.POST("/deployments/:id/approve", s.decide(true))
@@ -87,6 +102,7 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.POST("/schedules/:name/pause", s.scheduleOp(svc.PauseSchedule))
 	v1.POST("/schedules/:name/resume", s.scheduleOp(svc.ResumeSchedule))
 	v1.DELETE("/schedules/:name", s.scheduleOp(svc.DeleteSchedule))
+	s.mountUI(r, o)
 	return r
 }
 
@@ -136,7 +152,7 @@ func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 
 // list elenca i deploy più recenti (query: schedule, application, environment, state, limit).
 func (s *Server) list(c *gin.Context) {
-	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"), State: c.Query("state")}
+	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"), State: c.Query("state"), Cursor: c.Query("cursor")}
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
@@ -150,7 +166,12 @@ func (s *Server) list(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deployments": deps})
+	out := gin.H{"deployments": deps}
+	// Una pagina piena può avere un seguito: next_cursor è l'ID dell'ultimo deploy.
+	if limit := cmp.Or(f.Limit, 50); len(deps) >= limit && len(deps) > 0 {
+		out["next_cursor"] = deps[len(deps)-1].ID
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // cancel annulla un deploy in attesa o in esecuzione.

@@ -326,6 +326,15 @@ steps:
   post-test: true
 ```
 
+## Interfaccia web
+
+`manent-server` serve un'interfaccia web su `/`, allo stesso indirizzo dell'API: deploy con ondate e log in tempo reale, approvazioni, inventario con promozioni e rollback (sempre dopo un dry-run), freeze, schedule e metriche DORA. Usa il login OIDC (Authorization Code + PKCE, `auth.oidc.ui`) e gli stessi permessi dell'API, è accessibile (WCAG 2.1 AA, verificata con axe) e disponibile in inglese e italiano. Il codice è in `web/` (React, TypeScript, Vite), incorporato nel binario da `internal/webui`; il contratto dell'API è `api/openapi.yaml`.
+
+```sh
+make web        # costruisce la UI (Node >= 20 o un container node:22)
+make web-dev    # server di sviluppo su http://127.0.0.1:5173
+```
+
 ## Plugin disponibili
 
 | Plugin | Artefatto | Target |

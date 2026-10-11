@@ -389,3 +389,53 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 	}
 	return g.Next.Validate(ctx, d)
 }
+
+// Me restituisce l'identità e i ruoli che le si applicano (binding che la riguardano), senza
+// verificare permessi: ognuno può leggere i propri.
+func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {
+	id, err := g.Next.Me(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id.AuthEnabled = !g.Policy.Disabled
+	if g.Policy.Disabled {
+		return id, nil
+	}
+	id.Grants = []engine.Grant{}
+	p := auth.FromContext(ctx)
+	if p == nil {
+		return id, nil
+	}
+	for _, b := range g.Policy.Bindings {
+		if !b.matches(p) {
+			continue
+		}
+		acts := make([]string, len(g.Policy.Roles[b.Role]))
+		for i, a := range g.Policy.Roles[b.Role] {
+			acts[i] = string(a)
+		}
+		id.Grants = append(id.Grants, engine.Grant{Role: b.Role, Actions: acts, Applications: b.Applications, Environments: b.Environments})
+	}
+	return id, nil
+}
+
+// Approvals restituisce solo i deploy che l'identità può decidere: deployment.approve
+// sull'applicazione/ambiente e, salvo regola con allow_self, non richiesti da lei.
+func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
+	all, err := g.Next.Approvals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p := auth.FromContext(ctx)
+	out := all[:0]
+	for _, st := range all {
+		if !g.Policy.Allowed(p, DeploymentApprove, st.Application, st.Environment) {
+			continue
+		}
+		if !g.Policy.Disabled && st.RequestedBy == p.String() && (st.Approval == nil || !st.Approval.AllowSelf) {
+			continue
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}

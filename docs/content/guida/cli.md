@@ -106,6 +106,8 @@ manent rollback -a <application> -e <environment> [--to <version>]
 manent approve <id> [-m <comment>]
 manent reject <id> -m <reason>
 manent freezes [-a <application>] [-e <environment>]
+manent approvals                # deploys waiting for a decision that you can take
+manent whoami                   # your identity on the server and your roles
 ```
 
 `promote` and `rollback` also accept `--id`, `--dry-run`, `--freeze-override <reason>`, `--no-wait` and `--timeout`, with the same meaning as for `deploy`.

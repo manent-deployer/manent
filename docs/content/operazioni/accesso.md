@@ -42,6 +42,7 @@ manent verifies JWTs issued by an OIDC identity provider (Keycloak, Microsoft En
 | `username_claim` | `preferred_username` | Claim with the user name. If missing, `sub` is used. |
 | `groups_claim` | `groups` | Claim with the groups, used by permissions. |
 | `ca_file` | | Additional CAs to reach the issuer. |
+| `ui.client_id`, `ui.scopes`, `ui.redirect_path` | | Public client (PKCE) of the [web interface](../guida/interfaccia-web.md#sign-in). |
 
 The client (portal, script, CI with federated identity) obtains the token from the identity provider and passes it to manent. manent handles neither login nor sessions.
 
@@ -91,7 +92,7 @@ Every identity has the form `<method>:<name>`, used in permissions, in the audit
 | `cli` | `cli:joeg` | Operating system user running `manent-server admin` (recorded in the recovery and retention audit). |
 | `none` | `none:anonymous` | API with `auth.mode: none`. |
 
-## Permissions (RBAC)
+## Permissions (RBAC) { #permessi-rbac }
 
 Permissions assign a **role** to users or groups on a set of **applications** and **environments**. With `auth.mode: none` permissions are disabled and everything is allowed.
 

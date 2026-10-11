@@ -107,6 +107,7 @@ plugins:
             Callbacks: Callback
             Release governance: Governance dei rilasci
             Wave rollouts: Rilasci a ondate
+            Web interface: Interfaccia web
             Operations: Operazioni
             Installation: Installazione
             Configuring manent: Configurazione di manent
@@ -167,6 +168,7 @@ nav:
       - Rollback: guida/rollback.md
       - Release governance: guida/governance.md
       - Wave rollouts: guida/ondate.md
+      - Web interface: guida/interfaccia-web.md
   - Operations:
       - Installation: operazioni/installazione.md
       - manent-server: operazioni/server.md

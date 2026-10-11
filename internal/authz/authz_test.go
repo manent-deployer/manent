@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/joeg-ita/manent/internal/audit"
@@ -151,6 +152,16 @@ func (f *fakeService) Decide(_ context.Context, id string, _ engine.DecisionRequ
 }
 func (f *fakeService) Freezes(context.Context, string, string) ([]governance.WindowStatus, error) {
 	return nil, nil
+}
+func (f *fakeService) Approvals(context.Context) ([]engine.Status, error) {
+	var out []engine.Status
+	for _, id := range []string{"a1", "b1"} {
+		out = append(out, f.statuses[id])
+	}
+	return out, nil
+}
+func (f *fakeService) Me(ctx context.Context) (*engine.Identity, error) {
+	return (&engine.Engine{}).Me(ctx)
 }
 
 func (f *fakeService) Validate(context.Context, *descriptor.Descriptor) (*engine.Validation, error) {
@@ -347,5 +358,41 @@ func TestGuardGovernance(t *testing.T) {
 	}
 	if !approveDenied || !override {
 		t.Errorf("voci di audit mancanti (auto-approvazione %v, deroga %v): %+v", approveDenied, override, rec.entries)
+	}
+}
+
+func TestGuardMeEApprovazioni(t *testing.T) {
+	pol, err := NewPolicy(nil, []Binding{
+		{Groups: []string{"cab"}, Role: "approver", Applications: []string{"team-a-*"}, Environments: []string{"*"}},
+		{Groups: []string{"team-a"}, Role: "deployer", Applications: []string{"team-a-*"}, Environments: []string{"test"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &fakeService{statuses: map[string]engine.Status{
+		"a1": {ID: "a1", Application: "team-a-api", Environment: "test", State: engine.StateAwaitingApproval, RequestedBy: "oidc:alice"},
+		"b1": {ID: "b1", Application: "team-b-api", Environment: "test", State: engine.StateAwaitingApproval, RequestedBy: "oidc:bob"},
+	}}
+	g := &Guard{Next: svc, Policy: pol, Logger: discardLogger()}
+	carol := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "carol", Groups: []string{"cab"}, Method: auth.MethodOIDC})
+	alice := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "alice", Groups: []string{"cab", "team-a"}, Method: auth.MethodOIDC})
+
+	me, err := g.Me(alice)
+	if err != nil || me.Subject != "oidc:alice" || !me.AuthEnabled || len(me.Grants) != 2 || me.Grants[0].Role != "approver" ||
+		!slices.Contains(me.Grants[1].Actions, string(DeploymentSubmit)) {
+		t.Errorf("me: %+v %v", me, err)
+	}
+	// Solo i deploy che l'identità può approvare: non quelli di altri team né i propri.
+	if list, _ := g.Approvals(carol); len(list) != 1 || list[0].ID != "a1" {
+		t.Errorf("approvazioni di carol: %+v", list)
+	}
+	if list, _ := g.Approvals(alice); len(list) != 0 {
+		t.Errorf("alice non può approvare il proprio deploy: %+v", list)
+	}
+
+	// Senza autenticazione tutto è consentito e Me lo dice.
+	open := &Guard{Next: svc, Policy: Policy{Disabled: true}, Logger: discardLogger()}
+	if me, _ := open.Me(context.Background()); me.AuthEnabled || len(me.Grants) != 1 || me.Grants[0].Role != "*" {
+		t.Errorf("me senza autenticazione: %+v", me)
 	}
 }

@@ -42,6 +42,7 @@ import (
 	"github.com/joeg-ita/manent/internal/steps"
 	"github.com/joeg-ita/manent/internal/telemetry"
 	"github.com/joeg-ita/manent/internal/version"
+	"github.com/joeg-ita/manent/internal/webui"
 	"github.com/joeg-ita/manent/pkg/plugin"
 	"github.com/joeg-ita/manent/plugins/container"
 	"github.com/joeg-ita/manent/plugins/kubernetes"
@@ -633,13 +634,48 @@ func (a *App) OpsHandler() http.Handler {
 	return r
 }
 
-// APIOptions sono le opzioni del router dell'API: metriche, /metrics e /readyz.
+// APIOptions sono le opzioni del router dell'API: metriche, /metrics, /readyz e, se attiva,
+// l'interfaccia web con la sua configurazione.
 func (a *App) APIOptions() api.Options {
 	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready}
 	if a.metrics != nil {
 		o.MetricsHandler = a.metrics.Handler()
 	}
+	if a.Config.HTTP.UI.IsEnabled() {
+		ui := NewUIConfig(a.Config)
+		o.UIConfig = &ui
+		var origins []string
+		if ui.Issuer != "" {
+			origins = append(origins, ui.Issuer)
+		}
+		h := webui.New(webui.Options{ConnectOrigins: origins})
+		if !h.Built() {
+			a.Logger.Warn("interfaccia web non incorporata nel binario: make web e poi make build")
+		}
+		o.UI = h
+	}
 	return o
+}
+
+// NewUIConfig ricava la configurazione pubblica dell'interfaccia web: modalità di login e
+// client OIDC della UI.
+func NewUIConfig(cfg *config.Config) api.UIConfig {
+	ui := api.UIConfig{AuthMode: api.UIAuthNone, Version: version.Get().Version}
+	if cfg.Auth.Mode == config.AuthModeNone {
+		return ui
+	}
+	o := cfg.Auth.OIDC
+	if o == nil || o.UI == nil {
+		ui.AuthMode = api.UIAuthUnavailable
+		return ui
+	}
+	ui.AuthMode, ui.Issuer, ui.ClientID = api.UIAuthOIDC, o.Issuer, o.UI.ClientID
+	ui.Scopes = o.UI.Scopes
+	if len(ui.Scopes) == 0 {
+		ui.Scopes = []string{"openid", "profile"}
+	}
+	ui.RedirectPath = cmp.Or(o.UI.RedirectPath, "/auth/callback")
+	return ui
 }
 
 // WarnInsecure registra a log le impostazioni adatte solo allo sviluppo. Va chiamato dai

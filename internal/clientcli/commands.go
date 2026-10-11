@@ -322,6 +322,38 @@ func (c *FreezesCmd) Execute([]string) error {
 	})
 }
 
+// WhoamiCmd mostra l'identità con cui il client parla al server e i suoi permessi.
+type WhoamiCmd struct {
+	global *GlobalOptions
+}
+
+// Execute implementa flags.Commander.
+func (c *WhoamiCmd) Execute([]string) error {
+	return withService(c.global, func(ctx context.Context, svc service.Service) error {
+		id, err := svc.Me(ctx)
+		if err != nil {
+			return err
+		}
+		return cliutil.PrintJSON(id)
+	})
+}
+
+// ApprovalsCmd elenca i deploy in attesa che l'utente può approvare.
+type ApprovalsCmd struct {
+	global *GlobalOptions
+}
+
+// Execute implementa flags.Commander.
+func (c *ApprovalsCmd) Execute([]string) error {
+	return withService(c.global, func(ctx context.Context, svc service.Service) error {
+		deps, err := svc.Approvals(ctx)
+		if err != nil {
+			return err
+		}
+		return cliutil.PrintJSON(deps)
+	})
+}
+
 // StepsCmd mostra la timeline degli step di un deploy.
 type StepsCmd struct {
 	global *GlobalOptions

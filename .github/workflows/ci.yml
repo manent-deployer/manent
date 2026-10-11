@@ -1,5 +1,5 @@
 # Verifiche su ogni push e pull request: lint, test su SQLite e Postgres, test end-to-end
-# del plugin SSH, carico e caos, sito della documentazione, chart Helm e immagine.
+# del plugin SSH, carico e caos, interfaccia web, sito della documentazione, chart Helm e immagine.
 name: ci
 
 on:
@@ -59,6 +59,26 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make test-e2e
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - name: tipi allineati con api/openapi.yaml
+        run: npm run check:api
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
 
   docs:
     runs-on: ubuntu-latest

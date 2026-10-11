@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -138,7 +139,17 @@ type DBOS struct {
 // HTTP configura il web server API.
 type HTTP struct {
 	Listen string `yaml:"listen"`
+	UI     UI     `yaml:"ui"`
 }
+
+// UI configura l'interfaccia web servita dall'API.
+type UI struct {
+	// Enabled serve l'interfaccia su / (default true).
+	Enabled *bool `yaml:"enabled"`
+}
+
+// IsEnabled indica se l'interfaccia web è attiva (default true).
+func (u UI) IsEnabled() bool { return u.Enabled == nil || *u.Enabled }
 
 // Logging configura il log applicativo.
 type Logging struct {
@@ -251,6 +262,17 @@ type OIDC struct {
 	UsernameClaim string `yaml:"username_claim"`
 	GroupsClaim   string `yaml:"groups_claim"`
 	CAFile        string `yaml:"ca_file"`
+	// UI è il client OIDC pubblico (Authorization Code + PKCE) dell'interfaccia web: i suoi
+	// access token devono avere l'audience e il claim dei gruppi verificati qui sopra.
+	UI *OIDCUI `yaml:"ui"`
+}
+
+// OIDCUI è il client OIDC dell'interfaccia web.
+type OIDCUI struct {
+	ClientID string   `yaml:"client_id"`
+	Scopes   []string `yaml:"scopes"`
+	// RedirectPath è il percorso di ritorno dopo il login (default /auth/callback).
+	RedirectPath string `yaml:"redirect_path"`
 }
 
 // APIToken è un token statico per sistemi automatici: in configurazione c'è solo lo sha256.
@@ -628,6 +650,14 @@ func (c *Config) validateSecurity() []error {
 		}
 		if o := c.Auth.OIDC; o != nil && (o.Issuer == "" || o.Audience == "") {
 			errs = append(errs, errors.New("auth.oidc: issuer e audience obbligatori"))
+		}
+		if o := c.Auth.OIDC; o != nil && o.UI != nil {
+			if o.UI.ClientID == "" {
+				errs = append(errs, errors.New("auth.oidc.ui.client_id obbligatorio"))
+			}
+			if p := o.UI.RedirectPath; p != "" && (!strings.HasPrefix(p, "/") || strings.HasPrefix(p, "/api/")) {
+				errs = append(errs, errors.New("auth.oidc.ui.redirect_path deve essere un percorso assoluto fuori da /api/"))
+			}
 		}
 	default:
 		errs = append(errs, fmt.Errorf("auth.mode %q non valido (none|enabled)", c.Auth.Mode))

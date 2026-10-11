@@ -31,6 +31,7 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 | Key | Default | Description |
 |---|---|---|
 | `listen` | `:8080` | API address (can be overridden with `serve --listen`). |
+| `ui.enabled` | `true` | Serves the [web interface](../guida/interfaccia-web.md) at `/`. |
 
 ### `logging` and `siem`
 

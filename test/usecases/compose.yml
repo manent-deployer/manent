@@ -62,10 +62,23 @@ services:
       retries: 30
     networks: [core]
 
+  # Identity provider OIDC di prova per l'interfaccia web (UC8).
+  oidc:
+    image: manent-uc:dev
+    entrypoint: ["/usr/local/bin/manent-uc-oidc"]
+    command: ["-listen", ":9000", "-issuer", "http://oidc:9000"]
+    hostname: oidc
+    networks: [core]
+
   api:
     <<: *manent
     command: ["api"]
     hostname: api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      oidc:
+        condition: service_started
     # L'API (client DBOS) non migra lo schema: su un database vuoto attende che lo faccia un worker.
     restart: on-failure
     ports: ["127.0.0.1:18080:8080"]

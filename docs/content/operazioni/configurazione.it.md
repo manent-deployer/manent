@@ -31,6 +31,7 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `listen` | `:8080` | Indirizzo dell'API (sovrascrivibile con `serve --listen`). |
+| `ui.enabled` | `true` | Serve l'[interfaccia web](../guida/interfaccia-web.md) su `/`. |
 
 ### `logging` e `siem`
 

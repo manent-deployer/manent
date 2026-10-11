@@ -1,0 +1,106 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Palette: canali RGB, così Tailwind può applicare l'opacità (bg-accent/10).
+   Contrasto verificato WCAG AA per testo normale su bg e surface in entrambi i temi. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 10 14 23;          /* #0a0e17, come il sito */
+  --surface: 15 22 38;     /* #0f1626 */
+  --raised: 21 30 50;
+  --border: 51 65 85;
+  --fg: 226 232 240;       /* #e2e8f0 */
+  --muted: 148 163 184;    /* #94a3b8 */
+  --accent: 34 211 238;    /* ciano #22d3ee */
+  --accent-fg: 4 18 26;    /* testo su sfondo accent */
+  --violet: 167 139 250;   /* #a78bfa */
+  --ok: 52 211 153;
+  --warn: 251 191 36;
+  --bad: 248 113 113;
+  --info: 96 165 250;
+  --grid: 148 163 184 / 0.045;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: 248 250 252;
+  --surface: 255 255 255;
+  --raised: 241 245 249;
+  --border: 203 213 225;
+  --fg: 15 23 42;
+  --muted: 71 85 105;
+  --accent: 14 116 144;    /* cyan-700: 5.4:1 su bianco */
+  --accent-fg: 255 255 255;
+  --violet: 109 40 217;
+  --ok: 4 120 87;
+  --warn: 180 83 9;
+  --bad: 185 28 28;
+  --info: 29 78 216;
+  --grid: 15 23 42 / 0.04;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(1200px 600px at 85% -10%, rgb(var(--violet) / 0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgb(var(--accent) / 0.08), transparent 60%),
+      linear-gradient(rgb(var(--grid)) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--grid)) 1px, transparent 1px);
+    background-size: auto, auto, 32px 32px, 32px 32px;
+    background-attachment: fixed;
+  }
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  @media (prefers-contrast: more) {
+    :root, [data-theme="dark"] { --border: 148 163 184; --muted: 203 213 225; }
+    [data-theme="light"] { --border: 71 85 105; --muted: 30 41 59; }
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border/70 bg-surface/80 backdrop-blur-sm;
+  }
+  .gradient-text {
+    background: linear-gradient(90deg, rgb(var(--accent)), rgb(var(--violet)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .gradient-line {
+    background: linear-gradient(90deg, rgb(var(--accent)), rgb(var(--violet)));
+  }
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-fg;
+  }
+}

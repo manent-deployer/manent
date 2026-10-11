@@ -194,7 +194,7 @@ func (c *Client) Status(ctx context.Context, id string) (*service.Status, error)
 // List implementa service.Service. f.Match non è applicabile a distanza e viene ignorato.
 func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Status, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "state": f.State} {
+	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "state": f.State, "cursor": f.Cursor} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -333,6 +333,24 @@ func (c *Client) Freezes(ctx context.Context, application, environment string) (
 	}
 	err := c.do(ctx, http.MethodGet, "/freezes", q, nil, &out)
 	return out.Freezes, err
+}
+
+// Approvals implementa service.Service.
+func (c *Client) Approvals(ctx context.Context) ([]service.Status, error) {
+	var out struct {
+		Approvals []service.Status `json:"approvals"`
+	}
+	err := c.do(ctx, http.MethodGet, "/approvals", nil, nil, &out)
+	return out.Approvals, err
+}
+
+// Me implementa service.Service.
+func (c *Client) Me(ctx context.Context) (*service.Identity, error) {
+	var out service.Identity
+	if err := c.do(ctx, http.MethodGet, "/me", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // Steps implementa service.Service.

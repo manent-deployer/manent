@@ -1,0 +1,697 @@
+openapi: 3.1.0
+info:
+  title: manent API
+  version: v1
+  description: |
+    API di manent: deploy, rilasci a ondate, governance, log e metriche. Tutte le rotte sotto
+    /api/v1 richiedono un bearer token (OIDC o token statico) quando l'autenticazione è attiva;
+    i permessi sono quelli di RBAC per applicazione e ambiente. Le risposte di errore hanno la
+    forma {"error": "<messaggio>"}.
+
+    Questa specifica è il contratto tra server, interfaccia web e client: un test confronta le
+    rotte registrate dal server con i percorsi qui sotto.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: /
+security:
+  - bearer: []
+tags:
+  - name: deployments
+  - name: governance
+  - name: schedules
+  - name: insight
+  - name: access
+  - name: ui
+  - name: probes
+
+paths:
+  /api/v1/deployments:
+    post:
+      tags: [deployments]
+      summary: Accoda un deploy, lo pianifica o crea una schedule ricorrente
+      operationId: submitDeployment
+      parameters:
+        - name: dry_run
+          in: query
+          schema: {type: boolean}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Descriptor'}
+      responses:
+        '202': {description: Deploy accodato, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '201': {description: Schedule ricorrente creata o aggiornata, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    get:
+      tags: [deployments]
+      summary: Elenca i deploy più recenti
+      operationId: listDeployments
+      parameters:
+        - {name: schedule, in: query, schema: {type: string}}
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, default: 50}}
+        - name: cursor
+          in: query
+          description: next_cursor della pagina precedente
+          schema: {type: string}
+      responses:
+        '200':
+          description: Deploy dal più recente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployments]
+                properties:
+                  deployments: {type: array, items: {$ref: '#/components/schemas/Status'}}
+                  next_cursor: {type: string, description: Presente se la pagina è piena}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/plan:
+    post:
+      tags: [deployments]
+      summary: Calcola gli step che verrebbero eseguiti
+      operationId: planDeployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Descriptor'}
+      responses:
+        '200':
+          description: Piano
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan: {type: array, items: {$ref: '#/components/schemas/PlannedStep'}}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/validate:
+    post:
+      tags: [deployments]
+      summary: Verifica il descrittore come all'accodamento, senza accodarlo
+      operationId: validateDeployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Descriptor'}
+      responses:
+        '200': {description: Deploy effettivo, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}:
+    get:
+      tags: [deployments]
+      summary: Stato di un deploy
+      operationId: getDeployment
+      parameters: [{$ref: '#/components/parameters/id'}]
+      responses:
+        '200': {description: Stato, content: {application/json: {schema: {$ref: '#/components/schemas/Status'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/steps:
+    get:
+      tags: [insight]
+      summary: Step registrati del deploy
+      operationId: getDeploymentSteps
+      parameters: [{$ref: '#/components/parameters/id'}]
+      responses:
+        '200':
+          description: Step
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [steps]
+                properties:
+                  steps: {type: array, items: {$ref: '#/components/schemas/StepRecord'}}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/logs:
+    get:
+      tags: [insight]
+      summary: Righe di log del deploy a partire da offset
+      operationId: getDeploymentLogs
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200': {description: Pagina di log, content: {application/json: {schema: {$ref: '#/components/schemas/LogPage'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/events:
+    get:
+      tags: [insight]
+      summary: Stato e log del deploy come Server-Sent Events
+      description: |
+        Eventi "status" (Status in JSON, quando cambia), "log" (array di LogLine; id = offset
+        successivo, ripreso con Last-Event-ID), "end" alla conclusione, "error" se la lettura
+        fallisce. Commenti ": keep-alive" ogni 15 secondi senza eventi.
+      operationId: streamDeploymentEvents
+      parameters:
+        - {$ref: '#/components/parameters/id'}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0}}
+        - {name: Last-Event-ID, in: header, schema: {type: string}}
+      responses:
+        '200':
+          description: Stream di eventi
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/cancel:
+    post:
+      tags: [deployments]
+      summary: Annulla un deploy in attesa o in esecuzione
+      operationId: cancelDeployment
+      parameters: [{$ref: '#/components/parameters/id'}]
+      responses:
+        '204': {description: Annullato}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/approve:
+    post:
+      tags: [governance]
+      summary: Approva un deploy (prima del deploy o tra due ondate)
+      operationId: approveDeployment
+      parameters: [{$ref: '#/components/parameters/id'}]
+      requestBody: {$ref: '#/components/requestBodies/Decision'}
+      responses:
+        '204': {description: Decisione registrata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/deployments/{id}/reject:
+    post:
+      tags: [governance]
+      summary: Respinge un deploy
+      operationId: rejectDeployment
+      parameters: [{$ref: '#/components/parameters/id'}]
+      requestBody: {$ref: '#/components/requestBodies/Decision'}
+      responses:
+        '204': {description: Decisione registrata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/approvals:
+    get:
+      tags: [governance]
+      summary: Deploy in attesa che l'utente può approvare
+      operationId: listApprovals
+      responses:
+        '200':
+          description: Approvazioni in attesa
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approvals]
+                properties:
+                  approvals: {type: array, items: {$ref: '#/components/schemas/Status'}}
+  /api/v1/promotions:
+    post:
+      tags: [governance]
+      summary: Rilascia in un ambiente l'artefatto già rilasciato in un altro
+      operationId: promote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PromoteRequest'}
+      responses:
+        '202': {description: Promozione accodata, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/rollbacks:
+    post:
+      tags: [governance]
+      summary: Rilascia di nuovo una versione precedente
+      operationId: rollback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RollbackRequest'}
+      responses:
+        '202': {description: Rollback accodato, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/inventory:
+    get:
+      tags: [governance]
+      summary: Release in esercizio per applicazione e ambiente
+      operationId: getInventory
+      parameters:
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Inventario
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [inventory]
+                properties:
+                  inventory: {type: array, items: {$ref: '#/components/schemas/InventoryEntry'}}
+  /api/v1/freezes:
+    get:
+      tags: [governance]
+      summary: Finestre di freeze attive e future
+      operationId: listFreezes
+      parameters:
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Finestre
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [freezes]
+                properties:
+                  freezes: {type: array, items: {$ref: '#/components/schemas/WindowStatus'}}
+  /api/v1/metrics/dora:
+    get:
+      tags: [insight]
+      summary: Metriche DORA
+      operationId: getDORA
+      parameters:
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+        - name: since
+          in: query
+          description: Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni
+          schema: {type: string}
+      responses:
+        '200': {description: Metriche, content: {application/json: {schema: {$ref: '#/components/schemas/DORAReport'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v1/schedules:
+    get:
+      tags: [schedules]
+      summary: Schedule ricorrenti
+      operationId: listSchedules
+      responses:
+        '200':
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schedules]
+                properties:
+                  schedules: {type: array, items: {$ref: '#/components/schemas/ScheduleInfo'}}
+  /api/v1/schedules/{name}:
+    get:
+      tags: [schedules]
+      summary: Una schedule
+      operationId: getSchedule
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '200': {description: Schedule, content: {application/json: {schema: {$ref: '#/components/schemas/ScheduleInfo'}}}}
+        '404': {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [schedules]
+      summary: Elimina una schedule
+      operationId: deleteSchedule
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '204': {description: Eliminata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/schedules/{name}/pause:
+    post:
+      tags: [schedules]
+      summary: Sospende una schedule
+      operationId: pauseSchedule
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '204': {description: Sospesa}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/schedules/{name}/resume:
+    post:
+      tags: [schedules]
+      summary: Riprende una schedule
+      operationId: resumeSchedule
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '204': {description: Ripresa}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/me:
+    get:
+      tags: [access]
+      summary: Identità della richiesta e ruoli che le si applicano
+      operationId: getMe
+      responses:
+        '200': {description: Identità, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
+        '401': {$ref: '#/components/responses/Error'}
+  /ui/config.json:
+    get:
+      tags: [ui]
+      summary: Configurazione pubblica dell'interfaccia web
+      operationId: getUIConfig
+      security: []
+      responses:
+        '200': {description: Configurazione, content: {application/json: {schema: {$ref: '#/components/schemas/UIConfig'}}}}
+  /healthz:
+    get:
+      tags: [probes]
+      summary: Il processo risponde
+      operationId: healthz
+      security: []
+      responses:
+        '200': {description: OK}
+  /readyz:
+    get:
+      tags: [probes]
+      summary: Il processo è pronto (database raggiungibile, non in drain)
+      operationId: readyz
+      security: []
+      responses:
+        '200': {description: Pronto}
+        '503': {description: Non pronto}
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+    name:
+      name: name
+      in: path
+      required: true
+      schema: {type: string}
+  requestBodies:
+    Decision:
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              comment: {type: string}
+  responses:
+    Error:
+      description: Errore
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+    Descriptor:
+      type: object
+      description: Descrittore di deploy (vedi la guida "Il descrittore" della documentazione).
+      additionalProperties: true
+      required: [apiVersion, application, environment, artifact]
+      properties:
+        apiVersion: {type: string, examples: [manent/v1]}
+        id: {type: string}
+        application: {type: string}
+        environment: {type: string}
+        dryRun: {type: boolean}
+        artifact:
+          type: object
+          required: [type, name, source]
+          properties:
+            type: {type: string}
+            name: {type: string}
+            version: {type: string}
+            source: {type: string}
+            sha256: {type: string}
+    DeployTargets:
+      type: object
+      description: Sezione deploy di un descrittore (plugin, target, parametri).
+      additionalProperties: true
+    PlannedStep:
+      type: object
+      additionalProperties: true
+      properties:
+        name: {type: string}
+    Submission:
+      type: object
+      required: [state]
+      properties:
+        id: {type: string}
+        state: {type: string}
+        scheduled_at: {type: string, format: date-time}
+        schedule: {type: string}
+        dry_run: {type: boolean}
+    Decision:
+      type: object
+      required: [approver, approve, time]
+      properties:
+        approver: {type: string}
+        approve: {type: boolean}
+        comment: {type: string}
+        time: {type: string, format: date-time}
+    ApprovalState:
+      type: object
+      required: [status, required, expires_at]
+      properties:
+        status: {type: string, enum: [pending, approved, rejected, expired]}
+        required: {type: integer}
+        allow_self: {type: boolean}
+        expires_at: {type: string, format: date-time}
+        decisions: {type: array, items: {$ref: '#/components/schemas/Decision'}}
+    RolloutPass:
+      type: object
+      required: [name, hosts]
+      properties:
+        name: {type: string}
+        region: {type: string}
+        az: {type: string}
+        hosts: {type: array, items: {type: string}}
+    RolloutStage:
+      type: object
+      required: [name, wave, state, passes]
+      properties:
+        name: {type: string}
+        wave: {type: string}
+        state: {type: string, enum: [pending, running, baking, succeeded, failed, rolled-back]}
+        passes: {type: array, items: {$ref: '#/components/schemas/RolloutPass'}}
+        gate: {type: string, description: Ultimo controllo rosso dell'health gate}
+        error: {type: string}
+    RolloutState:
+      type: object
+      required: [status, stages, on_failure]
+      properties:
+        status: {type: string, enum: [planned, running, paused-approval, paused-freeze, succeeded, failed]}
+        stage: {type: string}
+        paused: {type: string}
+        stages: {type: array, items: {$ref: '#/components/schemas/RolloutStage'}}
+        approval: {$ref: '#/components/schemas/ApprovalState'}
+        on_failure: {type: string}
+        rollback: {type: string}
+    StepResult:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        output: {type: object, additionalProperties: {type: string}}
+    Result:
+      type: object
+      required: [deployment_id, steps]
+      properties:
+        deployment_id: {type: string}
+        dry_run: {type: boolean}
+        steps: {type: array, items: {$ref: '#/components/schemas/StepResult'}}
+        rollout: {$ref: '#/components/schemas/RolloutState'}
+    Status:
+      type: object
+      required: [id, state, created_at, updated_at]
+      properties:
+        id: {type: string}
+        state:
+          type: string
+          description: ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, MAX_RECOVERY_ATTEMPTS_EXCEEDED
+        application: {type: string}
+        environment: {type: string}
+        artifact: {type: string}
+        version: {type: string}
+        sha256: {type: string}
+        kind: {type: string, enum: [deploy, promotion, rollback]}
+        source: {type: string, description: Deploy di origine di una promozione o di un rollback}
+        dry_run: {type: boolean}
+        rollback: {type: string, description: Esito del rollback automatico}
+        requested_by: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        scheduled_at: {type: string, format: date-time}
+        approval: {$ref: '#/components/schemas/ApprovalState'}
+        rollout: {$ref: '#/components/schemas/RolloutState'}
+        rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
+        result: {$ref: '#/components/schemas/Result'}
+        error: {type: string}
+    Validation:
+      type: object
+      required: [valid]
+      properties:
+        valid: {type: boolean}
+        plan: {type: array, items: {$ref: '#/components/schemas/PlannedStep'}}
+        rollback: {type: object, additionalProperties: true}
+        deploy: {$ref: '#/components/schemas/DeployTargets'}
+        secrets: {type: array, items: {type: string}}
+        config: {type: object, additionalProperties: {type: string}}
+        governance:
+          type: object
+          properties:
+            rule: {type: string}
+            requires: {type: array, items: {type: string}}
+            approvals: {type: integer}
+            freeze: {$ref: '#/components/schemas/WindowStatus'}
+        rollout: {$ref: '#/components/schemas/RolloutState'}
+        warnings: {type: array, items: {type: string}}
+    StepRecord:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        started_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time}
+        duration_ms: {type: integer}
+        output: {}
+        error: {type: string}
+    LogLine:
+      type: object
+      required: [time, level, message]
+      properties:
+        time: {type: string, format: date-time}
+        level: {type: string}
+        step: {type: string}
+        message: {type: string}
+        attrs: {type: object, additionalProperties: {type: string}}
+    LogPage:
+      type: object
+      required: [lines, next, done]
+      properties:
+        lines: {type: array, items: {$ref: '#/components/schemas/LogLine'}}
+        next: {type: integer}
+        done: {type: boolean}
+    InventoryEntry:
+      type: object
+      required: [application, environment]
+      properties:
+        application: {type: string}
+        environment: {type: string}
+        current: {$ref: '#/components/schemas/Status'}
+        last_failure: {$ref: '#/components/schemas/Status'}
+        drift: {type: boolean}
+    WindowStatus:
+      type: object
+      required: [name, applications, environments, active]
+      properties:
+        name: {type: string}
+        reason: {type: string}
+        applications: {type: array, items: {type: string}}
+        environments: {type: array, items: {type: string}}
+        regions: {type: array, items: {type: string}}
+        active: {type: boolean}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+        recurring: {type: boolean}
+    ScheduleInfo:
+      type: object
+      required: [name, cron, status, application, environment]
+      properties:
+        name: {type: string}
+        cron: {type: string}
+        timezone: {type: string}
+        status: {type: string}
+        application: {type: string}
+        environment: {type: string}
+        requested_by: {type: string}
+        last_fired_at: {type: string, format: date-time}
+    DORAMetrics:
+      type: object
+      required: [deployments, failures, deployments_per_day, change_failure_rate]
+      properties:
+        application: {type: string}
+        environment: {type: string}
+        deployments: {type: integer}
+        failures: {type: integer}
+        deployments_per_day: {type: number}
+        change_failure_rate: {type: number}
+        mttr_seconds: {type: number}
+        lead_time_seconds: {type: number}
+    DORAReport:
+      type: object
+      required: [since, until, total, environments]
+      properties:
+        since: {type: string, format: date-time}
+        until: {type: string, format: date-time}
+        total: {$ref: '#/components/schemas/DORAMetrics'}
+        environments: {type: array, items: {$ref: '#/components/schemas/DORAMetrics'}}
+    Redeploy:
+      type: object
+      properties:
+        id: {type: string}
+        dry_run: {type: boolean}
+        freeze_override: {type: string, description: Motivo della deroga al freeze}
+    PromoteRequest:
+      allOf:
+        - $ref: '#/components/schemas/Redeploy'
+        - type: object
+          required: [application, from, to]
+          properties:
+            application: {type: string}
+            from: {type: string}
+            to: {type: string}
+            version: {type: string}
+            deploy: {$ref: '#/components/schemas/DeployTargets'}
+    RollbackRequest:
+      allOf:
+        - $ref: '#/components/schemas/Redeploy'
+        - type: object
+          required: [application, environment]
+          properties:
+            application: {type: string}
+            environment: {type: string}
+            version: {type: string}
+    Grant:
+      type: object
+      required: [role, actions, applications, environments]
+      properties:
+        role: {type: string}
+        actions: {type: array, items: {type: string}}
+        applications: {type: array, items: {type: string}}
+        environments: {type: array, items: {type: string}}
+    Identity:
+      type: object
+      required: [subject, name, method, auth_enabled, grants]
+      properties:
+        subject: {type: string}
+        name: {type: string}
+        method: {type: string}
+        groups: {type: array, items: {type: string}}
+        auth_enabled: {type: boolean}
+        grants: {type: array, items: {$ref: '#/components/schemas/Grant'}}
+    UIConfig:
+      type: object
+      required: [auth_mode, version]
+      properties:
+        auth_mode: {type: string, enum: [none, oidc, unavailable]}
+        issuer: {type: string}
+        client_id: {type: string}
+        scopes: {type: array, items: {type: string}}
+        redirect_path: {type: string}
+        version: {type: string}

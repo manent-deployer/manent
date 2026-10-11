@@ -69,6 +69,7 @@ type Service interface {
 	ScheduleService
 	GovernanceService
 	InsightService
+	AccessService
 }
 
 // DeploymentService gestisce i deploy, immediati o pianificati.
@@ -111,6 +112,9 @@ type GovernanceService interface {
 	Decide(ctx context.Context, id string, r DecisionRequest) error
 	// Freezes elenca le finestre di freeze attive e future.
 	Freezes(ctx context.Context, application, environment string) ([]governance.WindowStatus, error)
+	// Approvals elenca i deploy in attesa di una decisione: prima del deploy o tra due ondate.
+	// Attraverso i permessi, solo quelli che l'identità può approvare.
+	Approvals(ctx context.Context) ([]Status, error)
 }
 
 // InsightService espone timeline, log e metriche DORA dei deploy.
@@ -213,6 +217,8 @@ type ListFilter struct {
 	// State filtra per stato (es. SUCCESS, ERROR, AWAITING_APPROVAL).
 	State string `json:"state,omitempty"`
 	Limit int    `json:"limit,omitempty"`
+	// Cursor è l'ID dell'ultimo deploy della pagina precedente: l'elenco riparte dal successivo.
+	Cursor string `json:"cursor,omitempty"`
 	// Match, se presente, è un filtro aggiuntivo (es. i permessi): l'elenco prosegue sui deploy
 	// più vecchi finché non raggiunge Limit, quindi il filtro non riduce il numero di risultati.
 	Match func(Status) bool `json:"-"`

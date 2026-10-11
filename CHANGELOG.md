@@ -14,6 +14,17 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Interfaccia web servita da `manent-server` su `/` (`web/`, React + TypeScript, incorporata con
+  `go:embed` da `internal/webui`): deploy con filtri e paginazione, dettaglio con ondate, step e log
+  in tempo reale, approvazioni, inventario con promozione e rollback dopo un dry-run, freeze,
+  schedule e metriche DORA. Login OIDC con PKCE (`auth.oidc.ui`), token solo in memoria, CSP
+  rigida, tema scuro e chiaro, inglese e italiano, accessibilità WCAG 2.1 AA.
+- Specifica OpenAPI dell'API (`api/openapi.yaml`), verificata contro le rotte del server.
+- Endpoint `GET /api/v1/me`, `GET /api/v1/approvals`, `GET /api/v1/deployments/{id}/events`
+  (Server-Sent Events), `GET /ui/config.json` e paginazione con `cursor`/`next_cursor`;
+  comandi `manent whoami` e `manent approvals`.
+- Caso d'uso UC8: interfaccia web con Playwright e axe contro il laboratorio, con un identity
+  provider OIDC di prova.
 - Plugin `container`: rilascia immagini su server e VM via SSH con Docker o Podman (pull per
   digest, attesa di HEALTHCHECK o avvio stabile, release e rollback dalle etichette del container,
   login al registry con la password sullo stdin).

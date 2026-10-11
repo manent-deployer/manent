@@ -68,6 +68,8 @@ func Run(args []string) error {
 	add("promote", "Rilascia in un ambiente l'artefatto già rilasciato in un altro", &PromoteCmd{global: g})
 	add("rollback", "Torna a una versione rilasciata in precedenza", &RollbackCmd{global: g})
 	add("inventory", "Mostra la release in esercizio per applicazione e ambiente", &InventoryCmd{global: g})
+	add("approvals", "Elenca i deploy in attesa che puoi approvare", &ApprovalsCmd{global: g})
+	add("whoami", "Mostra la tua identità sul server e i tuoi permessi", &WhoamiCmd{global: g})
 	add("freezes", "Elenca le finestre di freeze attive e future", &FreezesCmd{global: g})
 	add("dora", "Calcola le metriche DORA dallo storico dei deploy", &DORACmd{global: g})
 	add("version", "Mostra la versione del client", &cliutil.VersionCmd{})

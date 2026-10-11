@@ -478,7 +478,13 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 		prefix = []string{scheduledIDPrefix(f.Schedule)}
 	}
 	out := []Status{}
+	// Con un cursore l'elenco riparte dal deploy successivo a quello indicato.
+	skipping := f.Cursor != ""
 	err := e.scan(prefix, func(s Status) bool {
+		if skipping {
+			skipping = s.ID != f.Cursor
+			return true
+		}
 		if f.Matches(s) {
 			out = append(out, s)
 		}

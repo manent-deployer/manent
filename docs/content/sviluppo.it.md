@@ -3,7 +3,11 @@
 ## Comandi
 
 ```sh
-make build        # bin/manent (client) e bin/manent-server (versione da git describe)
+make build        # bin/manent (client) e bin/manent-server con l'interfaccia web (NOUI=1 la salta)
+make web         # interfaccia web in internal/webui/dist (Node >= 20 o un container node:22)
+make web-dev     # interfaccia web su http://127.0.0.1:5173 contro un manent locale
+make web-test    # tipi, test dei componenti (Vitest) e allineamento con api/openapi.yaml
+make web-api     # rigenera i tipi TypeScript da api/openapi.yaml
 make plugins      # plugin esterni in bin/
 make test         # go test ./... (SQLite)
 make test-postgres  # gli stessi test su Postgres (avvia un container se serve)
@@ -37,6 +41,7 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 - **Engine:** i test avviano un DBOS reale su SQLite in una directory temporanea. Con `MANENT_TEST_DATABASE_URL` (un server Postgres su cui l'utente può creare database) ogni test usa invece un database Postgres creato per lui ed eliminato alla fine (`internal/testdb`): `make test-postgres` lo fa con un container. `scaling_test.go` avvia più worker sullo stesso database per verificare la recovery per `executor_id`, la serializzazione per ambiente e l'assenza di doppi deploy dalle schedule. Usano un `SchedulePollInterval` basso: con il default di 30 secondi una nuova schedule partirebbe solo dopo il ricaricamento successivo.
 - **Recovery e aggiornamenti:** `recovery_test.go` simula la caduta di un worker (arresto non registrato) e verifica la recovery automatica e manuale, il rifiuto di un worker attivo, la migrazione dei workflow a una nuova versione e il drain. `load_test.go` (`make test-load`, `MANENT_TEST_LOAD=1`) accoda molti deploy su tre worker e ne fa cadere uno mentre esegue: tutti i deploy devono concludersi, mai due insieme nello stesso ambiente.
 - **Casi d'uso:** `test/usecases` avvia API, worker, client e target SSH su Docker Compose e percorre deploy, fallimenti, rollback e rilasci a ondate. Vedi [Casi d'uso](casi-uso.md).
+- **Interfaccia web:** Vitest e Testing Library verificano le viste con un'API finta costruita sui tipi OpenAPI (`web/src/test`); `internal/webui` le intestazioni di sicurezza e il fallback per il routing lato client; `internal/api/openapi_test.go` che `api/openapi.yaml` descriva esattamente le rotte del server. Playwright (`web/e2e`) gira in UC8 contro il laboratorio, con un identity provider OIDC di prova e axe per l'accessibilità.
 - **SSH reale:** `plugins/remotecopy/e2e_test.go` gira solo con `MANENT_TEST_SSH_ADDR`; `scripts/e2e-ssh.sh` avvia un sshd Debian in Docker (`test/e2e/sshd`) e verifica layout releases, pulizia, rollback e checksum.
 - **Plugin esterni:** i test di `internal/extplugin` compilano `testdata/fakeplugin` e avviano processi reali. Verificano segreti, isolamento dell'ambiente, inoltro dei log, riavvio dopo un crash e verifica dello sha256.
 - **Plugin:** `remotecopy` sostituisce SSH con le interfacce `Dialer` e `Session`.
@@ -86,6 +91,9 @@ internal/                        motore (non importabile da fuori)
 pkg/plugin/                      contratto pubblico dei plugin
 pkg/plugin/external/             SDK e protocollo gRPC dei plugin esterni
 plugins/remotecopy/              plugin di riferimento
+api/openapi.yaml                 contratto dell'API HTTP
+web/                             interfaccia web (React, TypeScript, Vite)
+internal/webui/                  incorpora e serve la build di web/
 configs/                         configurazione d'esempio
 examples/                        descrittori e configurazioni di ambiente d'esempio
 docs/                            questo sito

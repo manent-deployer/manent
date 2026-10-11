@@ -9,12 +9,38 @@ LDFLAGS := -s -w -X github.com/joeg-ita/manent/internal/version.Version=$(VERSIO
 PG_TEST_URL ?= postgres://postgres:postgres@localhost:55432/postgres?sslmode=disable
 IMAGE ?= manent:$(VERSION)
 
-.PHONY: build plugins test test-postgres test-e2e test-load test-usecases lint run fmt clean proto docs docs-serve image
+.PHONY: build plugins test test-postgres test-e2e test-load test-usecases lint run fmt clean proto docs docs-serve image web web-dev web-test web-api
 
-# Due binari: il client (solo API) e il server (API, worker, operazioni di piattaforma).
-build:
+# npm con Node >= 20 locale, altrimenti in un container (scripts/web.sh).
+WEB := scripts/web.sh
+
+# Due binari: il client (solo API) e il server (API, worker, operazioni di piattaforma), con
+# l'interfaccia web incorporata. NOUI=1 salta la build della UI (il server mostra una pagina
+# che spiega come costruirla).
+build: $(if $(NOUI),,web)
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/manent
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(SERVER_BIN) ./cmd/manent-server
+
+# Interfaccia web (web/) compilata in internal/webui/dist, incorporata da go:embed.
+web: web/node_modules/.package-lock.json
+	$(WEB) run build
+
+web/node_modules/.package-lock.json: web/package.json web/package-lock.json
+	$(WEB) ci --no-audit --no-fund
+
+# Server di sviluppo con ricarica su http://127.0.0.1:5173; l'API è MANENT_DEV_API (default :8080).
+web-dev: web/node_modules/.package-lock.json
+	WEB_PORT=5173 $(WEB) run dev -- --host 0.0.0.0
+
+# Tipi, test dei componenti e allineamento dei tipi con api/openapi.yaml.
+web-test: web/node_modules/.package-lock.json
+	$(WEB) run lint
+	$(WEB) test
+	$(WEB) run check:api
+
+# Rigenera i tipi TypeScript dell'API da api/openapi.yaml.
+web-api: web/node_modules/.package-lock.json
+	$(WEB) run gen:api
 
 # Plugin distribuiti come binari esterni (vedi docs/content/plugins/esterni.md)
 plugins:

@@ -40,6 +40,9 @@ type (
 	ScheduleService      = service.ScheduleService
 	GovernanceService    = service.GovernanceService
 	InsightService       = service.InsightService
+	AccessService        = service.AccessService
+	Identity             = service.Identity
+	Grant                = service.Grant
 	Validation           = service.Validation
 	GovernanceValidation = service.GovernanceValidation
 	StepResult           = service.StepResult

@@ -34,7 +34,12 @@ rm -rf "$WORK"
 mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config" "$WORK/k3s"
 arch=$(docker info --format '{{.Architecture}}')
 case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) goarch=$arch ;; esac
-(cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server)
+# Interfaccia web incorporata in manent-server (UC8): Node >= 20 locale o un container.
+(cd ../.. && { [ -f web/node_modules/.package-lock.json ] || scripts/web.sh ci --no-audit --no-fund >/dev/null; } && scripts/web.sh run build >/dev/null 2>&1) ||
+  { echo "build dell'interfaccia web fallita (make web)" >&2; exit 1; }
+info "interfaccia web compilata"
+(cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server &&
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc)
 info "binari linux/$goarch compilati"
 
 # Chiave SSH del laboratorio: leggibile dall'utente nonroot dei container di manent.

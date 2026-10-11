@@ -63,6 +63,15 @@ rollback:
 # Token statici di prova (uc-<nome>-token): solo lo sha256 in configurazione.
 auth:
   mode: enabled
+  # Identity provider di prova (test/usecases/oidc) per l'interfaccia web (UC8): utenti
+  # ci, cab, admin e viewer con gli stessi gruppi dei token statici.
+  oidc:
+    issuer: http://oidc:9000
+    audience: manent
+    username_claim: preferred_username
+    groups_claim: groups
+    ui:
+      client_id: manent-ui
   tokens:
     - {name: ci, sha256: 31e75ebb1d5ad71fa4787f839f5a21751fbc7e26547e461ec36c3872ad11a969, groups: [ci]}
     - {name: cab, sha256: 747b88c3090b64b426e37f0d042f64d8f6d0eee1e997afa7d135045fae31489a, groups: [cab]}
@@ -83,6 +92,11 @@ governance:
       applications: [uc2-api]
       environments: [prod]
       requires: [test]
+      approvals: {required: 1, timeout: 1h}
+    # UC8: la promozione in prod dall'interfaccia web chiede un'approvazione.
+    - name: uc8-produzione
+      applications: [uc8-web]
+      environments: [prod]
       approvals: {required: 1, timeout: 1h}
     # Le approvazioni tra le ondate (UC4, UC5) non richiedono una regola: senza, ne basta una
     # e scadono dopo 72 ore. Una regola con approvals imporrebbe anche un'approvazione prima del deploy.

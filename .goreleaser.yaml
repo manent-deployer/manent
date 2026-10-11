@@ -6,6 +6,8 @@ project_name: manent
 before:
   hooks:
     - go mod download
+    # Interfaccia web incorporata in manent-server (Node >= 20 o Docker).
+    - make web
 
 builds:
   # Client: parla solo con l'API, per sviluppatori e CI.

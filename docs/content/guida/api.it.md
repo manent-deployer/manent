@@ -1,5 +1,7 @@
 # API HTTP
 
+Il contratto completo è la specifica OpenAPI in [`api/openapi.yaml`](https://github.com/joeg-ita/manent/blob/main/api/openapi.yaml): un test verifica che corrisponda alle rotte registrate dal server, e l'[interfaccia web](interfaccia-web.md) ne genera i tipi.
+
 L'API è servita da `manent-server serve` (default `:8080`). Accetta e restituisce JSON. Il body di un descrittore può essere al massimo di 1 MiB.
 
 ## Autenticazione
@@ -28,9 +30,12 @@ Authorization: Bearer <token>
 | `GET` | `/api/v1/deployments/{id}` | Stato e risultato di un deploy. |
 | `GET` | `/api/v1/deployments/{id}/steps` | Timeline degli step. |
 | `GET` | `/api/v1/deployments/{id}/logs?offset=` | Log del deploy. |
+| `GET` | `/api/v1/deployments/{id}/events` | Stato e log come Server-Sent Events. |
 | `POST` | `/api/v1/deployments/{id}/cancel` | Annulla un deploy. |
 | `POST` | `/api/v1/deployments/{id}/approve` | Approva un deploy in attesa. |
 | `POST` | `/api/v1/deployments/{id}/reject` | Respinge un deploy in attesa. |
+| `GET` | `/api/v1/approvals` | Deploy in attesa di una decisione che il chiamante può prendere. |
+| `GET` | `/api/v1/me` | Identità del chiamante e ruoli che le si applicano. |
 | `POST` | `/api/v1/promotions` | Promuove un artefatto da un ambiente a un altro. |
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
@@ -41,6 +46,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/schedules/{nome}/pause` | Sospende una schedule. |
 | `POST` | `/api/v1/schedules/{nome}/resume` | Riattiva una schedule. |
 | `DELETE` | `/api/v1/schedules/{nome}` | Elimina una schedule. |
+| `GET` | `/ui/config.json` | Configurazione pubblica dell'[interfaccia web](interfaccia-web.md). Senza autenticazione. |
 | `GET` | `/healthz` | Il processo è attivo. Senza autenticazione. |
 | `GET` | `/readyz` | Il processo raggiunge il database e non è in arresto. Senza autenticazione. |
 | `GET` | `/metrics` | Metriche Prometheus (con `observability.metrics`). Senza autenticazione. |
@@ -175,8 +181,9 @@ Restituisce `{"deployments": [...]}` dal più recente, senza il risultato degli 
 | `application`, `environment` | Solo i deploy dell'applicazione o dell'ambiente. |
 | `state` | Solo i deploy nello stato indicato (es. `AWAITING_APPROVAL`). |
 | `limit` | Numero massimo di risultati (default 50), intero positivo. |
+| `cursor` | `next_cursor` della pagina precedente: l'elenco riparte dal deploy successivo. |
 
-Filtri e permessi non riducono il numero di risultati: l'elenco prosegue sui deploy più vecchi fino a `limit` (esaminandone al più 10.000).
+Filtri e permessi non riducono il numero di risultati: l'elenco prosegue sui deploy più vecchi fino a `limit` (esaminandone al più 10.000). Quando la pagina è piena la risposta ha anche `next_cursor`, l'ID del suo ultimo deploy.
 
 ### Annullare
 
@@ -274,6 +281,23 @@ curl -H "Authorization: Bearer $TOKEN" "https://manent.example.com/api/v1/deploy
 ```
 
 Per seguire un deploy si ripete la richiesta con `offset` uguale a `next` finché `done` è `true`. `GET /api/v1/metrics/dora?application=&environment=&since=` accetta per `since` una data RFC 3339, una durata (`720h`) o un numero di giorni (`30d`, default). Tutte richiedono `deployment.read`. Vedi [Osservabilità](../operazioni/osservabilita.md).
+
+### Eventi in tempo reale { #eventi-in-tempo-reale }
+
+`GET /api/v1/deployments/{id}/events` invia lo stato e le nuove righe di log di un deploy come Server-Sent Events, con gli stessi permessi di stato e log:
+
+| Evento | Dati |
+|---|---|
+| `status` | Lo stato del deploy, come `GET /api/v1/deployments/{id}`, ogni volta che cambia. |
+| `log` | Un array di nuove righe di log. L'`id` dell'evento è l'offset successivo: un client che si riconnette con `Last-Event-ID` (o `?offset=`) riprende da lì. |
+| `end` | Il deploy è concluso e tutte le sue righe sono state inviate; il server chiude lo stream. |
+| `error` | La lettura di stato o log è fallita. |
+
+Un commento `: keep-alive` ogni 15 secondi tiene aperta la connessione attraverso i proxy. `EventSource` non può inviare l'intestazione `Authorization`: con l'autenticazione lo stream si legge con `fetch` (come fa l'interfaccia web) o con un client che supporta le intestazioni (`curl -N`).
+
+### Identità e approvazioni
+
+`GET /api/v1/me` restituisce l'identità della richiesta (`subject`, `name`, `method`, `groups`), se l'autenticazione è attiva e i ruoli che le si applicano, con applicazioni e ambienti (`grants`). `GET /api/v1/approvals` restituisce `{"approvals": [...]}`: i deploy in attesa di una decisione, prima dell'avvio o tra due ondate, per cui il chiamante ha `deployment.approve` e che non ha richiesto lui. La CLI li espone come `manent whoami` e `manent approvals`.
 
 Le richieste propagano il contesto di tracing W3C (`traceparent`): la traccia di un client, ad esempio una pipeline di CI, prosegue nell'API e negli step del worker.
 

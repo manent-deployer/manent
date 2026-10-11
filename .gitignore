@@ -9,3 +9,8 @@
 /docs/site/
 /docs/.venv/
 /test/usecases/.work/
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
+/web/node_modules/
+/web/test-results/
+/web/playwright-report/

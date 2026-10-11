@@ -88,6 +88,14 @@ artifact:
 
     [:octicons-arrow-right-24: Writing a plugin](plugins/index.md)
 
+-   :material-monitor-dashboard:{ .lg .middle } **Web interface**
+
+    ---
+
+    Deploys, waves and logs live, approvals, inventory with promotions and rollbacks, freezes and DORA metrics, with the permissions of the API. Built into the server, accessible, in English and Italian.
+
+    [:octicons-arrow-right-24: Web interface](guida/interfaccia-web.md)
+
 -   :material-tune-variant:{ .lg .middle } **Per-environment configuration**
 
     ---

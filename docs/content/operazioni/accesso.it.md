@@ -42,6 +42,7 @@ manent verifica i JWT emessi da un identity provider OIDC (Keycloak, Microsoft E
 | `username_claim` | `preferred_username` | Claim con il nome dell'utente. Se manca si usa `sub`. |
 | `groups_claim` | `groups` | Claim con i gruppi, usati dai permessi. |
 | `ca_file` | | CA aggiuntive per raggiungere l'issuer. |
+| `ui.client_id`, `ui.scopes`, `ui.redirect_path` | | Client pubblico (PKCE) dell'[interfaccia web](../guida/interfaccia-web.md#accesso). |
 
 Il client (portale, script, CI con identità federata) ottiene il token dall'identity provider e lo passa a manent. manent non gestisce login né sessioni.
 

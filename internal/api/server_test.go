@@ -57,6 +57,15 @@ func (m *mockService) List(_ context.Context, f engine.ListFilter) ([]engine.Sta
 	return []engine.Status{{ID: "dep-1"}}, nil
 }
 
+func (m *mockService) Approvals(context.Context) ([]engine.Status, error) {
+	return []engine.Status{{ID: "dep-2", State: engine.StateAwaitingApproval}}, nil
+}
+
+func (m *mockService) Me(ctx context.Context) (*engine.Identity, error) {
+	p := auth.FromContext(ctx)
+	return &engine.Identity{Subject: p.String(), Name: p.Subject, Method: p.Method}, nil
+}
+
 func (m *mockService) Cancel(_ context.Context, id string) error {
 	if id != "dep-1" {
 		return engine.ErrNotFound

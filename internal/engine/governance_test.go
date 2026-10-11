@@ -397,3 +397,48 @@ func TestScheduleConApprovazione(t *testing.T) {
 	}
 	waitState(t, e, id, "SUCCESS", nil)
 }
+
+func TestApprovazioniInAttesaECursore(t *testing.T) {
+	e := govEngine(t, []governance.Rule{{Applications: []string{"*"}, Environments: []string{"prod"},
+		Approvals: governance.Approvals{Required: 1, Timeout: time.Minute}}}, nil)
+	deploy(t, e, alice, appDescriptor("test", "1.0.0"))
+	deploy(t, e, alice, appDescriptor("test", "1.1.0"))
+	sub, err := e.Submit(alice, appDescriptor("prod", "1.1.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Lo stato dell'approvazione è pubblicato appena il suo workflow parte.
+	var list []Status
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if list, err = e.Approvals(alice); err == nil && len(list) == 1 && list[0].Approval != nil {
+			break
+		}
+	}
+	if err != nil || len(list) != 1 || list[0].ID != sub.ID || list[0].Approval == nil || list[0].Approval.Required != 1 {
+		t.Fatalf("approvazioni in attesa: %+v %v", list, err)
+	}
+	if err := e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Wait(alice, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := e.Approvals(alice); len(list) != 0 {
+		t.Errorf("approvato: non è più in attesa: %+v", list)
+	}
+
+	// Paginazione: la seconda pagina riparte dopo l'ultimo deploy della prima.
+	page1, _ := e.List(alice, ListFilter{Limit: 2})
+	page2, _ := e.List(alice, ListFilter{Limit: 2, Cursor: page1[1].ID})
+	if len(page1) != 2 || len(page2) != 1 || page2[0].ID == page1[0].ID || page2[0].ID == page1[1].ID {
+		t.Errorf("pagine: %v / %v", ids(page1), ids(page2))
+	}
+}
+
+func ids(ss []Status) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = s.ID
+	}
+	return out
+}
