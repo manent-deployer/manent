@@ -248,7 +248,7 @@ func (p *Process) conn() (*external.Client, error) {
 	if p.closed {
 		return nil, errors.New("plugin esterno arrestato")
 	}
-	if p.client != nil && !p.client.Exited() {
+	if p.client != nil && !p.client.Exited() && p.alive() {
 		return p.rpc, nil
 	}
 	if p.client != nil {
@@ -257,6 +257,13 @@ func (p *Process) conn() (*external.Client, error) {
 		p.client = nil
 	}
 	return p.start()
+}
+
+// alive verifica la connessione: subito dopo un crash il processo può non risultare ancora
+// terminato (Exited), ma la connessione è già chiusa.
+func (p *Process) alive() bool {
+	proto, err := p.client.Client()
+	return err == nil && proto.Ping() == nil
 }
 
 // start avvia il processo, esegue l'handshake e invia la configurazione.
