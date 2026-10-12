@@ -36,6 +36,8 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/deployments/{id}/reject` | Respinge un deploy in attesa. |
 | `GET` | `/api/v1/approvals` | Deploy in attesa di una decisione che il chiamante può prendere. |
 | `GET` | `/api/v1/me` | Identità del chiamante e ruoli che le si applicano. |
+| `GET` | `/api/v1/activity` | Deploy non ancora conclusi: in esecuzione, in attesa di approvazione, in coda, pianificati. |
+| `GET` | `/api/v1/workers` | Worker registrati con stato, heartbeat e workflow in esecuzione (`platform.read`). |
 | `POST` | `/api/v1/promotions` | Promuove un artefatto da un ambiente a un altro. |
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
@@ -298,6 +300,12 @@ Un commento `: keep-alive` ogni 15 secondi tiene aperta la connessione attravers
 ### Identità e approvazioni
 
 `GET /api/v1/me` restituisce l'identità della richiesta (`subject`, `name`, `method`, `groups`), se l'autenticazione è attiva e i ruoli che le si applicano, con applicazioni e ambienti (`grants`). `GET /api/v1/approvals` restituisce `{"approvals": [...]}`: i deploy in attesa di una decisione, prima dell'avvio o tra due ondate, per cui il chiamante ha `deployment.approve` e che non ha richiesto lui. La CLI li espone come `manent whoami` e `manent approvals`.
+
+### Attività e worker
+
+`GET /api/v1/activity[?application=&environment=]` restituisce i deploy non ancora conclusi, dal più recente, in quattro elenchi: `running` (con `executor`, `started_at`, `last_step`, l'ultimo step registrato, e `rollout_progress`), `awaiting_approval`, `queued` (dal più vecchio: escono dalla coda in quest'ordine) e `delayed` (per orario di partenza). `truncated` è `true` se i workflow attivi erano più di quelli esaminati (1000). Contiene solo i deploy che il chiamante può leggere.
+
+`GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. La CLI li espone come `manent activity` e `manent workers`.
 
 Le richieste propagano il contesto di tracing W3C (`traceparent`): la traccia di un client, ad esempio una pipeline di CI, prosegue nell'API e negli step del worker.
 

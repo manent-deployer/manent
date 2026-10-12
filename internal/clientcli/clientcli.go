@@ -69,6 +69,8 @@ func Run(args []string) error {
 	add("rollback", "Torna a una versione rilasciata in precedenza", &RollbackCmd{global: g})
 	add("inventory", "Mostra la release in esercizio per applicazione e ambiente", &InventoryCmd{global: g})
 	add("approvals", "Elenca i deploy in attesa che puoi approvare", &ApprovalsCmd{global: g})
+	add("activity", "Mostra i deploy in esecuzione, in attesa di approvazione, in coda e pianificati", &ActivityCmd{global: g})
+	add("workers", "Elenca i worker con stato, heartbeat e deploy in esecuzione (permesso platform.read)", &WorkersCmd{global: g})
 	add("whoami", "Mostra la tua identità sul server e i tuoi permessi", &WhoamiCmd{global: g})
 	add("freezes", "Elenca le finestre di freeze attive e future", &FreezesCmd{global: g})
 	add("dora", "Calcola le metriche DORA dallo storico dei deploy", &DORACmd{global: g})

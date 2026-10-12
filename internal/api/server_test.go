@@ -61,6 +61,15 @@ func (m *mockService) Approvals(context.Context) ([]engine.Status, error) {
 	return []engine.Status{{ID: "dep-2", State: engine.StateAwaitingApproval}}, nil
 }
 
+func (m *mockService) Workers(context.Context) ([]engine.WorkerInfo, error) {
+	return []engine.WorkerInfo{{ID: "w1", State: "alive", Tasks: []engine.WorkerTask{{ID: "dep-1", Kind: "deploy"}}}}, nil
+}
+
+func (m *mockService) Activity(_ context.Context, f engine.ActivityFilter) (*engine.Activity, error) {
+	m.op = "activity:" + f.Application + ":" + f.Environment
+	return &engine.Activity{Running: []engine.Status{{ID: "dep-1", State: "PENDING", Executor: "w1", LastStep: "deploy"}}}, nil
+}
+
 func (m *mockService) Me(ctx context.Context) (*engine.Identity, error) {
 	p := auth.FromContext(ctx)
 	return &engine.Identity{Subject: p.String(), Name: p.Subject, Method: p.Method}, nil
@@ -391,6 +400,15 @@ func TestOsservabilita(t *testing.T) {
 	}
 	if w := do(r, http.MethodGet, "/api/v1/metrics/dora?since=ieri", ""); w.Code != http.StatusBadRequest {
 		t.Errorf("since non valido: %d", w.Code)
+	}
+
+	w = do(r, http.MethodGet, "/api/v1/workers", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"workers":[{"id":"w1","state":"alive"`) {
+		t.Errorf("workers: %d %s", w.Code, w.Body)
+	}
+	w = do(r, http.MethodGet, "/api/v1/activity?application=app&environment=prod", "")
+	if w.Code != http.StatusOK || svc.op != "activity:app:prod" || !strings.Contains(w.Body.String(), `"last_step":"deploy"`) {
+		t.Errorf("activity: %d %s (%s)", w.Code, w.Body, svc.op)
 	}
 
 	w = do(r, http.MethodGet, "/metrics", "")

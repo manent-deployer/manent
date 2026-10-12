@@ -122,6 +122,19 @@ manent dora [--since 30d] [-a <application>] [-e <environment>]
 
 See [Observability](../operazioni/osservabilita.md).
 
+## Activity and workers { #attivita-e-worker }
+
+```sh
+manent activity [-a <application>] [-e <environment>] [-w 5s] [--json]   # active deploys
+manent workers [-w 5s] [--json]                                           # workers and their work
+```
+
+`activity` shows the deploys that have not finished yet, grouped as **running** (with the worker that runs them, the last recorded step and the wave progress), **awaiting approval**, **queued** (waiting for a free slot of the environment) and **scheduled** (`schedule.at`). Only deploys you can read are listed.
+
+`workers` lists the registered workers with state (`alive`, `stale` when the heartbeat is missing, `stopped`, `unregistered` for an executor that has pending workflows but is not in the registry), region, workflow and binary versions, last heartbeat and the workflows running on each: deploys, wave steps in a region, health gates, approvals waiting for a decision. It requires the [`platform.read`](../operazioni/accesso.md#permessi-rbac) permission; workflows of applications you cannot read are only counted.
+
+Both print a table; `--json` prints the API response, `-w` repeats the list at the given interval until Ctrl-C.
+
 ## Schedules
 
 ```sh

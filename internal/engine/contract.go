@@ -41,6 +41,11 @@ type (
 	GovernanceService    = service.GovernanceService
 	InsightService       = service.InsightService
 	AccessService        = service.AccessService
+	PlatformService      = service.PlatformService
+	WorkerInfo           = service.WorkerInfo
+	WorkerTask           = service.WorkerTask
+	ActivityFilter       = service.ActivityFilter
+	Activity             = service.Activity
 	Identity             = service.Identity
 	Grant                = service.Grant
 	Validation           = service.Validation

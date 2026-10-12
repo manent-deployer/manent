@@ -132,6 +132,7 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 | `deployment.freeze-override` | Derogare a una [finestra di freeze](../guida/governance.md#finestre-di-freeze). |
 | `schedule.read` | Leggere le schedule ricorrenti. |
 | `schedule.write` | Creare, aggiornare, sospendere, riattivare ed eliminare le schedule. Creare una schedule richiede anche `deployment.submit`. |
+| `platform.read` | Vedere i [worker](../guida/cli.md#attivita-e-worker): host, versioni, region, heartbeat e workflow in esecuzione. Non dipende dall'applicazione: basta un binding qualsiasi che la conceda. |
 
 | Ruolo predefinito | Azioni |
 |---|---|
@@ -139,7 +140,7 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 | `tester` | `viewer` + `deployment.dry-run` |
 | `approver` | `viewer` + `deployment.approve` |
 | `deployer` | `tester` + `deployment.submit`, `deployment.cancel`, `deployment.rollback` |
-| `operator` | `deployer` + `schedule.write` |
+| `operator` | `deployer` + `schedule.write`, `platform.read` |
 | `admin` | tutte, compresa `deployment.freeze-override` |
 
 `deployer` e `operator` non possono approvare: chi rilascia non deve potersi approvare con un secondo ruolo. Le approvazioni si assegnano a un gruppo dedicato (es. il change advisory board) con il ruolo `approver`.
@@ -162,6 +163,7 @@ rbac:
 - **Promozione.** Richiede `deployment.read` sull'ambiente di origine e `deployment.submit` su quello di destinazione.
 - **Approvazioni.** Chi ha richiesto un deploy non può approvarlo, salvo `allow_self` nella regola.
 - **Freeze.** Le finestre di freeze sono visibili a ogni identità autenticata.
+- **Attività e worker.** `GET /activity` elenca solo i deploy che l'identità può leggere. `GET /workers` richiede `platform.read`; dei workflow in esecuzione mostra solo quelli di applicazioni e ambienti leggibili e conta gli altri in `hidden_tasks`.
 
 ### Client e server
 
@@ -183,7 +185,7 @@ Ogni azione rilevante produce una voce di audit:
 | `approval.finish` | Esito di un'approvazione (`approved`, `rejected`, `expired`), registrato dal worker. |
 | `deployment.cancel` | Annullamento. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Operazioni sulle schedule. |
-| `deployment.read`, `schedule.read`, `schedule.write` | Solo se negate. |
+| `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Solo se negate. |
 | `deployment.finish` | Esito finale del deploy, registrato dal worker. |
 
 | Esito (`outcome`) | Significato |

@@ -183,6 +183,17 @@ func (f *fakeService) DORA(context.Context, engine.DORAFilter) (*engine.DORARepo
 	}}, nil
 }
 
+// Workers e Activity ignorano Match, come un servizio remoto: il Guard deve filtrare comunque.
+func (f *fakeService) Workers(context.Context) ([]engine.WorkerInfo, error) {
+	return []engine.WorkerInfo{{ID: "w1", State: "alive", Tasks: []engine.WorkerTask{
+		{ID: "a1", Application: "team-a-api", Environment: "test"}, {ID: "b1", Application: "team-b-api", Environment: "test"},
+	}}}, nil
+}
+
+func (f *fakeService) Activity(context.Context, engine.ActivityFilter) (*engine.Activity, error) {
+	return &engine.Activity{Running: []engine.Status{f.statuses["a1"]}, Queued: []engine.Status{f.statuses["b1"]}}, nil
+}
+
 type recordAudit struct{ entries []audit.Entry }
 
 func (r *recordAudit) Record(_ context.Context, e audit.Entry) error {
@@ -249,6 +260,15 @@ func TestGuard(t *testing.T) {
 		t.Errorf("DORA non filtrate: %+v", rep)
 	}
 
+	// Attività: solo i deploy leggibili.
+	if a, err := g.Activity(alice, engine.ActivityFilter{}); err != nil || len(a.Running) != 1 || len(a.Queued) != 0 {
+		t.Errorf("attività non filtrata: %+v %v", a, err)
+	}
+	// Worker: platform.read, che il ruolo deployer non ha.
+	if _, err := g.Workers(alice); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("worker senza platform.read: atteso ErrForbidden, ricevuto %v", err)
+	}
+
 	// Una schedule con lo stesso nome di un'altra applicazione non può essere sovrascritta.
 	op := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "ops", Method: auth.MethodOIDC})
 	cron := &descriptor.Descriptor{Application: "team-a-api", Environment: "test", Schedule: &descriptor.Schedule{Cron: "0 2 * * *", Name: "nightly"}}
@@ -258,6 +278,11 @@ func TestGuard(t *testing.T) {
 	cron.Schedule.Name = "team-a-nightly"
 	if _, err := g.Submit(op, cron); err != nil {
 		t.Errorf("schedule nuova non creata: %v", err)
+	}
+	// operator ha platform.read (vale qualunque binding): vede i worker, ma dei workflow in
+	// esecuzione solo quelli che può leggere.
+	if ws, err := g.Workers(op); err != nil || len(ws) != 1 || len(ws[0].Tasks) != 1 || ws[0].Tasks[0].ID != "a1" || ws[0].HiddenTasks != 1 {
+		t.Errorf("worker: %+v %v", ws, err)
 	}
 
 	// Senza identità nel context tutto è negato.
@@ -275,7 +300,7 @@ func TestGuard(t *testing.T) {
 			denied++
 		}
 	}
-	if allowed != 4 || denied != 7 {
+	if allowed != 4 || denied != 8 {
 		t.Errorf("voci di audit inattese (allowed=%d denied=%d): %+v", allowed, denied, rec.entries)
 	}
 	if rec.entries[0].Actor != "oidc:alice" || rec.entries[0].Deployment != "new" || rec.entries[0].Action != string(DeploymentSubmit) {

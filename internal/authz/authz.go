@@ -28,6 +28,9 @@ const (
 	FreezeOverride Action = "deployment.freeze-override"
 	ScheduleRead   Action = "schedule.read"
 	ScheduleWrite  Action = "schedule.write"
+	// PlatformRead consente di vedere i worker (host, versioni, region) e il loro carico.
+	// Non dipende da applicazione e ambiente: basta un binding qualsiasi che la conceda.
+	PlatformRead Action = "platform.read"
 	// All vale per tutte le azioni.
 	All Action = "*"
 )
@@ -35,7 +38,7 @@ const (
 // Actions elenca le azioni valide nella definizione di un ruolo.
 var Actions = []Action{
 	DeploymentRead, DeploymentSubmit, DeploymentDryRun, DeploymentCancel, DeploymentRollback,
-	DeploymentApprove, FreezeOverride, ScheduleRead, ScheduleWrite, All,
+	DeploymentApprove, FreezeOverride, ScheduleRead, ScheduleWrite, PlatformRead, All,
 }
 
 // BuiltinRoles sono i ruoli predefiniti; la configurazione può aggiungerne altri.
@@ -46,7 +49,7 @@ var BuiltinRoles = map[string][]Action{
 	"tester":   {DeploymentRead, ScheduleRead, DeploymentDryRun},
 	"approver": {DeploymentRead, ScheduleRead, DeploymentApprove},
 	"deployer": {DeploymentRead, ScheduleRead, DeploymentDryRun, DeploymentSubmit, DeploymentCancel, DeploymentRollback},
-	"operator": {DeploymentRead, ScheduleRead, DeploymentDryRun, DeploymentSubmit, DeploymentCancel, DeploymentRollback, ScheduleWrite},
+	"operator": {DeploymentRead, ScheduleRead, DeploymentDryRun, DeploymentSubmit, DeploymentCancel, DeploymentRollback, ScheduleWrite, PlatformRead},
 	"admin":    {All},
 }
 
@@ -112,6 +115,23 @@ func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment 
 			continue
 		}
 		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) {
+			return true
+		}
+	}
+	return false
+}
+
+// AllowedAnywhere indica se p ha l'azione a in almeno un binding, qualunque siano applicazioni
+// e ambienti: serve per le azioni di piattaforma, che non riguardano un'applicazione.
+func (pol Policy) AllowedAnywhere(p *auth.Principal, a Action) bool {
+	if pol.Disabled {
+		return true
+	}
+	if p == nil {
+		return false
+	}
+	for _, b := range pol.Bindings {
+		if pol.grants(b.Role, a) && b.matches(p) {
 			return true
 		}
 	}

@@ -369,6 +369,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker registrati con stato, heartbeat e workflow in esecuzione (permesso platform.read) */
+        get: operations["listWorkers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deploy non conclusi (in esecuzione, in attesa di approvazione, in coda, pianificati) */
+        get: operations["getActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ui/config.json": {
         parameters: {
             query?: never;
@@ -538,12 +572,71 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             scheduled_at?: string;
+            /**
+             * Format: date-time
+             * @description Inizio dell'esecuzione sul worker
+             */
+            started_at?: string;
+            /** @description Worker che esegue o ha eseguito il deploy */
+            executor?: string;
+            queue?: string;
+            /** @description Ultimo step registrato di un deploy in corso (solo in /activity) */
+            last_step?: string;
             approval?: components["schemas"]["ApprovalState"];
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
             result?: components["schemas"]["Result"];
             error?: string;
+        };
+        Worker: {
+            /** @description Executor ID DBOS */
+            id: string;
+            /** @enum {string} */
+            state: "alive" | "stale" | "stopped" | "unregistered";
+            /** @description Versione dei workflow (app.version) */
+            version?: string;
+            /** @description Versione del binario */
+            build?: string;
+            hostname?: string;
+            region?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            heartbeat_at?: string;
+            /** Format: date-time */
+            stopped_at?: string;
+            recovered_by?: string;
+            /** Format: date-time */
+            recovered_at?: string;
+            /** @description Workflow in sospeso per versione dei workflow */
+            pending?: {
+                [key: string]: number;
+            };
+            tasks: components["schemas"]["WorkerTask"][];
+            /** @description Workflow in esecuzione di applicazioni/ambienti non leggibili */
+            hidden_tasks?: number;
+        };
+        WorkerTask: {
+            id: string;
+            deployment_id: string;
+            /** @enum {string} */
+            kind: "deploy" | "pass" | "gate" | "approval" | "schedule";
+            application?: string;
+            environment?: string;
+            region?: string;
+            version?: string;
+            queue?: string;
+            /** Format: date-time */
+            started_at?: string;
+            attempts?: number;
+        };
+        Activity: {
+            running: components["schemas"]["Status"][];
+            awaiting_approval: components["schemas"]["Status"][];
+            queued: components["schemas"]["Status"][];
+            delayed: components["schemas"]["Status"][];
+            truncated?: boolean;
         };
         Validation: {
             valid: boolean;
@@ -1281,6 +1374,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    listWorkers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worker */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        workers: components["schemas"]["Worker"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getActivity: {
+        parameters: {
+            query?: {
+                application?: string;
+                environment?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attività */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
                 };
             };
             401: components["responses"]["Error"];

@@ -132,6 +132,7 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 | `deployment.freeze-override` | Bypass a [freeze window](../guida/governance.md#finestre-di-freeze). |
 | `schedule.read` | Read recurring schedules. |
 | `schedule.write` | Create, update, pause, resume and delete schedules. Creating a schedule also requires `deployment.submit`. |
+| `platform.read` | See the [workers](../guida/cli.md#attivita-e-worker): hosts, versions, regions, heartbeat and running workflows. It is not tied to an application: any binding that grants it is enough. |
 
 | Predefined role | Actions |
 |---|---|
@@ -139,7 +140,7 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 | `tester` | `viewer` + `deployment.dry-run` |
 | `approver` | `viewer` + `deployment.approve` |
 | `deployer` | `tester` + `deployment.submit`, `deployment.cancel`, `deployment.rollback` |
-| `operator` | `deployer` + `schedule.write` |
+| `operator` | `deployer` + `schedule.write`, `platform.read` |
 | `admin` | all, including `deployment.freeze-override` |
 
 `deployer` and `operator` cannot approve: whoever releases must not be able to approve themselves through a second role. Approvals are assigned to a dedicated group (e.g. the change advisory board) with the `approver` role.
@@ -162,6 +163,7 @@ rbac:
 - **Promotion.** Requires `deployment.read` on the source environment and `deployment.submit` on the destination.
 - **Approvals.** Whoever requested a deploy cannot approve it, unless the rule has `allow_self`.
 - **Freezes.** Freeze windows are visible to every authenticated identity.
+- **Activity and workers.** `GET /activity` lists only the deploys the identity can read. `GET /workers` requires `platform.read`; of the running workflows it shows only those of readable applications and environments, and counts the others in `hidden_tasks`.
 
 ### Client and server
 
@@ -183,7 +185,7 @@ Every relevant action produces an audit entry:
 | `approval.finish` | Outcome of an approval (`approved`, `rejected`, `expired`), recorded by the worker. |
 | `deployment.cancel` | Cancellation. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Schedule operations. |
-| `deployment.read`, `schedule.read`, `schedule.write` | Only if denied. |
+| `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Only if denied. |
 | `deployment.finish` | Final outcome of the deploy, recorded by the worker. |
 
 | Outcome (`outcome`) | Meaning |

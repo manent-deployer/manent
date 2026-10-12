@@ -26,8 +26,10 @@ type Executor struct {
 	// i workflow della propria versione.
 	Version string `json:"version"`
 	// Build è la versione del binario di manent.
-	Build       string     `json:"build,omitempty"`
-	Hostname    string     `json:"hostname,omitempty"`
+	Build    string `json:"build,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	// Region è la region del worker (dbos.region), se configurata.
+	Region      string     `json:"region,omitempty"`
 	StartedAt   time.Time  `json:"started_at"`
 	HeartbeatAt time.Time  `json:"heartbeat_at"`
 	StoppedAt   *time.Time `json:"stopped_at,omitempty"`
@@ -164,11 +166,28 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 	var err error
 	for attempt := range 4 {
 		if err = r.exec(ctx, stmts); err == nil {
-			return nil
+			if err = r.addColumns(ctx, postgres); err == nil {
+				return nil
+			}
 		}
 		time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
 	}
 	return fmt.Errorf("registro executor: creazione tabelle: %w", err)
+}
+
+// addColumns aggiunge le colonne introdotte dopo la prima versione del registro.
+func (r *SQL) addColumns(ctx context.Context, postgres bool) error {
+	if postgres {
+		_, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN IF NOT EXISTS region TEXT`)
+		return err
+	}
+	// SQLite non ha ADD COLUMN IF NOT EXISTS: si controlla prima lo schema.
+	var n int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('`+r.executors+`') WHERE name = 'region'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN region TEXT`)
+	return err
 }
 
 func (r *SQL) exec(ctx context.Context, stmts []string) error {
@@ -194,14 +213,14 @@ func fromMs(v sql.NullInt64) *time.Time {
 func (r *SQL) Register(ctx context.Context, e Executor) (bool, error) {
 	t := r.exBare
 	now := r.now()
-	res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+	res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at, region)
+		VALUES ($1, $2, $3, $4, $5, $6, $8)
 		ON CONFLICT (executor_id) DO UPDATE SET
-			version = excluded.version, build = excluded.build, hostname = excluded.hostname,
+			version = excluded.version, build = excluded.build, hostname = excluded.hostname, region = excluded.region,
 			started_at = excluded.started_at, heartbeat_at = excluded.heartbeat_at,
 			stopped_at = NULL, recovered_by = NULL, recovered_at = NULL, recovery_done_at = NULL
 		WHERE `+t+`.recovered_by IS NULL OR `+t+`.recovery_done_at IS NOT NULL OR `+t+`.recovered_at < $7`,
-		e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)))
+		e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)), e.Region)
 	if err != nil {
 		return false, err
 	}
@@ -233,7 +252,7 @@ func (r *SQL) Stopped(ctx context.Context, id string, startedAt time.Time) error
 // List implementa Registry.
 func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT executor_id, version, build, hostname, started_at, heartbeat_at,
-		stopped_at, recovered_by, recovered_at FROM `+r.executors+` ORDER BY executor_id`)
+		stopped_at, recovered_by, recovered_at, region FROM `+r.executors+` ORDER BY executor_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -244,13 +263,14 @@ func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 			e                   Executor
 			started, heartbeat  int64
 			stopped, recoveredT sql.NullInt64
-			recoveredBy         sql.NullString
+			recoveredBy, region sql.NullString
 		)
-		if err := rows.Scan(&e.ID, &e.Version, &e.Build, &e.Hostname, &started, &heartbeat, &stopped, &recoveredBy, &recoveredT); err != nil {
+		if err := rows.Scan(&e.ID, &e.Version, &e.Build, &e.Hostname, &started, &heartbeat, &stopped, &recoveredBy, &recoveredT, &region); err != nil {
 			return nil, err
 		}
 		e.StartedAt, e.HeartbeatAt = time.UnixMilli(started).UTC(), time.UnixMilli(heartbeat).UTC()
 		e.StoppedAt, e.RecoveredBy, e.RecoveredAt = fromMs(stopped), recoveredBy.String, fromMs(recoveredT)
+		e.Region = region.String
 		out = append(out, e)
 	}
 	return out, rows.Err()

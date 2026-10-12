@@ -149,3 +149,59 @@ describe("inventario", () => {
     ]);
   });
 });
+
+describe("attività", () => {
+  const activity = {
+    running: [dep({ id: "r1", state: "PENDING", executor: "worker-eu-1", last_step: "deploy", started_at: "2026-10-11T09:58:00Z" })],
+    awaiting_approval: [],
+    queued: [dep({ id: "q1", state: "ENQUEUED", environment: "test", queue: "deployments" })],
+    delayed: [],
+  };
+  const workers = {
+    workers: [
+      {
+        id: "worker-eu-1",
+        state: "alive",
+        region: "eu",
+        version: "1",
+        heartbeat_at: "2026-10-11T09:59:58Z",
+        tasks: [{ id: "r1", deployment_id: "r1", kind: "deploy", application: "shop", environment: "prod" }],
+        hidden_tasks: 2,
+      },
+      { id: "worker-us-1", state: "stale", tasks: [] },
+    ],
+  };
+
+  it("mostra deploy attivi e worker a chi ha platform.read", async () => {
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me")
+        return { json: identity({ grants: [{ role: "operator", actions: ["deployment.read", "platform.read"], applications: ["*"], environments: ["prod"] }] }) };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/activity") return { json: activity };
+      if (path === "/api/v1/workers") return { json: workers };
+    });
+    renderApp(api, "/activity");
+    const running = await screen.findByRole("table", { name: "Running" });
+    expect(within(running).getByRole("link", { name: /shop.*prod/ })).toHaveAttribute("href", "/deployments/r1");
+    expect(within(running).getByText("step deploy")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Queued" })).toHaveTextContent("deployments");
+    expect(screen.queryByRole("table", { name: "Scheduled" })).not.toBeInTheDocument();
+    const ws = await screen.findByRole("table", { name: "Workers" });
+    expect(within(ws).getByText("Alive")).toBeInTheDocument();
+    expect(within(ws).getByText("Lost")).toBeInTheDocument();
+    expect(within(ws).getByText("+2 not visible to you")).toBeInTheDocument();
+    expect(within(ws).getByText("Idle")).toBeInTheDocument();
+  });
+
+  it("senza platform.read non chiede i worker", async () => {
+    const { api, calls } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/activity") return { json: { running: [], awaiting_approval: [], queued: [], delayed: [] } };
+    });
+    renderApp(api, "/activity");
+    expect(await screen.findByText("No active deployments.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Workers/ })).not.toBeInTheDocument();
+    expect(calls.some((c) => c.path === "/api/v1/workers")).toBe(false);
+  });
+});

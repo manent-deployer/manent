@@ -36,6 +36,8 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/deployments/{id}/reject` | Rejects a pending deploy. |
 | `GET` | `/api/v1/approvals` | Deploys waiting for a decision that the caller can take. |
 | `GET` | `/api/v1/me` | Identity of the caller and the roles that apply to it. |
+| `GET` | `/api/v1/activity` | Deploys not yet finished: running, awaiting approval, queued, scheduled. |
+| `GET` | `/api/v1/workers` | Registered workers with state, heartbeat and running workflows (`platform.read`). |
 | `POST` | `/api/v1/promotions` | Promotes an artifact from one environment to another. |
 | `POST` | `/api/v1/rollbacks` | Goes back to a previous version. |
 | `GET` | `/api/v1/inventory` | Live releases per application and environment. |
@@ -298,6 +300,12 @@ A `: keep-alive` comment every 15 seconds keeps the connection open through prox
 ### Identity and approvals
 
 `GET /api/v1/me` returns the identity of the request (`subject`, `name`, `method`, `groups`), whether authentication is enabled and the roles that apply to it, with applications and environments (`grants`). `GET /api/v1/approvals` returns `{"approvals": [...]}`: the deploys waiting for a decision, before the start or between two waves, that the caller has `deployment.approve` for and did not request. The CLI exposes them as `manent whoami` and `manent approvals`.
+
+### Activity and workers
+
+`GET /api/v1/activity[?application=&environment=]` returns the deploys not yet finished, from the most recent, in four lists: `running` (with `executor`, `started_at`, `last_step`, the last recorded step, and `rollout_progress`), `awaiting_approval`, `queued` (oldest first: they leave the queue in that order) and `delayed` (by start time). `truncated` is `true` if there were more active workflows than examined (1000). It contains only deploys the caller can read.
+
+`GET /api/v1/workers` returns `{"workers": [...]}`: for each worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (workflow version), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (pending workflows per version) and `tasks`, the running workflows (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, with `deployment_id`, application, environment, region and `started_at`). It requires `platform.read`; `hidden_tasks` counts the workflows of applications the caller cannot read. The CLI exposes them as `manent activity` and `manent workers`.
 
 Requests propagate the W3C tracing context (`traceparent`): a client's trace, for example a CI pipeline, continues into the API and the worker's steps.
 

@@ -10,7 +10,12 @@ import (
 
 func openTest(t *testing.T) *SQL {
 	t.Helper()
-	r, err := Open(context.Background(), testdb.URL(t))
+	return openURL(t, testdb.URL(t))
+}
+
+func openURL(t *testing.T, url string) *SQL {
+	t.Helper()
+	r, err := Open(context.Background(), url)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,5 +142,33 @@ func TestDataSource(t *testing.T) {
 	}
 	if _, _, _, err := dataSource("sqlite::memory:"); err == nil {
 		t.Error("SQLite in memoria accettato")
+	}
+}
+
+func TestRegionERegistroPrecedente(t *testing.T) {
+	ctx := context.Background()
+	url := testdb.URL(t)
+	r, err := Open(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Registro creato da una versione precedente, senza la colonna region.
+	if _, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` DROP COLUMN region`); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Close()
+	for range 2 { // la migrazione è ripetibile
+		if r, err = Open(ctx, url); err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Close()
+	}
+	r = openURL(t, url)
+	if _, err := r.Register(ctx, Executor{ID: "w1", Version: "1", Region: "eu", StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	es, err := r.List(ctx)
+	if err != nil || len(es) != 1 || es[0].Region != "eu" {
+		t.Fatalf("region non registrata: %+v %v", es, err)
 	}
 }

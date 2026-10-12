@@ -10,7 +10,8 @@ export type Action =
   | "deployment.approve"
   | "deployment.freeze-override"
   | "schedule.read"
-  | "schedule.write";
+  | "schedule.write"
+  | "platform.read";
 
 /** glob confronta un valore con un pattern in cui "*" vale qualsiasi sequenza (come internal/glob). */
 export function glob(pattern: string, value: string): boolean {

@@ -72,7 +72,11 @@ type ServiceOptions struct {
 	Governance Governance
 	// Health, se presente, verifica che i controlli di salute dei rollout siano eseguibili.
 	Health rollout.Checker
-	Logger *slog.Logger
+	// Executors, se presente, fornisce a Workers il registro dei worker; StaleAfter è il
+	// ritardo di heartbeat oltre il quale un worker è considerato perso.
+	Executors  ExecutorLister
+	StaleAfter time.Duration
+	Logger     *slog.Logger
 	// Now restituisce l'ora corrente; sostituibile nei test.
 	Now func() time.Time
 }
@@ -103,6 +107,8 @@ type Engine struct {
 	resolver   ConfigResolver
 	governance Governance
 	health     rollout.Checker
+	executors  ExecutorLister
+	staleAfter time.Duration
 	logger     *slog.Logger
 	now        func() time.Time
 }
@@ -122,6 +128,8 @@ func NewService(opts ServiceOptions) *Engine {
 		resolver:   opts.Resolver,
 		governance: opts.Governance,
 		health:     opts.Health,
+		executors:  opts.Executors,
+		staleAfter: cmp.Or(opts.StaleAfter, time.Minute),
 		logger:     opts.Logger.With("component", "engine"),
 		now:        opts.Now,
 	}
@@ -603,6 +611,12 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		at := st.DelayUntil
 		s.ScheduledAt = &at
 	}
+	// Un deploy in coda non ha ancora un worker: l'executor registrato è quello che l'ha accodato.
+	if st.Status != dbos.WorkflowStatusEnqueued && st.Status != dbos.WorkflowStatusDelayed && !st.StartedAt.IsZero() {
+		at := st.StartedAt.UTC()
+		s.StartedAt, s.Executor = &at, st.ExecutorID
+	}
+	s.Queue = st.QueueName
 	if st.Status == dbos.WorkflowStatusError && st.Error != nil {
 		s.Error = st.Error.Error()
 	}

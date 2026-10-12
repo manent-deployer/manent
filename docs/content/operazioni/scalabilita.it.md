@@ -53,6 +53,8 @@ Cosa succede se un worker si ferma durante un deploy:
 2. al riavvio, il worker lo riprende: gli step già completati non vengono rieseguiti, quello interrotto riparte;
 3. se il deploy riprende su un worker diverso, perché la macchina è stata sostituita mantenendo l'ID, e la directory di lavoro non contiene l'artefatto, lo step `deploy` lo riscarica e ne verifica lo sha256.
 
+[`manent workers`](../guida/cli.md#attivita-e-worker) mostra stato, ultimo heartbeat e workflow in esecuzione di ogni worker; [`manent activity`](../guida/cli.md#attivita-e-worker) quale worker sta eseguendo ogni deploy.
+
 Per questo gli step e i plugin devono essere idempotenti. Il plugin `remote-copy`, ad esempio, scrive su un file `.part` e lo rinomina in modo atomico: riscrivere lo stesso artefatto produce lo stesso risultato.
 
 ## Arresto

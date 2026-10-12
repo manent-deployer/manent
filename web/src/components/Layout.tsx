@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CalendarClock, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, ShieldAlert, Sun } from "lucide-react";
+import { Activity as ActivityIcon, BarChart3, CalendarClock, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, ShieldAlert, Sun } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
@@ -149,6 +149,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const nav = [
     { to: "/deployments", label: t("nav.deployments"), icon: Rocket },
+    { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },
     { to: "/approvals", label: t("nav.approvals"), icon: ListChecks, count: canApprove ? waiting : 0 },
     { to: "/inventory", label: t("nav.inventory"), icon: LayoutGrid },
     { to: "/calendar", label: t("nav.calendar"), icon: CalendarClock },

@@ -12,6 +12,7 @@ import { Button, Loading, PageHeader } from "@/components/ui";
 import { I18nProvider, useI18n, type Lang } from "@/i18n/i18n";
 import { loadConfig, type UIConfig } from "@/lib/config";
 import { ThemeProvider } from "@/lib/theme";
+import { ActivityPage } from "@/pages/Activity";
 import { ApprovalsPage } from "@/pages/Approvals";
 import { CalendarPage } from "@/pages/Calendar";
 import { DeploymentDetailPage } from "@/pages/DeploymentDetail";
@@ -58,6 +59,7 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to="/deployments" replace />} />
         <Route path="/deployments" element={<DeploymentsPage />} />
         <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/calendar" element={<CalendarPage />} />

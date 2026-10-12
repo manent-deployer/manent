@@ -439,3 +439,55 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 	}
 	return out, nil
 }
+
+// Workers richiede platform.read. Dei workflow in esecuzione restano visibili solo quelli delle
+// applicazioni/ambienti leggibili: gli altri sono solo contati.
+func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
+	p := auth.FromContext(ctx)
+	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
+		err := fmt.Errorf("%w: %s non può eseguire %s", engine.ErrForbidden, actor(p), PlatformRead)
+		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
+		return nil, err
+	}
+	ws, err := g.Next.Workers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range ws {
+		tasks := ws[i].Tasks[:0]
+		for _, t := range ws[i].Tasks {
+			if g.Policy.Allowed(p, DeploymentRead, t.Application, t.Environment) {
+				tasks = append(tasks, t)
+			} else {
+				ws[i].HiddenTasks++
+			}
+		}
+		ws[i].Tasks = tasks
+	}
+	return ws, nil
+}
+
+// Activity restituisce solo i deploy che l'identità può leggere.
+func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.Activity, error) {
+	p := auth.FromContext(ctx)
+	match := f.Match
+	f.Match = func(st engine.Status) bool {
+		return g.Policy.Allowed(p, DeploymentRead, st.Application, st.Environment) && (match == nil || match(st))
+	}
+	a, err := g.Next.Activity(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	// Un servizio remoto ignora Match: il filtro viene riapplicato.
+	keep := func(in []engine.Status) []engine.Status {
+		out := []engine.Status{}
+		for _, st := range in {
+			if f.Match(st) {
+				out = append(out, st)
+			}
+		}
+		return out
+	}
+	a.Running, a.AwaitingApproval, a.Queued, a.Delayed = keep(a.Running), keep(a.AwaitingApproval), keep(a.Queued), keep(a.Delayed)
+	return a, nil
+}

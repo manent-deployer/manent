@@ -45,6 +45,11 @@ id=$(submit "$(descriptor uc3-d uc3-120-crash $APP test 1.2.0)")
 wait_started eu1-b 1.2.0
 w=$(executor_of "$id")
 expect_match "il deploy è in esecuzione su un worker" "$w" "^worker-[12]$"
+expect_eq "activity: il deploy è tra quelli in esecuzione, su $w" \
+  "$(manent activity --json -a $APP | jq -r --arg id "$id" '.running[] | select(.id == $id) | .executor')" "$w"
+expect_match "workers: $w è attivo e sta eseguendo il deploy" \
+  "$(manent workers --json | jq -r --arg w "$w" '.[] | select(.id == $w) | .state + " " + ([.tasks[].deployment_id] | join(","))')" "^alive .*$id"
+expect_match "workers richiede platform.read (viewer: 403)" "$(as viewer manent_err workers)" "platform.read"
 dc kill "$w" >/dev/null 2>&1
 fault eu1-b $APP clear
 info "$w terminato con SIGKILL; recovery automatica attesa dopo ~10s"
@@ -54,8 +59,11 @@ expect_eq "l'ultimo step è stato eseguito da $other" "$(executor_of "$id")" "$o
 expect_eq "eu1-b sulla 1.2.0" "$(current eu1-b $APP)" 1.2.0
 expect_eq "solo lo step interrotto è stato rieseguito (2 esecuzioni)" "$(started eu1-b 1.2.0)" 2
 expect_match "il worker caduto è stato ripreso da $other" "$(dc logs "$other" 2>/dev/null | grep -i recover | tail -3)" "$w"
+expect_eq "workers: $w risulta perso e ripreso da $other" \
+  "$(manent workers --json | jq -r --arg w "$w" '.[] | select(.id == $w) | .state + " " + .recovered_by')" "stale executor:$other"
 dc start "$w" >/dev/null 2>&1
 sleep 8
+expect_eq "workers: $w di nuovo attivo dopo il riavvio" "$(manent workers --json | jq -r --arg w "$w" '.[] | select(.id == $w) | .state')" alive
 expect_eq "al riavvio il worker caduto non riesegue il deploy" "$(started eu1-b 1.2.0)" 2
 
 info "-- arresto ordinato (drain)"

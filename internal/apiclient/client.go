@@ -344,6 +344,31 @@ func (c *Client) Approvals(ctx context.Context) ([]service.Status, error) {
 	return out.Approvals, err
 }
 
+// Workers implementa service.Service.
+func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
+	var out struct {
+		Workers []service.WorkerInfo `json:"workers"`
+	}
+	err := c.do(ctx, http.MethodGet, "/workers", nil, nil, &out)
+	return out.Workers, err
+}
+
+// Activity implementa service.Service.
+func (c *Client) Activity(ctx context.Context, f service.ActivityFilter) (*service.Activity, error) {
+	q := url.Values{}
+	if f.Application != "" {
+		q.Set("application", f.Application)
+	}
+	if f.Environment != "" {
+		q.Set("environment", f.Environment)
+	}
+	var a service.Activity
+	if err := c.do(ctx, http.MethodGet, "/activity", q, nil, &a); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // Me implementa service.Service.
 func (c *Client) Me(ctx context.Context) (*service.Identity, error) {
 	var out service.Identity

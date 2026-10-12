@@ -53,6 +53,8 @@ What happens if a worker stops during a deploy:
 2. on restart, the worker resumes it: steps already completed are not rerun, the interrupted one restarts;
 3. if the deploy resumes on a different worker, because the machine was replaced keeping the ID, and the working directory does not contain the artifact, the `deploy` step downloads it again and verifies its sha256.
 
+[`manent workers`](../guida/cli.md#attivita-e-worker) shows each worker's state, last heartbeat and running workflows; [`manent activity`](../guida/cli.md#attivita-e-worker) which worker is running each deploy.
+
 This is why steps and plugins must be idempotent. The `remote-copy` plugin, for example, writes to a `.part` file and renames it atomically: rewriting the same artifact produces the same result.
 
 ## Shutdown

@@ -280,7 +280,7 @@ func (w *Worker) Launch() error {
 // dei suoi workflow (al più cluster.ClaimTimeout).
 func (w *Worker) register() error {
 	w.startedAt = time.Now().UTC()
-	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, StartedAt: w.startedAt}
+	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, Region: w.region, StartedAt: w.startedAt}
 	deadline := time.Now().Add(cluster.ClaimTimeout + 10*time.Second)
 	for {
 		ok, err := w.registry.Register(context.Background(), e)

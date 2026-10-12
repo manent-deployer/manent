@@ -15,6 +15,8 @@ export type DORAReport = components["schemas"]["DORAReport"];
 export type DORAMetrics = components["schemas"]["DORAMetrics"];
 export type Identity = components["schemas"]["Identity"];
 export type Submission = components["schemas"]["Submission"];
+export type Activity = components["schemas"]["Activity"];
+export type Worker = components["schemas"]["Worker"];
 
 /** Errore dell'API con lo stato HTTP e il messaggio del server. */
 export class ApiError extends Error {

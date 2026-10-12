@@ -23,6 +23,7 @@ tags:
   - name: schedules
   - name: insight
   - name: access
+  - name: platform
   - name: ui
   - name: probes
 
@@ -354,6 +355,34 @@ paths:
       responses:
         '200': {description: Identità, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
         '401': {$ref: '#/components/responses/Error'}
+  /api/v1/workers:
+    get:
+      tags: [platform]
+      summary: Worker registrati con stato, heartbeat e workflow in esecuzione (permesso platform.read)
+      operationId: listWorkers
+      responses:
+        '200':
+          description: Worker
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workers]
+                properties:
+                  workers: {type: array, items: {$ref: '#/components/schemas/Worker'}}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v1/activity:
+    get:
+      tags: [platform]
+      summary: Deploy non conclusi (in esecuzione, in attesa di approvazione, in coda, pianificati)
+      operationId: getActivity
+      parameters:
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Attività, content: {application/json: {schema: {$ref: '#/components/schemas/Activity'}}}}
+        '401': {$ref: '#/components/responses/Error'}
   /ui/config.json:
     get:
       tags: [ui]
@@ -536,11 +565,56 @@ components:
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
         scheduled_at: {type: string, format: date-time}
+        started_at: {type: string, format: date-time, description: Inizio dell'esecuzione sul worker}
+        executor: {type: string, description: Worker che esegue o ha eseguito il deploy}
+        queue: {type: string}
+        last_step: {type: string, description: Ultimo step registrato di un deploy in corso (solo in /activity)}
         approval: {$ref: '#/components/schemas/ApprovalState'}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
         result: {$ref: '#/components/schemas/Result'}
         error: {type: string}
+    Worker:
+      type: object
+      required: [id, state, tasks]
+      properties:
+        id: {type: string, description: Executor ID DBOS}
+        state: {type: string, enum: [alive, stale, stopped, unregistered]}
+        version: {type: string, description: Versione dei workflow (app.version)}
+        build: {type: string, description: Versione del binario}
+        hostname: {type: string}
+        region: {type: string}
+        started_at: {type: string, format: date-time}
+        heartbeat_at: {type: string, format: date-time}
+        stopped_at: {type: string, format: date-time}
+        recovered_by: {type: string}
+        recovered_at: {type: string, format: date-time}
+        pending: {type: object, additionalProperties: {type: integer}, description: Workflow in sospeso per versione dei workflow}
+        tasks: {type: array, items: {$ref: '#/components/schemas/WorkerTask'}}
+        hidden_tasks: {type: integer, description: Workflow in esecuzione di applicazioni/ambienti non leggibili}
+    WorkerTask:
+      type: object
+      required: [id, deployment_id, kind]
+      properties:
+        id: {type: string}
+        deployment_id: {type: string}
+        kind: {type: string, enum: [deploy, pass, gate, approval, schedule]}
+        application: {type: string}
+        environment: {type: string}
+        region: {type: string}
+        version: {type: string}
+        queue: {type: string}
+        started_at: {type: string, format: date-time}
+        attempts: {type: integer}
+    Activity:
+      type: object
+      required: [running, awaiting_approval, queued, delayed]
+      properties:
+        running: {type: array, items: {$ref: '#/components/schemas/Status'}}
+        awaiting_approval: {type: array, items: {$ref: '#/components/schemas/Status'}}
+        queued: {type: array, items: {$ref: '#/components/schemas/Status'}}
+        delayed: {type: array, items: {$ref: '#/components/schemas/Status'}}
+        truncated: {type: boolean}
     Validation:
       type: object
       required: [valid]

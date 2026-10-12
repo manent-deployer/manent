@@ -70,6 +70,7 @@ type Service interface {
 	GovernanceService
 	InsightService
 	AccessService
+	PlatformService
 }
 
 // DeploymentService gestisce i deploy, immediati o pianificati.
@@ -195,12 +196,19 @@ type Status struct {
 	Source string `json:"source,omitempty"`
 	DryRun bool   `json:"dry_run,omitempty"`
 	// Rollback è l'esito del rollback automatico, se eseguito.
-	Rollback    string         `json:"rollback,omitempty"`
-	RequestedBy string         `json:"requested_by,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	ScheduledAt *time.Time     `json:"scheduled_at,omitempty"`
-	Approval    *ApprovalState `json:"approval,omitempty"`
+	Rollback    string     `json:"rollback,omitempty"`
+	RequestedBy string     `json:"requested_by,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+	// StartedAt è l'inizio dell'esecuzione sul worker (assente finché il deploy è in coda).
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	// Executor è il worker che esegue o ha eseguito il deploy; Queue la coda.
+	Executor string `json:"executor,omitempty"`
+	Queue    string `json:"queue,omitempty"`
+	// LastStep è l'ultimo step registrato di un deploy in corso (solo nell'attività).
+	LastStep string         `json:"last_step,omitempty"`
+	Approval *ApprovalState `json:"approval,omitempty"`
 	// Rollout è lo stato del rilascio a ondate, se il deploy ne ha uno.
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// RolloutProgress riassume il rollout negli elenchi: "stadi superati/stadi totali".

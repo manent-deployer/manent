@@ -122,6 +122,19 @@ manent dora [--since 30d] [-a <applicazione>] [-e <ambiente>]
 
 Vedi [Osservabilità](../operazioni/osservabilita.md).
 
+## Attività e worker { #attivita-e-worker }
+
+```sh
+manent activity [-a <applicazione>] [-e <ambiente>] [-w 5s] [--json]   # deploy attivi
+manent workers [-w 5s] [--json]                                         # worker e lavoro in corso
+```
+
+`activity` mostra i deploy non ancora conclusi, raggruppati in **in esecuzione** (con il worker che li esegue, l'ultimo step registrato e l'avanzamento delle ondate), **in attesa di approvazione**, **in coda** (in attesa di uno slot libero dell'ambiente) e **pianificati** (`schedule.at`). Sono elencati solo i deploy che puoi leggere.
+
+`workers` elenca i worker registrati con stato (`alive`, `stale` se manca l'heartbeat, `stopped`, `unregistered` per un executor con workflow in sospeso ma assente dal registro), region, versione dei workflow e del binario, ultimo heartbeat e i workflow in esecuzione su ciascuno: deploy, passi di un'ondata in una region, health gate, approvazioni in attesa di una decisione. Richiede il permesso [`platform.read`](../operazioni/accesso.md#permessi-rbac); i workflow delle applicazioni che non puoi leggere sono solo contati.
+
+Entrambi stampano una tabella; `--json` stampa la risposta dell'API, `-w` ripete l'elenco all'intervallo indicato fino a Ctrl-C.
+
 ## Schedule
 
 ```sh

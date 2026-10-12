@@ -383,11 +383,13 @@ type components struct {
 }
 
 // service costruisce il servizio esposto a CLI e API: l'Engine avvolto dai permessi.
-func (c *components) service(cfg *config.Config, client dbos.Client) engine.Service {
+// executors fornisce l'elenco dei worker (Admin, aperto al primo uso in modalità client).
+func (c *components) service(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) engine.Service {
 	eng := engine.NewService(engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
 		Resolver: c.resolver, Governance: c.governance, Health: c.health, Logger: c.log,
+		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	})
 	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Logger: c.log.With("component", "authz")}
 }
@@ -532,7 +534,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	return &App{
 		Config:   cfg,
 		Logger:   c.log,
-		Service:  c.service(cfg, w.Client()),
+		Service:  c.service(cfg, w.Client(), w.Admin()),
 		worker:   w,
 		plugins:  c.plugins,
 		closers:  c.closers,
@@ -558,17 +560,25 @@ func NewClient(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connessione al database DBOS: %w", err)
 	}
-	return &App{
+	a := &App{
 		Config:  cfg,
 		Logger:  c.log,
-		Service: c.service(cfg, client),
 		client:  client,
 		plugins: c.plugins,
 		closers: c.closers,
 		siem:    c.siem,
 		audit:   c.audit,
 		metrics: c.metrics,
-	}, nil
+	}
+	a.Service = c.service(cfg, client, lazyAdmin{a})
+	return a, nil
+}
+
+// lazyAdmin apre il registro dei worker solo quando serve l'elenco dei worker.
+type lazyAdmin struct{ a *App }
+
+func (l lazyAdmin) Executors(ctx context.Context, staleAfter time.Duration) ([]engine.ExecutorStatus, error) {
+	return l.a.Admin().Executors(ctx, staleAfter)
 }
 
 // dbosClient restituisce il client DBOS dell'applicazione (contesto del worker o client).

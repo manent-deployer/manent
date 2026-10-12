@@ -96,6 +96,8 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.POST("/rollbacks", s.rollback)
 	v1.GET("/inventory", s.inventory)
 	v1.GET("/freezes", s.freezes)
+	v1.GET("/workers", s.workers)
+	v1.GET("/activity", s.activity)
 
 	v1.GET("/schedules", s.listSchedules)
 	v1.GET("/schedules/:name", s.getSchedule)
@@ -304,6 +306,24 @@ func (s *Server) freezes(c *gin.Context) {
 }
 
 // readJSON decodifica il body JSON, rifiutando campi sconosciuti.
+func (s *Server) workers(c *gin.Context) {
+	ws, err := s.svc.Workers(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"workers": ws})
+}
+
+func (s *Server) activity(c *gin.Context) {
+	a, err := s.svc.Activity(c.Request.Context(), engine.ActivityFilter{Application: c.Query("application"), Environment: c.Query("environment")})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, a)
+}
+
 func readJSON(c *gin.Context, v any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 	dec.DisallowUnknownFields()
