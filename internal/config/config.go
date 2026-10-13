@@ -165,11 +165,34 @@ type Logging struct {
 	Format string `yaml:"format"`
 }
 
-// SIEM configura l'invio dei log in formato RFC 5424.
+// SIEM configura l'invio dei log strutturati: a un collettore RFC 5424 (udp, tcp), al socket
+// syslog locale (unixgram, es. /dev/log) o a journald con il protocollo nativo (journald).
 type SIEM struct {
 	Enabled bool   `yaml:"enabled"`
 	Network string `yaml:"network"`
 	Address string `yaml:"address"`
+	// Destinations sono destinazioni in aggiunta a network/address (es. il SIEM remoto e il
+	// journal locale insieme).
+	Destinations []SIEMDestination `yaml:"destinations"`
+}
+
+// SIEMDestination è una destinazione dei log strutturati. Per unixgram e journald address è il
+// percorso del socket (default /dev/log e /run/systemd/journal/socket).
+type SIEMDestination struct {
+	Network string `yaml:"network"`
+	Address string `yaml:"address"`
+}
+
+// Targets restituisce le destinazioni attive: nessuna se l'invio è disattivato.
+func (s SIEM) Targets() []SIEMDestination {
+	if !s.Enabled {
+		return nil
+	}
+	out := []SIEMDestination{}
+	if s.Network != "" && (s.Address != "" || s.Network == "unixgram" || s.Network == "journald") {
+		out = append(out, SIEMDestination{Network: s.Network, Address: s.Address})
+	}
+	return append(out, s.Destinations...)
 }
 
 // Provider di configurazione di ambiente supportati.
@@ -580,6 +603,7 @@ func (c *Config) Validate() error {
 	}
 	errs = append(errs, c.validateSecurity()...)
 	errs = append(errs, c.validateOperations()...)
+	errs = append(errs, c.validateSIEM()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
 	}
@@ -612,6 +636,30 @@ func (c *Config) Validate() error {
 }
 
 // validateOperations verifica drain, recovery, retention e osservabilità.
+// validateSIEM verifica le destinazioni dei log strutturati.
+func (c *Config) validateSIEM() []error {
+	if !c.SIEM.Enabled {
+		return nil
+	}
+	targets := c.SIEM.Targets()
+	if len(targets) == 0 {
+		return []error{errors.New("siem: con enabled serve address (udp, tcp) o una destinazione in destinations")}
+	}
+	var errs []error
+	for i, d := range targets {
+		switch d.Network {
+		case "udp", "tcp":
+			if d.Address == "" {
+				errs = append(errs, fmt.Errorf("siem: destinazione %d (%s) senza address", i+1, d.Network))
+			}
+		case "unixgram", "journald":
+		default:
+			errs = append(errs, fmt.Errorf("siem: rete %q non supportata (udp, tcp, unixgram, journald)", d.Network))
+		}
+	}
+	return errs
+}
+
 func (c *Config) validateOperations() []error {
 	var errs []error
 	if c.DBOS.DrainTimeout < 0 {

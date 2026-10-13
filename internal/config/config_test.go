@@ -71,3 +71,47 @@ func TestConfigurazioneSicurezzaErrata(t *testing.T) {
 		}
 	}
 }
+
+func TestDestinazioniSIEM(t *testing.T) {
+	// SIEM remoto e journal locale insieme.
+	cfg, err := load(t, `
+siem:
+  enabled: true
+  network: tcp
+  address: siem.example.com:6514
+  destinations:
+    - network: journald
+    - network: unixgram
+      address: /dev/log
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.SIEM.Targets()
+	if len(got) != 3 || got[0].Network != "tcp" || got[1].Network != "journald" || got[2].Address != "/dev/log" {
+		t.Errorf("destinazioni: %+v", got)
+	}
+	// Solo il journal: network di default (udp) senza address non è una destinazione.
+	cfg, err = load(t, "siem: {enabled: true, destinations: [{network: journald}]}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.SIEM.Targets(); len(got) != 1 || got[0].Network != "journald" {
+		t.Errorf("solo journald: %+v", got)
+	}
+	if cfg, _ := load(t, "siem: {enabled: false, network: journald}\n"); len(cfg.SIEM.Targets()) != 0 {
+		t.Error("SIEM disattivato con destinazioni attive")
+	}
+	for in, want := range map[string]string{
+		"siem: {enabled: true}\n":                                     "serve address",
+		"siem: {enabled: true, network: syslog, address: x}\n":        `rete "syslog" non supportata`,
+		"siem: {enabled: true, destinations: [{network: tcp}]}\n":     "senza address",
+		"siem: {enabled: true, network: unixgram}\n":                  "",
+		"siem: {enabled: true, network: journald, address: /tmp/j}\n": "",
+	} {
+		_, err := load(t, in)
+		if (want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), want)) {
+			t.Errorf("%q: errore %v, atteso %q", in, err, want)
+		}
+	}
+}

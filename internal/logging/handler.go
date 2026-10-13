@@ -15,6 +15,10 @@ import (
 // sdID è l'identificativo dello structured data RFC 5424 usato per gli attributi slog.
 const sdID = "manent@32473"
 
+// facilityLocal0 è la facility local0 (16) di RFC 5424. rfc5424.Local0 vale 12, perché la
+// libreria omette le facility da 12 a 15 (ntp, security, console, solaris-cron).
+const facilityLocal0 rfc5424.Priority = 16 << 3
+
 // Options configura la costruzione del logger.
 type Options struct {
 	AppName string
@@ -119,7 +123,7 @@ func (h *siemHandler) Enabled(_ context.Context, l slog.Level) bool {
 
 func (h *siemHandler) Handle(_ context.Context, r slog.Record) error {
 	msg := rfc5424.Message{
-		Priority:  rfc5424.Local0 | severity(r.Level),
+		Priority:  facilityLocal0 | severity(r.Level),
 		Timestamp: r.Time,
 		Hostname:  h.host,
 		AppName:   h.appName,

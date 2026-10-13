@@ -39,9 +39,10 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 |---|---|---|
 | `logging.level` | `info` | `debug`, `info`, `warn`, `error`. |
 | `logging.format` | `text` | `text` oppure `json`. |
-| `siem.enabled` | `false` | Inoltra ogni log al SIEM in RFC 5424. |
-| `siem.network` | `udp` | `udp` oppure `tcp`. |
-| `siem.address` | | `host:porta` del collettore. |
+| `siem.enabled` | `false` | Inoltra ogni log alle destinazioni dei log strutturati. |
+| `siem.network` | `udp` | `udp`, `tcp`, `unixgram` (socket syslog locale) o `journald` (protocollo nativo). |
+| `siem.address` | | `host:porta` del collettore; per `unixgram` e `journald` il percorso del socket (default `/dev/log` e `/run/systemd/journal/socket`). |
+| `siem.destinations` | `[]` | Destinazioni aggiuntive (`network`, `address`), ad esempio il journal locale insieme al SIEM remoto. |
 
 Vedi [Log e SIEM](log-siem.md).
 

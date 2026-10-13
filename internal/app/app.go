@@ -73,12 +73,19 @@ type App struct {
 // NewLogger crea il logger applicativo con l'eventuale inoltro al SIEM.
 func NewLogger(cfg *config.Config) (*slog.Logger, logging.SIEMSender, error) {
 	var sender logging.SIEMSender = logging.NoopSender{}
-	if cfg.SIEM.Enabled {
-		s, err := logging.NewNetSender(cfg.SIEM.Network, cfg.SIEM.Address)
-		if err != nil {
-			return nil, nil, err
+	if targets := cfg.SIEM.Targets(); len(targets) > 0 {
+		senders := make(logging.MultiSender, 0, len(targets))
+		for _, d := range targets {
+			s, err := logging.NewSender(d.Network, d.Address)
+			if err != nil {
+				return nil, nil, err
+			}
+			senders = append(senders, s)
 		}
-		sender = s
+		sender = senders
+		if len(senders) == 1 {
+			sender = senders[0]
+		}
 	}
 	log := logging.New(logging.Options{
 		AppName: cfg.App.Name,
