@@ -52,10 +52,13 @@ func (e Executor) Stale(now time.Time, after time.Duration) bool {
 type Registry interface {
 	// Register registra l'avvio dell'executor e azzera arresto e rivendicazione precedenti.
 	// Restituisce false se è in corso la recovery dei suoi workflow: va ripetuto più tardi.
-	// Va chiamato prima di avviare DBOS.
-	Register(ctx context.Context, e Executor) (bool, error)
+	// Restituisce *InUseError se lo stesso ID è registrato da un altro avvio che non si è
+	// arrestato e ha inviato un heartbeat da meno di staleAfter: due processi con lo stesso ID
+	// riprenderebbero l'uno i workflow dell'altro. Va chiamato prima di avviare DBOS.
+	Register(ctx context.Context, e Executor, staleAfter time.Duration) (bool, error)
 	// Heartbeat aggiorna l'executor avviato a startedAt. Restituisce chi ne ha rivendicato i
-	// workflow, se è successo mentre era irraggiungibile.
+	// workflow, se è successo mentre era irraggiungibile, o ErrReplaced se un altro avvio si è
+	// registrato con lo stesso ID.
 	Heartbeat(ctx context.Context, id string, startedAt time.Time) (recoveredBy string, err error)
 	// Stopped registra l'arresto ordinato dell'executor avviato a startedAt.
 	Stopped(ctx context.Context, id string, startedAt time.Time) error
@@ -73,6 +76,20 @@ type Registry interface {
 	Lease(ctx context.Context, name, holder string, ttl time.Duration) (bool, error)
 	Close() error
 }
+
+// InUseError indica un executor_id già registrato da un altro processo attivo.
+type InUseError struct {
+	ID, Hostname           string
+	StartedAt, HeartbeatAt time.Time
+}
+
+func (e *InUseError) Error() string {
+	return fmt.Sprintf("executor_id %q già in uso da un worker attivo (host %s, avviato %s, ultimo heartbeat %s): ogni worker deve avere un dbos.executor_id univoco (es. DBOS__VMID)",
+		e.ID, e.Hostname, e.StartedAt.Format(time.RFC3339), e.HeartbeatAt.Format(time.RFC3339))
+}
+
+// ErrReplaced indica che un altro avvio si è registrato con lo stesso executor_id.
+var ErrReplaced = errors.New("un altro processo si è registrato con lo stesso executor_id")
 
 // ClaimTimeout è il tempo dopo il quale una recovery non segnata come conclusa (es. per un
 // crash di chi la eseguiva) non blocca più la registrazione dell'executor.
@@ -209,23 +226,58 @@ func fromMs(v sql.NullInt64) *time.Time {
 	return &t
 }
 
-// Register implementa Registry.
-func (r *SQL) Register(ctx context.Context, e Executor) (bool, error) {
+// Register implementa Registry. La registrazione sostituisce la riga esistente solo se
+// appartiene allo stesso avvio letto prima (started_at): se nel frattempo un altro processo si è
+// registrato, si rilegge e si rivaluta.
+func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration) (bool, error) {
 	t := r.exBare
-	now := r.now()
-	res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at, region)
-		VALUES ($1, $2, $3, $4, $5, $6, $8)
-		ON CONFLICT (executor_id) DO UPDATE SET
-			version = excluded.version, build = excluded.build, hostname = excluded.hostname, region = excluded.region,
-			started_at = excluded.started_at, heartbeat_at = excluded.heartbeat_at,
-			stopped_at = NULL, recovered_by = NULL, recovered_at = NULL, recovery_done_at = NULL
-		WHERE `+t+`.recovered_by IS NULL OR `+t+`.recovery_done_at IS NOT NULL OR `+t+`.recovered_at < $7`,
-		e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)), e.Region)
-	if err != nil {
-		return false, err
+	for range 3 {
+		now := r.now()
+		var (
+			started, heartbeat int64
+			stopped            sql.NullInt64
+			hostname           string
+			recoveredBy        sql.NullString
+		)
+		prev := int64(-1)
+		err := r.db.QueryRowContext(ctx, `SELECT started_at, heartbeat_at, stopped_at, hostname, recovered_by FROM `+r.executors+` WHERE executor_id = $1`, e.ID).
+			Scan(&started, &heartbeat, &stopped, &hostname, &recoveredBy)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return false, err
+		default:
+			prev = started
+			// Un executor rivendicato è già stato dichiarato perso: anche se risponde ancora, la
+			// nuova registrazione segue le regole della recovery.
+			if !stopped.Valid && !recoveredBy.Valid && started != ms(e.StartedAt) && now.Sub(time.UnixMilli(heartbeat)) < staleAfter {
+				return false, &InUseError{ID: e.ID, Hostname: hostname, StartedAt: time.UnixMilli(started).UTC(), HeartbeatAt: time.UnixMilli(heartbeat).UTC()}
+			}
+		}
+		res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at, region)
+			VALUES ($1, $2, $3, $4, $5, $6, $8)
+			ON CONFLICT (executor_id) DO UPDATE SET
+				version = excluded.version, build = excluded.build, hostname = excluded.hostname, region = excluded.region,
+				started_at = excluded.started_at, heartbeat_at = excluded.heartbeat_at,
+				stopped_at = NULL, recovered_by = NULL, recovered_at = NULL, recovery_done_at = NULL
+			WHERE `+t+`.started_at = $9
+			  AND (`+t+`.recovered_by IS NULL OR `+t+`.recovery_done_at IS NOT NULL OR `+t+`.recovered_at < $7)`,
+			e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)), e.Region, prev)
+		if err != nil {
+			return false, err
+		}
+		if n, err := res.RowsAffected(); err != nil || n == 1 {
+			return n == 1, err
+		}
+		// Nessuna riga aggiornata: recovery in corso (la riga è quella letta) o un altro avvio
+		// registrato nel frattempo (si rivaluta).
+		var now2 int64
+		err = r.db.QueryRowContext(ctx, `SELECT started_at FROM `+r.executors+` WHERE executor_id = $1`, e.ID).Scan(&now2)
+		if err == nil && now2 == prev {
+			return false, nil
+		}
 	}
-	n, err := res.RowsAffected()
-	return n == 1, err
+	return false, fmt.Errorf("registro executor: registrazione di %q contesa da un altro processo", e.ID)
 }
 
 // Heartbeat implementa Registry.
@@ -237,7 +289,7 @@ func (r *SQL) Heartbeat(ctx context.Context, id string, startedAt time.Time) (st
 	var by sql.NullString
 	err := r.db.QueryRowContext(ctx, `SELECT recovered_by FROM `+r.executors+` WHERE executor_id = $1 AND started_at = $2`, id, ms(startedAt)).Scan(&by)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
+		return "", ErrReplaced
 	}
 	return by.String, err
 }

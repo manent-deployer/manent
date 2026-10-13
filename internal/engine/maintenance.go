@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/joeg-ita/manent/internal/cluster"
 )
 
 // MaintenanceOptions configura le attività periodiche del worker.
@@ -48,7 +51,7 @@ func (w *Worker) maintain() {
 	t := time.NewTicker(o.HeartbeatInterval)
 	defer t.Stop()
 	var lastPrune time.Time
-	warned := false
+	warned, replaced := false, false
 	for {
 		select {
 		case <-w.stop:
@@ -58,6 +61,13 @@ func (w *Worker) maintain() {
 		ctx, cancel := context.WithTimeout(context.Background(), o.HeartbeatInterval)
 		by, err := w.registry.Heartbeat(ctx, w.id, w.startedAt)
 		switch {
+		case errors.Is(err, cluster.ErrReplaced):
+			if !replaced {
+				// Un altro processo si è registrato con lo stesso ID dopo che questo è risultato
+				// perso: entrambi possono riprendere gli stessi deploy.
+				w.logger.Error("un altro processo si è registrato con lo stesso executor_id: questo worker va arrestato", "executor", w.id)
+				replaced = true
+			}
 		case err != nil:
 			w.logger.Warn("heartbeat non registrato", "error", err)
 		case by != "" && !warned:

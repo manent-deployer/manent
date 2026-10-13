@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -633,53 +634,60 @@ func (e *Engine) scanRaw(prefix []string, fn func(dbos.WorkflowStatus) bool) err
 // scanRawFrom è scanRaw a partire dai workflow creati fino a from compreso. Le pagine sono per
 // chiave (data di creazione), non per offset: ogni pagina costa una query sull'indice di
 // created_at, qualunque sia la sua posizione nello storico.
+//
+// L'ordine è deterministico, per data di creazione e poi per ID (decrescenti): DBOS ordina solo
+// per data, e i workflow creati nello stesso millisecondo possono tornare in ordine diverso da
+// una query all'altra. Per questo un gruppo con la stessa data viene restituito solo quando è
+// stato letto per intero: l'ultimo gruppo di una pagina piena viene riletto con la pagina dopo.
 func (e *Engine) scanRawFrom(prefix []string, from time.Time, fn func(dbos.WorkflowStatus) bool) error {
 	const page = 200
-	// seen sono i workflow già visti con la data di creazione del limite corrente: la pagina
-	// successiva riparte da quella data compresa, per non perdere quelli creati nello stesso
-	// millisecondo.
-	seen := map[string]bool{}
-	for scanned := 0; scanned < maxListScan; {
-		opts := []dbos.ListWorkflowsOption{
+	list := func(opts ...dbos.ListWorkflowsOption) ([]dbos.WorkflowStatus, error) {
+		opts = append(opts,
 			dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
 			dbos.WithFilterSortDesc(),
-			dbos.WithFilterLimit(page),
 			dbos.WithFilterLoadInput(false),
 			dbos.WithFilterLoadOutput(false),
-		}
-		if !from.IsZero() {
-			opts = append(opts, dbos.WithFilterCreatedBefore(from))
-		}
+		)
 		if len(prefix) > 0 {
 			opts = append(opts, dbos.WithFilterWorkflowIDPrefix(prefix...))
 		}
-		wfs, err := dbos.ListWorkflows(e.client, opts...)
+		return dbos.ListWorkflows(e.client, opts...)
+	}
+	for scanned := 0; scanned < maxListScan; {
+		opts := []dbos.ListWorkflowsOption{dbos.WithFilterLimit(page)}
+		if !from.IsZero() {
+			opts = append(opts, dbos.WithFilterCreatedBefore(from))
+		}
+		wfs, err := list(opts...)
 		if err != nil {
 			return err
 		}
-		fresh := 0
+		last := len(wfs) == page
+		if last {
+			boundary := wfs[len(wfs)-1].CreatedAt
+			if wfs[0].CreatedAt.Equal(boundary) {
+				// Una pagina intera nello stesso millisecondo: si legge tutto il gruppo.
+				if wfs, err = list(dbos.WithFilterCreatedAfter(boundary), dbos.WithFilterCreatedBefore(boundary)); err != nil {
+					return err
+				}
+				from = boundary.Add(-time.Millisecond)
+			} else {
+				// L'ultimo gruppo può essere incompleto: viene riletto con la pagina successiva.
+				wfs = slices.DeleteFunc(wfs, func(w dbos.WorkflowStatus) bool { return w.CreatedAt.Equal(boundary) })
+				from = boundary
+			}
+		}
+		slices.SortStableFunc(wfs, func(x, y dbos.WorkflowStatus) int {
+			return cmp.Or(y.CreatedAt.Compare(x.CreatedAt), strings.Compare(y.ID, x.ID))
+		})
 		for _, w := range wfs {
-			if seen[w.ID] {
-				continue
-			}
-			fresh++
 			scanned++
-			if !w.CreatedAt.Equal(from) {
-				from = w.CreatedAt
-				clear(seen)
-			}
-			seen[w.ID] = true
 			if !fn(w) {
 				return nil
 			}
 		}
-		switch {
-		case len(wfs) < page:
+		if !last {
 			return nil
-		case fresh == 0:
-			// Una pagina intera creata nello stesso millisecondo, già vista: si passa oltre.
-			from = from.Add(-time.Millisecond)
-			clear(seen)
 		}
 	}
 	return nil

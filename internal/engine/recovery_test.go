@@ -255,3 +255,30 @@ func TestDrain(t *testing.T) {
 		t.Fatalf("deploy prelevato dopo il drain: %s", st.State)
 	}
 }
+
+// Un secondo worker con l'executor_id di uno attivo (es. due processi sulla stessa macchina con
+// l'hostname come ID) non parte: riprenderebbe i deploy in corso dell'altro. Il primo resta
+// registrato come attivo.
+func TestExecutorIDDuplicato(t *testing.T) {
+	reg, _ := testRegistry(t, artifactStep{})
+	db := testdb.URL(t)
+	o1 := workerOpts(db, "host1", reg)
+	o1.Registry, o1.Maintenance = openRegistry(t, db), fastMaintenance
+	startWorker(t, o1)
+
+	o2 := workerOpts(db, "host1", reg)
+	o2.Registry, o2.Maintenance = openRegistry(t, db), fastMaintenance
+	w2, err := NewWorker(o2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w2.Shutdown(time.Second) })
+	var inUse *cluster.InUseError
+	if err := w2.Launch(); !errors.As(err, &inUse) {
+		t.Fatalf("secondo worker con lo stesso ID avviato: %v", err)
+	}
+	es, err := o1.Registry.List(context.Background())
+	if err != nil || len(es) != 1 || es[0].Stale(time.Now(), fastMaintenance.StaleAfter) {
+		t.Fatalf("il primo worker non risulta attivo: %+v %v", es, err)
+	}
+}

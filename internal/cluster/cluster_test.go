@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	start := now.Add(-time.Hour)
 	register := func(e Executor) bool {
 		t.Helper()
-		ok, err := r.Register(ctx, e)
+		ok, err := r.Register(ctx, e, time.Minute)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,9 +77,9 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if es[0].RecoveredBy != "" || es[0].Version != "2" || es[0].Stale(now, time.Minute) {
 		t.Fatalf("nuovo avvio non registrato: %+v", es[0])
 	}
-	// Il vecchio processo non aggiorna più la riga.
-	if by, _ := r.Heartbeat(ctx, "w1", start); by != "" {
-		t.Fatalf("heartbeat di un avvio superato: %q", by)
+	// Il vecchio processo non aggiorna più la riga e scopre di essere stato sostituito.
+	if by, err := r.Heartbeat(ctx, "w1", start); by != "" || !errors.Is(err, ErrReplaced) {
+		t.Fatalf("heartbeat di un avvio superato: %q %v", by, err)
 	}
 	if err := r.Stopped(ctx, "w1", now); err != nil {
 		t.Fatal(err)
@@ -164,11 +165,52 @@ func TestRegionERegistroPrecedente(t *testing.T) {
 		_ = r.Close()
 	}
 	r = openURL(t, url)
-	if _, err := r.Register(ctx, Executor{ID: "w1", Version: "1", Region: "eu", StartedAt: time.Now()}); err != nil {
+	if _, err := r.Register(ctx, Executor{ID: "w1", Version: "1", Region: "eu", StartedAt: time.Now()}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	es, err := r.List(ctx)
 	if err != nil || len(es) != 1 || es[0].Region != "eu" {
 		t.Fatalf("region non registrata: %+v %v", es, err)
+	}
+}
+
+// Due processi con lo stesso executor_id: il secondo viene rifiutato finché il primo invia
+// heartbeat; dopo un arresto ordinato o senza heartbeat da staleAfter la registrazione riesce.
+func TestExecutorIDInUso(t *testing.T) {
+	r := openTest(t)
+	ctx := context.Background()
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	r.now = func() time.Time { return now }
+	first := Executor{ID: "host1", Version: "1", Hostname: "host1", StartedAt: now}
+	if ok, err := r.Register(ctx, first, time.Minute); err != nil || !ok {
+		t.Fatalf("prima istanza: %v %v", ok, err)
+	}
+	second := Executor{ID: "host1", Version: "1", Hostname: "host1", StartedAt: now.Add(time.Second)}
+	now = now.Add(30 * time.Second)
+	_, err := r.Register(ctx, second, time.Minute)
+	var inUse *InUseError
+	if !errors.As(err, &inUse) || inUse.Hostname != "host1" {
+		t.Fatalf("seconda istanza con lo stesso ID accettata: %v", err)
+	}
+	// La prima istanza resta registrata e il suo arresto non riguarda altri.
+	if _, err := r.Heartbeat(ctx, "host1", first.StartedAt); err != nil {
+		t.Fatalf("heartbeat della prima istanza: %v", err)
+	}
+	// Riavvio della stessa istanza (stesso avvio): ammesso.
+	if ok, err := r.Register(ctx, first, time.Minute); err != nil || !ok {
+		t.Fatalf("ripetizione della registrazione: %v %v", ok, err)
+	}
+	// Crash della prima: senza heartbeat da staleAfter la seconda subentra.
+	now = now.Add(2 * time.Minute)
+	if ok, err := r.Register(ctx, second, time.Minute); err != nil || !ok {
+		t.Fatalf("subentro dopo il crash: %v %v", ok, err)
+	}
+	// Arresto ordinato: il successivo avvio subentra subito.
+	if err := r.Stopped(ctx, "host1", second.StartedAt); err != nil {
+		t.Fatal(err)
+	}
+	third := Executor{ID: "host1", Version: "1", Hostname: "host1", StartedAt: now.Add(time.Second)}
+	if ok, err := r.Register(ctx, third, time.Minute); err != nil || !ok {
+		t.Fatalf("avvio dopo un arresto ordinato: %v %v", ok, err)
 	}
 }

@@ -29,6 +29,15 @@ Every worker must have a **unique and stable** `dbos.executor_id` (default: the 
 
 At startup a worker resumes only the deploys left pending with its own ID, from the step where they stopped. If a node does not come back with the same ID, its deploys stay `PENDING` until another worker resumes them through [recovery](affidabilita.md#worker-perso), manual or automatic. In Kubernetes a StatefulSet is recommended, whose pods have stable names (`manent-0`, `manent-1`, …): the [Helm chart](installazione.md#kubernetes-helm) uses the pod name as `executor_id`.
 
+With the default, **several workers on the same machine** would all use the hostname as ID: give each one its own ID, stable across restarts.
+
+```sh
+DBOS__VMID=build01-w1 manent-server -c manent.yml worker
+DBOS__VMID=build01-w2 manent-server -c manent.yml worker
+```
+
+A worker started with the ID of another one that is still active (not stopped and with a heartbeat more recent than `recovery.stale_after`) **does not start**. Otherwise, at startup, the DBOS recovery would also resume the deploys running on the other one, which would run twice. Before giving up it waits for `recovery.stale_after`: this covers a restart after a crash, where the previous process did not record its shutdown. The error names the host using the ID.
+
 ## Several regions
 
 With targets in several regions, [wave rollouts](../guida/ondate.md) update one region (or one AZ) at a time. With `dbos.region_routing` each worker declares its `dbos.region` and runs only the passes on that region's targets, from the `<queue>.<region>` queue: SSH, downloads and checks start from the region's network. There is still a single database, reached by all regions.

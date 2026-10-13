@@ -29,6 +29,15 @@ Ogni worker deve avere un `dbos.executor_id` **univoco e stabile** (default: l'h
 
 All'avvio un worker riprende solo i deploy rimasti in sospeso con il proprio ID, dallo step in cui si erano fermati. Se un nodo non torna con lo stesso ID, i suoi deploy restano in stato `PENDING` finché non vengono ripresi da un altro worker con la [recovery](affidabilita.md#worker-perso), manuale o automatica. In Kubernetes conviene uno StatefulSet, i cui pod hanno nomi stabili (`manent-0`, `manent-1`, …): il [chart Helm](installazione.md#kubernetes-helm) usa il nome del pod come `executor_id`.
 
+Con il default, **più worker sulla stessa macchina** avrebbero tutti l'hostname come ID: va assegnato a ciascuno un ID proprio, stabile tra i riavvii.
+
+```sh
+DBOS__VMID=build01-w1 manent-server -c manent.yml worker
+DBOS__VMID=build01-w2 manent-server -c manent.yml worker
+```
+
+Un worker che parte con l'ID di un altro ancora attivo (non arrestato e con un heartbeat più recente di `recovery.stale_after`) **non si avvia**. Altrimenti, al suo avvio, la recovery di DBOS riprenderebbe anche i deploy in esecuzione sull'altro, che verrebbero eseguiti due volte. Prima di rinunciare attende `recovery.stale_after`: è il caso di un riavvio dopo un crash, in cui il processo precedente non ha registrato l'arresto. L'errore indica l'host che usa l'ID.
+
 ## Più region
 
 Con target in più region, i [rilasci a ondate](../guida/ondate.md) aggiornano una region (o un'AZ) alla volta. Con `dbos.region_routing` ogni worker dichiara la sua `dbos.region` ed esegue solo i passi sui target di quella region, dalla coda `<queue>.<region>`: SSH, download e controlli partono dalla rete della region. Il database resta uno, raggiunto da tutte le region.

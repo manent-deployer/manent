@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -462,7 +463,7 @@ func TestElencoPerChiave(t *testing.T) {
 			t.Fatalf("deploy ripetuto: %s", s.ID)
 		}
 		seen[s.ID] = true
-		if i > 0 && s.CreatedAt.After(all[i-1].CreatedAt) {
+		if i > 0 && (s.CreatedAt.After(all[i-1].CreatedAt) || (s.CreatedAt.Equal(all[i-1].CreatedAt) && s.ID > all[i-1].ID)) {
 			t.Fatalf("ordine: %s dopo %s", s.ID, all[i-1].ID)
 		}
 	}
@@ -481,16 +482,83 @@ func TestElencoPerChiave(t *testing.T) {
 		}
 		cursor = page[len(page)-1].ID
 	}
-	// A parità di data di creazione l'ordine può cambiare tra due query (Postgres): si
-	// confrontano gli insiemi.
-	pagedSet := map[string]bool{}
-	for _, id := range paged {
-		pagedSet[id] = true
+	// L'ordine è deterministico (data di creazione, poi ID) anche tra deploy creati nello
+	// stesso millisecondo: le pagine riproducono l'elenco completo.
+	if len(paged) != n {
+		t.Fatalf("pagine: %d deploy", len(paged))
 	}
-	if len(paged) != n || len(pagedSet) != n {
-		t.Fatalf("pagine: %d deploy, %d distinti", len(paged), len(pagedSet))
+	for i, id := range paged {
+		if id != all[i].ID {
+			t.Fatalf("pagina diversa dall'elenco alla posizione %d: %s, atteso %s", i, id, all[i].ID)
+		}
 	}
 	if inv, err := e.Inventory(ctx, InventoryFilter{}); err != nil || len(inv) != 0 {
 		t.Errorf("inventario con soli deploy in coda: %+v %v", inv, err)
+	}
+}
+
+// Un gruppo di workflow con la stessa data di creazione più grande di una pagina della
+// scansione viene letto per intero, in ordine di ID.
+func TestElencoGruppoStessaData(t *testing.T) {
+	url := testdb.URL(t)
+	reg, _ := testRegistry(t, artifactStep{})
+	w := startWorker(t, workerOpts(url, "w1", reg))
+	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Logger: discard})
+	enqueue := func(id string) {
+		t.Helper()
+		req := Request{Descriptor: *appVersion("app", "test", "1.0.0", "")}
+		if _, err := dbos.Enqueue[Result](e.client, "ferma", workflowName, req, dbos.WithEnqueueWorkflowID(id),
+			dbos.WithEnqueueAttributes(attributes(req)), dbos.WithEnqueueQueuePartitionKey("app/test")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := range 250 {
+		enqueue(fmt.Sprintf("g%03d", i))
+	}
+	// Gli stessi 250 workflow creati nello stesso millisecondo.
+	driver, dsn, table := "sqlite", strings.TrimPrefix(url, "sqlite:"), "workflow_status"
+	if testdb.Postgres() {
+		driver, dsn, table = "pgx", url, "dbos.workflow_status"
+	}
+	db, err := sql.Open(driver, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("UPDATE " + table + " SET created_at = 1700000000000 WHERE workflow_uuid LIKE 'g%'"); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 30 {
+		enqueue(fmt.Sprintf("n%03d", i))
+	}
+	ctx := context.Background()
+	all, err := e.List(ctx, ListFilter{Limit: 1000})
+	if err != nil || len(all) != 280 {
+		t.Fatalf("elenco: %d %v", len(all), err)
+	}
+	if all[30].ID != "g249" || all[279].ID != "g000" {
+		t.Errorf("gruppo non in ordine di ID: %s … %s", all[30].ID, all[279].ID)
+	}
+	var paged []string
+	for cursor := ""; ; {
+		page, err := e.List(ctx, ListFilter{Limit: 70, Cursor: cursor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range page {
+			paged = append(paged, s.ID)
+		}
+		if len(page) < 70 {
+			break
+		}
+		cursor = page[len(page)-1].ID
+	}
+	if len(paged) != len(all) {
+		t.Fatalf("pagine: %d deploy", len(paged))
+	}
+	for i := range paged {
+		if paged[i] != all[i].ID {
+			t.Fatalf("posizione %d: %s, atteso %s", i, paged[i], all[i].ID)
+		}
 	}
 }

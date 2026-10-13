@@ -293,24 +293,38 @@ func (w *Worker) Launch() error {
 }
 
 // register registra l'avvio del worker, attendendo la fine di un'eventuale recovery in corso
-// dei suoi workflow (al più cluster.ClaimTimeout).
+// dei suoi workflow (al più cluster.ClaimTimeout). Se lo stesso executor_id risulta in uso da
+// un altro processo attivo, attende che risulti perso (StaleAfter: il caso di un riavvio dopo un
+// crash) e poi rinuncia: due processi con lo stesso ID riprenderebbero l'uno i deploy dell'altro.
 func (w *Worker) register() error {
 	w.startedAt = time.Now().UTC()
 	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, Region: w.region, StartedAt: w.startedAt}
 	deadline := time.Now().Add(cluster.ClaimTimeout + 10*time.Second)
+	inUseDeadline := time.Now().Add(w.maintenance.StaleAfter + w.maintenance.HeartbeatInterval)
+	warned := false
 	for {
-		ok, err := w.registry.Register(context.Background(), e)
-		if err != nil {
+		ok, err := w.registry.Register(context.Background(), e, w.maintenance.StaleAfter)
+		var inUse *cluster.InUseError
+		switch {
+		case errors.As(err, &inUse):
+			if time.Now().After(inUseDeadline) {
+				return fmt.Errorf("registrazione del worker: %w", err)
+			}
+			if !warned {
+				w.logger.Warn("executor_id registrato da un altro processo non arrestato: attesa che risulti perso (se è ancora attivo, assegnare un dbos.executor_id diverso)",
+					"executor", w.id, "host", inUse.Hostname, "heartbeat_at", inUse.HeartbeatAt)
+				warned = true
+			}
+		case err != nil:
 			return fmt.Errorf("registrazione del worker: %w", err)
-		}
-		if ok {
+		case ok:
 			return nil
-		}
-		if time.Now().After(deadline) {
+		case time.Now().After(deadline):
 			return errors.New("registrazione del worker: recovery dei suoi workflow ancora in corso")
+		default:
+			w.logger.Warn("recovery dei workflow di questo executor in corso su un altro worker: attesa")
 		}
-		w.logger.Warn("recovery dei workflow di questo executor in corso su un altro worker: attesa")
-		time.Sleep(2 * time.Second)
+		time.Sleep(min(2*time.Second, w.maintenance.HeartbeatInterval))
 	}
 }
 
