@@ -108,7 +108,7 @@ wait_state() {
   while [ "$t" -lt "$limit" ]; do
     s=$(state "$id")
     case "$want" in
-      terminal) case "$s" in SUCCESS|ERROR|CANCELLED|REJECTED|EXPIRED|MAX_RECOVERY_ATTEMPTS_EXCEEDED) echo "$s"; return 0 ;; esac ;;
+      terminal) case "$s" in SUCCESS|ERROR|CANCELLED|REJECTED|EXPIRED|DEPENDENCY_FAILED|MAX_RECOVERY_ATTEMPTS_EXCEEDED) echo "$s"; return 0 ;; esac ;;
       *) [ "$s" = "$want" ] && { echo "$s"; return 0; } ;;
     esac
     sleep 2; t=$((t + 3))

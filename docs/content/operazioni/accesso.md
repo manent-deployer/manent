@@ -163,6 +163,7 @@ rbac:
 - **Promotion.** Requires `deployment.read` on the source environment and `deployment.submit` on the destination.
 - **Approvals.** Whoever requested a deploy cannot approve it, unless the rule has `allow_self`.
 - **Freezes.** Freeze windows are visible to every authenticated identity.
+- **Dependencies and releases.** A deploy with [`after`](../guida/catene.md) requires `deployment.read` on its dependencies. A composite release requires the permissions of every deploy (plus `deployment.rollback` with `onFailure: rollback`); reading or cancelling it requires `deployment.read` or `deployment.cancel` on all its deploys.
 - **Activity and workers.** `GET /activity` lists only the deploys the identity can read. `GET /workers` requires `platform.read`; of the running workflows it shows only those of readable applications and environments, and counts the others in `hidden_tasks`.
 
 ### Client and server
@@ -183,6 +184,7 @@ Every relevant action produces an audit entry:
 | `deployment.promote`, `deployment.rollback` | Promotion and manual rollback. |
 | `deployment.approve`, `deployment.reject` | An approver's decision. |
 | `approval.finish` | Outcome of an approval (`approved`, `rejected`, `expired`), recorded by the worker. |
+| `after.finish`, `release.finish` | Outcome of a dependency wait and of a composite release, recorded by the worker. |
 | `deployment.cancel` | Cancellation. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Schedule operations. |
 | `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Only if denied. |

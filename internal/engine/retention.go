@@ -127,7 +127,7 @@ func (a *Admin) releasesToKeep(keep int) (map[string]bool, error) {
 			k := s.Application + "/" + s.Environment
 			if perEnv[k] < keep {
 				perEnv[k]++
-				ids[w.ID], ids[w.ID+approvalSuffix] = true, true
+				ids[w.ID], ids[w.ID+approvalSuffix], ids[w.ID+afterSuffix] = true, true, true
 			}
 		}
 		if len(wfs) < pruneBatch {

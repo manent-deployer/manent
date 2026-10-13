@@ -85,6 +85,15 @@ func Run(args []string) error {
 		}); err != nil {
 		return err
 	}
+	if err := cliutil.AddGroup(p, "release", "Gestisce le release composte (più deploy con dipendenze)",
+		"Gestisce le release composte: più deploy con dipendenze tra loro, in parallelo dove possibile", []cliutil.Command{
+			{Name: "submit", Short: "Accoda una release da un file YAML e ne segue l'avanzamento", Cmd: &ReleaseSubmitCmd{global: g}},
+			{Name: "status", Short: "Mostra lo stato di una release", Cmd: &ReleaseStatusCmd{global: g}},
+			{Name: "list", Short: "Elenca le release più recenti", Cmd: &ReleaseListCmd{global: g}},
+			{Name: "cancel", Short: "Annulla i deploy non conclusi di una release", Cmd: &ReleaseCancelCmd{global: g}},
+		}); err != nil {
+		return err
+	}
 	return cliutil.Parse(p, args)
 }
 
@@ -185,6 +194,9 @@ func follow(ctx context.Context, svc service.Service, sub *service.Submission, n
 	}
 	if noWait || sub.ID == "" || sub.ScheduledAt != nil {
 		return cliutil.PrintJSON(sub)
+	}
+	if sub.State == service.StateWaitingDependency {
+		fmt.Fprintln(os.Stderr, "deploy in attesa delle dipendenze:", sub.ID)
 	}
 	kind := "deploy"
 	if sub.DryRun {

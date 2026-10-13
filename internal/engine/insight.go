@@ -16,7 +16,7 @@ import (
 // workflowFor restituisce l'ID del workflow che rappresenta il deploy: il deploy stesso o, se
 // non è ancora partito, la sua approvazione.
 func (e *Engine) workflowFor(id string) (dbos.WorkflowStatus, error) {
-	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix),
+	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
 		dbos.WithFilterName(workflowNames...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	if err != nil {
 		return dbos.WorkflowStatus{}, err

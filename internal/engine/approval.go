@@ -184,23 +184,6 @@ func approvalWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 	return string(st)
 }
 
-// approvalStatus restituisce lo stato di un deploy che non ha ancora un workflow, perché in
-// attesa di approvazione o respinto.
-func (e *Engine) approvalStatus(id string) (*Status, error) {
-	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id+approvalSuffix), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
-	if err != nil {
-		return nil, err
-	}
-	if len(ws) == 0 {
-		return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
-	}
-	s := toStatus(ws[0])
-	if a, err := e.approval(id + approvalSuffix); err == nil {
-		s.Approval = a
-	}
-	return &s, nil
-}
-
 // approval legge lo stato dell'approvazione: il risultato se conclusa, altrimenti l'ultimo
 // evento pubblicato. Un'approvazione non ancora avviata non ha stato.
 func (e *Engine) approval(approvalID string) (*ApprovalState, error) {

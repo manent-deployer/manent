@@ -21,6 +21,10 @@ recovery:
 rollout:
   check_timeout: 5s
 
+# UC9: letture frequenti dello stato dei deploy attesi.
+chains:
+  poll_interval: 1s
+
 http:
   listen: ":8080"
 

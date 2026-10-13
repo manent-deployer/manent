@@ -88,6 +88,9 @@ type WorkerOptions struct {
 	Region string
 	// RegionRouting esegue i passi dei rollout sui worker della region dei target.
 	RegionRouting bool
+	// ChainPollInterval è il primo intervallo di lettura dello stato delle dipendenze e dei
+	// deploy di una release (default 5s); raddoppia a ogni lettura fino a 1 minuto.
+	ChainPollInterval time.Duration
 }
 
 // ConfigResolver recupera la configurazione di ambiente e la fonde con il descrittore.
@@ -139,6 +142,11 @@ type Worker struct {
 	wg              sync.WaitGroup
 	logger          *slog.Logger
 	id              string
+	// reader legge lo stato dei deploy (dipendenze, release) sul contesto del worker.
+	reader    *Engine
+	chainPoll time.Duration
+	// service è il servizio completo usato dalle release per i rollback (SetService).
+	service Service
 }
 
 // NewWorker crea il contesto DBOS, registra i workflow e la coda. Va chiamato Launch prima dell'uso.
@@ -187,11 +195,15 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	}
 	w.logger = opts.Logger.With("component", "worker", "executor", w.id)
 	w.admin = NewAdmin(AdminOptions{Client: ctx, Registry: opts.Registry, Version: w.version, Audit: opts.Audit, Logger: opts.Logger})
+	w.reader = NewService(ServiceOptions{Client: ctx, QueueName: opts.Queue.Name, Logger: opts.Logger})
+	w.chainPoll = cmp.Or(opts.ChainPollInterval, defaultChainPoll)
 	dbos.RegisterWorkflow(ctx, w.deployWorkflow, dbos.WithWorkflowName(workflowName))
 	dbos.RegisterWorkflow(ctx, w.scheduledWorkflow, dbos.WithWorkflowName(scheduledWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.approvalWorkflow, dbos.WithWorkflowName(approvalWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.passWorkflow, dbos.WithWorkflowName(passWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.gateWorkflow, dbos.WithWorkflowName(gateWorkflowName))
+	dbos.RegisterWorkflow(ctx, w.afterWorkflow, dbos.WithWorkflowName(afterWorkflowName))
+	dbos.RegisterWorkflow(ctx, w.releaseWorkflow, dbos.WithWorkflowName(releaseWorkflowName))
 
 	q := opts.Queue
 	qopts := []dbos.QueueOption{
@@ -243,6 +255,10 @@ func (w *Worker) ExecutorID() string { return w.id }
 
 // Version restituisce la versione dei workflow eseguiti dal worker.
 func (w *Worker) Version() string { return w.version }
+
+// SetService imposta il servizio completo (con planner e policy) usato dalle release per i
+// rollback dei deploy riusciti. Va chiamato prima di Launch.
+func (w *Worker) SetService(s Service) { w.service = s }
 
 // Admin restituisce le operazioni di piattaforma sul database del worker.
 func (w *Worker) Admin() *Admin { return w.admin }

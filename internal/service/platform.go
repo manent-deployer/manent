@@ -58,6 +58,9 @@ const (
 	TaskGate     = "gate"
 	TaskApproval = "approval"
 	TaskSchedule = "schedule"
+	// TaskAfter è l'attesa delle dipendenze di un deploy; TaskRelease una release composta.
+	TaskAfter   = "after"
+	TaskRelease = "release"
 )
 
 // WorkerTask è un workflow in esecuzione su un worker.
@@ -65,7 +68,8 @@ type WorkerTask struct {
 	// ID è l'ID del workflow; DeploymentID il deploy a cui appartiene.
 	ID           string `json:"id"`
 	DeploymentID string `json:"deployment_id"`
-	// Kind è deploy, pass (passo di un rollout in una region), gate, approval o schedule.
+	// Kind è deploy, pass (passo di un rollout in una region), gate, approval, schedule, after
+	// (attesa delle dipendenze) o release.
 	Kind        string     `json:"kind"`
 	Application string     `json:"application,omitempty"`
 	Environment string     `json:"environment,omitempty"`
@@ -92,6 +96,8 @@ type Activity struct {
 	Running []Status `json:"running"`
 	// AwaitingApproval sono i deploy in attesa di una decisione, prima del deploy o tra due ondate.
 	AwaitingApproval []Status `json:"awaiting_approval"`
+	// WaitingDependency sono i deploy in attesa che riescano i deploy da cui dipendono.
+	WaitingDependency []Status `json:"waiting_dependency"`
 	// Queued sono i deploy in coda, in attesa di uno slot libero.
 	Queued []Status `json:"queued"`
 	// Delayed sono i deploy pianificati con schedule.at.

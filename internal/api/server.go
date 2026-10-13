@@ -97,6 +97,10 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.GET("/inventory", s.inventory)
 	v1.GET("/freezes", s.freezes)
 	v1.GET("/workers", s.workers)
+	v1.POST("/releases", s.submitRelease)
+	v1.GET("/releases", s.listReleases)
+	v1.GET("/releases/:id", s.releaseStatus)
+	v1.POST("/releases/:id/cancel", s.cancelRelease)
 	v1.GET("/activity", s.activity)
 
 	v1.GET("/schedules", s.listSchedules)
@@ -306,6 +310,65 @@ func (s *Server) freezes(c *gin.Context) {
 }
 
 // readJSON decodifica il body JSON, rifiutando campi sconosciuti.
+// submitRelease accoda una release composta: 202 con lo stato iniziale, che riporta gli ID
+// dei deploy.
+func (s *Server) submitRelease(c *gin.Context) {
+	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxReleaseBodySize))
+	if err != nil {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": err.Error()})
+		return
+	}
+	r, err := descriptor.ParseReleaseJSON(body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	rs, err := s.svc.SubmitRelease(c.Request.Context(), r)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusAccepted, rs)
+}
+
+// maxReleaseBodySize è il limite del corpo di una release: contiene più descrittori.
+const maxReleaseBodySize = 16 * maxBodySize
+
+func (s *Server) listReleases(c *gin.Context) {
+	limit := 0
+	if l := c.Query("limit"); l != "" {
+		n, err := strconv.Atoi(l)
+		if err != nil || n <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit deve essere un intero positivo"})
+			return
+		}
+		limit = n
+	}
+	rs, err := s.svc.ListReleases(c.Request.Context(), limit)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"releases": rs})
+}
+
+func (s *Server) releaseStatus(c *gin.Context) {
+	rs, err := s.svc.ReleaseStatus(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, rs)
+}
+
+func (s *Server) cancelRelease(c *gin.Context) {
+	if err := s.svc.CancelRelease(c.Request.Context(), c.Param("id")); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (s *Server) workers(c *gin.Context) {
 	ws, err := s.svc.Workers(c.Request.Context())
 	if err != nil {

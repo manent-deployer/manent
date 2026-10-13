@@ -52,6 +52,11 @@ type Descriptor struct {
 	// Rollout, se presente, rilascia a ondate (region, AZ) con health gate tra un passo e
 	// l'altro. Di norma sta nella configurazione di ambiente, autorevole.
 	Rollout *Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
+	// After elenca gli ID dei deploy che devono concludersi con successo prima che questo parta.
+	// Fino ad allora il deploy attende senza occupare la coda dell'ambiente.
+	After []string `json:"after,omitempty" yaml:"after,omitempty"`
+	// AfterTimeout è il tempo massimo di attesa delle dipendenze (es. "2h", default 24h).
+	AfterTimeout string `json:"afterTimeout,omitempty" yaml:"afterTimeout,omitempty"`
 }
 
 // Rollback configura il rollback automatico. Nel descrittore effettivo (dopo lo step config)
@@ -318,6 +323,7 @@ func (d *Descriptor) Validate() error {
 	if d.ID != "" && !validName(d.ID) {
 		errs = append(errs, fmt.Errorf("id %q non valido: %s", d.ID, nameRule))
 	}
+	errs = append(errs, d.validateAfter())
 	if d.Schedule != nil {
 		if d.DryRun {
 			errs = append(errs, errors.New("dryRun non ammesso con schedule: il dry-run viene eseguito subito"))
@@ -328,6 +334,62 @@ func (d *Descriptor) Validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// Limiti delle dipendenze tra deploy.
+const (
+	maxAfter            = 20
+	DefaultAfterTimeout = 24 * time.Hour
+	maxAfterTimeout     = 30 * 24 * time.Hour
+)
+
+// validateAfter controlla le dipendenze: ID validi e distinti, mai il deploy stesso, non con
+// dry-run né con schedule.cron (ogni scatto dipenderebbe sempre dagli stessi deploy).
+func (d *Descriptor) validateAfter() error {
+	if len(d.After) == 0 {
+		if d.AfterTimeout != "" {
+			return errors.New("afterTimeout si usa solo con after")
+		}
+		return nil
+	}
+	var errs []error
+	if len(d.After) > maxAfter {
+		errs = append(errs, fmt.Errorf("after: al massimo %d dipendenze", maxAfter))
+	}
+	seen := map[string]bool{}
+	for i, id := range d.After {
+		switch {
+		case !validName(id):
+			errs = append(errs, fmt.Errorf("after[%d] %q non valido: %s", i, id, nameRule))
+		case seen[id]:
+			errs = append(errs, fmt.Errorf("after[%d]: %q duplicato", i, id))
+		case d.ID != "" && id == d.ID:
+			errs = append(errs, fmt.Errorf("after[%d]: un deploy non può dipendere da se stesso", i))
+		}
+		seen[id] = true
+	}
+	if d.DryRun {
+		errs = append(errs, errors.New("after non ammesso con dryRun: il dry-run viene eseguito subito"))
+	}
+	if d.Schedule != nil && d.Schedule.Cron != "" {
+		errs = append(errs, errors.New("after non ammesso con schedule.cron"))
+	}
+	if _, err := d.AfterWait(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// AfterWait restituisce il tempo massimo di attesa delle dipendenze.
+func (d *Descriptor) AfterWait() (time.Duration, error) {
+	if d.AfterTimeout == "" {
+		return DefaultAfterTimeout, nil
+	}
+	t, err := time.ParseDuration(d.AfterTimeout)
+	if err != nil || t < time.Minute || t > maxAfterTimeout {
+		return 0, fmt.Errorf("afterTimeout %q non valido: durata tra 1m e %s", d.AfterTimeout, maxAfterTimeout)
+	}
+	return t, nil
 }
 
 // maxOverride limita la lunghezza del motivo di una deroga al freeze.

@@ -2,7 +2,9 @@ package descriptor
 
 import (
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseYAMLEsempio(t *testing.T) {
@@ -166,5 +168,84 @@ func TestRollback(t *testing.T) {
 	var nilRB *Rollback
 	if nilRB.IsEnabled() || nilRB.Triggers("deploy") {
 		t.Error("un rollback assente non deve essere attivo")
+	}
+}
+
+func TestDipendenze(t *testing.T) {
+	d, err := LoadYAMLFile("../../examples/descriptor-after.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, _ := d.AfterWait(); len(d.After) != 1 || w != 2*time.Hour {
+		t.Fatalf("dipendenze inattese: %v %v", d.After, w)
+	}
+	cases := map[string]func(*Descriptor){
+		"se stesso":       func(d *Descriptor) { d.After = []string{d.ID} },
+		"duplicato":       func(d *Descriptor) { d.After = []string{"a", "a"} },
+		"nome non valido": func(d *Descriptor) { d.After = []string{"a b"} },
+		"dry-run":         func(d *Descriptor) { d.DryRun = true },
+		"timeout":         func(d *Descriptor) { d.AfterTimeout = "10s" },
+		"senza after":     func(d *Descriptor) { d.After = nil },
+		"cron": func(d *Descriptor) {
+			d.ID, d.Schedule = "", &Schedule{Cron: "0 2 * * *"}
+		},
+	}
+	for name, mut := range cases {
+		c := *d
+		mut(&c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: atteso errore", name)
+		}
+	}
+	if w, _ := (&Descriptor{After: []string{"a"}}).AfterWait(); w != DefaultAfterTimeout {
+		t.Errorf("timeout di default: %v", w)
+	}
+}
+
+func TestRelease(t *testing.T) {
+	r, err := LoadReleaseYAMLFile("../../examples/release.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, _ := r.Order()
+	var names []string
+	for _, rd := range order {
+		names = append(names, rd.Name)
+	}
+	if strings.Join(names, " ") != "db api worker web" || r.DeploymentID(order[0]) != "shop-2026-10.db" || r.FailurePolicy() != ReleaseOnFailureRollback {
+		t.Fatalf("release inattesa: %v %s", names, r.FailurePolicy())
+	}
+	if order[0].Descriptor == nil || order[0].Descriptor.Artifact.Type != "migration" || order[0].File != "" {
+		t.Errorf("descrittore non caricato: %+v", order[0])
+	}
+	cases := map[string]func(*Release){
+		"ciclo":             func(r *Release) { r.Deploys[0].After = []string{"web"} },
+		"after sconosciuto": func(r *Release) { r.Deploys[1].After = []string{"nessuno"} },
+		"nome duplicato":    func(r *Release) { r.Deploys[1].Name = "db" },
+		"id duplicato": func(r *Release) {
+			a, b := *r.Deploys[0].Descriptor, *r.Deploys[1].Descriptor
+			a.ID, b.ID = "x", "x"
+			r.Deploys[0].Descriptor, r.Deploys[1].Descriptor = &a, &b
+		},
+		"schedule": func(r *Release) {
+			d := *r.Deploys[0].Descriptor
+			at := time.Now().Add(time.Hour)
+			d.Schedule = &Schedule{At: &at}
+			r.Deploys[0].Descriptor = &d
+		},
+		"onFailure": func(r *Release) { r.OnFailure = "ignora" },
+		"senza id":  func(r *Release) { r.ID = "" },
+		"kind":      func(r *Release) { r.Kind = "Deploy" },
+	}
+	for name, mut := range cases {
+		c := *r
+		c.Deploys = append([]ReleaseDeploy(nil), r.Deploys...)
+		mut(&c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: atteso errore", name)
+		}
+	}
+	if _, err := ParseReleaseJSON([]byte(`{"apiVersion":"manent/v1","kind":"Release","id":"r","deploys":[{"name":"a","file":"a.yml"}]}`)); err == nil {
+		t.Error("file non ammesso via API")
 	}
 }

@@ -44,6 +44,7 @@ type Config struct {
 	Plugins          map[string]map[string]any `yaml:"plugins"`
 	Observability    Observability             `yaml:"observability"`
 	Rollout          RolloutConfig             `yaml:"rollout"`
+	Chains           Chains                    `yaml:"chains"`
 	Recovery         Recovery                  `yaml:"recovery"`
 	Retention        Retention                 `yaml:"retention"`
 }
@@ -78,6 +79,13 @@ type RolloutConfig struct {
 	AlertmanagerURL string `yaml:"alertmanager_url"`
 	// CheckTimeout limita ogni lettura dell'health gate.
 	CheckTimeout time.Duration `yaml:"check_timeout"`
+}
+
+// Chains configura le dipendenze tra deploy (after) e le release composte.
+type Chains struct {
+	// PollInterval è il primo intervallo di lettura dello stato dei deploy attesi; raddoppia a
+	// ogni lettura fino a 1 minuto.
+	PollInterval time.Duration `yaml:"poll_interval"`
 }
 
 // Recovery configura il registro dei worker e la ripresa dei workflow di un worker perso.
@@ -479,6 +487,7 @@ func Default() *Config {
 		Recovery:      Recovery{HeartbeatInterval: 15 * time.Second, StaleAfter: time.Minute},
 		Retention:     Retention{KeepReleases: 10, Interval: time.Hour},
 		Rollout:       RolloutConfig{CheckTimeout: 30 * time.Second},
+		Chains:        Chains{PollInterval: 5 * time.Second},
 	}
 }
 
@@ -623,6 +632,9 @@ func (c *Config) validateOperations() []error {
 	}
 	if c.DBOS.Region != "" && !regionRe.MatchString(c.DBOS.Region) {
 		errs = append(errs, fmt.Errorf("dbos.region %q non valida", c.DBOS.Region))
+	}
+	if c.Chains.PollInterval < 100*time.Millisecond {
+		errs = append(errs, errors.New("chains.poll_interval deve essere almeno 100ms"))
 	}
 	if c.Rollout.CheckTimeout <= 0 {
 		errs = append(errs, errors.New("rollout.check_timeout deve essere > 0"))

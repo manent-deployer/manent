@@ -157,6 +157,15 @@ rollback:
 
 Strategia di [rilascio a ondate](ondate.md): ondate, tempo di osservazione, health gate, comportamento in caso di fallimento. Di norma sta nella configurazione di ambiente; nel descrittore è ammessa solo se l'ambiente non ne definisce una, o se è identica.
 
+### `after` e `afterTimeout`
+
+ID dei deploy che devono riuscire prima che questo parta, e l'attesa massima (default `24h`). Fino ad allora il deploy è `WAITING_DEPENDENCY` e non occupa uno slot della coda dell'ambiente. Vedi [Catene di deploy](catene.md).
+
+```yaml
+after: [shop-db-42-prod]
+afterTimeout: 2h
+```
+
 ### `freezeOverride`
 
 Motivo con cui il deploy deroga a una [finestra di freeze](governance.md#finestre-di-freeze) (al massimo 500 caratteri, non ammesso con `schedule.cron`). Richiede il permesso `deployment.freeze-override` ed è registrato nell'audit.

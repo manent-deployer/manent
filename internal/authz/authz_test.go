@@ -194,6 +194,39 @@ func (f *fakeService) Activity(context.Context, engine.ActivityFilter) (*engine.
 	return &engine.Activity{Running: []engine.Status{f.statuses["a1"]}, Queued: []engine.Status{f.statuses["b1"]}}, nil
 }
 
+func (f *fakeService) SubmitRelease(_ context.Context, r *descriptor.Release) (*engine.ReleaseStatus, error) {
+	rs := &engine.ReleaseStatus{ID: r.ID}
+	for _, rd := range r.Deploys {
+		rs.Deploys = append(rs.Deploys, engine.ReleaseDeployState{Name: rd.Name, DeploymentID: r.ID + "." + rd.Name,
+			Application: rd.Descriptor.Application, Environment: rd.Descriptor.Environment})
+	}
+	return rs, nil
+}
+
+func (f *fakeService) releases() []engine.ReleaseStatus {
+	return []engine.ReleaseStatus{
+		{ID: "ra", Deploys: []engine.ReleaseDeployState{{DeploymentID: "a1", Application: "team-a-api", Environment: "test"}}},
+		{ID: "rab", Deploys: []engine.ReleaseDeployState{
+			{DeploymentID: "a1", Application: "team-a-api", Environment: "test"}, {DeploymentID: "b1", Application: "team-b-api", Environment: "test"},
+		}},
+	}
+}
+
+func (f *fakeService) ReleaseStatus(_ context.Context, id string) (*engine.ReleaseStatus, error) {
+	for _, rs := range f.releases() {
+		if rs.ID == id {
+			return &rs, nil
+		}
+	}
+	return nil, engine.ErrNotFound
+}
+
+func (f *fakeService) ListReleases(context.Context, int) ([]engine.ReleaseStatus, error) {
+	return f.releases(), nil
+}
+
+func (f *fakeService) CancelRelease(context.Context, string) error { return nil }
+
 type recordAudit struct{ entries []audit.Entry }
 
 func (r *recordAudit) Record(_ context.Context, e audit.Entry) error {
@@ -260,6 +293,30 @@ func TestGuard(t *testing.T) {
 		t.Errorf("DORA non filtrate: %+v", rep)
 	}
 
+	// Release: permessi su ogni deploy, lettura delle dipendenze esterne, rollback se richiesto.
+	item := func(name, app, env string, after ...string) descriptor.ReleaseDeploy {
+		return descriptor.ReleaseDeploy{Name: name, Descriptor: &descriptor.Descriptor{Application: app, Environment: env, After: after}}
+	}
+	if _, err := g.SubmitRelease(alice, &descriptor.Release{ID: "r1", Deploys: []descriptor.ReleaseDeploy{item("api", "team-a-api", "test"), item("web", "team-b-api", "test")}}); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("release con un deploy di un altro team: %v", err)
+	}
+	if _, err := g.SubmitRelease(alice, &descriptor.Release{ID: "r2", Deploys: []descriptor.ReleaseDeploy{item("api", "team-a-api", "test", "b1")}}); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("dipendenza da un deploy non leggibile: %v", err)
+	}
+	if _, err := g.SubmitRelease(alice, &descriptor.Release{ID: "r3", OnFailure: descriptor.ReleaseOnFailureRollback, Deploys: []descriptor.ReleaseDeploy{item("api", "team-a-api", "test", "a1")}}); err != nil {
+		t.Errorf("release ammessa: %v", err)
+	}
+	if _, err := g.ReleaseStatus(alice, "rab"); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("release con deploy non leggibili: %v", err)
+	}
+	if list, _ := g.ListReleases(alice, 0); len(list) != 1 || list[0].ID != "ra" {
+		t.Errorf("elenco release non filtrato: %+v", list)
+	}
+	d.Environment, d.DryRun, d.After = "test", false, []string{"b1"}
+	if _, err := g.Submit(alice, d); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("after su un deploy non leggibile: %v", err)
+	}
+
 	// Attività: solo i deploy leggibili.
 	if a, err := g.Activity(alice, engine.ActivityFilter{}); err != nil || len(a.Running) != 1 || len(a.Queued) != 0 {
 		t.Errorf("attività non filtrata: %+v %v", a, err)
@@ -300,7 +357,7 @@ func TestGuard(t *testing.T) {
 			denied++
 		}
 	}
-	if allowed != 4 || denied != 8 {
+	if allowed != 5 || denied != 12 {
 		t.Errorf("voci di audit inattese (allowed=%d denied=%d): %+v", allowed, denied, rec.entries)
 	}
 	if rec.entries[0].Actor != "oidc:alice" || rec.entries[0].Deployment != "new" || rec.entries[0].Action != string(DeploymentSubmit) {

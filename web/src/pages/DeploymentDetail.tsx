@@ -54,6 +54,13 @@ function Facts({ d }: { d: Status }) {
           </Link>
         </Fact>
       )}
+      {d.release && (
+        <Fact label={t("detail.release")}>
+          <Link className="font-mono text-sm text-accent hover:underline" to={`/releases/${encodeURIComponent(d.release)}`}>
+            {d.release}
+          </Link>
+        </Fact>
+      )}
       <Fact label={t("detail.requestedBy")}>{d.requested_by || "—"}</Fact>
       <Fact label={t("detail.created")}>
         <time dateTime={d.created_at}>{formatDateTime(d.created_at, locale)}</time>
@@ -68,6 +75,39 @@ function Facts({ d }: { d: Status }) {
       )}
       {d.rollback && <Fact label={t("detail.rollback")}>{d.rollback}</Fact>}
     </dl>
+  );
+}
+
+/** DependenciesPanel mostra i deploy da cui questo dipende (after) con il loro stato. */
+function DependenciesPanel({ d }: { d: Status }) {
+  const { t, locale } = useI18n();
+  const a = d.after;
+  if (!a) return null;
+  return (
+    <Section title={t("detail.after")}>
+      <p className="text-sm text-muted">
+        {a.status === "satisfied" ? t("detail.after.satisfied") : t("detail.after.lead")}
+        {a.status === "waiting" && (
+          <>
+            {" "}
+            <time dateTime={a.expires_at} title={formatDateTime(a.expires_at, locale)}>
+              {t("detail.after.expires", { time: formatRelative(a.expires_at, locale) })}
+            </time>
+          </>
+        )}
+      </p>
+      <ul className="mt-3 flex flex-col gap-2" aria-label={t("detail.after.caption")}>
+        {a.dependencies.map((dep) => (
+          <li key={dep.id} className="flex flex-wrap items-center gap-3">
+            <Link className="font-mono text-sm text-accent hover:underline" to={`/deployments/${encodeURIComponent(dep.id)}`}>
+              {dep.id}
+            </Link>
+            <StatusBadge state={dep.state} />
+          </li>
+        ))}
+      </ul>
+      {a.reason && <p className="mt-3 text-sm text-bad">{a.reason}</p>}
+    </Section>
   );
 }
 
@@ -206,6 +246,7 @@ export function DeploymentDetailPage() {
             </div>
           )}
         </Section>
+        <DependenciesPanel d={d} />
         <ApprovalPanel d={d} />
         {d.rollout && (
           <Section title={t("detail.rollout")}>

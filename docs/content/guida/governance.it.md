@@ -77,7 +77,7 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 !!! note
     L'inventario esamina gli ultimi 10.000 deploy. Un'applicazione che non viene rilasciata da molto più tempo può non comparire: in quel caso fa fede il sistema di destinazione.
 
-## Promozione
+## Promozione { #promozione }
 
 `requires` elenca gli ambienti in cui **lo stesso artefatto** deve essere già stato rilasciato con successo: stessa applicazione, stesso nome e stessa versione e, se il descrittore indica `artifact.sha256`, stesso hash. Un deploy che non rispetta la regola viene rifiutato all'accodamento (`422`):
 

@@ -157,6 +157,15 @@ rollback:
 
 [Wave rollout](ondate.md) strategy: waves, bake time, health gate, behaviour on failure. It normally lives in the environment configuration; in the descriptor it is allowed only if the environment does not define one, or if it is identical.
 
+### `after` and `afterTimeout`
+
+IDs of deploys that must succeed before this one starts, and the maximum wait (default `24h`). Until then the deploy is `WAITING_DEPENDENCY` and does not take a slot of the environment queue. See [Deploy chains](catene.md).
+
+```yaml
+after: [shop-db-42-prod]
+afterTimeout: 2h
+```
+
 ### `freezeOverride`
 
 Reason for which the deploy bypasses a [freeze window](governance.md#finestre-di-freeze) (up to 500 characters, not allowed with `schedule.cron`). Requires the `deployment.freeze-override` permission and is recorded in the audit log.

@@ -10,7 +10,7 @@ import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
 import { durationBetween, formatDateTime, formatDuration, formatRelative, shortId } from "@/lib/format";
 
-const STATES = ["PENDING", "ENQUEUED", "DELAYED", "AWAITING_APPROVAL", "SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED"];
+const STATES = ["PENDING", "ENQUEUED", "DELAYED", "AWAITING_APPROVAL", "WAITING_DEPENDENCY", "SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED", "DEPENDENCY_FAILED"];
 const PAGE = 50;
 
 export function DeploymentsPage() {
@@ -160,5 +160,5 @@ export function DeploymentsPage() {
 }
 
 function isRunning(state: string) {
-  return state === "PENDING" || state === "ENQUEUED" || state === "AWAITING_APPROVAL" || state === "DELAYED";
+  return state === "PENDING" || state === "ENQUEUED" || state === "AWAITING_APPROVAL" || state === "DELAYED" || state === "WAITING_DEPENDENCY";
 }

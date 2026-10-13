@@ -18,6 +18,7 @@ import { CalendarPage } from "@/pages/Calendar";
 import { DeploymentDetailPage } from "@/pages/DeploymentDetail";
 import { DeploymentsPage } from "@/pages/Deployments";
 import { InventoryPage } from "@/pages/Inventory";
+import { ReleaseDetailPage, ReleasesPage } from "@/pages/Releases";
 
 // Le metriche usano Recharts (circa 100 KB compressi): caricate solo quando si apre la pagina.
 const MetricsPage = lazy(() => import("@/pages/Metrics").then((m) => ({ default: m.MetricsPage })));
@@ -62,6 +63,8 @@ export function AppRoutes() {
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/inventory" element={<InventoryPage />} />
+        <Route path="/releases" element={<ReleasesPage />} />
+        <Route path="/releases/:id" element={<ReleaseDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route
           path="/metrics"

@@ -3,7 +3,6 @@ package engine
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -82,15 +81,7 @@ func (e *Engine) loadRequest(id string) (Request, error) {
 		return Request{}, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 	}
 	var req Request
-	data, ok := ws[0].Input.(string)
-	if !ok {
-		b, err := json.Marshal(ws[0].Input)
-		if err != nil {
-			return req, fmt.Errorf("input del deploy %s non leggibile: %w", id, err)
-		}
-		data = string(b)
-	}
-	if err := json.Unmarshal([]byte(data), &req); err != nil {
+	if err := decodeInput(ws[0].Input, &req); err != nil {
 		return req, fmt.Errorf("input del deploy %s non leggibile: %w", id, err)
 	}
 	return req, nil
@@ -99,6 +90,8 @@ func (e *Engine) loadRequest(id string) (Request, error) {
 // applyRedeploy prepara il descrittore del nuovo deploy a partire da quello registrato.
 func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 	d.ID, d.DryRun, d.FreezeOverride, d.Schedule = r.ID, r.DryRun, r.FreezeOverride, nil
+	// Le dipendenze valevano per il deploy di origine, già concluso.
+	d.After, d.AfterTimeout = nil, ""
 	if src.SHA256 != "" {
 		// Viene rilasciato esattamente l'artefatto già rilasciato: lo step qa lo verifica.
 		d.Artifact.SHA256 = src.SHA256

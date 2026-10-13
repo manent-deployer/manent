@@ -41,6 +41,8 @@ type Request struct {
 	Kind string `json:"kind,omitempty"`
 	// Source è il deploy da cui deriva una promozione o un rollback manuale.
 	Source string `json:"source,omitempty"`
+	// Release è la release composta a cui appartiene il deploy.
+	Release string `json:"release,omitempty"`
 	// Approval, se presente, sono le approvazioni richieste prima dell'esecuzione: la regola
 	// è quella valida al momento della richiesta (o della creazione della schedule).
 	Approval *governance.Approvals `json:"approval,omitempty"`
@@ -142,7 +144,7 @@ func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Pla
 
 // submitMeta descrive l'origine di una richiesta di deploy.
 type submitMeta struct {
-	kind, source string
+	kind, source, release string
 }
 
 // Submit calcola il piano e, in base a schedule nel descrittore:
@@ -170,10 +172,19 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	}
 	req := Request{
 		Descriptor: *d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: meta.kind, Source: meta.source,
-		TraceParent: telemetry.TraceParent(ctx),
+		Release: meta.release, TraceParent: telemetry.TraceParent(ctx),
 	}
 	if req.Approval, err = e.govern(ctx, d); err != nil {
 		return nil, err
+	}
+	// Con dipendenze non ancora riuscite il deploy attende: poi approvazione e accodamento.
+	wait := false
+	if len(d.After) > 0 {
+		done, err := e.checkAfter(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+		wait = !done
 	}
 	if d.Schedule != nil && d.Schedule.Cron != "" {
 		return e.applySchedule(req)
@@ -191,6 +202,17 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	var id string
 	if d.ID != "" {
 		id = workflowID(d)
+	}
+	if wait {
+		if id == "" {
+			id = uuid.NewString()
+		}
+		if err := enqueueAfter(e.client, e.queueName, req, id); err != nil {
+			return nil, err
+		}
+		sub.ID, sub.State = id, StateWaitingDependency
+		e.logger.Info("deploy in attesa delle dipendenze", "deployment", id, "application", d.Application, "environment", d.Environment, "after", d.After, "requested_by", req.RequestedBy)
+		return sub, nil
 	}
 	if req.Approval != nil {
 		// Il deploy non esiste ancora: l'ID va scelto subito, perché è quello da approvare.
@@ -426,6 +448,12 @@ func attributes(req Request) map[string]any {
 	if req.Approval != nil {
 		a[attrApproval] = "required"
 	}
+	if len(d.After) > 0 {
+		a[attrAfter] = "true"
+	}
+	if req.Release != "" {
+		a[attrRelease] = req.Release
+	}
 	return a
 }
 
@@ -434,7 +462,7 @@ func attributes(req Request) map[string]any {
 func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 	h, err := dbos.RetrieveWorkflow[Result](e.client, id)
 	if err != nil {
-		return e.approvalStatus(id)
+		return e.pendingStatus(id)
 	}
 	st, err := h.GetStatus()
 	if err != nil {
@@ -452,6 +480,9 @@ func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 		if a, err := e.approval(id + approvalSuffix); err == nil {
 			s.Approval = a
 		}
+	}
+	if attr(st, attrAfter) == "true" {
+		s.After = e.afterState(id)
 	}
 	switch st.Status {
 	case dbos.WorkflowStatusSuccess:
@@ -507,7 +538,7 @@ func (e *Engine) scan(prefix []string, fn func(Status) bool) error {
 	const page = 200
 	for offset := 0; offset < maxListScan; offset += page {
 		opts := []dbos.ListWorkflowsOption{
-			dbos.WithFilterName(workflowName, approvalWorkflowName),
+			dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
 			dbos.WithFilterSortDesc(),
 			dbos.WithFilterLimit(page),
 			dbos.WithFilterOffset(offset),
@@ -522,7 +553,10 @@ func (e *Engine) scan(prefix []string, fn func(Status) bool) error {
 			return err
 		}
 		for _, w := range wfs {
-			if w.Name == approvalWorkflowName && attr(w, attrOutcome) == ApprovalApproved {
+			// Approvazioni concluse con un deploy e attese soddisfatte sono rappresentate da ciò
+			// che hanno accodato.
+			if (w.Name == approvalWorkflowName && attr(w, attrOutcome) == ApprovalApproved) ||
+				(w.Name == afterWorkflowName && attr(w, attrOutcome) == service.AfterSatisfied) {
 				continue
 			}
 			if !fn(toStatus(w)) {
@@ -544,28 +578,39 @@ func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		opts = append(opts, dbos.WithHandleTimeout(time.Until(deadline)))
 	}
-	h, err := dbos.RetrieveWorkflow[Result](e.client, id)
-	if err != nil {
-		ah, aerr := dbos.RetrieveWorkflow[ApprovalState](e.client, id+approvalSuffix)
-		if aerr != nil {
-			return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
+	// Prima dell'esecuzione il deploy può attendere le dipendenze, poi l'approvazione: ognuna,
+	// se va a buon fine, accoda la successiva prima di concludersi.
+	for range 3 {
+		if h, err := dbos.RetrieveWorkflow[Result](e.client, id); err == nil {
+			res, err := h.GetResult(opts...)
+			if err != nil {
+				return nil, err
+			}
+			return &res, nil
 		}
-		a, err := ah.GetResult(opts...)
-		if err != nil {
-			return nil, err
+		if ah, err := dbos.RetrieveWorkflow[ApprovalState](e.client, id+approvalSuffix); err == nil {
+			a, err := ah.GetResult(opts...)
+			if err != nil {
+				return nil, err
+			}
+			if a.Status != ApprovalApproved {
+				return nil, fmt.Errorf("deploy %s non eseguito: approvazione %s", id, a.Status)
+			}
+			continue
 		}
-		if a.Status != ApprovalApproved {
-			return nil, fmt.Errorf("deploy %s non eseguito: approvazione %s", id, a.Status)
+		if wh, err := dbos.RetrieveWorkflow[AfterState](e.client, id+afterSuffix); err == nil {
+			a, err := wh.GetResult(opts...)
+			if err != nil {
+				return nil, err
+			}
+			if a.Status != service.AfterSatisfied {
+				return nil, fmt.Errorf("deploy %s non eseguito: dipendenze %s (%s)", id, a.Status, a.Reason)
+			}
+			continue
 		}
-		if h, err = dbos.RetrieveWorkflow[Result](e.client, id); err != nil {
-			return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
-		}
+		break
 	}
-	res, err := h.GetResult(opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &res, nil
+	return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 }
 
 // Cancel annulla il deploy: se è in attesa viene rimosso dalla coda, se è in esecuzione si
@@ -576,8 +621,13 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 		return err
 	}
 	target := id
-	if st.State == StateAwaitingApproval {
-		target = id + approvalSuffix
+	switch st.State {
+	case StateAwaitingApproval:
+		if st.Rollout == nil {
+			target = id + approvalSuffix
+		}
+	case StateWaitingDependency:
+		target = id + afterSuffix
 	}
 	if err := dbos.CancelWorkflow(e.client, target); err != nil {
 		return err
@@ -601,9 +651,16 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		// Deploy accodati prima degli attributi: la chiave di partizione è "<application>/<environment>".
 		s.Application, s.Environment, _ = strings.Cut(st.QueuePartitionKey, "/")
 	}
-	if st.Name == approvalWorkflowName {
+	s.Release = attr(st, attrRelease)
+	switch st.Name {
+	case approvalWorkflowName:
 		s.ID = strings.TrimSuffix(st.ID, approvalSuffix)
 		s.State = approvalWorkflowState(st.Status, attr(st, attrOutcome))
+		s.Error = ""
+		return s
+	case afterWorkflowName:
+		s.ID = strings.TrimSuffix(st.ID, afterSuffix)
+		s.State = afterWorkflowState(st.Status, attr(st, attrOutcome))
 		s.Error = ""
 		return s
 	}

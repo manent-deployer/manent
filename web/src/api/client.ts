@@ -17,6 +17,8 @@ export type Identity = components["schemas"]["Identity"];
 export type Submission = components["schemas"]["Submission"];
 export type Activity = components["schemas"]["Activity"];
 export type Worker = components["schemas"]["Worker"];
+export type AfterState = components["schemas"]["AfterState"];
+export type ReleaseStatus = components["schemas"]["ReleaseStatus"];
 
 /** Errore dell'API con lo stato HTTP e il messaggio del server. */
 export class ApiError extends Error {
@@ -64,4 +66,4 @@ export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }):
 }
 
 /** Stati in cui un deploy non cambierà più. */
-export const TERMINAL = new Set(["SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"]);
+export const TERMINAL = new Set(["SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED", "DEPENDENCY_FAILED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"]);

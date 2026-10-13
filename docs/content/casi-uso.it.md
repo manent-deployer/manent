@@ -60,6 +60,7 @@ flowchart LR
 | **UC6** | Container su VM con Docker (plugin [container](plugins/container.md)) | Immagine fissata al digest, promozione `test → prod` a ondate, dry-run, immagine unhealthy con `rollback-all`, rollback manuale, VM spenta, tag spostato nel registry (la promozione rifiuta l'immagine diversa) |
 | **UC7** | Manifest su Kubernetes (plugin [kubernetes](plugins/kubernetes.md)) | Dry-run lato server, stessi manifest in `test` e `prod` con configurazione di ambiente diversa, rollout bloccato e rollback, prune degli oggetti rimossi, storico delle release, immagine non fissata al digest, rollback manuale |
 | **UC8** | [Interfaccia web](guida/interfaccia-web.md) | Intestazioni e configurazione, `whoami`, approvazioni, cursore e stream SSE dell'API; con Playwright: login OIDC, ogni vista verificata con axe in entrambi i temi, dettaglio con log in tempo reale, promozione dopo un dry-run, divieto di auto-approvazione, approvazione da un altro utente seguita in tempo reale, tastiera e italiano |
+| **UC9** | [Catene di deploy](guida/catene.md) | Deploy che attende un altro (`after`) senza toccare il proprio target, avvio dopo la fine della dipendenza, dipendenza fallita (`DEPENDENCY_FAILED`) e rifiuto all'invio, release composta in ordine topologico con reinvio idempotente, release fallita con `onFailure: rollback` (deploy riusciti riportati alla versione precedente) |
 
 Ogni verifica stampa ✔ o ✘. Alla fine lo script riassume i fallimenti e salva i log dei container in `test/usecases/.work/compose.log`.
 

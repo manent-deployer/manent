@@ -1,0 +1,22 @@
+# Release composta di esempio (CLI: manent release submit -f examples/release.yml).
+# La migrazione del database parte per prima; api e worker partono in parallelo quando è
+# riuscita; web parte dopo api. I file dei deploy sono relativi a questo file.
+apiVersion: manent/v1
+kind: Release
+id: shop-2026-10
+# stop (default): non avvia i deploy non ancora partiti se uno fallisce.
+# continue: prosegue con i deploy che non dipendono da quello fallito.
+# rollback: come stop, poi riporta i deploy riusciti alla versione precedente.
+onFailure: rollback
+deploys:
+  - name: db
+    file: release/db.yml
+  - name: api
+    file: release/api.yml
+    after: [db]
+  - name: worker
+    file: release/worker.yml
+    after: [db]
+  - name: web
+    file: release/web.yml
+    after: [api]

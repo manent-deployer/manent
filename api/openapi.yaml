@@ -24,6 +24,7 @@ tags:
   - name: insight
   - name: access
   - name: platform
+  - name: releases
   - name: ui
   - name: probes
 
@@ -383,6 +384,57 @@ paths:
       responses:
         '200': {description: Attività, content: {application/json: {schema: {$ref: '#/components/schemas/Activity'}}}}
         '401': {$ref: '#/components/responses/Error'}
+  /api/v1/releases:
+    post:
+      tags: [releases]
+      summary: Accoda una release composta (più deploy con dipendenze)
+      operationId: submitRelease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Release'}
+      responses:
+        '202': {description: Release accodata, content: {application/json: {schema: {$ref: '#/components/schemas/ReleaseStatus'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    get:
+      tags: [releases]
+      summary: Release più recenti
+      operationId: listReleases
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Release
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [releases]
+                properties:
+                  releases: {type: array, items: {$ref: '#/components/schemas/ReleaseStatus'}}
+  /api/v1/releases/{id}:
+    get:
+      tags: [releases]
+      summary: Stato di una release e dei suoi deploy
+      operationId: getRelease
+      parameters: [{$ref: '#/components/parameters/id'}]
+      responses:
+        '200': {description: Release, content: {application/json: {schema: {$ref: '#/components/schemas/ReleaseStatus'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/releases/{id}/cancel:
+    post:
+      tags: [releases]
+      summary: Annulla i deploy non conclusi della release e la release
+      operationId: cancelRelease
+      parameters: [{$ref: '#/components/parameters/id'}]
+      responses:
+        '204': {description: Annullata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
   /ui/config.json:
     get:
       tags: [ui]
@@ -457,6 +509,8 @@ components:
         application: {type: string}
         environment: {type: string}
         dryRun: {type: boolean}
+        after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
+        afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
         artifact:
           type: object
           required: [type, name, source]
@@ -551,7 +605,7 @@ components:
         id: {type: string}
         state:
           type: string
-          description: ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, MAX_RECOVERY_ATTEMPTS_EXCEEDED
+          description: ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, WAITING_DEPENDENCY, DEPENDENCY_FAILED, MAX_RECOVERY_ATTEMPTS_EXCEEDED
         application: {type: string}
         environment: {type: string}
         artifact: {type: string}
@@ -570,10 +624,71 @@ components:
         queue: {type: string}
         last_step: {type: string, description: Ultimo step registrato di un deploy in corso (solo in /activity)}
         approval: {$ref: '#/components/schemas/ApprovalState'}
+        after: {$ref: '#/components/schemas/AfterState'}
+        release: {type: string, description: Release composta a cui appartiene il deploy}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
         result: {$ref: '#/components/schemas/Result'}
         error: {type: string}
+    AfterState:
+      type: object
+      required: [status, expires_at, dependencies]
+      properties:
+        status: {type: string, enum: [waiting, satisfied, failed, expired]}
+        expires_at: {type: string, format: date-time}
+        dependencies:
+          type: array
+          items:
+            type: object
+            required: [id, state]
+            properties:
+              id: {type: string}
+              state: {type: string}
+        reason: {type: string}
+    Release:
+      type: object
+      required: [apiVersion, kind, id, deploys]
+      properties:
+        apiVersion: {type: string, examples: [manent/v1]}
+        kind: {type: string, enum: [Release]}
+        id: {type: string}
+        onFailure: {type: string, enum: [stop, continue, rollback]}
+        deploys:
+          type: array
+          items:
+            type: object
+            required: [name, descriptor]
+            properties:
+              name: {type: string}
+              descriptor: {$ref: '#/components/schemas/Descriptor'}
+              after: {type: array, items: {type: string}, description: Nomi di altri deploy della release}
+    ReleaseStatus:
+      type: object
+      required: [id, state, on_failure, created_at, updated_at, deploys]
+      properties:
+        id: {type: string}
+        state: {type: string, description: PENDING, SUCCESS, ERROR, CANCELLED}
+        on_failure: {type: string, enum: [stop, continue, rollback]}
+        requested_by: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        error: {type: string}
+        deploys:
+          type: array
+          items:
+            type: object
+            required: [name, deployment_id, application, environment, state]
+            properties:
+              name: {type: string}
+              deployment_id: {type: string}
+              application: {type: string}
+              environment: {type: string}
+              version: {type: string}
+              after: {type: array, items: {type: string}}
+              state: {type: string}
+              error: {type: string}
+              rollback_id: {type: string}
+              rollback_state: {type: string}
     Worker:
       type: object
       required: [id, state, tasks]
@@ -598,7 +713,7 @@ components:
       properties:
         id: {type: string}
         deployment_id: {type: string}
-        kind: {type: string, enum: [deploy, pass, gate, approval, schedule]}
+        kind: {type: string, enum: [deploy, pass, gate, approval, schedule, after, release]}
         application: {type: string}
         environment: {type: string}
         region: {type: string}
@@ -608,10 +723,11 @@ components:
         attempts: {type: integer}
     Activity:
       type: object
-      required: [running, awaiting_approval, queued, delayed]
+      required: [running, awaiting_approval, waiting_dependency, queued, delayed]
       properties:
         running: {type: array, items: {$ref: '#/components/schemas/Status'}}
         awaiting_approval: {type: array, items: {$ref: '#/components/schemas/Status'}}
+        waiting_dependency: {type: array, items: {$ref: '#/components/schemas/Status'}}
         queued: {type: array, items: {$ref: '#/components/schemas/Status'}}
         delayed: {type: array, items: {$ref: '#/components/schemas/Status'}}
         truncated: {type: boolean}

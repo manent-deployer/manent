@@ -27,6 +27,7 @@ type DeployCmd struct {
 	NoWait  bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
 	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
 	DryRun  bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
+	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
 }
 
 // Execute implementa flags.Commander.
@@ -35,8 +36,9 @@ func (c *DeployCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	if c.DryRun {
-		d.DryRun = true
+	if c.DryRun || len(c.After) > 0 {
+		d.DryRun = d.DryRun || c.DryRun
+		d.After = append(d.After, c.After...)
 		if err := d.Validate(); err != nil {
 			return err
 		}

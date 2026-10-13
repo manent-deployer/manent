@@ -2,8 +2,10 @@ package authz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/joeg-ita/manent/internal/audit"
 	"github.com/joeg-ita/manent/internal/auth"
@@ -114,6 +116,9 @@ func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.S
 		return nil, err
 	}
 	if err := g.checkOverride(ctx, d.FreezeOverride, t); err != nil {
+		return nil, err
+	}
+	if err := g.checkDependencies(ctx, d.After); err != nil {
 		return nil, err
 	}
 	if d.Schedule != nil && d.Schedule.Cron != "" {
@@ -490,4 +495,105 @@ func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.
 	}
 	a.Running, a.AwaitingApproval, a.Queued, a.Delayed = keep(a.Running), keep(a.AwaitingApproval), keep(a.Queued), keep(a.Delayed)
 	return a, nil
+}
+
+// checkDependencies verifica che l'identità possa leggere i deploy da cui un deploy dipende:
+// altrimenti dall'esito dell'attesa si dedurrebbe lo stato di applicazioni altrui.
+func (g *Guard) checkDependencies(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		if _, err := g.Status(ctx, id); err != nil && !errors.Is(err, engine.ErrNotFound) {
+			return err
+		}
+	}
+	return nil
+}
+
+// SubmitRelease richiede, per ogni deploy della release, gli stessi permessi di un deploy
+// singolo (deployment.submit, deroga al freeze, lettura delle dipendenze esterne) e, con
+// onFailure: rollback, deployment.rollback. Ogni deploy accodato è registrato nell'audit.
+func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engine.ReleaseStatus, error) {
+	for _, rd := range r.Deploys {
+		d := rd.Descriptor
+		if d == nil {
+			continue // rifiutato dalla validazione dell'engine
+		}
+		t := target{application: d.Application, environment: d.Environment, comment: d.FreezeOverride}
+		if err := g.check(ctx, DeploymentSubmit, t); err != nil {
+			return nil, err
+		}
+		if err := g.checkOverride(ctx, d.FreezeOverride, t); err != nil {
+			return nil, err
+		}
+		if r.FailurePolicy() == descriptor.ReleaseOnFailureRollback {
+			if err := g.check(ctx, DeploymentRollback, t); err != nil {
+				return nil, err
+			}
+		}
+		if err := g.checkDependencies(ctx, d.After); err != nil {
+			return nil, err
+		}
+	}
+	rs, err := g.Next.SubmitRelease(ctx, r)
+	if err != nil {
+		g.done(ctx, DeploymentSubmit, target{deployment: r.ID, comment: "release"}, err)
+		return nil, err
+	}
+	for _, d := range rs.Deploys {
+		g.done(ctx, DeploymentSubmit, target{application: d.Application, environment: d.Environment, deployment: d.DeploymentID, comment: "release " + rs.ID}, nil)
+	}
+	return rs, nil
+}
+
+// readableRelease indica se l'identità può leggere tutti i deploy della release.
+func (g *Guard) readableRelease(ctx context.Context, rs *engine.ReleaseStatus, a Action) error {
+	for _, d := range rs.Deploys {
+		if err := g.check(ctx, a, target{application: d.Application, environment: d.Environment, deployment: d.DeploymentID}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReleaseStatus richiede deployment.read su tutti i deploy della release.
+func (g *Guard) ReleaseStatus(ctx context.Context, id string) (*engine.ReleaseStatus, error) {
+	rs, err := g.Next.ReleaseStatus(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := g.readableRelease(ctx, rs, DeploymentRead); err != nil {
+		return nil, err
+	}
+	return rs, nil
+}
+
+// ListReleases restituisce solo le release di cui l'identità può leggere tutti i deploy.
+func (g *Guard) ListReleases(ctx context.Context, limit int) ([]engine.ReleaseStatus, error) {
+	all, err := g.Next.ListReleases(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	p := auth.FromContext(ctx)
+	out := []engine.ReleaseStatus{}
+	for _, rs := range all {
+		if !slices.ContainsFunc(rs.Deploys, func(d engine.ReleaseDeployState) bool {
+			return !g.Policy.Allowed(p, DeploymentRead, d.Application, d.Environment)
+		}) {
+			out = append(out, rs)
+		}
+	}
+	return out, nil
+}
+
+// CancelRelease richiede deployment.cancel su tutti i deploy della release.
+func (g *Guard) CancelRelease(ctx context.Context, id string) error {
+	rs, err := g.Next.ReleaseStatus(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := g.readableRelease(ctx, rs, DeploymentCancel); err != nil {
+		return err
+	}
+	err = g.Next.CancelRelease(ctx, id)
+	g.done(ctx, DeploymentCancel, target{deployment: id, comment: "release"}, err)
+	return err
 }

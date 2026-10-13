@@ -9,9 +9,10 @@ It shows only what the user is allowed to see and offers only the actions they a
 | View | What it shows | What you can do |
 |---|---|---|
 | **Deployments** | The most recent deploys, filterable by application, environment and state, with kind, wave progress, requester and duration. | Open a deploy. |
-| **Deployment detail** | Status, sha256, origin of a promotion or rollback, approvals with comments, waves (stages, regions, AZs, health gate), recorded steps, log. Status and log update live. | Approve or reject, cancel. |
-| **Activity** | What is happening now: running deploys with worker, last step and wave progress; deploys awaiting approval, queued and scheduled. With `platform.read`, the workers with state, region, heartbeat and running workflows. Refreshed every 5 seconds. | Open a deploy. |
+| **Deployment detail** | Status, sha256, origin of a promotion or rollback, release, dependencies with their state, approvals with comments, waves (stages, regions, AZs, health gate), recorded steps, log. Status and log update live. | Approve or reject, cancel. |
+| **Activity** | What is happening now: running deploys with worker, last step and wave progress; deploys awaiting approval, waiting for dependencies, queued and scheduled. With `platform.read`, the workers with state, region, heartbeat and running workflows. Refreshed every 5 seconds. | Open a deploy. |
 | **Approvals** | Deploys waiting for a decision that you can take, before the start or between two waves. | Approve with a comment, reject (comment required). |
+| **Releases** | [Composite releases](catene.md#release-composte) with the progress of each deploy, its dependencies and the rollbacks of `onFailure: rollback`. | Open a release or a deploy, cancel a release. |
 | **Inventory** | Live release per application and environment, last failure and drift. | Promote to another environment, roll back, always after a dry-run. |
 | **Calendar** | Active and upcoming freeze windows (also per region), recurring schedules. | Pause, resume and delete schedules. |
 | **Metrics** | DORA metrics over 7, 30 or 90 days, per application and environment, with the data also as a table. | |

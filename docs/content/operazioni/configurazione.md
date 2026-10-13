@@ -166,6 +166,14 @@ Health gate of [wave rollouts](../guida/ondate.md#health-gate).
 | `alertmanager_url` | | Alertmanager API for `rollout.health.alerts`. |
 | `check_timeout` | `30s` | Maximum time of each gate reading. |
 
+### `chains`
+
+[Deploy chains](../guida/catene.md): dependencies between deploys and composite releases.
+
+| Key | Default | Description |
+|---|---|---|
+| `poll_interval` | `5s` | First interval at which a waiting deploy or a release reads the state of the deploys it waits for; it doubles at each reading up to 1 minute. |
+
 ### `observability`
 
 | Key | Default | Description |

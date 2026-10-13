@@ -344,6 +344,42 @@ func (c *Client) Approvals(ctx context.Context) ([]service.Status, error) {
 	return out.Approvals, err
 }
 
+// SubmitRelease implementa service.Service.
+func (c *Client) SubmitRelease(ctx context.Context, r *descriptor.Release) (*service.ReleaseStatus, error) {
+	var rs service.ReleaseStatus
+	if err := c.do(ctx, http.MethodPost, "/releases", nil, r, &rs); err != nil {
+		return nil, err
+	}
+	return &rs, nil
+}
+
+// ReleaseStatus implementa service.Service.
+func (c *Client) ReleaseStatus(ctx context.Context, id string) (*service.ReleaseStatus, error) {
+	var rs service.ReleaseStatus
+	if err := c.do(ctx, http.MethodGet, "/releases/"+url.PathEscape(id), nil, nil, &rs); err != nil {
+		return nil, err
+	}
+	return &rs, nil
+}
+
+// ListReleases implementa service.Service.
+func (c *Client) ListReleases(ctx context.Context, limit int) ([]service.ReleaseStatus, error) {
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var out struct {
+		Releases []service.ReleaseStatus `json:"releases"`
+	}
+	err := c.do(ctx, http.MethodGet, "/releases", q, nil, &out)
+	return out.Releases, err
+}
+
+// CancelRelease implementa service.Service.
+func (c *Client) CancelRelease(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/releases/"+url.PathEscape(id)+"/cancel", nil, nil, nil)
+}
+
 // Workers implementa service.Service.
 func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
 	var out struct {

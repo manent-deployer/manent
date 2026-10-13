@@ -1,0 +1,10 @@
+# Deploy "api" della release di esempio (examples/release.yml). Senza id: nella release
+# riceve l'ID "<release>.api".
+apiVersion: manent/v1
+application: shop-api
+environment: prod
+artifact:
+  type: application
+  name: shop-api
+  version: 2.4.0
+  source: https://artifacts.example.com/shop-api/2.4.0/shop-api-2.4.0.tar.gz

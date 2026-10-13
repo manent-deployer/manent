@@ -166,6 +166,14 @@ Health gate dei [rilasci a ondate](../guida/ondate.md#health-gate).
 | `alertmanager_url` | | API di Alertmanager per `rollout.health.alerts`. |
 | `check_timeout` | `30s` | Tempo massimo di ogni lettura del gate. |
 
+### `chains`
+
+[Catene di deploy](../guida/catene.md): dipendenze tra deploy e release composte.
+
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `poll_interval` | `5s` | Primo intervallo con cui un deploy in attesa o una release leggono lo stato dei deploy attesi; raddoppia a ogni lettura fino a 1 minuto. |
+
 ### `observability`
 
 | Chiave | Default | Descrizione |

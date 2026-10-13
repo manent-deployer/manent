@@ -58,6 +58,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--no-wait` | Stampa l'ID e termina subito, senza attendere. |
 | `--timeout` | Tempo massimo di attesa (es. `30m`). Scaduto il tempo il comando termina, ma il deploy prosegue. |
 | `--dry-run` | Esegue il deploy in [simulazione](dry-run.md). |
+| `--after <id>` | Avvia il deploy solo dopo il successo del deploy `<id>` (ripetibile): vedi [Catene di deploy](catene.md). |
 
 I deploy pianificati (`schedule` nel descrittore) e quelli in [attesa di approvazione](governance.md#approvazioni) non vengono attesi: il comando stampa lo stato e termina.
 
@@ -122,6 +123,17 @@ manent dora [--since 30d] [-a <applicazione>] [-e <ambiente>]
 
 Vedi [Osservabilità](../operazioni/osservabilita.md).
 
+## Release composte
+
+```sh
+manent release submit -f release.yml [--no-wait] [--timeout 2h]   # invia e segue la release
+manent release status <id>
+manent release list [-n 20]
+manent release cancel <id>
+```
+
+`submit` stampa una riga a ogni cambio di stato di un deploy (e del suo rollback) e termina con errore se la release non riesce. Vedi [Catene di deploy](catene.md#release-composte).
+
 ## Attività e worker { #attivita-e-worker }
 
 ```sh
@@ -129,7 +141,7 @@ manent activity [-a <applicazione>] [-e <ambiente>] [-w 5s] [--json]   # deploy 
 manent workers [-w 5s] [--json]                                         # worker e lavoro in corso
 ```
 
-`activity` mostra i deploy non ancora conclusi, raggruppati in **in esecuzione** (con il worker che li esegue, l'ultimo step registrato e l'avanzamento delle ondate), **in attesa di approvazione**, **in coda** (in attesa di uno slot libero dell'ambiente) e **pianificati** (`schedule.at`). Sono elencati solo i deploy che puoi leggere.
+`activity` mostra i deploy non ancora conclusi, raggruppati in **in esecuzione** (con il worker che li esegue, l'ultimo step registrato e l'avanzamento delle ondate), **in attesa di approvazione**, **in attesa delle dipendenze** (con i deploy ancora attesi), **in coda** (in attesa di uno slot libero dell'ambiente) e **pianificati** (`schedule.at`). Sono elencati solo i deploy che puoi leggere.
 
 `workers` elenca i worker registrati con stato (`alive`, `stale` se manca l'heartbeat, `stopped`, `unregistered` per un executor con workflow in sospeso ma assente dal registro), region, versione dei workflow e del binario, ultimo heartbeat e i workflow in esecuzione su ciascuno: deploy, passi di un'ondata in una region, health gate, approvazioni in attesa di una decisione. Richiede il permesso [`platform.read`](../operazioni/accesso.md#permessi-rbac); i workflow delle applicazioni che non puoi leggere sono solo contati.
 

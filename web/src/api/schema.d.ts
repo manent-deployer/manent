@@ -403,6 +403,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release più recenti */
+        get: operations["listReleases"];
+        put?: never;
+        /** Accoda una release composta (più deploy con dipendenze) */
+        post: operations["submitRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stato di una release e dei suoi deploy */
+        get: operations["getRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Annulla i deploy non conclusi della release e la release */
+        post: operations["cancelRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ui/config.json": {
         parameters: {
             query?: never;
@@ -468,6 +520,10 @@ export interface components {
             application: string;
             environment: string;
             dryRun?: boolean;
+            /** @description ID dei deploy che devono riuscire prima di questo */
+            after?: string[];
+            /** @description Attesa massima delle dipendenze (default 24h) */
+            afterTimeout?: string;
             artifact: {
                 type: string;
                 name: string;
@@ -551,7 +607,7 @@ export interface components {
         };
         Status: {
             id: string;
-            /** @description ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, MAX_RECOVERY_ATTEMPTS_EXCEEDED */
+            /** @description ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, WAITING_DEPENDENCY, DEPENDENCY_FAILED, MAX_RECOVERY_ATTEMPTS_EXCEEDED */
             state: string;
             application?: string;
             environment?: string;
@@ -583,11 +639,64 @@ export interface components {
             /** @description Ultimo step registrato di un deploy in corso (solo in /activity) */
             last_step?: string;
             approval?: components["schemas"]["ApprovalState"];
+            after?: components["schemas"]["AfterState"];
+            /** @description Release composta a cui appartiene il deploy */
+            release?: string;
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
             result?: components["schemas"]["Result"];
             error?: string;
+        };
+        AfterState: {
+            /** @enum {string} */
+            status: "waiting" | "satisfied" | "failed" | "expired";
+            /** Format: date-time */
+            expires_at: string;
+            dependencies: {
+                id: string;
+                state: string;
+            }[];
+            reason?: string;
+        };
+        Release: {
+            apiVersion: string;
+            /** @enum {string} */
+            kind: "Release";
+            id: string;
+            /** @enum {string} */
+            onFailure?: "stop" | "continue" | "rollback";
+            deploys: {
+                name: string;
+                descriptor: components["schemas"]["Descriptor"];
+                /** @description Nomi di altri deploy della release */
+                after?: string[];
+            }[];
+        };
+        ReleaseStatus: {
+            id: string;
+            /** @description PENDING */
+            state: string;
+            /** @enum {string} */
+            on_failure: "stop" | "continue" | "rollback";
+            requested_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            error?: string;
+            deploys: {
+                name: string;
+                deployment_id: string;
+                application: string;
+                environment: string;
+                version?: string;
+                after?: string[];
+                state: string;
+                error?: string;
+                rollback_id?: string;
+                rollback_state?: string;
+            }[];
         };
         Worker: {
             /** @description Executor ID DBOS */
@@ -621,7 +730,7 @@ export interface components {
             id: string;
             deployment_id: string;
             /** @enum {string} */
-            kind: "deploy" | "pass" | "gate" | "approval" | "schedule";
+            kind: "deploy" | "pass" | "gate" | "approval" | "schedule" | "after" | "release";
             application?: string;
             environment?: string;
             region?: string;
@@ -634,6 +743,7 @@ export interface components {
         Activity: {
             running: components["schemas"]["Status"][];
             awaiting_approval: components["schemas"]["Status"][];
+            waiting_dependency: components["schemas"]["Status"][];
             queued: components["schemas"]["Status"][];
             delayed: components["schemas"]["Status"][];
             truncated?: boolean;
@@ -1425,6 +1535,103 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    listReleases: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        releases: components["schemas"]["ReleaseStatus"][];
+                    };
+                };
+            };
+        };
+    };
+    submitRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Release"];
+            };
+        };
+        responses: {
+            /** @description Release accodata */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseStatus"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseStatus"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Annullata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     getUIConfig: {

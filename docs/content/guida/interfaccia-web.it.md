@@ -9,9 +9,10 @@ Mostra solo ciò che l'utente può vedere e offre solo le azioni che può esegui
 | Vista | Cosa mostra | Cosa si può fare |
 |---|---|---|
 | **Deploy** | I deploy più recenti, filtrabili per applicazione, ambiente e stato, con tipo, avanzamento delle ondate, richiedente e durata. | Aprire un deploy. |
-| **Dettaglio di un deploy** | Stato, sha256, origine di una promozione o di un rollback, approvazioni con i commenti, ondate (stadi, region, AZ, health gate), step registrati, log. Stato e log si aggiornano in tempo reale. | Approvare o respingere, annullare. |
-| **Attività** | Cosa sta succedendo ora: deploy in esecuzione con worker, ultimo step e avanzamento delle ondate; deploy in attesa di approvazione, in coda e pianificati. Con `platform.read`, i worker con stato, region, heartbeat e workflow in esecuzione. Aggiornata ogni 5 secondi. | Aprire un deploy. |
+| **Dettaglio di un deploy** | Stato, sha256, origine di una promozione o di un rollback, release, dipendenze con il loro stato, approvazioni con i commenti, ondate (stadi, region, AZ, health gate), step registrati, log. Stato e log si aggiornano in tempo reale. | Approvare o respingere, annullare. |
+| **Attività** | Cosa sta succedendo ora: deploy in esecuzione con worker, ultimo step e avanzamento delle ondate; deploy in attesa di approvazione, in attesa delle dipendenze, in coda e pianificati. Con `platform.read`, i worker con stato, region, heartbeat e workflow in esecuzione. Aggiornata ogni 5 secondi. | Aprire un deploy. |
 | **Approvazioni** | I deploy in attesa di una decisione che puoi prendere, prima dell'avvio o tra due ondate. | Approvare con un commento, respingere (commento obbligatorio). |
+| **Release** | [Release composte](catene.md#release-composte) con l'avanzamento di ogni deploy, le dipendenze e i rollback di `onFailure: rollback`. | Aprire una release o un deploy, annullare una release. |
 | **Inventario** | Release in esercizio per applicazione e ambiente, ultimo fallimento e drift. | Promuovere in un altro ambiente, fare rollback, sempre dopo un dry-run. |
 | **Calendario** | Finestre di freeze attive e future (anche per region), schedule ricorrenti. | Sospendere, riprendere ed eliminare le schedule. |
 | **Metriche** | Metriche DORA su 7, 30 o 90 giorni, per applicazione e ambiente, con i dati anche in tabella. | |

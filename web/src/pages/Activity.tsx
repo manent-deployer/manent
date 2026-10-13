@@ -75,7 +75,7 @@ function Group({ title, items, columns, row }: { title: string; items: Status[];
 
 function ActiveDeployments({ a }: { a: Activity }) {
   const { t } = useI18n();
-  const empty = a.running.length + a.awaiting_approval.length + a.queued.length + a.delayed.length === 0;
+  const empty = a.running.length + a.awaiting_approval.length + a.waiting_dependency.length + a.queued.length + a.delayed.length === 0;
   if (empty) return <EmptyState>{t("activity.empty")}</EmptyState>;
   const c = (k: MessageKey) => t(k);
   return (
@@ -113,6 +113,35 @@ function ActiveDeployments({ a }: { a: Activity }) {
             <td className={td}>{d.requested_by || "—"}</td>
             <td className={td}>
               <StatusBadge state={d.state} />
+            </td>
+            <td className={td}>
+              <When iso={d.created_at} />
+            </td>
+          </>
+        )}
+      />
+      <Group
+        title={t("activity.waitingDependency")}
+        items={a.waiting_dependency}
+        columns={[c("activity.col.deployment"), c("activity.col.version"), c("activity.col.requestedBy"), c("activity.col.waitingFor"), c("activity.col.since")]}
+        row={(d) => (
+          <>
+            <DeploymentCell d={d} />
+            <td className={`${td} font-mono`}>{d.version || "—"}</td>
+            <td className={td}>{d.requested_by || "—"}</td>
+            <td className={td}>
+              <ul className="flex flex-col gap-1">
+                {(d.after?.dependencies ?? [])
+                  .filter((x) => x.state !== "SUCCESS")
+                  .map((x) => (
+                    <li key={x.id} className="flex flex-wrap items-center gap-2">
+                      <Link to={`/deployments/${encodeURIComponent(x.id)}`} className="font-mono text-xs hover:text-accent hover:underline">
+                        {shortId(x.id)}
+                      </Link>
+                      <StatusBadge state={x.state} />
+                    </li>
+                  ))}
+              </ul>
             </td>
             <td className={td}>
               <When iso={d.created_at} />

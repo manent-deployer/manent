@@ -77,7 +77,7 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 !!! note
     The inventory examines the last 10,000 deploys. An application that has not been released for much longer may not appear: in that case the target system is the source of truth.
 
-## Promotion
+## Promotion { #promozione }
 
 `requires` lists the environments in which **the same artifact** must already have been released successfully: same application, same name and same version and, if the descriptor sets `artifact.sha256`, same hash. A deploy that does not respect the rule is rejected at enqueue time (`422`):
 

@@ -9,10 +9,12 @@ import (
 
 // Stati, tipi di deploy ed esiti delle approvazioni.
 const (
-	StateScheduled        = service.StateScheduled
-	StateAwaitingApproval = service.StateAwaitingApproval
-	StateRejected         = service.StateRejected
-	StateExpired          = service.StateExpired
+	StateScheduled         = service.StateScheduled
+	StateAwaitingApproval  = service.StateAwaitingApproval
+	StateRejected          = service.StateRejected
+	StateExpired           = service.StateExpired
+	StateWaitingDependency = service.StateWaitingDependency
+	StateDependencyFailed  = service.StateDependencyFailed
 
 	KindDeploy    = service.KindDeploy
 	KindPromotion = service.KindPromotion
@@ -22,6 +24,16 @@ const (
 	ApprovalApproved = service.ApprovalApproved
 	ApprovalRejected = service.ApprovalRejected
 	ApprovalExpired  = service.ApprovalExpired
+)
+
+// Stati dei workflow (gli stessi di DBOS).
+const (
+	StatePending   = service.StatePending
+	StateEnqueued  = service.StateEnqueued
+	StateDelayed   = service.StateDelayed
+	StateSuccess   = service.StateSuccess
+	StateError     = service.StateError
+	StateCancelled = service.StateCancelled
 )
 
 // Errori del servizio.
@@ -46,6 +58,11 @@ type (
 	WorkerTask           = service.WorkerTask
 	ActivityFilter       = service.ActivityFilter
 	Activity             = service.Activity
+	ReleaseService       = service.ReleaseService
+	ReleaseStatus        = service.ReleaseStatus
+	ReleaseDeployState   = service.ReleaseDeployState
+	AfterState           = service.AfterState
+	DependencyState      = service.DependencyState
 	Identity             = service.Identity
 	Grant                = service.Grant
 	Validation           = service.Validation

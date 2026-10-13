@@ -58,6 +58,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--no-wait` | Prints the ID and exits immediately, without waiting. |
 | `--timeout` | Maximum wait (e.g. `30m`). When it expires the command exits, but the deploy continues. |
 | `--dry-run` | Runs the deploy as a [simulation](dry-run.md). |
+| `--after <id>` | Starts the deploy only after the deploy `<id>` has succeeded (repeatable): see [Deploy chains](catene.md). |
 
 Scheduled deploys (`schedule` in the descriptor) and those [awaiting approval](governance.md#approvazioni) are not waited for: the command prints the state and exits.
 
@@ -122,6 +123,17 @@ manent dora [--since 30d] [-a <application>] [-e <environment>]
 
 See [Observability](../operazioni/osservabilita.md).
 
+## Composite releases
+
+```sh
+manent release submit -f release.yml [--no-wait] [--timeout 2h]   # submits and follows the release
+manent release status <id>
+manent release list [-n 20]
+manent release cancel <id>
+```
+
+`submit` prints a line for every change of state of a deploy (and of its rollback) and exits with an error if the release does not succeed. See [Deploy chains](catene.md#release-composte).
+
 ## Activity and workers { #attivita-e-worker }
 
 ```sh
@@ -129,7 +141,7 @@ manent activity [-a <application>] [-e <environment>] [-w 5s] [--json]   # activ
 manent workers [-w 5s] [--json]                                           # workers and their work
 ```
 
-`activity` shows the deploys that have not finished yet, grouped as **running** (with the worker that runs them, the last recorded step and the wave progress), **awaiting approval**, **queued** (waiting for a free slot of the environment) and **scheduled** (`schedule.at`). Only deploys you can read are listed.
+`activity` shows the deploys that have not finished yet, grouped as **running** (with the worker that runs them, the last recorded step and the wave progress), **awaiting approval**, **waiting for dependencies** (with the deploys still awaited), **queued** (waiting for a free slot of the environment) and **scheduled** (`schedule.at`). Only deploys you can read are listed.
 
 `workers` lists the registered workers with state (`alive`, `stale` when the heartbeat is missing, `stopped`, `unregistered` for an executor that has pending workflows but is not in the registry), region, workflow and binary versions, last heartbeat and the workflows running on each: deploys, wave steps in a region, health gates, approvals waiting for a decision. It requires the [`platform.read`](../operazioni/accesso.md#permessi-rbac) permission; workflows of applications you cannot read are only counted.
 

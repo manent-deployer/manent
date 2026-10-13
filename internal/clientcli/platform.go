@@ -131,6 +131,7 @@ func printActivity(out io.Writer, a *service.Activity, now time.Time) error {
 			return strings.TrimSpace(dash(s.Executor) + "  " + stepOf(s))
 		}},
 		{"In attesa di approvazione", a.AwaitingApproval, func(s service.Status) string { return ago(&s.CreatedAt, now) }, approvalOf},
+		{"In attesa delle dipendenze", a.WaitingDependency, func(s service.Status) string { return ago(&s.CreatedAt, now) }, dependenciesOf},
 		{"In coda", a.Queued, func(s service.Status) string { return ago(&s.CreatedAt, now) }, func(s service.Status) string { return dash(s.Queue) }},
 		{"Pianificati", a.Delayed, func(s service.Status) string { return at(s.ScheduledAt, now) }, func(service.Status) string { return "" }},
 	}
@@ -195,6 +196,23 @@ func approvalOf(s service.Status) string {
 		}
 	}
 	return r
+}
+
+// dependenciesOf elenca le dipendenze non ancora riuscite con il loro stato.
+func dependenciesOf(s service.Status) string {
+	if s.After == nil {
+		return ""
+	}
+	var parts []string
+	for _, d := range s.After.Dependencies {
+		if d.State != service.StateSuccess {
+			parts = append(parts, d.ID+" ("+d.State+")")
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "attende " + strings.Join(parts, ", ")
 }
 
 func versionOf(w service.WorkerInfo) string {

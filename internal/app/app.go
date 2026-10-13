@@ -385,12 +385,22 @@ type components struct {
 // service costruisce il servizio esposto a CLI e API: l'Engine avvolto dai permessi.
 // executors fornisce l'elenco dei worker (Admin, aperto al primo uso in modalità client).
 func (c *components) service(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) engine.Service {
-	eng := engine.NewService(engine.ServiceOptions{
+	return c.guard(c.engine(cfg, client, executors))
+}
+
+// engine costruisce l'Engine senza permessi: il worker lo usa per i rollback delle release,
+// già autorizzati all'invio.
+func (c *components) engine(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) *engine.Engine {
+	return engine.NewService(engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
 		Resolver: c.resolver, Governance: c.governance, Health: c.health, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	})
+}
+
+// guard avvolge l'Engine con i permessi.
+func (c *components) guard(eng *engine.Engine) engine.Service {
 	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Logger: c.log.With("component", "authz")}
 }
 
@@ -511,6 +521,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		HealthTimeout:        cfg.Rollout.CheckTimeout,
 		Region:               cfg.DBOS.Region,
 		RegionRouting:        cfg.DBOS.RegionRouting,
+		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
 		Hostname:             host,
 		Maintenance: engine.MaintenanceOptions{
@@ -525,6 +536,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		}
 		return nil, err
 	}
+	eng := c.engine(cfg, w.Client(), w.Admin())
+	w.SetService(eng)
 	if err := w.Launch(); err != nil {
 		if reg != nil {
 			_ = reg.Close()
@@ -534,7 +547,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	return &App{
 		Config:   cfg,
 		Logger:   c.log,
-		Service:  c.service(cfg, w.Client(), w.Admin()),
+		Service:  c.guard(eng),
 		worker:   w,
 		plugins:  c.plugins,
 		closers:  c.closers,

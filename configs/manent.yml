@@ -29,6 +29,10 @@ rollout:
   # alertmanager_url: http://alertmanager:9093
   check_timeout: 30s
 
+# Dipendenze tra deploy (after) e release composte (docs: Catene di deploy).
+chains:
+  poll_interval: 5s
+
 # Registro dei worker e recovery dei workflow di un worker perso (docs: Recovery, arresto e retention).
 recovery:
   heartbeat_interval: 15s

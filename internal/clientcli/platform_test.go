@@ -32,13 +32,15 @@ func TestStampaWorkerEAttivita(t *testing.T) {
 	a := &service.Activity{
 		Running: []service.Status{{ID: "d1", Application: "api", Environment: "prod", Version: "1.2.0", Executor: "w1", LastStep: "deploy", StartedAt: &beat, RolloutProgress: "1/3"}},
 		Queued:  []service.Status{{ID: "d2", Application: "api", Environment: "prod", Queue: "deployments", CreatedAt: beat}},
+		WaitingDependency: []service.Status{{ID: "d4", Application: "web", Environment: "prod", CreatedAt: beat,
+			After: &service.AfterState{Dependencies: []service.DependencyState{{ID: "d1", State: "PENDING"}, {ID: "d0", State: "SUCCESS"}}}}},
 		Delayed: []service.Status{{ID: "d3", Application: "api", Environment: "test", ScheduledAt: &at, DryRun: true}},
 	}
 	out.Reset()
 	if err := printActivity(&out, a, now); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"In esecuzione (1)", "step deploy, ondate 1/3", "In coda (1)", "deployments", "Pianificati (1)", "d3 (dry-run)", "tra 1h0m0s"} {
+	for _, want := range []string{"In attesa delle dipendenze (1)", "attende d1 (PENDING)", "In esecuzione (1)", "step deploy, ondate 1/3", "In coda (1)", "deployments", "Pianificati (1)", "d3 (dry-run)", "tra 1h0m0s"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("manca %q in\n%s", want, out.String())
 		}

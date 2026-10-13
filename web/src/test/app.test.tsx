@@ -8,7 +8,7 @@ import type { Api } from "@/api/client";
 import type { Lang } from "@/i18n/i18n";
 import type { UIConfig } from "@/lib/config";
 
-import { dep, fakeApi, identity } from "./fakeApi";
+import { dep, fakeApi, identity, now } from "./fakeApi";
 
 const config: UIConfig = { auth_mode: "none", version: "1.2.3" };
 
@@ -154,6 +154,7 @@ describe("attività", () => {
   const activity = {
     running: [dep({ id: "r1", state: "PENDING", executor: "worker-eu-1", last_step: "deploy", started_at: "2026-10-11T09:58:00Z" })],
     awaiting_approval: [],
+    waiting_dependency: [],
     queued: [dep({ id: "q1", state: "ENQUEUED", environment: "test", queue: "deployments" })],
     delayed: [],
   };
@@ -197,11 +198,70 @@ describe("attività", () => {
     const { api, calls } = fakeApi(({ path }) => {
       if (path === "/api/v1/me") return { json: identity() };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
-      if (path === "/api/v1/activity") return { json: { running: [], awaiting_approval: [], queued: [], delayed: [] } };
+      if (path === "/api/v1/activity") return { json: { running: [], awaiting_approval: [], waiting_dependency: [], queued: [], delayed: [] } };
     });
     renderApp(api, "/activity");
     expect(await screen.findByText("No active deployments.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /Workers/ })).not.toBeInTheDocument();
     expect(calls.some((c) => c.path === "/api/v1/workers")).toBe(false);
+  });
+});
+
+describe("catene", () => {
+  it("mostra le dipendenze di un deploy in attesa", async () => {
+    const waiting = dep({
+      id: "api-2",
+      state: "WAITING_DEPENDENCY",
+      release: "r1",
+      after: { status: "waiting", expires_at: "2026-10-12T10:00:00Z", dependencies: [{ id: "db-2", state: "PENDING" }] },
+    });
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity({ auth_enabled: false }) };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/deployments/api-2") return { json: waiting };
+      if (path === "/api/v1/deployments/api-2/steps") return { json: { steps: [] } };
+      if (path === "/api/v1/deployments/api-2/logs") return { json: { lines: [], next: 0, done: false } };
+      if (path === "/api/v1/deployments/api-2/events") return { status: 404 };
+    });
+    renderApp(api, "/deployments/api-2");
+    const list = await screen.findByRole("list", { name: "Deploys this deploy depends on" });
+    expect(within(list).getByRole("link", { name: "db-2" })).toHaveAttribute("href", "/deployments/db-2");
+    expect(within(list).getByText("Running")).toBeInTheDocument();
+    expect(screen.getAllByText("Waiting for dependencies").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "r1" })).toHaveAttribute("href", "/releases/r1");
+  });
+
+  it("mostra una release con i deploy e il rollback", async () => {
+    const rel = {
+      id: "r2",
+      state: "ERROR",
+      on_failure: "rollback",
+      requested_by: "oidc:alice",
+      created_at: now,
+      updated_at: now,
+      error: "deploy non riusciti: api: ERROR",
+      deploys: [
+        { name: "db", deployment_id: "r2.db", application: "db", environment: "prod", version: "2.0.0", state: "SUCCESS", rollback_id: "r2.rollback.db", rollback_state: "SUCCESS" },
+        { name: "api", deployment_id: "r2.api", application: "api", environment: "prod", version: "2.0.0", after: ["db"], state: "ERROR" },
+        { name: "web", deployment_id: "r2.web", application: "web", environment: "prod", after: ["api"], state: "CANCELLED" },
+      ],
+    };
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity({ auth_enabled: false }) };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/releases") return { json: { releases: [rel] } };
+      if (path === "/api/v1/releases/r2") return { json: rel };
+    });
+    const user = userEvent.setup();
+    renderApp(api, "/releases");
+    const table = await screen.findByRole("table", { name: "Releases, newest first" });
+    expect(within(table).getByText("1/3 succeeded")).toBeInTheDocument();
+    await user.click(within(table).getByRole("link", { name: "r2" }));
+    const deploys = await screen.findByRole("table", { name: /Deploys of the release/ });
+    const rows = within(deploys).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent(/db.*Succeeded.*Rollback.*Succeeded/);
+    expect(rows[2]).toHaveTextContent(/api.*db.*Failed/);
+    expect(screen.getByRole("alert")).toHaveTextContent("api: ERROR");
+    expect(screen.queryByRole("button", { name: "Cancel release" })).not.toBeInTheDocument();
   });
 });

@@ -1,0 +1,10 @@
+# Deploy "db" della release di esempio (examples/release.yml). Senza id: nella release
+# riceve l'ID "<release>.db".
+apiVersion: manent/v1
+application: shop-db
+environment: prod
+artifact:
+  type: migration
+  name: shop-db
+  version: 2.4.0
+  source: https://artifacts.example.com/shop-db/2.4.0/shop-db-2.4.0.tar.gz

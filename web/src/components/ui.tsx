@@ -8,10 +8,12 @@ import {
   Clock,
   Copy,
   Hourglass,
+  Link2,
   Loader2,
   PauseCircle,
   ShieldQuestion,
   Undo2,
+  Unlink,
   X,
   XCircle,
   type LucideIcon,
@@ -133,6 +135,8 @@ const stateStyle: Record<string, { tone: Tone; icon: LucideIcon; spin?: boolean 
   DELAYED: { tone: "violet", icon: Clock },
   SCHEDULED: { tone: "violet", icon: Clock },
   AWAITING_APPROVAL: { tone: "warn", icon: ShieldQuestion },
+  WAITING_DEPENDENCY: { tone: "violet", icon: Link2 },
+  DEPENDENCY_FAILED: { tone: "bad", icon: Unlink },
 };
 
 /** StatusBadge mostra lo stato di un deploy con icona e testo: il colore non è mai l'unico segnale. */

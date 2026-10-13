@@ -70,6 +70,28 @@ func (m *mockService) Activity(_ context.Context, f engine.ActivityFilter) (*eng
 	return &engine.Activity{Running: []engine.Status{{ID: "dep-1", State: "PENDING", Executor: "w1", LastStep: "deploy"}}}, nil
 }
 
+func (m *mockService) SubmitRelease(_ context.Context, r *descriptor.Release) (*engine.ReleaseStatus, error) {
+	m.op = "release:" + r.ID
+	return &engine.ReleaseStatus{ID: r.ID, State: "PENDING"}, nil
+}
+
+func (m *mockService) ReleaseStatus(_ context.Context, id string) (*engine.ReleaseStatus, error) {
+	if id != "r1" {
+		return nil, engine.ErrNotFound
+	}
+	return &engine.ReleaseStatus{ID: id, State: "SUCCESS"}, nil
+}
+
+func (m *mockService) ListReleases(_ context.Context, limit int) ([]engine.ReleaseStatus, error) {
+	m.op = "releases:" + strconv.Itoa(limit)
+	return []engine.ReleaseStatus{{ID: "r1"}}, nil
+}
+
+func (m *mockService) CancelRelease(_ context.Context, id string) error {
+	m.op = "cancel-release:" + id
+	return nil
+}
+
 func (m *mockService) Me(ctx context.Context) (*engine.Identity, error) {
 	p := auth.FromContext(ctx)
 	return &engine.Identity{Subject: p.String(), Name: p.Subject, Method: p.Method}, nil
@@ -409,6 +431,26 @@ func TestOsservabilita(t *testing.T) {
 	w = do(r, http.MethodGet, "/api/v1/activity?application=app&environment=prod", "")
 	if w.Code != http.StatusOK || svc.op != "activity:app:prod" || !strings.Contains(w.Body.String(), `"last_step":"deploy"`) {
 		t.Errorf("activity: %d %s (%s)", w.Code, w.Body, svc.op)
+	}
+
+	rel := `{"apiVersion":"manent/v1","kind":"Release","id":"r1","deploys":[{"name":"api","descriptor":` + validJSON + `}]}`
+	if w := do(r, http.MethodPost, "/api/v1/releases", rel); w.Code != http.StatusAccepted || svc.op != "release:r1" {
+		t.Errorf("submit release: %d %s", w.Code, w.Body)
+	}
+	if w := do(r, http.MethodPost, "/api/v1/releases", `{"apiVersion":"manent/v1","kind":"Release","id":"r1","deploys":[]}`); w.Code != http.StatusBadRequest {
+		t.Errorf("release senza deploy: %d", w.Code)
+	}
+	if w := do(r, http.MethodGet, "/api/v1/releases/r1", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"state":"SUCCESS"`) {
+		t.Errorf("release: %d %s", w.Code, w.Body)
+	}
+	if w := do(r, http.MethodGet, "/api/v1/releases/altra", ""); w.Code != http.StatusNotFound {
+		t.Errorf("release inesistente: %d", w.Code)
+	}
+	if w := do(r, http.MethodGet, "/api/v1/releases?limit=5", ""); w.Code != http.StatusOK || svc.op != "releases:5" {
+		t.Errorf("elenco release: %d %s", w.Code, svc.op)
+	}
+	if w := do(r, http.MethodPost, "/api/v1/releases/r1/cancel", ""); w.Code != http.StatusNoContent || svc.op != "cancel-release:r1" {
+		t.Errorf("annullamento release: %d %s", w.Code, svc.op)
 	}
 
 	w = do(r, http.MethodGet, "/metrics", "")

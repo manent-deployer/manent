@@ -107,6 +107,10 @@ func toTask(w dbos.WorkflowStatus) WorkerTask {
 		t.Kind, t.DeploymentID = service.TaskApproval, strings.TrimSuffix(w.ID, approvalSuffix)
 	case scheduledWorkflowName:
 		t.Kind = service.TaskSchedule
+	case afterWorkflowName:
+		t.Kind, t.DeploymentID = service.TaskAfter, strings.TrimSuffix(w.ID, afterSuffix)
+	case releaseWorkflowName:
+		t.Kind = service.TaskRelease
 	case passWorkflowName:
 		t.Kind, t.DeploymentID = service.TaskPass, cmp.Or(w.ParentWorkflowID, parentID(w.ID, ".pass.", ".undo."))
 	case gateWorkflowName:
@@ -130,14 +134,14 @@ func parentID(id string, seps ...string) string {
 // registrato, al più per maxPendingChecked deploy.
 func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, error) {
 	wfs, err := dbos.ListWorkflows(e.client,
-		dbos.WithFilterName(workflowName, approvalWorkflowName),
+		dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
 		dbos.WithFilterStatus(dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed),
 		dbos.WithFilterSortDesc(), dbos.WithFilterLimit(maxActive),
 		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	if err != nil {
 		return nil, err
 	}
-	a := &Activity{Running: []Status{}, AwaitingApproval: []Status{}, Queued: []Status{}, Delayed: []Status{}, Truncated: len(wfs) == maxActive}
+	a := &Activity{Running: []Status{}, AwaitingApproval: []Status{}, WaitingDependency: []Status{}, Queued: []Status{}, Delayed: []Status{}, Truncated: len(wfs) == maxActive}
 	match := ListFilter{Application: f.Application, Environment: f.Environment, Match: f.Match}
 	detailed := 0
 	for _, w := range wfs {
@@ -145,7 +149,7 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 		if !match.Matches(s) {
 			continue
 		}
-		if w.Status == dbos.WorkflowStatusPending && detailed < maxPendingChecked {
+		if (w.Status == dbos.WorkflowStatusPending || w.Name == afterWorkflowName) && detailed < maxPendingChecked {
 			detailed++
 			if full, err := e.Status(ctx, s.ID); err == nil {
 				s = *full
@@ -159,6 +163,8 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 			a.Running = append(a.Running, s)
 		case StateAwaitingApproval:
 			a.AwaitingApproval = append(a.AwaitingApproval, s)
+		case StateWaitingDependency:
+			a.WaitingDependency = append(a.WaitingDependency, s)
 		case StateEnqueued:
 			a.Queued = append(a.Queued, s)
 		case StateDelayed:
@@ -186,12 +192,5 @@ func (e *Engine) lastStep(id string) string {
 	}
 	return steps[len(steps)-1].StepName
 }
-
-// Stati dei workflow usati da Activity.
-const (
-	StatePending  = service.StatePending
-	StateEnqueued = service.StateEnqueued
-	StateDelayed  = service.StateDelayed
-)
 
 var _ service.PlatformService = (*Engine)(nil)

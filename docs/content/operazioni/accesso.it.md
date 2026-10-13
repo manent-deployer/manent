@@ -163,6 +163,7 @@ rbac:
 - **Promozione.** Richiede `deployment.read` sull'ambiente di origine e `deployment.submit` su quello di destinazione.
 - **Approvazioni.** Chi ha richiesto un deploy non può approvarlo, salvo `allow_self` nella regola.
 - **Freeze.** Le finestre di freeze sono visibili a ogni identità autenticata.
+- **Dipendenze e release.** Un deploy con [`after`](../guida/catene.md) richiede `deployment.read` sulle sue dipendenze. Una release composta richiede i permessi di ogni deploy (più `deployment.rollback` con `onFailure: rollback`); leggerla o annullarla richiede `deployment.read` o `deployment.cancel` su tutti i suoi deploy.
 - **Attività e worker.** `GET /activity` elenca solo i deploy che l'identità può leggere. `GET /workers` richiede `platform.read`; dei workflow in esecuzione mostra solo quelli di applicazioni e ambienti leggibili e conta gli altri in `hidden_tasks`.
 
 ### Client e server
@@ -183,6 +184,7 @@ Ogni azione rilevante produce una voce di audit:
 | `deployment.promote`, `deployment.rollback` | Promozione e rollback manuale. |
 | `deployment.approve`, `deployment.reject` | Decisione di un approvatore. |
 | `approval.finish` | Esito di un'approvazione (`approved`, `rejected`, `expired`), registrato dal worker. |
+| `after.finish`, `release.finish` | Esito dell'attesa delle dipendenze e di una release composta, registrato dal worker. |
 | `deployment.cancel` | Annullamento. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Operazioni sulle schedule. |
 | `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Solo se negate. |

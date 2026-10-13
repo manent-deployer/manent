@@ -41,7 +41,7 @@ const (
 // Terminal indica gli stati finali di un deploy.
 func Terminal(state string) bool {
 	switch state {
-	case StateSuccess, StateError, StateCancelled, StateMaxRecoveryAttempts, StateRejected, StateExpired:
+	case StateSuccess, StateError, StateCancelled, StateMaxRecoveryAttempts, StateRejected, StateExpired, StateDependencyFailed:
 		return true
 	}
 	return false
@@ -71,6 +71,7 @@ type Service interface {
 	InsightService
 	AccessService
 	PlatformService
+	ReleaseService
 }
 
 // DeploymentService gestisce i deploy, immediati o pianificati.
@@ -209,6 +210,10 @@ type Status struct {
 	// LastStep è l'ultimo step registrato di un deploy in corso (solo nell'attività).
 	LastStep string         `json:"last_step,omitempty"`
 	Approval *ApprovalState `json:"approval,omitempty"`
+	// After è lo stato delle dipendenze, se il deploy ne ha.
+	After *AfterState `json:"after,omitempty"`
+	// Release è la release composta a cui appartiene il deploy.
+	Release string `json:"release,omitempty"`
 	// Rollout è lo stato del rilascio a ondate, se il deploy ne ha uno.
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// RolloutProgress riassume il rollout negli elenchi: "stadi superati/stadi totali".

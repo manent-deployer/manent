@@ -37,6 +37,10 @@ Authorization: Bearer <token>
 | `GET` | `/api/v1/approvals` | Deploy in attesa di una decisione che il chiamante può prendere. |
 | `GET` | `/api/v1/me` | Identità del chiamante e ruoli che le si applicano. |
 | `GET` | `/api/v1/activity` | Deploy non ancora conclusi: in esecuzione, in attesa di approvazione, in coda, pianificati. |
+| `POST` | `/api/v1/releases` | Invia una [release composta](catene.md#release-composte). |
+| `GET` | `/api/v1/releases` | Elenca le release più recenti. |
+| `GET` | `/api/v1/releases/{id}` | Stato di una release e dei suoi deploy. |
+| `POST` | `/api/v1/releases/{id}/cancel` | Annulla i deploy non conclusi e la release. |
 | `GET` | `/api/v1/workers` | Worker registrati con stato, heartbeat e workflow in esecuzione (`platform.read`). |
 | `POST` | `/api/v1/promotions` | Promuove un artefatto da un ambiente a un altro. |
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
@@ -158,6 +162,8 @@ GET /api/v1/deployments/{id}
 | `CANCELLED` | Annullato. |
 | `AWAITING_APPROVAL` | In attesa delle [approvazioni](governance.md#approvazioni): `approval` riporta le decisioni. |
 | `REJECTED`, `EXPIRED` | Respinto o non approvato in tempo: il deploy non è stato eseguito. |
+| `WAITING_DEPENDENCY` | In attesa che i deploy in [`after`](catene.md) riescano: `after` ne riporta lo stato. |
+| `DEPENDENCY_FAILED` | Una dipendenza non è riuscita o l'attesa è scaduta: il deploy non è stato eseguito. |
 
 Un ID inesistente restituisce `404`.
 
@@ -264,6 +270,24 @@ Restituiscono `{"inventory": [...]}` e `{"freezes": [...]}`. Le finestre di free
  "start": "2026-10-16T18:00:00+02:00", "end": "2026-10-19T08:00:00+02:00", "recurring": true}
 ```
 
+## Release composte { #release-composte }
+
+`POST /api/v1/releases` invia una [release composta](catene.md#release-composte). Il corpo è la release in JSON con i descrittori inclusi (`descriptor`; `file` è solo per la CLI):
+
+```json
+{
+  "apiVersion": "manent/v1", "kind": "Release", "id": "shop-2026-10", "onFailure": "rollback",
+  "deploys": [
+    {"name": "db",  "descriptor": {"apiVersion": "manent/v1", "application": "shop-db", "environment": "prod", "artifact": {"type": "migration", "name": "shop-db", "version": "42", "source": "https://…"}}},
+    {"name": "api", "after": ["db"], "descriptor": {"apiVersion": "manent/v1", "application": "shop-api", "environment": "prod", "artifact": {"type": "application", "name": "shop-api", "version": "2.4.0", "source": "https://…"}}}
+  ]
+}
+```
+
+Risponde `202` con lo stato della release: `id`, `state` (`PENDING`, `SUCCESS`, `ERROR`, `CANCELLED`), `on_failure`, `requested_by`, `error` e `deploys`, in ordine topologico, con `name`, `deployment_id`, `application`, `environment`, `version`, `after`, `state`, `error`, `rollback_id` e `rollback_state`. Una release non valida (cicli, dipendenze sconosciute, `schedule` o `dryRun` in un deploy) è `400`; un deploy rifiutato da policy o governance è `422`. Inviare di nuovo lo stesso `id` restituisce la release esistente.
+
+`GET /api/v1/releases[?limit=]` restituisce `{"releases": [...]}`, `GET /api/v1/releases/{id}` una singola release, `POST /api/v1/releases/{id}/cancel` la annulla (`204`).
+
 ## Log, timeline e metriche DORA
 
 ```sh
@@ -303,9 +327,9 @@ Un commento `: keep-alive` ogni 15 secondi tiene aperta la connessione attravers
 
 ### Attività e worker
 
-`GET /api/v1/activity[?application=&environment=]` restituisce i deploy non ancora conclusi, dal più recente, in quattro elenchi: `running` (con `executor`, `started_at`, `last_step`, l'ultimo step registrato, e `rollout_progress`), `awaiting_approval`, `queued` (dal più vecchio: escono dalla coda in quest'ordine) e `delayed` (per orario di partenza). `truncated` è `true` se i workflow attivi erano più di quelli esaminati (1000). Contiene solo i deploy che il chiamante può leggere.
+`GET /api/v1/activity[?application=&environment=]` restituisce i deploy non ancora conclusi, dal più recente, in cinque elenchi: `running` (con `executor`, `started_at`, `last_step`, l'ultimo step registrato, e `rollout_progress`), `awaiting_approval`, `waiting_dependency` (con `after`), `queued` (dal più vecchio: escono dalla coda in quest'ordine) e `delayed` (per orario di partenza). `truncated` è `true` se i workflow attivi erano più di quelli esaminati (1000). Contiene solo i deploy che il chiamante può leggere.
 
-`GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. La CLI li espone come `manent activity` e `manent workers`.
+`GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, `after`, `release`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. La CLI li espone come `manent activity` e `manent workers`.
 
 Le richieste propagano il contesto di tracing W3C (`traceparent`): la traccia di un client, ad esempio una pipeline di CI, prosegue nell'API e negli step del worker.
 
