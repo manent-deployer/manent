@@ -342,8 +342,11 @@ make web-dev    # server di sviluppo su http://127.0.0.1:5173
 | `remote-copy` | file (`application`), copiato via SSH/SFTP con layout `releases` e symlink `current` | server e VM |
 | `container` | immagine di un registry (`oci://registry/repo:tag`), avviata per digest con Docker o Podman via SSH | server e VM |
 | `kubernetes` | manifest YAML/JSON o archivio `.tar.gz`, applicati con server-side apply e attesa del rollout | cluster Kubernetes |
+| `ecs` | immagine di un registry: nuova revisione della task definition, aggiornamento del servizio e attesa del deployment | servizi Amazon ECS (Fargate o EC2), una region per target |
+| `lambda` | immagine ECR o pacchetto `.zip`: aggiornamento del codice, versione pubblicata e alias spostato | funzioni AWS Lambda, una region per target |
+| `cloudrun` | immagine di un registry: nuova revisione e traffico sull'ultima revisione pronta | servizi Google Cloud Run, una region per target |
 
-Tutti e tre supportano dry-run, lettura della release in esercizio e rollback. Per le immagini, il digest del manifest diventa lo sha256 dell'artefatto: promozioni e rollback rilasciano esattamente l'immagine verificata.
+Tutti supportano dry-run, lettura della release in esercizio e rollback. Per le immagini, il digest del manifest diventa lo sha256 dell'artefatto: promozioni e rollback rilasciano esattamente l'immagine verificata.
 
 ## Scrivere un plugin di deploy
 

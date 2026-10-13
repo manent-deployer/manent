@@ -115,6 +115,18 @@ rollback:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
+    ecs:                   # servizi ECS: torna alla task definition precedente
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    lambda:                # funzioni Lambda: riporta l'alias alla versione precedente
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    cloudrun:              # servizi Cloud Run: traffico sulla revisione precedente
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
     migration:
       allowed: false       # le migration di database di norma non sono reversibili
 
@@ -193,6 +205,9 @@ governance:
 #     remote-copy: [dest_dir, verify_checksum, keep_releases]   # mai i comandi (post_command, ...)
 #     container: [container_name, wait_timeout]                 # mai run_args e command
 #     kubernetes: [wait_timeout, "var.*"]                        # namespace e credenziali solo dall'envconfig
+#     ecs: [wait_timeout]                                         # servizio, role_arn e credenziali solo dall'envconfig
+#     lambda: [wait_timeout]
+#     cloudrun: [wait_timeout]
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
 
@@ -256,6 +271,16 @@ plugins:
     # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent nel cluster
     insecure_skip_tls_verify: false
     artifact_types: [kubernetes]
+  # Servizi cloud gestiti: un target per region. Credenziali AWS dalla catena standard
+  # dell'SDK (IRSA, ruolo del task o dell'istanza) o dai parametri *_secret e role_arn;
+  # Google dalle Application Default Credentials o da credentials_secret.
+  ecs:                     # immagini su servizi Amazon ECS (target: region o region/cluster)
+    artifact_types: [ecs]
+    # endpoint: http://localhost:4566   # LocalStack
+  lambda:                  # codice di funzioni AWS Lambda (immagine ECR o .zip), con alias
+    artifact_types: [lambda]
+  cloudrun:                # immagini su servizi Google Cloud Run (parametro project)
+    artifact_types: [cloudrun]
   # Plugin esterno: binario separato avviato da manent al primo deploy (make plugins).
   # Le altre chiavi, oltre a external, sono la configurazione passata al plugin.
   # remote-copy-ext:

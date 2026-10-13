@@ -493,6 +493,9 @@ func Default() *Config {
 			"application": {Allowed: true},
 			"container":   {Allowed: true},
 			"kubernetes":  {Allowed: true},
+			"ecs":         {Allowed: true},
+			"lambda":      {Allowed: true},
+			"cloudrun":    {Allowed: true},
 			"migration":   {Allowed: false},
 		}},
 		Pipeline: Pipeline{Steps: []Step{

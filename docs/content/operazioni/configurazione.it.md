@@ -81,7 +81,7 @@ Vedi [Callback](../guida/callback.md).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `locator` | `plugin` | Strategia di default per individuare la release a cui tornare. |
-| `artifact_types.<tipo>.allowed` | `application`: `true`, `migration`: `false` | Il rollback è possibile per il tipo. I tipi non elencati non lo ammettono. |
+| `artifact_types.<tipo>.allowed` | `application`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`: `true`; `migration`: `false` | Il rollback è possibile per il tipo. I tipi non elencati non lo ammettono. |
 | `artifact_types.<tipo>.enabled` | `false` | Default per i deploy del tipo. Richiede `allowed`. |
 | `artifact_types.<tipo>.on` | `[deploy, post-test, activation]` | Step il cui fallimento avvia il rollback. |
 | `artifact_types.<tipo>.locator` | | Locator specifico del tipo. |
@@ -155,7 +155,7 @@ plugins:
     artifact_types: [container]
 ```
 
-Vedi [remote-copy](../plugins/remote-copy.md) e [Plugin esterni](../plugins/esterni.md).
+Plugin compilati in manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md). Vedi anche [Plugin esterni](../plugins/esterni.md).
 
 ### `rollout`
 

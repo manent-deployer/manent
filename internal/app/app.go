@@ -44,8 +44,11 @@ import (
 	"github.com/joeg-ita/manent/internal/version"
 	"github.com/joeg-ita/manent/internal/webui"
 	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/joeg-ita/manent/plugins/cloudrun"
 	"github.com/joeg-ita/manent/plugins/container"
+	"github.com/joeg-ita/manent/plugins/ecs"
 	"github.com/joeg-ita/manent/plugins/kubernetes"
+	"github.com/joeg-ita/manent/plugins/lambda"
 	"github.com/joeg-ita/manent/plugins/remotecopy"
 )
 
@@ -124,6 +127,9 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 		remotecopy.Name: remotecopy.Factory,
 		container.Name:  container.Factory,
 		kubernetes.Name: kubernetes.Factory,
+		ecs.Name:        ecs.Factory,
+		lambda.Name:     lambda.Factory,
+		cloudrun.Name:   cloudrun.Factory,
 	} {
 		if err := reg.Register(name, f); err != nil {
 			return nil, err

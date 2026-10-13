@@ -7,7 +7,7 @@ import (
 )
 
 // TestClientLeggero verifica che il client non includa il motore: DBOS, driver di database,
-// plugin, SSH, server HTTP, metriche e tracing restano nel server.
+// plugin, SSH, SDK dei cloud, server HTTP, metriche e tracing restano nel server.
 func TestClientLeggero(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "github.com/joeg-ita/manent/cmd/manent").CombinedOutput()
 	if err != nil {
@@ -19,7 +19,7 @@ func TestClientLeggero(t *testing.T) {
 		"github.com/joeg-ita/manent/internal/engine", "github.com/joeg-ita/manent/internal/app",
 		"github.com/joeg-ita/manent/internal/steps", "github.com/joeg-ita/manent/plugins/",
 		"github.com/joeg-ita/manent/internal/secrets", "github.com/joeg-ita/manent/internal/extplugin",
-		"github.com/joeg-ita/manent/internal/webui",
+		"github.com/joeg-ita/manent/internal/webui", "github.com/aws/", "golang.org/x/oauth2/google",
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		for _, f := range forbidden {

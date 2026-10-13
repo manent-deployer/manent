@@ -81,7 +81,7 @@ See [Callbacks](../guida/callback.md).
 | Key | Default | Description |
 |---|---|---|
 | `locator` | `plugin` | Default strategy to find the release to go back to. |
-| `artifact_types.<type>.allowed` | `application`: `true`, `migration`: `false` | Rollback is possible for the type. Types not listed do not allow it. |
+| `artifact_types.<type>.allowed` | `application`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`: `true`; `migration`: `false` | Rollback is possible for the type. Types not listed do not allow it. |
 | `artifact_types.<type>.enabled` | `false` | Default for deploys of the type. Requires `allowed`. |
 | `artifact_types.<type>.on` | `[deploy, post-test, activation]` | Steps whose failure triggers rollback. |
 | `artifact_types.<type>.locator` | | Type-specific locator. |
@@ -155,7 +155,7 @@ plugins:
     artifact_types: [container]
 ```
 
-See [remote-copy](../plugins/remote-copy.md) and [External plugins](../plugins/esterni.md).
+Plugins compiled into manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md). See also [External plugins](../plugins/esterni.md).
 
 ### `rollout`
 

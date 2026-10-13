@@ -84,7 +84,7 @@ artifact:
 
     ---
 
-    The actual deploy is delegated to plugins: [remote-copy](plugins/remote-copy.md) for files over SSH, [container](plugins/container.md) for Docker and Podman on VMs, [kubernetes](plugins/kubernetes.md) for clusters. You can write new ones, also as separate binaries over gRPC.
+    The actual deploy is delegated to plugins: [remote-copy](plugins/remote-copy.md) for files over SSH, [container](plugins/container.md) for Docker and Podman on VMs, [kubernetes](plugins/kubernetes.md) for clusters, [ecs](plugins/ecs.md), [lambda](plugins/lambda.md) and [cloudrun](plugins/cloudrun.md) for managed cloud services. You can write new ones, also as separate binaries over gRPC.
 
     [:octicons-arrow-right-24: Writing a plugin](plugins/index.md)
 

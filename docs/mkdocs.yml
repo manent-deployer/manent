@@ -188,6 +188,9 @@ nav:
       - remote-copy: plugins/remote-copy.md
       - container: plugins/container.md
       - kubernetes: plugins/kubernetes.md
+      - ecs: plugins/ecs.md
+      - lambda: plugins/lambda.md
+      - cloudrun: plugins/cloudrun.md
       - External plugins: plugins/esterni.md
   - Use cases: casi-uso.md
   - Development: sviluppo.md
