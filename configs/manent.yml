@@ -204,7 +204,7 @@ governance:
 #   params:
 #     remote-copy: [dest_dir, verify_checksum, keep_releases]   # mai i comandi (post_command, ...)
 #     container: [container_name, wait_timeout]                 # mai run_args e command
-#     kubernetes: [wait_timeout, "var.*"]                        # namespace e credenziali solo dall'envconfig
+#     kubernetes: [wait_timeout, "var.*", "helm_value.*"]        # namespace e credenziali solo dall'envconfig
 #     ecs: [wait_timeout]                                         # servizio, role_arn e credenziali solo dall'envconfig
 #     lambda: [wait_timeout]
 #     cloudrun: [wait_timeout]
@@ -271,6 +271,10 @@ plugins:
     # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent nel cluster
     insecure_skip_tls_verify: false
     artifact_types: [kubernetes]
+    # helm:                # chart Helm (.tgz di helm package), renderizzati con helm template
+    #   command: helm      # incluso nell'immagine di manent-server
+    #   sha256: ""         # verifica del binario a ogni rendering
+    #   timeout: 2m
   # Servizi cloud gestiti: un target per region. Credenziali AWS dalla catena standard
   # dell'SDK (IRSA, ruolo del task o dell'istanza) o dai parametri *_secret e role_arn;
   # Google dalle Application Default Credentials o da credentials_secret.

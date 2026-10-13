@@ -1,6 +1,6 @@
 # kubernetes
 
-The `kubernetes` plugin releases manifests to one or more Kubernetes clusters. It uses server-side apply, waits for workloads to finish rolling out and keeps the release history in the cluster, which it uses to go back to the previous release. It talks directly to the cluster API: the worker needs neither `kubectl` nor `helm`.
+The `kubernetes` plugin releases manifests or Helm charts to one or more Kubernetes clusters. It uses server-side apply, waits for workloads to finish rolling out and keeps the release history in the cluster, which it uses to go back to the previous release. It talks directly to the cluster API: the worker does not need `kubectl`, and needs `helm` only to render charts.
 
 ## The artifact is the manifests
 
@@ -15,7 +15,7 @@ artifact:
   sha256: 8c1f…
 ```
 
-For Helm charts or Kustomize configurations, release the output generated in CI (`helm template`, `kustomize build`): the artifact stays immutable and verifiable.
+For a Helm chart see [Helm charts](#chart-helm). For Kustomize configurations, release the output generated in CI (`kustomize build`): the artifact stays immutable and verifiable.
 
 ### Variables
 
@@ -38,7 +38,51 @@ plugins:
     # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent inside the cluster
     insecure_skip_tls_verify: false      # true only in development
     artifact_types: [kubernetes]         # default
+    helm:                                # charts only
+      command: helm                      # default; included in the manent-server image
+      # sha256: "<sha256 of the binary>" # checked before every render
+      timeout: 2m                        # default
 ```
+
+## Helm charts { #chart-helm }
+
+The artifact can be a chart packaged with `helm package` (a `.tgz` with `<name>/Chart.yaml`), recognized automatically. The package is the artifact verified with the sha256 and promoted between environments; dependencies must be included (`helm package --dependency-update`).
+
+```yaml
+artifact:
+  type: kubernetes
+  name: shop
+  version: "1.4.0"
+  source: https://nexus.example.com/repository/charts/shop-1.4.0.tgz
+  sha256: 8c1f…
+```
+
+The chart is only **rendered** with `helm template`, for each cluster, as Argo CD does: the generated objects follow the same path as manifests (labels, server-side apply, history, rollout wait, prune, dry-run). Helm installs nothing and keeps no state in the cluster: no `sh.helm.release.v1` secrets, and `helm list` does not show the release. The rollback re-applies the objects saved in the history and does not need Helm.
+
+- **Cluster capabilities.** `--kube-version` and `--api-versions` come from the target cluster's discovery, so `.Capabilities.KubeVersion` and `.Capabilities.APIVersions.Has` answer as in a `helm install`.
+- **Values**, in increasing order of precedence: the chart's `values.yaml`, the files in `helm_values_files` (inside the chart, for example `values-prod.yaml`), `helm_values` (YAML), the single `helm_value.<path>` entries. Like the other parameters, they come from the [environment configuration](../guida/configurazione-ambiente.md).
+- **Hooks.** Hooks (`helm.sh/hook`) have no equivalent in server-side apply: by default they are not applied and are listed in the result (`helm_hooks_skipped`) and in the log. With `helm_hooks: apply` they are applied as normal objects, together with the others; a migration Job must then be idempotent or renamed at every version (for example with `{{ .Chart.AppVersion }}` in the name). Tests (`helm.sh/hook: test`) are never applied.
+- **CRDs** in the `crds/` folder are included and applied first (`helm_skip_crds: true` to leave them out).
+- **`lookup`** does not read the cluster during rendering and always returns an empty value.
+- **Isolation.** Helm runs with an empty environment and a temporary home: it does not inherit the worker's variables and reads no `KUBECONFIG`, repositories or local credentials. With `helm.sha256` the binary is checked before every use.
+- The `${...}` manifest variables do not apply to charts: use values.
+
+```yaml title="envconfig/shop/prod.yml"
+plugin: kubernetes
+targets:
+  - {host: k8s-eu1.example.com, labels: {region: eu-1}}
+params:
+  namespace: shop-prod
+  token_secret: kube-token
+  helm_values_files: values-prod.yaml
+  helm_value.replicaCount: "4"
+  helm_values: |
+    ingress:
+      enabled: true
+      host: shop.example.com
+```
+
+An application already installed with `helm install` can move to manent: server-side apply adopts its objects. Then delete only Helm's state (the `sh.helm.release.v1.<release>.*` secrets in the namespace), not the release with `helm uninstall`, which would delete the objects.
 
 ## Targets and credentials
 
@@ -76,12 +120,18 @@ The token's permissions decide what manent can change: a Role limited to the app
 | `keep_releases` | `5` | Releases kept in the history (at least 2). |
 | `require_image_digest` | `false` | `true`: reject workloads whose images are not pinned to a digest (`image@sha256:…`). |
 | `var.NAME` | | Value of `${NAME}` in the manifests. |
+| `helm_release` | application name | Helm release name (`.Release.Name`). |
+| `helm_values_files` | | Values files inside the chart, comma separated, applied in order. |
+| `helm_values` | | Values in YAML. |
+| `helm_value.<path>` | | A single value, parsed as YAML: `helm_value.image.tag: "1.4.0"`, `helm_value.replicaCount: "3"`. |
+| `helm_hooks` | `skip` | `apply`: apply the chart's hooks as normal objects. |
+| `helm_skip_crds` | `false` | `true`: do not apply the CRDs in the `crds/` folder. |
 
 ## How it works
 
 For each cluster, in sequence:
 
-1. it reads the manifests, substitutes the variables and checks every object against the cluster's discovery (existing apiVersion and kind). Objects without a namespace get `namespace`;
+1. it reads the manifests and substitutes the variables, or renders the chart with the cluster's capabilities; then it checks every object against the cluster's discovery (existing apiVersion and kind). Objects without a namespace get `namespace`;
 2. it adds the labels `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/environment` and the annotations `manent.io/version` and `manent.io/deployment`;
 3. it applies the Namespaces first, then saves the release in the history, then applies the other objects in dependency order (CRDs, permissions, ConfigMaps and Secrets, Services, workloads). Server-side apply uses the `manent` field manager and is idempotent;
 4. it waits for Deployments, StatefulSets and DaemonSets to roll out. A Deployment past its `progressDeadlineSeconds` fails immediately, without waiting for `wait_timeout`;

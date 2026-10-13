@@ -3,10 +3,11 @@
 // conserva nel cluster lo storico delle release, da cui legge la release in esercizio e torna
 // alla precedente.
 //
-// L'artefatto è un file di manifest (YAML o JSON, anche con più documenti) o un archivio
-// .tar.gz di manifest: è quello verificato con lo sha256 e promosso tra gli ambienti. Ogni
-// target è il server API di un cluster. Il plugin parla direttamente con l'API REST, senza
-// kubectl né client-go.
+// L'artefatto è un file di manifest (YAML o JSON, anche con più documenti), un archivio
+// .tar.gz di manifest o un chart Helm impacchettato: è quello verificato con lo sha256 e
+// promosso tra gli ambienti. Un chart viene renderizzato con "helm template" per ogni cluster
+// e i suoi oggetti seguono lo stesso percorso dei manifest. Ogni target è il server API di un
+// cluster. Il plugin parla direttamente con l'API REST, senza kubectl né client-go.
 package kubernetes
 
 import (
@@ -82,6 +83,7 @@ type Plugin struct {
 	types     []string
 	logger    *slog.Logger
 	poll      time.Duration
+	helm      Helm
 }
 
 // New crea il plugin con il connettore indicato e i tipi di artefatto supportati.
@@ -93,6 +95,7 @@ func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 //   - ca_file: CA del cluster (es. quella del service account, con manent nel cluster)
 //   - insecure_skip_tls_verify: true per non verificare il certificato (solo sviluppo)
 //   - artifact_types: tipi supportati (default ["kubernetes"])
+//   - helm: command (default "helm"), sha256 del binario, timeout del rendering (default 2m)
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	caFile, _ := cfg["ca_file"].(string)
 	insecure, _ := cfg["insecure_skip_tls_verify"].(bool)
@@ -107,7 +110,23 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 			types = append(types, s)
 		}
 	}
-	return New(HTTPConnector{CAFile: caFile, InsecureSkipTLSVerify: insecure}, types, logger), nil
+	p := New(HTTPConnector{CAFile: caFile, InsecureSkipTLSVerify: insecure}, types, logger)
+	if raw, ok := cfg["helm"]; ok {
+		hc, ok := raw.(map[string]any)
+		if !ok {
+			return nil, errors.New("helm deve essere una mappa (command, sha256, timeout)")
+		}
+		p.helm.Command, _ = hc["command"].(string)
+		p.helm.SHA256, _ = hc["sha256"].(string)
+		if t, ok := hc["timeout"].(string); ok {
+			d, err := time.ParseDuration(t)
+			if err != nil || d <= 0 {
+				return nil, fmt.Errorf("helm.timeout %q non valido", t)
+			}
+			p.helm.Timeout = d
+		}
+	}
+	return p, nil
 }
 
 // Name restituisce il nome del plugin.
@@ -142,8 +161,9 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 		errs = append(errs, err)
 	}
 	if strings.HasSuffix(req.Artifact.LocalPath, plugin.ImageRefExt) {
-		errs = append(errs, errors.New("l'artefatto è un'immagine: il plugin kubernetes rilascia manifest (file .yaml o archivio .tar.gz)"))
+		errs = append(errs, errors.New("l'artefatto è un'immagine: il plugin kubernetes rilascia manifest (file .yaml o archivio .tar.gz) o chart Helm (.tgz)"))
 	}
+	errs = append(errs, validateHelm(req.Params)...)
 	if len(req.Targets) == 0 {
 		errs = append(errs, errors.New("nessun cluster tra i target"))
 	}
@@ -258,29 +278,18 @@ type prepared struct {
 	refs    []ObjectRef
 	// newNamespaces sono i Namespace creati dai manifest.
 	newNamespaces []string
+	// hooksSkipped sono gli hook del chart Helm non applicati.
+	hooksSkipped []string
 }
 
 // prepare legge, interpreta e completa gli oggetti per il cluster: namespace di default,
 // etichette e annotazioni di manent, controllo dei digest delle immagini.
 func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*prepared, error) {
-	raw, err := loadManifests(req.Artifact.LocalPath)
+	objs, hooks, err := p.objects(ctx, api, req)
 	if err != nil {
 		return nil, err
 	}
-	vars := map[string]string{
-		"MANENT_APPLICATION": req.Application, "MANENT_ENVIRONMENT": req.Environment,
-		"MANENT_VERSION": req.Artifact.Version, "MANENT_NAMESPACE": namespace(req), "MANENT_DEPLOYMENT": req.DeploymentID,
-	}
-	for k, v := range req.Params {
-		if name, ok := strings.CutPrefix(k, ParamVarPrefix); ok && name != "" {
-			vars[name] = v
-		}
-	}
-	objs, err := parseObjects(render(raw, vars))
-	if err != nil {
-		return nil, err
-	}
-	pr := &prepared{}
+	pr := &prepared{hooksSkipped: hooks}
 	seen := map[string]bool{}
 	var errs []error
 	for _, o := range objs {
@@ -328,6 +337,53 @@ func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*pr
 	return pr, nil
 }
 
+// objects legge gli oggetti dell'artefatto: renderizza il chart Helm per il cluster, oppure
+// legge i manifest e ne sostituisce le variabili. Per un chart restituisce anche gli hook tolti.
+func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]Object, []string, error) {
+	chart, err := isChart(req.Artifact.LocalPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	if chart {
+		kv, err := api.Version(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("versione del cluster: %w", err)
+		}
+		gvs, err := api.GroupVersions(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("API del cluster: %w", err)
+		}
+		raw, err := p.helm.Render(ctx, req, kv, gvs)
+		if err != nil {
+			return nil, nil, err
+		}
+		objs, err := parseObjects(raw)
+		if err != nil {
+			return nil, nil, fmt.Errorf("manifest generati dal chart: %w", err)
+		}
+		objs, hooks := filterHooks(objs, req.Params)
+		if len(objs) == 0 {
+			return nil, nil, errors.New("il chart non genera oggetti da applicare")
+		}
+		return objs, hooks, nil
+	}
+	raw, err := loadManifests(req.Artifact.LocalPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	vars := map[string]string{
+		"MANENT_APPLICATION": req.Application, "MANENT_ENVIRONMENT": req.Environment,
+		"MANENT_VERSION": req.Artifact.Version, "MANENT_NAMESPACE": namespace(req), "MANENT_DEPLOYMENT": req.DeploymentID,
+	}
+	for k, v := range req.Params {
+		if name, ok := strings.CutPrefix(k, ParamVarPrefix); ok && name != "" {
+			vars[name] = v
+		}
+	}
+	objs, err := parseObjects(render(raw, vars))
+	return objs, nil, err
+}
+
 // Deploy rilascia i manifest su ogni cluster in sequenza; si ferma al primo errore. Il
 // server-side apply è idempotente, quindi il deploy può essere rieseguito.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
@@ -356,6 +412,10 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	n := historyNames(req)
 	ns := namespace(req)
 	details := map[string]string{"namespace": ns, "objects": strconv.Itoa(len(pr.objects)), DetailRelease: n.release(req.Artifact.Version)}
+	if len(pr.hooksSkipped) > 0 {
+		details[DetailHooksSkipped] = strings.Join(pr.hooksSkipped, ",")
+		log.WarnContext(ctx, "hook del chart non applicati", "hooks", pr.hooksSkipped)
+	}
 	prev, err := readPointer(ctx, api, ns, n)
 	if err != nil {
 		return details, err
@@ -863,6 +923,9 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 		checked++
 	}
 	details["objects_checked"], details["objects_skipped"] = strconv.Itoa(checked), strconv.Itoa(skipped)
+	if len(pr.hooksSkipped) > 0 {
+		details[DetailHooksSkipped] = strings.Join(pr.hooksSkipped, ",")
+	}
 	if rel, err := readPointer(ctx, api, namespace(req), historyNames(req)); err == nil && rel != nil {
 		details["current"] = rel.version
 	}

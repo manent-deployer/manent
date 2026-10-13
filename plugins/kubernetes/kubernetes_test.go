@@ -37,6 +37,8 @@ var discovery = map[string]string{
 		{"name":"namespaces","kind":"Namespace","namespaced":false},
 		{"name":"namespaces/status","kind":"Namespace","namespaced":false}]}`,
 	"/apis/apps/v1": `{"resources":[{"name":"deployments","kind":"Deployment","namespaced":true}]}`,
+	"/apis": `{"groups":[{"name":"apps","versions":[{"groupVersion":"apps/v1"}]},
+		{"name":"monitoring.coreos.com","versions":[{"groupVersion":"monitoring.coreos.com/v1"}]}]}`,
 }
 
 func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {

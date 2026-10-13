@@ -45,6 +45,8 @@ type API interface {
 	List(ctx context.Context, apiVersion, kind, namespace, selector string) ([]Object, error)
 	// Version restituisce la versione del cluster (verifica di connessione e credenziali).
 	Version(ctx context.Context) (string, error)
+	// GroupVersions restituisce le API servite dal cluster (es. "v1", "apps/v1").
+	GroupVersions(ctx context.Context) ([]string, error)
 }
 
 // Connector apre l'accesso al cluster di un target.
@@ -267,6 +269,26 @@ func (a *httpAPI) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return v.GitVersion, nil
+}
+
+func (a *httpAPI) GroupVersions(ctx context.Context) ([]string, error) {
+	var list struct {
+		Groups []struct {
+			Versions []struct {
+				GroupVersion string `json:"groupVersion"`
+			} `json:"versions"`
+		} `json:"groups"`
+	}
+	if err := a.do(ctx, http.MethodGet, "/apis", "", nil, &list); err != nil {
+		return nil, err
+	}
+	out := []string{"v1"}
+	for _, g := range list.Groups {
+		for _, v := range g.Versions {
+			out = append(out, v.GroupVersion)
+		}
+	}
+	return out, nil
 }
 
 // do esegue una richiesta all'API e decodifica la risposta; gli errori riportano il

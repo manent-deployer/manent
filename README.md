@@ -341,7 +341,7 @@ make web-dev    # server di sviluppo su http://127.0.0.1:5173
 |---|---|---|
 | `remote-copy` | file (`application`), copiato via SSH/SFTP con layout `releases` e symlink `current` | server e VM |
 | `container` | immagine di un registry (`oci://registry/repo:tag`), avviata per digest con Docker o Podman via SSH | server e VM |
-| `kubernetes` | manifest YAML/JSON o archivio `.tar.gz`, applicati con server-side apply e attesa del rollout | cluster Kubernetes |
+| `kubernetes` | manifest YAML/JSON, archivio `.tar.gz` o chart Helm (`helm package`, renderizzato con `helm template`), applicati con server-side apply e attesa del rollout | cluster Kubernetes |
 | `ecs` | immagine di un registry: nuova revisione della task definition, aggiornamento del servizio e attesa del deployment | servizi Amazon ECS (Fargate o EC2), una region per target |
 | `lambda` | immagine ECR o pacchetto `.zip`: aggiornamento del codice, versione pubblicata e alias spostato | funzioni AWS Lambda, una region per target |
 | `cloudrun` | immagine di un registry: nuova revisione e traffico sull'ultima revisione pronta | servizi Google Cloud Run, una region per target |
