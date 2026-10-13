@@ -84,3 +84,62 @@ func TestToTaskPassiEGate(t *testing.T) {
 		}
 	}
 }
+
+// I conteggi dei workflow conclusi sono letti al più ogni finishedCountsTTL, quelli dei non
+// conclusi a ogni lettura.
+func TestWorkflowCounts(t *testing.T) {
+	reg, planner := testRegistry(t, artifactStep{})
+	w := startWorker(t, workerOpts(testdb.URL(t), "w1", reg))
+	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
+	// Un Admin proprio: quello del worker è usato anche dalla manutenzione.
+	a := NewAdmin(AdminOptions{Client: w.Client(), Logger: discard})
+	now := time.Now()
+	a.now = func() time.Time { return now }
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	count := func(status string) int64 {
+		t.Helper()
+		cs, err := a.WorkflowCounts(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n int64
+		for _, c := range cs {
+			if c.Workflow == workflowName && c.Status == status {
+				n += c.Count
+			}
+		}
+		return n
+	}
+	deploy := func(id string) {
+		t.Helper()
+		if _, err := e.Submit(ctx, appVersion("app", "test", "1.0.0", id)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.Wait(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deploy("c1")
+	if n := count(StateSuccess); n != 1 {
+		t.Fatalf("riusciti: %d", n)
+	}
+	deploy("c2")
+	if n := count(StateSuccess); n != 1 {
+		t.Errorf("conteggio dei conclusi riletto prima della scadenza: %d", n)
+	}
+	now = now.Add(finishedCountsTTL)
+	if n := count(StateSuccess); n != 2 {
+		t.Errorf("riusciti dopo la scadenza: %d", n)
+	}
+	// Un deploy pianificato (DELAYED) si vede subito.
+	d := appVersion("app", "test", "2.0.0", "c3")
+	at := time.Now().Add(time.Hour)
+	d.Schedule = &descriptor.Schedule{At: &at}
+	if _, err := e.Submit(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(StateDelayed); n != 1 {
+		t.Errorf("pianificati: %d", n)
+	}
+}

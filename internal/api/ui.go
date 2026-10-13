@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/joeg-ita/manent/internal/authz"
 	"github.com/joeg-ita/manent/internal/service"
 )
 
@@ -84,7 +85,8 @@ const heartbeatEvery = 15 * time.Second
 // righe, invia "end" e chiude. Lo stato è letto dal servizio a intervalli, quindi valgono gli
 // stessi permessi di Status e Logs.
 func (s *Server) events(c *gin.Context) {
-	ctx := c.Request.Context()
+	// Lo stato letto a ogni giro autorizza anche la lettura dei log: il Guard non lo rilegge.
+	ctx := authz.WithDeploymentScope(c.Request.Context())
 	id := c.Param("id")
 	offset := 0
 	for _, v := range []string{c.GetHeader("Last-Event-ID"), c.Query("offset")} {

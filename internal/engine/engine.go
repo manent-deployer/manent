@@ -113,6 +113,8 @@ type Engine struct {
 	staleAfter time.Duration
 	logger     *slog.Logger
 	now        func() time.Time
+	// inv è l'inventario del processo, aggiornato in modo incrementale.
+	inv inventoryCache
 }
 
 // NewService crea il servizio sopra un client DBOS.
@@ -145,6 +147,9 @@ func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Pla
 // submitMeta descrive l'origine di una richiesta di deploy.
 type submitMeta struct {
 	kind, source, release string
+	// prechecked salta la verifica di policy e configurazione di ambiente (check), già
+	// eseguita da chi ha accettato la richiesta (deploy di una release).
+	prechecked bool
 }
 
 // Submit calcola il piano e, in base a schedule nel descrittore:
@@ -167,8 +172,10 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	if err != nil {
 		return nil, err
 	}
-	if err := e.check(ctx, d); err != nil {
-		return nil, err
+	if !meta.prechecked {
+		if err := e.check(ctx, d); err != nil {
+			return nil, err
+		}
 	}
 	req := Request{
 		Descriptor: *d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: meta.kind, Source: meta.source,
@@ -457,49 +464,83 @@ func attributes(req Request) map[string]any {
 	return a
 }
 
-// Status legge lo stato del workflow dal database di sistema DBOS. Un deploy in attesa di
-// approvazione non ha ancora un workflow: lo stato è quello dell'approvazione.
+// Status legge lo stato del deploy dal database di sistema DBOS: con una sola query il
+// workflow del deploy e quelli di approvazione e attesa delle dipendenze. Un deploy in attesa
+// non ha ancora un workflow: lo stato è quello dell'approvazione o dell'attesa.
 func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
-	h, err := dbos.RetrieveWorkflow[Result](e.client, id)
-	if err != nil {
-		return e.pendingStatus(id)
-	}
-	st, err := h.GetStatus()
+	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
+		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(true))
 	if err != nil {
 		return nil, err
 	}
+	g := groupDeploy(id, ws)
+	if g.deploy == nil {
+		return e.pendingStatus(id, g)
+	}
+	st := *g.deploy
 	s := toStatus(st)
-	if rs, err := dbos.GetEvent[RolloutState](e.client, id, rolloutEvent, 0); err == nil && rs.Status != "" {
+	e.readRollout(&s, st)
+	if st.Attributes[attrApproval] != nil && s.Approval == nil && g.approval != nil {
+		s.Approval = e.approval(*g.approval)
+	}
+	if attr(st, attrAfter) == "true" && g.after != nil {
+		s.After = e.afterState(*g.after)
+	}
+	if st.Status == dbos.WorkflowStatusSuccess {
+		var res Result
+		if err := decodeInput(st.Output, &res); err != nil {
+			return nil, fmt.Errorf("risultato del deploy %s: %w", id, err)
+		}
+		s.Result = &res
+	}
+	return &s, nil
+}
+
+// deployWorkflows sono i workflow che rappresentano un deploy: il deploy stesso, l'approvazione
+// e l'attesa delle dipendenze, ognuno nil se non esiste.
+type deployWorkflows struct {
+	deploy, approval, after *dbos.WorkflowStatus
+}
+
+// groupDeploy individua tra i workflow letti quelli del deploy id.
+func groupDeploy(id string, ws []dbos.WorkflowStatus) deployWorkflows {
+	var g deployWorkflows
+	for i := range ws {
+		w := &ws[i]
+		switch {
+		case w.ID == id:
+			g.deploy = w
+		case w.ID == id+approvalSuffix && w.Name == approvalWorkflowName:
+			g.approval = w
+		case w.ID == id+afterSuffix && w.Name == afterWorkflowName:
+			g.after = w
+		}
+	}
+	return g
+}
+
+// readRollout aggiunge a s lo stato del rollout del deploy st, se va letto (readsRollout).
+func (e *Engine) readRollout(s *Status, st dbos.WorkflowStatus) {
+	if !readsRollout(st) {
+		return
+	}
+	if rs, err := dbos.GetEvent[RolloutState](e.client, st.ID, rolloutEvent, 0); err == nil && rs.Status != "" {
 		s.Rollout = &rs
 		if rs.Status == service.RolloutPausedApproval && st.Status == dbos.WorkflowStatusPending {
 			// Approvazione tra due ondate: il deploy è in corso ma attende una decisione.
 			s.State, s.Approval = StateAwaitingApproval, rs.Approval
 		}
 	}
-	if st.Attributes[attrApproval] != nil && s.Approval == nil {
-		if a, err := e.approval(id + approvalSuffix); err == nil {
-			s.Approval = a
-		}
-	}
-	if attr(st, attrAfter) == "true" {
-		s.After = e.afterState(id)
-	}
+}
+
+// readsRollout dice se lo stato del rollout va letto dall'evento: per i deploy in corso e per
+// quelli conclusi con un rollout (attributo registrato alla fine) o interrotti prima della fine.
+func readsRollout(st dbos.WorkflowStatus) bool {
 	switch st.Status {
-	case dbos.WorkflowStatusSuccess:
-		res, err := h.GetResult()
-		if err != nil {
-			return nil, err
-		}
-		s.Result = &res
-	case dbos.WorkflowStatusError:
-		// Con un client DBOS lo stato non include l'errore, registrato a parte con l'esito.
-		if s.Error == "" {
-			if _, err := h.GetResult(); err != nil {
-				s.Error = err.Error()
-			}
-		}
+	case dbos.WorkflowStatusPending, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded:
+		return true
 	}
-	return &s, nil
+	return attr(st, attrRolloutProgress) != ""
 }
 
 // maxListScan limita i deploy esaminati da un elenco filtrato o dall'inventario.
@@ -517,9 +558,22 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 		prefix = []string{scheduledIDPrefix(f.Schedule)}
 	}
 	out := []Status{}
-	// Con un cursore l'elenco riparte dal deploy successivo a quello indicato.
+	// Con un cursore l'elenco riparte dal deploy successivo a quello indicato: la scansione
+	// parte dalla sua data di creazione, poi salta i deploy fino al cursore compreso.
+	var from time.Time
 	skipping := f.Cursor != ""
-	err := e.scan(prefix, func(s Status) bool {
+	if skipping {
+		at, err := e.createdAt(f.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		if at.IsZero() {
+			// Il deploy del cursore non esiste più (es. retention): l'elenco è concluso.
+			return out, nil
+		}
+		from = at
+	}
+	err := e.scanFrom(prefix, from, func(s Status) bool {
 		if skipping {
 			skipping = s.ID != f.Cursor
 			return true
@@ -532,18 +586,69 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 	return out, err
 }
 
+// createdAt restituisce la data di creazione più recente tra i workflow del deploy id (deploy,
+// approvazione, attesa), o zero se non ne esiste nessuno.
+func (e *Engine) createdAt(id string) (time.Time, error) {
+	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
+		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+	if err != nil {
+		return time.Time{}, err
+	}
+	var at time.Time
+	for _, w := range ws {
+		if w.CreatedAt.After(at) {
+			at = w.CreatedAt
+		}
+	}
+	return at, nil
+}
+
 // scan scorre deploy e approvazioni dal più recente, a pagine, finché fn restituisce true.
-// Le approvazioni concluse con un deploy non sono riportate: il deploy le rappresenta.
 func (e *Engine) scan(prefix []string, fn func(Status) bool) error {
+	return e.scanFrom(prefix, time.Time{}, fn)
+}
+
+// scanFrom è scan a partire dai workflow creati fino a from compreso (zero: dal più recente).
+// Le approvazioni concluse con un deploy e le attese soddisfatte non sono riportate: le
+// rappresenta ciò che hanno accodato.
+func (e *Engine) scanFrom(prefix []string, from time.Time, fn func(Status) bool) error {
+	return e.scanRawFrom(prefix, from, func(w dbos.WorkflowStatus) bool {
+		return superseded(w) || fn(toStatus(w))
+	})
+}
+
+// superseded dice se il workflow è un'approvazione concluso con un deploy o un'attesa
+// soddisfatta: il deploy che hanno accodato li rappresenta.
+func superseded(w dbos.WorkflowStatus) bool {
+	return (w.Name == approvalWorkflowName && attr(w, attrOutcome) == ApprovalApproved) ||
+		(w.Name == afterWorkflowName && attr(w, attrOutcome) == service.AfterSatisfied)
+}
+
+// scanRaw scorre deploy, approvazioni e attese dal più recente, senza filtri, finché fn
+// restituisce true.
+func (e *Engine) scanRaw(prefix []string, fn func(dbos.WorkflowStatus) bool) error {
+	return e.scanRawFrom(prefix, time.Time{}, fn)
+}
+
+// scanRawFrom è scanRaw a partire dai workflow creati fino a from compreso. Le pagine sono per
+// chiave (data di creazione), non per offset: ogni pagina costa una query sull'indice di
+// created_at, qualunque sia la sua posizione nello storico.
+func (e *Engine) scanRawFrom(prefix []string, from time.Time, fn func(dbos.WorkflowStatus) bool) error {
 	const page = 200
-	for offset := 0; offset < maxListScan; offset += page {
+	// seen sono i workflow già visti con la data di creazione del limite corrente: la pagina
+	// successiva riparte da quella data compresa, per non perdere quelli creati nello stesso
+	// millisecondo.
+	seen := map[string]bool{}
+	for scanned := 0; scanned < maxListScan; {
 		opts := []dbos.ListWorkflowsOption{
 			dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
 			dbos.WithFilterSortDesc(),
 			dbos.WithFilterLimit(page),
-			dbos.WithFilterOffset(offset),
 			dbos.WithFilterLoadInput(false),
 			dbos.WithFilterLoadOutput(false),
+		}
+		if !from.IsZero() {
+			opts = append(opts, dbos.WithFilterCreatedBefore(from))
 		}
 		if len(prefix) > 0 {
 			opts = append(opts, dbos.WithFilterWorkflowIDPrefix(prefix...))
@@ -552,19 +657,29 @@ func (e *Engine) scan(prefix []string, fn func(Status) bool) error {
 		if err != nil {
 			return err
 		}
+		fresh := 0
 		for _, w := range wfs {
-			// Approvazioni concluse con un deploy e attese soddisfatte sono rappresentate da ciò
-			// che hanno accodato.
-			if (w.Name == approvalWorkflowName && attr(w, attrOutcome) == ApprovalApproved) ||
-				(w.Name == afterWorkflowName && attr(w, attrOutcome) == service.AfterSatisfied) {
+			if seen[w.ID] {
 				continue
 			}
-			if !fn(toStatus(w)) {
+			fresh++
+			scanned++
+			if !w.CreatedAt.Equal(from) {
+				from = w.CreatedAt
+				clear(seen)
+			}
+			seen[w.ID] = true
+			if !fn(w) {
 				return nil
 			}
 		}
-		if len(wfs) < page {
+		switch {
+		case len(wfs) < page:
 			return nil
+		case fresh == 0:
+			// Una pagina intera creata nello stesso millisecondo, già vista: si passa oltre.
+			from = from.Add(-time.Millisecond)
+			clear(seen)
 		}
 	}
 	return nil
@@ -632,6 +747,7 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 	if err := dbos.CancelWorkflow(e.client, target); err != nil {
 		return err
 	}
+	e.notifyWaiters(id)
 	e.logger.Info("deploy annullato", "deployment", id)
 	return nil
 }

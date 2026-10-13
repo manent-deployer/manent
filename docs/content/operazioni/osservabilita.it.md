@@ -40,7 +40,7 @@ observability:
 Più le metriche standard del runtime Go (`go_*`) e del processo (`process_*`).
 
 !!! note "Metriche globali e di processo"
-    `manent_deployments_total` e gli istogrammi sono del singolo processo e vanno sommati tra le istanze (`sum`). `manent_workflows` e `manent_executor_*` sono letti dal database, quindi ogni istanza riporta gli stessi valori: vanno aggregati con `max`. La lettura dal database avviene al più ogni 15 secondi.
+    `manent_deployments_total` e gli istogrammi sono del singolo processo e vanno sommati tra le istanze (`sum`). `manent_workflows` e `manent_executor_*` sono letti dal database, quindi ogni istanza riporta gli stessi valori: vanno aggregati con `max`. La lettura dal database avviene al più ogni 15 secondi per i workflow non conclusi (in coda, in esecuzione, pianificati) e al più ogni 5 minuti per i conclusi, il cui conteggio scorre tutto lo storico.
 
 Esempi di query e allarmi:
 

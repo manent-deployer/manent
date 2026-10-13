@@ -117,6 +117,9 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 		if err := w.enqueueApproved(ctx, in); err != nil {
 			return st, err
 		}
+	} else {
+		// Il deploy non verrà eseguito: chi lo attende può concludersi subito.
+		w.notifyWaiters(ctx, in.DeploymentID)
 	}
 	log.Info("approvazione conclusa", "status", st.Status, "decisions", len(st.Decisions))
 	w.recordApproval(ctx, in, st)
@@ -184,26 +187,21 @@ func approvalWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 	return string(st)
 }
 
-// approval legge lo stato dell'approvazione: il risultato se conclusa, altrimenti l'ultimo
-// evento pubblicato. Un'approvazione non ancora avviata non ha stato.
-func (e *Engine) approval(approvalID string) (*ApprovalState, error) {
-	h, err := dbos.RetrieveWorkflow[ApprovalState](e.client, approvalID)
-	if err != nil {
-		return nil, err
+// approval legge lo stato dell'approvazione w (letta con l'output): il risultato se conclusa,
+// altrimenti l'ultimo evento pubblicato. Un'approvazione non ancora avviata non ha stato (nil).
+func (e *Engine) approval(w dbos.WorkflowStatus) *ApprovalState {
+	if w.Status == dbos.WorkflowStatusSuccess {
+		var a ApprovalState
+		if err := decodeInput(w.Output, &a); err == nil {
+			return &a
+		}
+		return nil
 	}
-	st, err := h.GetStatus()
-	if err != nil {
-		return nil, err
-	}
-	if st.Status == dbos.WorkflowStatusSuccess {
-		a, err := h.GetResult()
-		return &a, err
-	}
-	a, err := dbos.GetEvent[ApprovalState](e.client, approvalID, approvalEvent, 0)
+	a, err := dbos.GetEvent[ApprovalState](e.client, w.ID, approvalEvent, 0)
 	if err != nil || a.Status == "" {
-		return nil, fmt.Errorf("approvazione non ancora avviata")
+		return nil
 	}
-	return &a, nil
+	return &a
 }
 
 // Decide registra la decisione dell'identità nel context sul deploy in attesa di approvazione.

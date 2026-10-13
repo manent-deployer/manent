@@ -284,7 +284,7 @@ They return `{"inventory": [...]}` and `{"freezes": [...]}`. Freeze windows are 
 }
 ```
 
-It responds `202` with the state of the release: `id`, `state` (`PENDING`, `SUCCESS`, `ERROR`, `CANCELLED`), `on_failure`, `requested_by`, `error` and `deploys`, in topological order, with `name`, `deployment_id`, `application`, `environment`, `version`, `after`, `state`, `error`, `rollback_id` and `rollback_state`. An invalid release (cycles, unknown dependencies, `schedule` or `dryRun` in a deploy) is `400`; a deploy refused by policies or governance is `422`. Submitting the same `id` again returns the existing release.
+It responds `202` with the state of the release: `id`, `state` (`PENDING`, `SUCCESS`, `ERROR`, `CANCELLED`), `on_failure`, `requested_by`, `error` and `deploys`, in topological order, with `name`, `deployment_id`, `application`, `environment`, `version`, `after`, `state`, `error`, `rollback_id` and `rollback_state`. An invalid release (cycles, unknown dependencies, `schedule` or `dryRun` in a deploy) is `400`; a deploy refused by policies or governance is `422`. In the response the deploys are `ENQUEUED`: the release workflow queues them right after, and the following reads report their actual state. Submitting the same `id` again returns the existing release.
 
 `GET /api/v1/releases[?limit=]` returns `{"releases": [...]}`, `GET /api/v1/releases/{id}` a single release, `POST /api/v1/releases/{id}/cancel` cancels it (`204`).
 

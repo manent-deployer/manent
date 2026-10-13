@@ -40,7 +40,7 @@ observability:
 Plus the standard Go runtime (`go_*`) and process (`process_*`) metrics.
 
 !!! note "Global and per-process metrics"
-    `manent_deployments_total` and the histograms belong to the single process and must be summed across instances (`sum`). `manent_workflows` and `manent_executor_*` are read from the database, so every instance reports the same values: aggregate them with `max`. The database is read at most every 15 seconds.
+    `manent_deployments_total` and the histograms belong to the single process and must be summed across instances (`sum`). `manent_workflows` and `manent_executor_*` are read from the database, so every instance reports the same values: aggregate them with `max`. The database is read at most every 15 seconds for unfinished workflows (queued, running, scheduled) and at most every 5 minutes for finished ones, whose count scans the whole history.
 
 Example queries and alerts:
 

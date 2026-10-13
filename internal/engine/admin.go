@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
@@ -31,6 +32,11 @@ type Admin struct {
 	audit    audit.Recorder
 	logger   *slog.Logger
 	now      func() time.Time
+
+	// countsMu protegge i conteggi dei workflow conclusi, letti al più ogni finishedCountsTTL.
+	countsMu       sync.Mutex
+	finishedCounts []telemetry.WorkflowCount
+	finishedAt     time.Time
 }
 
 // AdminOptions configura Admin.
@@ -365,10 +371,41 @@ func (a *Admin) recordRecover(ctx context.Context, o RecoverOptions, rep *Recove
 	})
 }
 
-// WorkflowCounts implementa telemetry.StateSource: workflow di manent per tipo, stato e coda.
+// Stati dei workflow non conclusi, contati a ogni lettura delle metriche.
+var activeStatuses = []dbos.WorkflowStatusType{
+	dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed,
+}
+
+// finishedCountsTTL è l'intervallo di aggiornamento dei conteggi dei workflow conclusi: il
+// loro raggruppamento scorre tutto lo storico, mentre quello dei non conclusi usa gli indici
+// parziali di DBOS ed è economico.
+const finishedCountsTTL = 5 * time.Minute
+
+// WorkflowCounts implementa telemetry.StateSource: i workflow di manent per nome, stato e coda.
 func (a *Admin) WorkflowCounts(_ context.Context) ([]telemetry.WorkflowCount, error) {
+	out, err := a.workflowCounts(activeStatuses)
+	if err != nil {
+		return nil, err
+	}
+	a.countsMu.Lock()
+	defer a.countsMu.Unlock()
+	if a.finishedCounts == nil || a.now().Sub(a.finishedAt) >= finishedCountsTTL {
+		finished, err := a.workflowCounts([]dbos.WorkflowStatusType{
+			dbos.WorkflowStatusSuccess, dbos.WorkflowStatusError, dbos.WorkflowStatusCancelled,
+			dbos.WorkflowStatusMaxRecoveryAttemptsExceeded,
+		})
+		if err != nil {
+			return nil, err
+		}
+		a.finishedCounts, a.finishedAt = finished, a.now()
+	}
+	return append(out, a.finishedCounts...), nil
+}
+
+// workflowCounts conta i workflow di manent negli stati indicati, per nome, stato e coda.
+func (a *Admin) workflowCounts(status []dbos.WorkflowStatusType) ([]telemetry.WorkflowCount, error) {
 	rows, err := dbos.GetWorkflowAggregates(a.client, dbos.GetWorkflowAggregatesInput{
-		GroupByName: true, GroupByStatus: true, GroupByQueueName: true, SelectCount: true, Name: workflowNames,
+		GroupByName: true, GroupByStatus: true, GroupByQueueName: true, SelectCount: true, Name: workflowNames, Status: status,
 	})
 	if err != nil {
 		return nil, err

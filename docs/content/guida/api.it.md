@@ -284,7 +284,7 @@ Restituiscono `{"inventory": [...]}` e `{"freezes": [...]}`. Le finestre di free
 }
 ```
 
-Risponde `202` con lo stato della release: `id`, `state` (`PENDING`, `SUCCESS`, `ERROR`, `CANCELLED`), `on_failure`, `requested_by`, `error` e `deploys`, in ordine topologico, con `name`, `deployment_id`, `application`, `environment`, `version`, `after`, `state`, `error`, `rollback_id` e `rollback_state`. Una release non valida (cicli, dipendenze sconosciute, `schedule` o `dryRun` in un deploy) è `400`; un deploy rifiutato da policy o governance è `422`. Inviare di nuovo lo stesso `id` restituisce la release esistente.
+Risponde `202` con lo stato della release: `id`, `state` (`PENDING`, `SUCCESS`, `ERROR`, `CANCELLED`), `on_failure`, `requested_by`, `error` e `deploys`, in ordine topologico, con `name`, `deployment_id`, `application`, `environment`, `version`, `after`, `state`, `error`, `rollback_id` e `rollback_state`. Una release non valida (cicli, dipendenze sconosciute, `schedule` o `dryRun` in un deploy) è `400`; un deploy rifiutato da policy o governance è `422`. Nella risposta i deploy sono `ENQUEUED`: li accoda subito dopo il workflow della release, e le letture successive ne riportano lo stato effettivo. Inviare di nuovo lo stesso `id` restituisce la release esistente.
 
 `GET /api/v1/releases[?limit=]` restituisce `{"releases": [...]}`, `GET /api/v1/releases/{id}` una singola release, `POST /api/v1/releases/{id}/cancel` la annulla (`204`).
 

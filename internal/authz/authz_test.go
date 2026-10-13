@@ -92,6 +92,8 @@ type fakeService struct {
 	submitted []*descriptor.Descriptor
 	cancelled []string
 	decided   []string
+	// statusReads conta le letture dello stato.
+	statusReads int
 }
 
 func (f *fakeService) Plan(context.Context, *descriptor.Descriptor) (pipeline.Plan, error) {
@@ -102,6 +104,7 @@ func (f *fakeService) Submit(_ context.Context, d *descriptor.Descriptor) (*engi
 	return &engine.Submission{ID: "new"}, nil
 }
 func (f *fakeService) Status(_ context.Context, id string) (*engine.Status, error) {
+	f.statusReads++
 	st, ok := f.statuses[id]
 	if !ok {
 		return nil, engine.ErrNotFound
@@ -366,6 +369,35 @@ func TestGuard(t *testing.T) {
 }
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+// Con WithDeploymentScope i log di un deploy già letto non rileggono lo stato, ma il permesso
+// viene comunque verificato sulla policy.
+func TestGuardScopeDeploy(t *testing.T) {
+	svc := &fakeService{statuses: map[string]engine.Status{
+		"a1": {ID: "a1", Application: "team-a-api", Environment: "test"},
+		"b1": {ID: "b1", Application: "team-b-api", Environment: "test"},
+	}}
+	g := &Guard{Next: svc, Policy: testPolicy(t), Audit: &recordAudit{}, Logger: discardLogger()}
+	alice := WithDeploymentScope(auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "alice", Groups: []string{"team-a"}, Method: auth.MethodOIDC}))
+	if _, err := g.Status(alice, "a1"); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := g.Logs(alice, "a1", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if svc.statusReads != 1 {
+		t.Errorf("letture dello stato: %d, attesa 1", svc.statusReads)
+	}
+	// Un deploy non autorizzato non viene ricordato: i log restano negati.
+	if _, err := g.Status(alice, "b1"); !errors.Is(err, engine.ErrForbidden) {
+		t.Fatal(err)
+	}
+	if _, err := g.Logs(alice, "b1", 0); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("log di un altro team: %v", err)
+	}
+}
 
 func TestGuardGovernance(t *testing.T) {
 	pol, err := NewPolicy(nil, []Binding{

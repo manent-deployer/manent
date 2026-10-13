@@ -149,6 +149,7 @@ func (g *Guard) Status(ctx context.Context, id string) (*engine.Status, error) {
 	if err := g.check(ctx, DeploymentRead, target{application: st.Application, environment: st.Environment, deployment: id}); err != nil {
 		return nil, err
 	}
+	remember(ctx, id, st.Application, st.Environment)
 	return st, nil
 }
 
@@ -358,7 +359,11 @@ func (g *Guard) Steps(ctx context.Context, id string) ([]engine.StepRecord, erro
 
 // Logs richiede la lettura dell'applicazione/ambiente del deploy.
 func (g *Guard) Logs(ctx context.Context, id string, offset int) (*deploylog.Page, error) {
-	if _, err := g.Status(ctx, id); err != nil {
+	if t, ok := recall(ctx, id); ok {
+		if err := g.check(ctx, DeploymentRead, t); err != nil {
+			return nil, err
+		}
+	} else if _, err := g.Status(ctx, id); err != nil {
 		return nil, err
 	}
 	return g.Next.Logs(ctx, id, offset)

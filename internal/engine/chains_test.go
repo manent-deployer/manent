@@ -3,10 +3,13 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/governance"
@@ -51,11 +54,16 @@ func (s *gatedStep) Run(ctx context.Context, in pipeline.Input) (pipeline.Output
 // chainEngine avvia un worker con letture rapide delle dipendenze e il servizio completo per
 // i rollback delle release.
 func chainEngine(t *testing.T) (*Engine, *gatedStep) {
+	return chainEngineEvery(t, 50*time.Millisecond)
+}
+
+// chainEngineEvery è chainEngine con l'intervallo di lettura indicato.
+func chainEngineEvery(t *testing.T, poll time.Duration) (*Engine, *gatedStep) {
 	t.Helper()
 	step := &gatedStep{release: map[string]chan struct{}{}}
 	reg, planner := testRegistry(t, artifactStep{}, step)
 	opts := workerOpts(testdb.URL(t), "w1", reg)
-	opts.ChainPollInterval = 50 * time.Millisecond
+	opts.ChainPollInterval = poll
 	w, err := NewWorker(opts)
 	if err != nil {
 		t.Fatal(err)
@@ -283,5 +291,206 @@ func TestDipendenzeEApprovazione(t *testing.T) {
 	defer cancel()
 	if _, err := e.Wait(ctx, "api-prod"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Con un intervallo di lettura di un'ora, attese e release procedono solo grazie ai messaggi
+// di chi si conclude: deploy riuscito, deploy annullato, deploy della release.
+func TestCateneSvegliateDaiMessaggi(t *testing.T) {
+	e, step := chainEngineEvery(t, time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	submit := func(d *descriptor.Descriptor, after ...string) {
+		t.Helper()
+		d.After = after
+		if _, err := e.Submit(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	submit(appVersion("db", "test", "slow-1", "a"))
+	submit(appVersion("api", "test", "1.0.0", "b"), "a")
+	// La dipendenza può risultare ancora in coda: il suo avvio non sveglia l'attesa.
+	waitState(t, e, "b", StateWaitingDependency, func(s *Status) bool {
+		return s.After != nil && len(s.After.Dependencies) == 1
+	})
+	close(step.gate("a"))
+	if _, err := e.Wait(ctx, "b"); err != nil {
+		t.Fatalf("B non svegliato dalla conclusione di A: %v", err)
+	}
+
+	submit(appVersion("db", "test", "slow-2", "c"))
+	submit(appVersion("api", "test", "2.0.0", "d"), "c")
+	// La dipendenza può risultare ancora in coda: il suo avvio non sveglia l'attesa.
+	waitState(t, e, "d", StateWaitingDependency, func(s *Status) bool {
+		return s.After != nil && len(s.After.Dependencies) == 1
+	})
+	if err := e.Cancel(ctx, "c"); err != nil {
+		t.Fatal(err)
+	}
+	if st := waitState(t, e, "d", StateDependencyFailed, nil); !strings.Contains(st.Error, "CANCELLED") {
+		t.Errorf("motivo: %q", st.Error)
+	}
+
+	r := &descriptor.Release{APIVersion: descriptor.APIVersion, Kind: descriptor.KindRelease, ID: "rel", Deploys: []descriptor.ReleaseDeploy{
+		{Name: "db", Descriptor: appVersion("db", "prod", "3.0.0", "")},
+		{Name: "api", Descriptor: appVersion("api", "prod", "3.0.0", ""), After: []string{"db"}},
+	}}
+	if _, err := e.SubmitRelease(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		rs, err := e.ReleaseStatus(ctx, "rel")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rs.State == StateSuccess {
+			break
+		}
+		if Terminal(rs.State) || ctx.Err() != nil {
+			t.Fatalf("release: %+v", rs)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// Una release annullata mentre un deploy è in corso annulla anche i deploy non conclusi.
+func TestReleaseAnnullata(t *testing.T) {
+	e, _ := chainEngine(t)
+	ctx := context.Background()
+	r := &descriptor.Release{APIVersion: descriptor.APIVersion, Kind: descriptor.KindRelease, ID: "rel", Deploys: []descriptor.ReleaseDeploy{
+		{Name: "db", Descriptor: appVersion("db", "prod", "slow-1", "")},
+		{Name: "api", Descriptor: appVersion("api", "prod", "1.0.0", ""), After: []string{"db"}},
+	}}
+	if _, err := e.SubmitRelease(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, e, "rel.api", StateWaitingDependency, nil)
+	if err := e.CancelRelease(ctx, "rel"); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, e, "rel.db", StateCancelled, nil)
+	waitState(t, e, "rel.api", StateCancelled, nil)
+	if rs, err := e.ReleaseStatus(ctx, "rel"); err != nil || rs.State != StateCancelled {
+		t.Errorf("release: %+v %v", rs, err)
+	}
+}
+
+// L'inventario letto più volte dallo stesso engine segue i deploy conclusi dopo la prima
+// lettura (lettura incrementale), compresi quelli in corso al momento della lettura.
+func TestInventarioIncrementale(t *testing.T) {
+	e, step := chainEngine(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	current := func() (string, string) {
+		t.Helper()
+		inv, err := e.Inventory(ctx, InventoryFilter{Application: "db"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(inv) != 1 {
+			return "", ""
+		}
+		cur, fail := "", ""
+		if inv[0].Current != nil {
+			cur = inv[0].Current.Version
+		}
+		if inv[0].LastFailure != nil {
+			fail = inv[0].LastFailure.Version
+		}
+		return cur, fail
+	}
+	run := func(version, id string) {
+		t.Helper()
+		if _, err := e.Submit(ctx, appVersion("db", "test", version, id)); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = e.Wait(ctx, id)
+	}
+
+	if cur, _ := current(); cur != "" {
+		t.Fatalf("inventario vuoto atteso: %q", cur)
+	}
+	run("1.0.0", "i1")
+	if cur, fail := current(); cur != "1.0.0" || fail != "" {
+		t.Errorf("dopo i1: %q %q", cur, fail)
+	}
+	// i2 è in corso alla lettura e si conclude dopo.
+	if _, err := e.Submit(ctx, appVersion("db", "test", "slow-2.0.0", "i2")); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, e, "i2", StatePending, nil)
+	if cur, _ := current(); cur != "1.0.0" {
+		t.Errorf("i2 in corso: %q", cur)
+	}
+	close(step.gate("i2"))
+	_, _ = e.Wait(ctx, "i2")
+	if cur, fail := current(); cur != "slow-2.0.0" || fail != "" {
+		t.Errorf("dopo i2: %q %q", cur, fail)
+	}
+	run("3.0.0-bad", "i3")
+	if cur, fail := current(); cur != "slow-2.0.0" || fail != "3.0.0-bad" {
+		t.Errorf("dopo i3 fallito: %q %q", cur, fail)
+	}
+	run("4.0.0", "i4")
+	if cur, fail := current(); cur != "4.0.0" || fail != "" {
+		t.Errorf("dopo i4: %q %q", cur, fail)
+	}
+}
+
+// Elenco e cursore scorrono più pagine della scansione (200 workflow) senza perdere né
+// ripetere deploy, anche con molti workflow creati nello stesso millisecondo.
+func TestElencoPerChiave(t *testing.T) {
+	e, _ := chainEngine(t)
+	const n = 450
+	for i := range n {
+		req := Request{Descriptor: *appVersion("app", "test", "1.0.0", "")}
+		// Una coda senza worker: i deploy restano in coda.
+		if _, err := dbos.Enqueue[Result](e.client, "ferma", workflowName, req, dbos.WithEnqueueWorkflowID(fmt.Sprintf("k%03d", i)),
+			dbos.WithEnqueueAttributes(attributes(req)), dbos.WithEnqueueQueuePartitionKey("app/test")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+	all, err := e.List(ctx, ListFilter{Limit: 1000})
+	if err != nil || len(all) != n {
+		t.Fatalf("elenco: %d %v", len(all), err)
+	}
+	seen := map[string]bool{}
+	for i, s := range all {
+		if seen[s.ID] {
+			t.Fatalf("deploy ripetuto: %s", s.ID)
+		}
+		seen[s.ID] = true
+		if i > 0 && s.CreatedAt.After(all[i-1].CreatedAt) {
+			t.Fatalf("ordine: %s dopo %s", s.ID, all[i-1].ID)
+		}
+	}
+	var paged []string
+	cursor := ""
+	for {
+		page, err := e.List(ctx, ListFilter{Limit: 70, Cursor: cursor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range page {
+			paged = append(paged, s.ID)
+		}
+		if len(page) < 70 {
+			break
+		}
+		cursor = page[len(page)-1].ID
+	}
+	// A parità di data di creazione l'ordine può cambiare tra due query (Postgres): si
+	// confrontano gli insiemi.
+	pagedSet := map[string]bool{}
+	for _, id := range paged {
+		pagedSet[id] = true
+	}
+	if len(paged) != n || len(pagedSet) != n {
+		t.Fatalf("pagine: %d deploy, %d distinti", len(paged), len(pagedSet))
+	}
+	if inv, err := e.Inventory(ctx, InventoryFilter{}); err != nil || len(inv) != 0 {
+		t.Errorf("inventario con soli deploy in coda: %+v %v", inv, err)
 	}
 }

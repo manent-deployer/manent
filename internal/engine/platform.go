@@ -130,8 +130,8 @@ func parentID(id string, seps ...string) string {
 }
 
 // Activity implementa PlatformService: i deploy e le approvazioni non conclusi. Dei deploy in
-// esecuzione legge lo stato completo (rollout, approvazioni tra ondate) e l'ultimo step
-// registrato, al più per maxPendingChecked deploy.
+// esecuzione legge il rollout (approvazioni tra ondate) e l'ultimo step registrato, delle
+// approvazioni e delle attese lo stato completo, al più per maxPendingChecked workflow.
 func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, error) {
 	wfs, err := dbos.ListWorkflows(e.client,
 		dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
@@ -149,13 +149,20 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 		if !match.Matches(s) {
 			continue
 		}
-		if (w.Status == dbos.WorkflowStatusPending || w.Name == afterWorkflowName) && detailed < maxPendingChecked {
+		switch {
+		case detailed >= maxPendingChecked:
+		case w.Name == workflowName && w.Status == dbos.WorkflowStatusPending:
+			// Deploy in corso: il workflow è già letto, servono solo rollout e ultimo step.
+			detailed++
+			e.readRollout(&s, w)
+			if s.State == StatePending {
+				s.LastStep = e.lastStep(w.ID)
+			}
+		case w.Status == dbos.WorkflowStatusPending || w.Name == afterWorkflowName:
+			// Approvazione o attesa delle dipendenze: lo stato completo ne riporta i dettagli.
 			detailed++
 			if full, err := e.Status(ctx, s.ID); err == nil {
 				s = *full
-			}
-			if s.State == StatePending {
-				s.LastStep = e.lastStep(w.ID)
 			}
 		}
 		switch s.State {

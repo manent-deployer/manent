@@ -172,7 +172,7 @@ Health gate dei [rilasci a ondate](../guida/ondate.md#health-gate).
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `poll_interval` | `5s` | Primo intervallo con cui un deploy in attesa o una release leggono lo stato dei deploy attesi; raddoppia a ogni lettura fino a 1 minuto. |
+| `poll_interval` | `5s` | Primo intervallo con cui un deploy in attesa o una release rileggono lo stato dei deploy attesi; raddoppia a ogni lettura fino a 5 minuti. Di norma la lettura avviene prima, perché chi si conclude avvisa chi lo attende. |
 
 ### `observability`
 

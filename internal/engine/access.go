@@ -21,24 +21,30 @@ func (e *Engine) Me(ctx context.Context) (*Identity, error) {
 }
 
 // Approvals implementa GovernanceService: i deploy in attesa di approvazione, sia prima del
-// deploy (workflow di approvazione) sia tra due ondate di un rollout. Per questi ultimi lo
-// stato si legge dall'evento del rollout, quindi viene chiesto per ogni deploy in attesa o in
-// corso (pochi: al più maxPendingChecked).
+// deploy (workflow di approvazione) sia tra due ondate di un rollout. Legge solo i workflow non
+// conclusi; dei deploy in corso lo stato del rollout si legge dall'evento, quindi viene chiesto
+// per al più maxPendingChecked deploy.
 func (e *Engine) Approvals(ctx context.Context) ([]Status, error) {
-	out := []Status{}
-	var candidates []string
-	err := e.scan(nil, func(s Status) bool {
-		if s.State == StateAwaitingApproval || s.State == string(dbos.WorkflowStatusPending) {
-			candidates = append(candidates, s.ID)
-		}
-		return len(candidates) < maxPendingChecked
-	})
+	wfs, err := dbos.ListWorkflows(e.client,
+		dbos.WithFilterName(workflowName, approvalWorkflowName),
+		dbos.WithFilterStatus(dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued),
+		dbos.WithFilterSortDesc(), dbos.WithFilterLimit(maxActive),
+		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	if err != nil {
 		return nil, err
 	}
-	// Lo stato completo riporta anche approvazioni richieste, decisioni e scadenza.
-	for _, id := range candidates {
-		st, err := e.Status(ctx, id)
+	out := []Status{}
+	checked := 0
+	for _, w := range wfs {
+		// Un deploy in coda non è ancora partito: non può essere fermo tra due ondate.
+		if w.Name == workflowName && w.Status != dbos.WorkflowStatusPending {
+			continue
+		}
+		if checked++; checked > maxPendingChecked {
+			break
+		}
+		// Lo stato completo riporta anche approvazioni richieste, decisioni e scadenza.
+		st, err := e.Status(ctx, trimPendingSuffix(w.ID))
 		if err == nil && st.State == StateAwaitingApproval {
 			out = append(out, *st)
 		}

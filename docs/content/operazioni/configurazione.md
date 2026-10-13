@@ -172,7 +172,7 @@ Health gate of [wave rollouts](../guida/ondate.md#health-gate).
 
 | Key | Default | Description |
 |---|---|---|
-| `poll_interval` | `5s` | First interval at which a waiting deploy or a release reads the state of the deploys it waits for; it doubles at each reading up to 1 minute. |
+| `poll_interval` | `5s` | First interval at which a waiting deploy or a release reads the state of the deploys it waits for again; it doubles at each reading up to 5 minutes. Usually the reading happens earlier, because a deploy that ends notifies whoever waits for it. |
 
 ### `observability`
 

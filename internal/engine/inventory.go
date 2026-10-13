@@ -4,7 +4,10 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
@@ -13,47 +16,167 @@ import (
 )
 
 // Inventory ricostruisce dallo storico dei deploy la release in esercizio in ogni
-// applicazione/ambiente. Non considera i dry-run. Esamina al più gli ultimi maxListScan deploy.
+// applicazione/ambiente. Non considera i dry-run. Lo stato è tenuto in una cache del processo
+// (inventoryCache): ogni chiamata legge solo i workflow nuovi e quelli non ancora conclusi.
 func (e *Engine) Inventory(_ context.Context, f InventoryFilter) ([]InventoryEntry, error) {
-	byKey := map[string]*InventoryEntry{}
-	var keys []string
-	err := e.scan(nil, func(s Status) bool {
-		if s.DryRun || s.Application == "" || (f.Application != "" && s.Application != f.Application) || (f.Environment != "" && s.Environment != f.Environment) {
-			return true
-		}
-		k := s.Application + "/" + s.Environment
-		ie := byKey[k]
-		if ie == nil {
-			ie = &InventoryEntry{Application: s.Application, Environment: s.Environment}
-			byKey[k] = ie
-			keys = append(keys, k)
-		}
-		if ie.Current != nil {
-			return true
-		}
-		switch s.State {
-		case string(dbos.WorkflowStatusSuccess):
-			ie.Current = &s
-		case string(dbos.WorkflowStatusError), string(dbos.WorkflowStatusCancelled), string(dbos.WorkflowStatusMaxRecoveryAttemptsExceeded):
-			if ie.LastFailure == nil {
-				ie.LastFailure = &s
-			}
-		}
-		return true
-	})
-	if err != nil {
+	e.inv.mu.Lock()
+	defer e.inv.mu.Unlock()
+	if err := e.refreshInventory(); err != nil {
 		return nil, err
 	}
-	slices.Sort(keys)
 	out := []InventoryEntry{}
-	for _, k := range keys {
-		ie := byKey[k]
+	for _, k := range slices.Sorted(maps.Keys(e.inv.entries)) {
+		ie := *e.inv.entries[k]
+		if (f.Application != "" && ie.Application != f.Application) || (f.Environment != "" && ie.Environment != f.Environment) {
+			continue
+		}
 		ie.Drift = ie.LastFailure != nil && progressStarted(ie.LastFailure.RolloutProgress)
 		if ie.Current != nil || ie.LastFailure != nil {
-			out = append(out, *ie)
+			out = append(out, ie)
 		}
 	}
 	return out, nil
+}
+
+// inventoryRebuild è l'intervallo dopo il quale l'inventario viene ricostruito da zero: copre
+// ciò che la lettura incrementale non vede, come i workflow eliminati dalla retention.
+const inventoryRebuild = 10 * time.Minute
+
+// inventoryCache è l'inventario del processo. Si ricostruisce scorrendo lo storico (al più
+// maxListScan workflow) al primo uso e ogni inventoryRebuild; tra una ricostruzione e l'altra
+// legge i workflow creati dopo l'ultimo letto (indice di created_at) e rilegge per ID quelli
+// non ancora conclusi.
+type inventoryCache struct {
+	mu      sync.Mutex
+	builtAt time.Time
+	entries map[string]*InventoryEntry
+	// mark è la data di creazione più recente letta; recent sono i workflow letti creati negli
+	// ultimi inventoryOverlap prima di mark, da non rileggere.
+	mark   time.Time
+	recent map[string]time.Time
+	// pending sono i workflow letti e non ancora conclusi.
+	pending map[string]bool
+}
+
+// inventoryOverlap è il margine con cui si rileggono i workflow creati poco prima dell'ultimo
+// letto: created_at è assegnato all'inserimento, quindi una transazione più lenta può rendere
+// visibile un workflow con una data anteriore a quelli già letti.
+const inventoryOverlap = 5 * time.Second
+
+// refreshInventory aggiorna la cache; va chiamata con e.inv.mu bloccato.
+func (e *Engine) refreshInventory() error {
+	c := &e.inv
+	if c.entries == nil || time.Since(c.builtAt) >= inventoryRebuild {
+		return e.rebuildInventory()
+	}
+	names := dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName)
+	if len(c.pending) > 0 {
+		ws, err := dbos.ListWorkflows(e.client, names, dbos.WithFilterWorkflowIDs(slices.Collect(maps.Keys(c.pending))...),
+			dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+		if err != nil {
+			return err
+		}
+		for _, w := range ws {
+			c.apply(w)
+		}
+	}
+	const page = 500
+	from := c.mark.Add(-inventoryOverlap)
+	for {
+		ws, err := dbos.ListWorkflows(e.client, names, dbos.WithFilterCreatedAfter(from), dbos.WithFilterLimit(page),
+			dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+		if err != nil {
+			return err
+		}
+		fresh := 0
+		for _, w := range ws {
+			from = w.CreatedAt
+			if _, ok := c.recent[w.ID]; ok {
+				continue
+			}
+			fresh++
+			c.see(w)
+			c.apply(w)
+		}
+		if len(ws) < page {
+			break
+		}
+		if fresh == 0 {
+			// Una pagina intera già letta: si prosegue dal millisecondo successivo.
+			from = from.Add(time.Millisecond)
+		}
+	}
+	for id, at := range c.recent {
+		if at.Before(c.mark.Add(-inventoryOverlap)) {
+			delete(c.recent, id)
+		}
+	}
+	return nil
+}
+
+// see registra un workflow letto per la lettura incrementale successiva.
+func (c *inventoryCache) see(w dbos.WorkflowStatus) {
+	if w.CreatedAt.After(c.mark) {
+		c.mark = w.CreatedAt
+	}
+	if !w.CreatedAt.Before(c.mark.Add(-inventoryOverlap)) {
+		c.recent[w.ID] = w.CreatedAt
+	}
+}
+
+// rebuildInventory ricostruisce la cache scorrendo lo storico dal più recente.
+func (e *Engine) rebuildInventory() error {
+	c := &e.inv
+	c.entries, c.pending, c.recent, c.mark = map[string]*InventoryEntry{}, map[string]bool{}, map[string]time.Time{}, time.Time{}
+	err := e.scanRaw(nil, func(w dbos.WorkflowStatus) bool {
+		c.see(w)
+		c.apply(w)
+		return true
+	})
+	if err != nil {
+		c.entries = nil
+		return err
+	}
+	c.builtAt = time.Now()
+	return nil
+}
+
+// apply aggiorna l'inventario con un workflow letto: un deploy riuscito diventa la release in
+// esercizio se è il più recente; un deploy fallito o annullato è l'ultimo fallimento se è più
+// recente della release in esercizio. I workflow non conclusi restano da rileggere.
+func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
+	delete(c.pending, w.ID)
+	if superseded(w) {
+		return
+	}
+	s := toStatus(w)
+	if s.DryRun || s.Application == "" {
+		return
+	}
+	if !Terminal(s.State) {
+		c.pending[w.ID] = true
+		return
+	}
+	k := s.Application + "/" + s.Environment
+	ie := c.entries[k]
+	if ie == nil {
+		ie = &InventoryEntry{Application: s.Application, Environment: s.Environment}
+		c.entries[k] = ie
+	}
+	switch s.State {
+	case string(dbos.WorkflowStatusSuccess):
+		if ie.Current == nil || s.CreatedAt.After(ie.Current.CreatedAt) {
+			ie.Current = &s
+			if ie.LastFailure != nil && !ie.LastFailure.CreatedAt.After(s.CreatedAt) {
+				ie.LastFailure = nil
+			}
+		}
+	case string(dbos.WorkflowStatusError), string(dbos.WorkflowStatusCancelled), string(dbos.WorkflowStatusMaxRecoveryAttemptsExceeded):
+		if (ie.Current == nil || s.CreatedAt.After(ie.Current.CreatedAt)) &&
+			(ie.LastFailure == nil || s.CreatedAt.After(ie.LastFailure.CreatedAt)) {
+			ie.LastFailure = &s
+		}
+	}
 }
 
 // findRelease restituisce il deploy più recente concluso con successo (non dry-run)

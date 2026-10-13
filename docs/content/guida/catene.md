@@ -40,7 +40,7 @@ flowchart LR
 
 - **At submit time** every dependency must exist, must not be a dry-run and must not have already ended without success: otherwise the request is refused (`422`). If they have all already succeeded, the deploy is queued straight away.
 - **While waiting** the deploy is `WAITING_DEPENDENCY` and **does not take a slot of the environment queue**: like an approval, the wait runs on the approval queue. A waiting deploy therefore never blocks the other deploys of the environment, and two deploys waiting for each other cannot deadlock the queue.
-- The wait is a durable DBOS workflow: it survives worker restarts. It reads the state of the dependencies every `chains.poll_interval` (default 5s), doubling the interval up to one minute.
+- The wait is a durable DBOS workflow: it survives worker restarts. When a dependency ends (succeeded, failed, cancelled, rejected) it **immediately notifies** the waits that follow it, which read the state again with a single query. The wait also reads the state every `chains.poll_interval` (default 5s), doubling the interval up to 5 minutes: this covers the cases without a notification, such as a deploy deleted by retention.
 - **When all dependencies have succeeded** the approval is requested, if the [governance](governance.md#approvazioni) rule requires one (so approvers are asked only for a deploy that can really start), then the deploy is queued with the ID already returned. With `schedule.at`, the deploy starts at the later of the time and the success of the dependencies.
 - **If a dependency does not succeed** (error, cancelled, rejected, expired, dependency failed in turn) or the wait expires, the deploy is not run and ends as `DEPENDENCY_FAILED`, with the reason in `error` and in `after.reason`. The outcome is recorded in the audit log (`after.finish`).
 - A waiting deploy can be cancelled like any other (`manent cancel <id>`).
@@ -105,10 +105,11 @@ Through the API the descriptors are included in the request (`descriptor` instea
 
 ### How it works
 
-- **Checks first, then submission.** The release is validated as a whole (unique names, existing dependencies, **no cycles**, no `schedule` or `dryRun` in the deploys), then plan, policies and environment configuration of **every** deploy are checked. Only then are the deploys queued, in topological order. If one is refused anyway (e.g. a freeze), those already queued are cancelled and the error is returned.
+- **Checks first, then submission.** The release is validated as a whole (unique names, existing dependencies, **no cycles**, no `schedule` or `dryRun` in the deploys), then plan, policies, environment configuration, governance rules (e.g. a freeze) and dependencies outside the release are checked for **every** deploy: an error refuses the whole request immediately. Only then is the release accepted.
+- **Queuing the deploys.** The release workflow queues the deploys, in topological order, as its first step: a server crash right after the submission does not leave deploys without the release that follows them. Newly accepted deploys are `ENQUEUED` until the workflow has queued them. If a deploy is refused at that moment (e.g. a freeze that started in the meantime), those already queued are cancelled: the refused one is `ERROR`, the following ones `CANCELLED`, the release `ERROR`.
 - **IDs.** Each deploy gets the ID of its descriptor, if it has one, otherwise `<release>.<name>` (e.g. `shop-2026-10.api`). The dependencies inside the release become `after` between these IDs; `after` already in a descriptor (dependencies outside the release) is kept.
 - **Each deploy is a normal deploy**: its own plan, permissions, governance (approvals, freeze, mandatory promotion), automatic rollback and waves. In lists and in the status it carries `release`.
-- **Following.** A `manent.release` workflow, also on the approval queue, reads the state of the deploys and applies `onFailure`. Submitting the same release again returns the existing one.
+- **Following.** The `manent.release` workflow, on the approval queue, reads the state of all the deploys with a single query, is notified when one of them (or its rollback) ends, and applies `onFailure`. Submitting the same release again returns the existing one. Cancelling the release (`manent release cancel`) stops the workflow first, then cancels the deploys that have not finished.
 
 ### `onFailure`
 

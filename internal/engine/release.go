@@ -31,12 +31,17 @@ const (
 // ordine topologico.
 type releaseInput struct {
 	Release ReleaseStatus `json:"release"`
+	// Descriptors sono i descrittori dei deploy, nell'ordine di Release.Deploys, con ID e
+	// dipendenze (after) già assegnati: il workflow li accoda nel primo step. Le release
+	// accodate dalle versioni precedenti non li hanno, perché i deploy erano già accodati.
+	Descriptors []descriptor.Descriptor `json:"descriptors,omitempty"`
 }
 
-// SubmitRelease implementa ReleaseService. Prima verifica piano e policy di tutti i deploy,
-// poi li accoda in ordine topologico, ognuno con le dipendenze (after) dai propri
-// predecessori, e infine accoda il workflow che segue la release. Se un accodamento fallisce
-// annulla i deploy già accodati. Con lo stesso ID restituisce la release esistente.
+// SubmitRelease implementa ReleaseService. Verifica piano, policy, governance e dipendenze
+// esterne di tutti i deploy, poi accoda il workflow della release, che a sua volta accoda i
+// deploy in ordine topologico, ognuno con le dipendenze (after) dai propri predecessori.
+// Così una caduta del processo dopo l'accodamento non lascia deploy senza la release che li
+// segue. Con lo stesso ID restituisce la release esistente.
 func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*ReleaseStatus, error) {
 	if err := r.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -56,7 +61,8 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		ID: r.ID, State: string(dbos.WorkflowStatusPending), OnFailure: r.FailurePolicy(),
 		RequestedBy: auth.FromContext(ctx).String(), CreatedAt: e.now().UTC(),
 	}
-	descs := make([]*descriptor.Descriptor, len(order))
+	descs := make([]descriptor.Descriptor, len(order))
+	waitsFor := make([]string, 0, 2*len(order))
 	for i, rd := range order {
 		d := *rd.Descriptor
 		d.ID = ids[rd.Name]
@@ -64,6 +70,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		for _, a := range rd.After {
 			after = append(after, ids[a])
 		}
+		external := d.After
 		d.After = append(after, d.After...)
 		if err := d.Validate(); err != nil {
 			return nil, fmt.Errorf("%w: deploy %s: %w", ErrInvalidRequest, rd.Name, err)
@@ -74,38 +81,81 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		if err := e.check(ctx, &d); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
-		descs[i] = &d
+		// Freeze e regole di governance rifiutano la release subito, non dopo l'accodamento.
+		if _, err := e.govern(ctx, &d); err != nil {
+			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
+		}
+		// Le dipendenze interne non esistono ancora: si verificano solo quelle esterne.
+		if len(external) > 0 {
+			ext := d
+			ext.After = external
+			if _, err := e.checkAfter(ctx, &ext); err != nil {
+				return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
+			}
+		}
+		descs[i] = d
 		rs.Deploys = append(rs.Deploys, ReleaseDeployState{
 			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Environment: d.Environment,
-			Version: d.Artifact.Version, After: rd.After,
+			Version: d.Artifact.Version, After: rd.After, State: StateEnqueued,
 		})
-	}
-	var submitted []string
-	for i, d := range descs {
-		sub, err := e.submit(ctx, d, submitMeta{kind: KindDeploy, release: r.ID})
-		if err != nil {
-			for _, id := range submitted {
-				if cerr := e.Cancel(ctx, id); cerr != nil {
-					e.logger.Warn("release: annullamento di un deploy già accodato fallito", "release", r.ID, "deployment", id, "error", cerr)
-				}
-			}
-			return nil, fmt.Errorf("deploy %s: %w", rs.Deploys[i].Name, err)
+		waitsFor = append(waitsFor, d.ID)
+		if rs.OnFailure == descriptor.ReleaseOnFailureRollback {
+			waitsFor = append(waitsFor, r.ID+releaseRollbackInfix+rd.Name)
 		}
-		submitted = append(submitted, sub.ID)
-		rs.Deploys[i].State = sub.State
 	}
 	opts := []dbos.EnqueueOption{
 		dbos.WithEnqueueWorkflowID(r.ID),
-		dbos.WithEnqueueAttributes(map[string]any{attrRelease: r.ID}),
+		dbos.WithEnqueueAttributes(map[string]any{attrRelease: r.ID, attrWaitsFor: strings.Join(waitsFor, " ")}),
 	}
 	if rs.RequestedBy != "" {
 		opts = append(opts, dbos.WithEnqueueAuthenticatedUser(rs.RequestedBy))
 	}
-	if _, err := dbos.Enqueue[ReleaseStatus](e.client, approvalQueue(e.queueName), releaseWorkflowName, releaseInput{Release: *rs}, opts...); err != nil {
+	if _, err := dbos.Enqueue[ReleaseStatus](e.client, approvalQueue(e.queueName), releaseWorkflowName, releaseInput{Release: *rs, Descriptors: descs}, opts...); err != nil {
 		return nil, err
 	}
 	e.logger.Info("release accodata", "release", r.ID, "deploys", len(rs.Deploys), "on_failure", rs.OnFailure, "requested_by", rs.RequestedBy)
 	return rs, nil
+}
+
+// submitDeploys accoda i deploy della release, in ordine, con l'identità di chi l'ha
+// richiesta. È uno step: dopo una caduta viene ripetuto, e gli ID fissi rendono idempotenti gli
+// accodamenti già avvenuti. Se un deploy viene rifiutato (es. un freeze iniziato dopo
+// l'invio) o la release viene annullata, annulla quelli già accodati: il rifiutato risulta
+// ERROR, quelli non accodati CANCELLED.
+func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []descriptor.Descriptor) []ReleaseDeployState {
+	out := slices.Clone(rs.Deploys)
+	eng, ok := w.service.(*Engine)
+	method, subject, _ := strings.Cut(rs.RequestedBy, ":")
+	pc := auth.WithPrincipal(ctx, &auth.Principal{Method: method, Subject: subject})
+	var submitted []string
+	for i := range descs {
+		var err error
+		switch {
+		case !ok:
+			err = errors.New("servizio non configurato sul worker")
+		case ctx.Err() != nil || w.cancelled(rs.ID):
+			err = errors.New("release annullata")
+		default:
+			var sub *Submission
+			if sub, err = eng.submit(pc, &descs[i], submitMeta{kind: KindDeploy, release: rs.ID, prechecked: true}); err == nil {
+				out[i].State = sub.State
+				submitted = append(submitted, sub.ID)
+				continue
+			}
+		}
+		w.logger.Error("release: deploy non accodato, la release si ferma", "release", rs.ID, "deploy", out[i].Name, "error", err)
+		out[i].State, out[i].Error = string(dbos.WorkflowStatusError), "deploy non accodato: "+err.Error()
+		for j := i + 1; j < len(out); j++ {
+			out[j].State = string(dbos.WorkflowStatusCancelled)
+		}
+		for _, id := range submitted {
+			if err := eng.Cancel(context.WithoutCancel(pc), id); err != nil && !errors.Is(err, ErrNotFound) {
+				w.logger.Warn("release: annullamento di un deploy già accodato fallito", "release", rs.ID, "deployment", id, "error", err)
+			}
+		}
+		break
+	}
+	return out
 }
 
 // releaseCheck è una lettura dello stato dei deploy della release, persistita come step.
@@ -122,6 +172,15 @@ type releaseCheck struct {
 func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStatus, error) {
 	rs := in.Release
 	log := w.logger.With("release", rs.ID)
+	if len(in.Descriptors) > 0 {
+		deploys, err := dbos.RunAsStep(ctx, func(c context.Context) ([]ReleaseDeployState, error) {
+			return w.submitDeploys(c, rs, in.Descriptors), nil
+		}, dbos.WithStepName("submit"))
+		if err != nil {
+			return rs, err
+		}
+		rs.Deploys = deploys
+	}
 	stopped := false
 	var published []ReleaseDeployState
 	for poll := w.chainPoll; ; poll = min(poll*2, chainPollMax) {
@@ -157,7 +216,7 @@ func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStat
 			}
 			published = slices.Clone(rs.Deploys)
 		}
-		if _, err := dbos.Sleep(ctx, poll); err != nil {
+		if err := waitChain(ctx, poll); err != nil {
 			return rs, err
 		}
 	}
@@ -183,23 +242,53 @@ func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStat
 	return rs, nil
 }
 
-// readRelease legge lo stato dei deploy della release. Un errore di lettura lascia il deploy
-// nello stato precedente.
+// readRelease legge lo stato dei deploy della release, con una sola query. Un errore di
+// lettura lascia i deploy nello stato precedente. L'errore di un deploy non riuscito si legge
+// dallo stato completo, una volta sola.
 func (w *Worker) readRelease(ctx context.Context, deploys []ReleaseDeployState) releaseCheck {
 	c := releaseCheck{Deploys: slices.Clone(deploys)}
+	states, err := w.reader.states(releaseIDs(deploys))
+	if err != nil {
+		w.logger.Warn("release: lettura dello stato dei deploy fallita", "error", err)
+		return c
+	}
 	for i := range c.Deploys {
 		d := &c.Deploys[i]
-		st, err := w.reader.Status(ctx, d.DeploymentID)
-		if err != nil {
-			w.logger.Warn("release: lettura dello stato di un deploy fallita", "deployment", d.DeploymentID, "error", err)
+		st, ok := states[d.DeploymentID]
+		if !ok {
 			continue
 		}
+		if Terminal(st.State) && st.State != StateSuccess {
+			switch {
+			case st.State == d.State && d.Error != "":
+				st.Error = d.Error
+			default:
+				if full, err := w.reader.Status(ctx, d.DeploymentID); err == nil {
+					st.Error = full.Error
+				}
+			}
+		}
 		d.State, d.Error = st.State, st.Error
-		if notStarted(st) {
+		if notStarted(&st) {
 			c.Pending = append(c.Pending, d.DeploymentID)
 		}
 	}
 	return c
+}
+
+// cancelled dice se il workflow id è stato annullato (es. CancelRelease durante l'accodamento).
+func (w *Worker) cancelled(id string) bool {
+	ws, err := dbos.ListWorkflows(w.dbos, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+	return err == nil && len(ws) == 1 && ws[0].Status == dbos.WorkflowStatusCancelled
+}
+
+// releaseIDs restituisce gli ID dei deploy della release.
+func releaseIDs(deploys []ReleaseDeployState) []string {
+	ids := make([]string, len(deploys))
+	for i, d := range deploys {
+		ids[i] = d.DeploymentID
+	}
+	return ids
 }
 
 // notStarted indica un deploy che non ha ancora iniziato a modificare i target.
@@ -265,7 +354,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 			if err := dbos.SetEvent(ctx, releaseEvent, rs); err != nil {
 				return err
 			}
-			if _, err := dbos.Sleep(ctx, poll); err != nil {
+			if err := waitChain(ctx, poll); err != nil {
 				return err
 			}
 			state, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
@@ -375,15 +464,21 @@ func (e *Engine) CancelRelease(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// Prima il workflow: se sta ancora accodando i deploy si ferma (submitDeploys), poi
+	// vengono annullati quelli già accodati.
+	if err := dbos.CancelWorkflow(e.client, id); err != nil {
+		return err
+	}
+	states, err := e.states(releaseIDs(rs.Deploys))
+	if err != nil {
+		return err
+	}
 	for _, d := range rs.Deploys {
-		if st, err := e.Status(ctx, d.DeploymentID); err == nil && !Terminal(st.State) {
+		if st, ok := states[d.DeploymentID]; ok && !Terminal(st.State) {
 			if err := e.Cancel(ctx, d.DeploymentID); err != nil {
 				return fmt.Errorf("deploy %s: %w", d.Name, err)
 			}
 		}
-	}
-	if err := dbos.CancelWorkflow(e.client, id); err != nil {
-		return err
 	}
 	e.logger.Info("release annullata", "release", id)
 	return nil

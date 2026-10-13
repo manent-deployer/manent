@@ -75,7 +75,7 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 ```
 
 !!! note
-    L'inventario esamina gli ultimi 10.000 deploy. Un'applicazione che non viene rilasciata da molto più tempo può non comparire: in quel caso fa fede il sistema di destinazione.
+    L'inventario si ricostruisce dagli ultimi 10.000 deploy all'avvio del server e ogni 10 minuti, e nel frattempo segue i deploy nuovi e quelli in corso. Un'applicazione che non viene rilasciata da molto più tempo può non comparire: in quel caso fa fede il sistema di destinazione.
 
 ## Promozione { #promozione }
 

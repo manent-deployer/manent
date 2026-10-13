@@ -75,7 +75,7 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 ```
 
 !!! note
-    The inventory examines the last 10,000 deploys. An application that has not been released for much longer may not appear: in that case the target system is the source of truth.
+    The inventory is rebuilt from the last 10,000 deploys when the server starts and every 10 minutes, and in the meantime it follows new and running deploys. An application that has not been released for much longer may not appear: in that case the target system is the source of truth.
 
 ## Promotion { #promozione }
 

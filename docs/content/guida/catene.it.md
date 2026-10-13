@@ -40,7 +40,7 @@ flowchart LR
 
 - **All'invio** ogni dipendenza deve esistere, non essere un dry-run e non essere già conclusa senza successo: altrimenti la richiesta è rifiutata (`422`). Se sono già tutte riuscite il deploy viene accodato subito.
 - **Durante l'attesa** il deploy è `WAITING_DEPENDENCY` e **non occupa uno slot della coda dell'ambiente**: come un'approvazione, l'attesa gira sulla coda delle approvazioni. Un deploy in attesa non blocca quindi gli altri deploy dell'ambiente, e due deploy che si attendono a vicenda non possono bloccare la coda.
-- L'attesa è un workflow DBOS durevole: sopravvive al riavvio dei worker. Legge lo stato delle dipendenze ogni `chains.poll_interval` (default 5s), raddoppiando l'intervallo fino a un minuto.
+- L'attesa è un workflow DBOS durevole: sopravvive al riavvio dei worker. Quando una dipendenza si conclude (riuscita, fallita, annullata, respinta) **avvisa subito** le attese che la seguono, che rileggono lo stato in una sola query. In più l'attesa rilegge lo stato ogni `chains.poll_interval` (default 5s), raddoppiando l'intervallo fino a 5 minuti: copre i casi senza avviso, come un deploy eliminato dalla retention.
 - **Quando tutte le dipendenze sono riuscite** viene chiesta l'approvazione, se la regola di [governance](governance.md#approvazioni) la richiede (così gli approvatori vengono interpellati solo per un deploy che può davvero partire), poi il deploy viene accodato con l'ID già restituito. Con `schedule.at` il deploy parte al più tardi tra l'orario e il successo delle dipendenze.
 - **Se una dipendenza non riesce** (errore, annullata, respinta, scaduta, a sua volta con dipendenze fallite) o l'attesa scade, il deploy non viene eseguito e si conclude in `DEPENDENCY_FAILED`, con il motivo in `error` e in `after.reason`. L'esito è registrato nell'audit (`after.finish`).
 - Un deploy in attesa si annulla come gli altri (`manent cancel <id>`).
@@ -105,10 +105,11 @@ Tramite API i descrittori sono inclusi nella richiesta (`descriptor` invece di `
 
 ### Come funziona
 
-- **Prima le verifiche, poi l'invio.** La release è validata nel suo insieme (nomi distinti, dipendenze esistenti, **nessun ciclo**, niente `schedule` né `dryRun` nei deploy), poi vengono verificati piano, policy e configurazione di ambiente di **ogni** deploy. Solo dopo i deploy vengono accodati, in ordine topologico. Se uno viene comunque rifiutato (es. un freeze), quelli già accodati vengono annullati e l'errore viene restituito.
+- **Prima le verifiche, poi l'invio.** La release è validata nel suo insieme (nomi distinti, dipendenze esistenti, **nessun ciclo**, niente `schedule` né `dryRun` nei deploy), poi per **ogni** deploy vengono verificati piano, policy, configurazione di ambiente, regole di governance (es. un freeze) e dipendenze esterne alla release: un errore rifiuta subito l'intera richiesta. Solo dopo la release viene accettata.
+- **Accodamento dei deploy.** È il workflow della release ad accodare i deploy, in ordine topologico, come primo passo: una caduta del server subito dopo l'invio non lascia deploy senza la release che li segue. I deploy appena accettati risultano `ENQUEUED` finché il workflow non li ha accodati. Se in quel momento un deploy viene rifiutato (es. un freeze iniziato nel frattempo), quelli già accodati vengono annullati: il rifiutato risulta `ERROR`, i successivi `CANCELLED`, la release `ERROR`.
 - **ID.** Ogni deploy riceve l'ID del suo descrittore, se ne ha uno, altrimenti `<release>.<nome>` (es. `shop-2026-10.api`). Le dipendenze interne alla release diventano `after` tra questi ID; un `after` già presente in un descrittore (dipendenze esterne alla release) resta.
 - **Ogni deploy è un deploy normale**: piano, permessi, governance (approvazioni, freeze, promozione obbligatoria), rollback automatico e ondate propri. Negli elenchi e nello stato riporta `release`.
-- **Monitoraggio.** Un workflow `manent.release`, anch'esso sulla coda delle approvazioni, legge lo stato dei deploy e applica `onFailure`. Inviare di nuovo la stessa release restituisce quella esistente.
+- **Monitoraggio.** Il workflow `manent.release`, sulla coda delle approvazioni, legge lo stato di tutti i deploy con una sola query, viene avvisato quando uno di essi (o un suo rollback) si conclude e applica `onFailure`. Inviare di nuovo la stessa release restituisce quella esistente. Annullando la release (`manent release cancel`) si ferma prima il workflow, poi vengono annullati i deploy non conclusi.
 
 ### `onFailure`
 

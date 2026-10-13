@@ -399,6 +399,9 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	ev.send(d, final)
 	w.recordOutcome(ctx, id, req.RequestedBy, d, final)
 	w.recordAttributes(ctx, id, req, res, final)
+	if !req.Descriptor.DryRun {
+		w.notifyWaiters(ctx, id)
+	}
 	w.recordMetrics(id, req, final)
 	span.SetAttributes(attribute.String("manent.outcome", final.Status))
 	if runErr != nil {
