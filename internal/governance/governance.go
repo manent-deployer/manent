@@ -25,6 +25,14 @@ type Approvals struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+// RequiredOrZero restituisce il numero di approvazioni richieste (0 senza regola).
+func (a *Approvals) RequiredOrZero() int {
+	if a == nil {
+		return 0
+	}
+	return a.Required
+}
+
 // Rule sono le regole di rilascio di un insieme di applicazioni e ambienti (pattern con "*").
 type Rule struct {
 	Name         string
@@ -34,6 +42,16 @@ type Rule struct {
 	// essere già stato rilasciato con successo.
 	Requires  []string
 	Approvals Approvals
+	// Change, se presente, apre un ticket di change management per ogni deploy.
+	Change *Change
+}
+
+// Change è la regola di change management di un deploy, fissata all'accodamento.
+type Change struct {
+	// Approval: il deploy attende l'approvazione del change nel sistema ITSM.
+	Approval bool `json:"approval,omitempty"`
+	// Timeout dell'attesa dell'approvazione.
+	Timeout time.Duration `json:"timeout,omitempty"`
 }
 
 // Window è una finestra di freeze: assoluta (From-To) o ricorrente (Cron per Duration).

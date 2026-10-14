@@ -6,7 +6,8 @@ manent keeps track of what is live in each environment and enforces the rules by
 - **mandatory promotion:** only what has already passed through another environment is released;
 - **approvals:** the deploy starts only after other people approve it;
 - **freeze windows:** periods in which deploys are blocked, with an override for emergencies;
-- **manual rollback:** go back to a previous version with one command.
+- **manual rollback:** go back to a previous version with one command;
+- **change management:** a ticket in ServiceNow or Jira for every deploy, optionally waiting for its approval (`change` in the rule, see [Chat and change management](integrazioni.md#change-management)).
 
 The rules live in the `governance` section of the [configuration](../operazioni/configurazione.md) and apply to CLI and API alike.
 
@@ -18,6 +19,7 @@ governance:
       environments: [prod]
       requires: [preprod]
       approvals: {required: 2, timeout: 48h}
+      change: {approval: true}       # change ticket approved in the ITSM
     - name: production
       applications: ["*"]
       environments: [prod]

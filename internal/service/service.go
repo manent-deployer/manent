@@ -170,6 +170,8 @@ type Result struct {
 	Steps  []StepResult `json:"steps"`
 	// Rollout è lo stato finale del rilascio a ondate, se il deploy ne ha uno.
 	Rollout *RolloutState `json:"rollout,omitempty"`
+	// Change è il ticket di change management del deploy, se previsto.
+	Change *ChangeTicket `json:"change,omitempty"`
 }
 
 // Submission descrive l'esito di Submit.
@@ -210,6 +212,8 @@ type Status struct {
 	// LastStep è l'ultimo step registrato di un deploy in corso (solo nell'attività).
 	LastStep string         `json:"last_step,omitempty"`
 	Approval *ApprovalState `json:"approval,omitempty"`
+	// Change è il ticket di change management del deploy, se previsto.
+	Change *ChangeTicket `json:"change,omitempty"`
 	// After è lo stato delle dipendenze, se il deploy ne ha.
 	After *AfterState `json:"after,omitempty"`
 	// Release è la release composta a cui appartiene il deploy.

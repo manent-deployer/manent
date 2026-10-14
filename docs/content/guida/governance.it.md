@@ -6,7 +6,8 @@ manent tiene traccia di cosa è in esercizio in ogni ambiente e applica le regol
 - **promozione obbligatoria:** in un ambiente si rilascia solo ciò che è già passato da un altro;
 - **approvazioni:** il deploy parte solo dopo l'approvazione di altre persone;
 - **finestre di freeze:** periodi in cui i deploy sono bloccati, con deroga per le emergenze;
-- **rollback manuale:** si torna a una versione precedente con un comando.
+- **rollback manuale:** si torna a una versione precedente con un comando;
+- **change management:** un ticket in ServiceNow o Jira per ogni deploy, con l'eventuale attesa della sua approvazione (`change` nella regola, vedi [Chat e change management](integrazioni.md#change-management)).
 
 Le regole sono nella sezione `governance` della [configurazione](../operazioni/configurazione.md) e valgono per CLI e API.
 
@@ -18,6 +19,7 @@ governance:
       environments: [prod]
       requires: [preprod]
       approvals: {required: 2, timeout: 48h}
+      change: {approval: true}       # ticket di change approvato nell'ITSM
     - name: produzione
       applications: ["*"]
       environments: [prod]

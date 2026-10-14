@@ -21,6 +21,8 @@ import (
 
 	"github.com/joeg-ita/manent/internal/audit"
 	"github.com/joeg-ita/manent/internal/callback"
+	"github.com/joeg-ita/manent/internal/change"
+	"github.com/joeg-ita/manent/internal/chat"
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/descriptor"
@@ -60,6 +62,14 @@ type WorkerOptions struct {
 	Notifier callback.Notifier
 	// CallbackRetries sono i tentativi aggiuntivi di ogni invio a un callback.
 	CallbackRetries int
+	// Chat, se presente, invia le notifiche in chat (destinazioni scelte all'accodamento).
+	Chat ChatNotifier
+	// Change, se presente, è il sistema di change management dei deploy che lo richiedono.
+	Change change.Provider
+	// ChangePoll è l'intervallo iniziale di lettura dell'approvazione del change (default 1m).
+	ChangePoll time.Duration
+	// PublicURL è l'indirizzo dell'interfaccia web, per i link nei ticket.
+	PublicURL string
 	// Rollback, se presente, applica la policy di rollback al descrittore effettivo.
 	Rollback RollbackPolicy
 	// Audit, se presente, registra l'esito finale di ogni deploy.
@@ -122,6 +132,10 @@ type Worker struct {
 	cleaner         pipeline.Cleaner
 	notifier        callback.Notifier
 	callbackRetries int
+	chat            ChatNotifier
+	change          change.Provider
+	changePoll      time.Duration
+	publicURL       string
 	rollback        RollbackPolicy
 	audit           audit.Recorder
 	governance      Governance
@@ -173,6 +187,10 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		cleaner:         opts.Cleaner,
 		notifier:        opts.Notifier,
 		callbackRetries: opts.CallbackRetries,
+		chat:            opts.Chat,
+		change:          opts.Change,
+		changePoll:      cmp.Or(opts.ChangePoll, time.Minute),
+		publicURL:       opts.PublicURL,
 		rollback:        opts.Rollback,
 		audit:           opts.Audit,
 		governance:      opts.Governance,
@@ -395,6 +413,7 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	defer span.End()
 	ev := &events{w: w, ctx: ctx, id: id, requestedBy: req.RequestedBy, span: span.SpanContext()}
 	ev.send(&req.Descriptor, callback.Event{Type: descriptor.CallbackEventDeployment, Status: callback.StatusStarted})
+	chatRefs := w.notifyChat(ctx, id, req.Notify, w.chatMessage(id, req, chat.EventStarted), nil)
 	res, d, runErr := w.run(ctx, id, req, ev)
 	if w.cleaner != nil {
 		if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
@@ -411,6 +430,15 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 		}
 	}
 	ev.send(d, final)
+	if res.Change != nil {
+		w.closeChange(ctx, id, res.Change, final)
+	}
+	msg := w.chatMessage(id, req, chat.EventSucceeded)
+	if runErr != nil {
+		msg.Event, msg.Error, msg.Rollback = chat.EventFailed, runErr.Error(), final.Rollback
+	}
+	msg.Change = chatChange(res.Change)
+	w.notifyChat(ctx, id, req.Notify, msg, chatRefs)
 	w.recordOutcome(ctx, id, req.RequestedBy, d, final)
 	w.recordAttributes(ctx, id, req, res, final)
 	if !req.Descriptor.DryRun {
@@ -452,6 +480,9 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 		if v := s.Output[outSHA256]; s.Name == stepArtifacts && v != "" {
 			attrs[attrSHA256] = v
 		}
+	}
+	if res.Change != nil {
+		attrs[attrChange], attrs[attrChangeURL] = res.Change.Number, res.Change.URL
 	}
 	if err := dbos.SetWorkflowAttributes(ctx, id, attrs); err != nil {
 		w.logger.Error("aggiornamento degli attributi del deploy fallito", "deployment", id, "error", err)
@@ -564,6 +595,13 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 		res.Steps = append(res.Steps, StepResult{Name: "config", Output: rc.Meta})
 	}
 	d := &req.Descriptor
+	if req.Change != nil && !d.DryRun {
+		t, err := w.openChange(ctx, id, req)
+		if err != nil {
+			return res, d, err
+		}
+		res.Change = t
+	}
 	if d.Rollout != nil {
 		return res, d, w.runRollout(ctx, id, req, d, ev, &res)
 	}

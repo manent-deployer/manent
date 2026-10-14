@@ -315,6 +315,29 @@ manent freezes -e prod                                       # finestre di freez
 
 Dettagli nella [documentazione](docs/content/guida/governance.md).
 
+## Chat e change management
+
+```yaml
+integrations:
+  public_url: https://manent.example.com
+  slack: {bot_token_ref: "vault:…#bot_token", signing_secret_ref: "vault:…#signing_secret", identities: {U024BE7LH: {subject: "oidc:alice"}}}
+  notifications:
+    - {name: prod, applications: ["*"], environments: [prod], slack: {channel: C0123456789}}
+    - {name: cab, applications: ["*"], environments: ["prod*"], events: [approval], teams: {webhook_ref: "vault:…#teams"}}
+  change:
+    provider: servicenow                  # o jira
+    servicenow: {url: https://acme.service-now.com, username: manent, password_ref: "vault:…#password"}
+governance:
+  rules:
+    - {name: produzione, applications: ["*"], environments: [prod], change: {approval: true}}
+```
+
+- **Notifiche:** avvio ed esito dei deploy, richieste ed esiti delle approvazioni, in Slack (bot con messaggi aggiornati, o incoming webhook) e Teams (Adaptive Card via Workflows). Le destinazioni si scelgono all'accodamento; ogni invio è uno step DBOS e non fa mai fallire il deploy.
+- **Approvazioni da Slack:** pulsanti Approva e Respingi verso `/integrations/slack/interactions`, verificati con la firma di Slack; la decisione vale come quella dell'identità di manent associata all'utente, con gli stessi permessi e il divieto di auto-approvazione. In Teams un link al deploy nell'interfaccia web.
+- **Change management:** con `change` nella regola di governance, un ticket in ServiceNow o Jira per ogni deploy, aperto all'avvio e chiuso con l'esito; con `approval: true` il deploy attende anche l'approvazione del change nell'ITSM.
+
+Dettagli nella [documentazione](docs/content/guida/integrazioni.md).
+
 ## Pipeline
 
 Gli step e il loro ordine si definiscono in `configs/manent.yml` (`pipeline.steps`).

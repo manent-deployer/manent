@@ -76,6 +76,7 @@ type (
 	Decision             = service.Decision
 	DecisionRequest      = service.DecisionRequest
 	ApprovalState        = service.ApprovalState
+	ChangeTicket         = service.ChangeTicket
 	InventoryFilter      = service.InventoryFilter
 	InventoryEntry       = service.InventoryEntry
 	Redeploy             = service.Redeploy

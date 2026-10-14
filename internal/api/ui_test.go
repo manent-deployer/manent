@@ -17,9 +17,10 @@ func newUIRouter(svc *mockService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	ui := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ui:"+r.URL.Path) })
 	return NewRouterWith(svc, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), Options{
-		UI:            ui,
-		UIConfig:      &UIConfig{AuthMode: UIAuthOIDC, Issuer: "https://idp.example.com", ClientID: "manent-ui", Scopes: []string{"openid"}, RedirectPath: "/auth/callback", Version: "1.2.3"},
-		EventInterval: 5 * time.Millisecond,
+		UI:                ui,
+		UIConfig:          &UIConfig{AuthMode: UIAuthOIDC, Issuer: "https://idp.example.com", ClientID: "manent-ui", Scopes: []string{"openid"}, RedirectPath: "/auth/callback", Version: "1.2.3"},
+		EventInterval:     5 * time.Millisecond,
+		SlackInteractions: http.NotFoundHandler(),
 	})
 }
 

@@ -183,6 +183,9 @@ func approvalOf(s service.Status) string {
 		return ""
 	}
 	r := fmt.Sprintf("%d/%d approvazioni", len(s.Approval.Decisions), s.Approval.Required)
+	if c := s.Approval.Change; c != nil {
+		r += fmt.Sprintf(", change %s %s", c.Number, c.Approval)
+	}
 	// Tra due ondate: l'ultimo stadio superato.
 	if s.Rollout != nil {
 		last := ""

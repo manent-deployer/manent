@@ -108,7 +108,7 @@ See [Authentication, permissions and audit](accesso.md).
 
 | Key | Default | Description |
 |---|---|---|
-| `governance.rules` | `[]` | Rules per application and environment (the first match applies): `name`, `applications`, `environments`, `requires` (environments to promote from), `approvals` (`required`, `allow_self`, `timeout`, default `72h`). |
+| `governance.rules` | `[]` | Rules per application and environment (the first match applies): `name`, `applications`, `environments`, `requires` (environments to promote from), `approvals` (`required`, `allow_self`, `timeout`, default `72h`), `change` (`approval`, `timeout`, default `72h`: change ticket, see [Chat and change management](../guida/integrazioni.md#change-management)). |
 | `governance.freezes` | `[]` | Freeze windows: `name`, `reason`, `applications`, `environments` and `from`/`to` or `cron` (5 fields), `duration`, `timezone`. |
 
 See [Release governance](../guida/governance.md).
@@ -166,6 +166,23 @@ Health gate of [wave rollouts](../guida/ondate.md#health-gate).
 | `prometheus_url` | | Prometheus API for `rollout.health.metrics` (e.g. `http://prometheus:9090`). Without it, a rollout with metrics is rejected. |
 | `alertmanager_url` | | Alertmanager API for `rollout.health.alerts`. |
 | `check_timeout` | `30s` | Maximum time of each gate reading. |
+
+### `integrations`
+
+Notifications in Slack and Teams, approvals from Slack and change tickets. See [Chat and change management](../guida/integrazioni.md).
+
+| Key | Default | Description |
+|---|---|---|
+| `integrations.public_url` | | Address of the web interface, for links in messages and tickets. |
+| `integrations.language` | `en` | Message language: `en` or `it`. |
+| `integrations.timeout` | `15s` | Timeout of calls to Slack, Teams and the ITSM. |
+| `integrations.slack.bot_token_ref`, `signing_secret_ref` | | Secrets of the Slack app: updatable messages and approval buttons. |
+| `integrations.slack.identities` | | Slack user ID → `subject` (`oidc:alice`) and `groups` of the manent identity. |
+| `integrations.slack.email_identity` | | Identity of unlisted users from their email, e.g. `oidc:{email}`. |
+| `integrations.notifications` | `[]` | Destinations: `name`, `applications`, `environments`, `events`, `dry_run` and `slack` (`channel` or `webhook_ref`) or `teams` (`webhook_ref`). |
+| `integrations.change.provider` | | `servicenow` or `jira`. |
+| `integrations.change.poll_interval` | `1m` | Initial interval for reading the change approval (up to 5 minutes). |
+| `integrations.change.servicenow`, `jira` | | Connection and fields of the ITSM system. |
 
 ### `chains`
 

@@ -82,7 +82,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
 		// Freeze e regole di governance rifiutano la release subito, non dopo l'accodamento.
-		if _, err := e.govern(ctx, &d); err != nil {
+		if _, _, err := e.govern(ctx, &d); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
 		// Le dipendenze interne non esistono ancora: si verificano solo quelle esterne.

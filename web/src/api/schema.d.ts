@@ -472,6 +472,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/slack/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clic sui pulsanti di approvazione dei messaggi Slack (Interactivity Request URL dell'app)
+         * @description Autenticata dalla firma di Slack (X-Slack-Signature, X-Slack-Request-Timestamp), non da un bearer. La decisione è registrata con l'identità di manent associata all'utente Slack; l'esito arriva all'utente con un messaggio effimero.
+         */
+        post: operations["slackInteractions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -566,6 +586,17 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             decisions?: components["schemas"]["Decision"][];
+            change?: components["schemas"]["ChangeTicket"];
+        };
+        /** @description Ticket di change management (ServiceNow, Jira) del deploy */
+        ChangeTicket: {
+            /** @description Identificativo tecnico nel sistema ITSM */
+            id?: string;
+            /** @description Riferimento leggibile */
+            number: string;
+            url?: string;
+            /** @enum {string} */
+            approval?: "pending" | "approved" | "rejected";
         };
         RolloutPass: {
             name: string;
@@ -604,6 +635,7 @@ export interface components {
             dry_run?: boolean;
             steps: components["schemas"]["StepResult"][];
             rollout?: components["schemas"]["RolloutState"];
+            change?: components["schemas"]["ChangeTicket"];
         };
         Status: {
             id: string;
@@ -639,6 +671,7 @@ export interface components {
             /** @description Ultimo step registrato di un deploy in corso (solo in /activity) */
             last_step?: string;
             approval?: components["schemas"]["ApprovalState"];
+            change?: components["schemas"]["ChangeTicket"];
             after?: components["schemas"]["AfterState"];
             /** @description Release composta a cui appartiene il deploy */
             release?: string;
@@ -1651,6 +1684,45 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UIConfig"];
                 };
+            };
+        };
+    };
+    slackInteractions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description Payload JSON dell'interazione (block_actions) */
+                    payload: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Ricevuta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Firma non valida o richiesta scaduta */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Integrazione non disponibile */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

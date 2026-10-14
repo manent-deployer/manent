@@ -48,7 +48,7 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
 	// I deploy della schedule risultano richiesti da chi l'ha creata. Se l'ambiente richiedeva
 	// approvazioni alla creazione della schedule, ogni esecuzione va approvata.
-	if sc.Request.Approval != nil {
+	if needsApproval(sc.Request) {
 		if err := enqueueApproval(ctx, sc.QueueName, sc.Request, id); err != nil {
 			return "", err
 		}

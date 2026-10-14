@@ -47,6 +47,13 @@ type Request struct {
 	// Approval, se presente, sono le approvazioni richieste prima dell'esecuzione: la regola
 	// è quella valida al momento della richiesta (o della creazione della schedule).
 	Approval *governance.Approvals `json:"approval,omitempty"`
+	// Change, se presente, apre un ticket di change management per il deploy ed eventualmente
+	// ne attende l'approvazione. Come Approval, è la regola valida alla richiesta.
+	Change *governance.Change `json:"change,omitempty"`
+	// Notify sono le destinazioni delle notifiche in chat (integrations.notifications), scelte
+	// alla richiesta: la sequenza degli step del workflow non dipende dalla configurazione
+	// letta durante una recovery.
+	Notify []string `json:"notify,omitempty"`
 	// TraceParent è la traccia (W3C traceparent) della richiesta: le span del worker ne
 	// diventano figlie. Vuoto per le esecuzioni delle schedule ricorrenti.
 	TraceParent string `json:"trace_parent,omitempty"`
@@ -73,6 +80,8 @@ type ServiceOptions struct {
 	Resolver ConfigResolver
 	// Governance, se presente, applica promozione obbligatoria, approvazioni e freeze.
 	Governance Governance
+	// Notifications, se presente, sceglie le destinazioni delle notifiche in chat.
+	Notifications NotificationRouter
 	// Health, se presente, verifica che i controlli di salute dei rollout siano eseguibili.
 	Health rollout.Checker
 	// Executors, se presente, fornisce a Workers il registro dei worker; StaleAfter è il
@@ -82,6 +91,11 @@ type ServiceOptions struct {
 	Logger     *slog.Logger
 	// Now restituisce l'ora corrente; sostituibile nei test.
 	Now func() time.Time
+}
+
+// NotificationRouter sceglie le destinazioni delle notifiche di un deploy.
+type NotificationRouter interface {
+	Match(application, environment string, dryRun bool) []string
 }
 
 // SourceChecker verifica che la sorgente di un artefatto sia ammessa.
@@ -109,6 +123,7 @@ type Engine struct {
 	sources    SourceChecker
 	resolver   ConfigResolver
 	governance Governance
+	notify     NotificationRouter
 	health     rollout.Checker
 	executors  ExecutorLister
 	staleAfter time.Duration
@@ -132,6 +147,7 @@ func NewService(opts ServiceOptions) *Engine {
 		sources:    opts.Sources,
 		resolver:   opts.Resolver,
 		governance: opts.Governance,
+		notify:     opts.Notifications,
 		health:     opts.Health,
 		executors:  opts.Executors,
 		staleAfter: cmp.Or(opts.StaleAfter, time.Minute),
@@ -182,8 +198,11 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 		Descriptor: *d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: meta.kind, Source: meta.source,
 		Release: meta.release, TraceParent: telemetry.TraceParent(ctx),
 	}
-	if req.Approval, err = e.govern(ctx, d); err != nil {
+	if req.Approval, req.Change, err = e.govern(ctx, d); err != nil {
 		return nil, err
+	}
+	if e.notify != nil {
+		req.Notify = e.notify.Match(d.Application, d.Environment, d.DryRun)
 	}
 	// Con dipendenze non ancora riuscite il deploy attende: poi approvazione e accodamento.
 	wait := false
@@ -222,7 +241,7 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 		e.logger.Info("deploy in attesa delle dipendenze", "deployment", id, "application", d.Application, "environment", d.Environment, "after", d.After, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
-	if req.Approval != nil {
+	if needsApproval(req) {
 		// Il deploy non esiste ancora: l'ID va scelto subito, perché è quello da approvare.
 		if id == "" {
 			id = uuid.NewString()
@@ -231,7 +250,8 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 			return nil, err
 		}
 		sub.ID, sub.State = id, StateAwaitingApproval
-		e.logger.Info("deploy in attesa di approvazione", "deployment", id, "application", d.Application, "environment", d.Environment, "required", req.Approval.Required, "requested_by", req.RequestedBy)
+		e.logger.Info("deploy in attesa di approvazione", "deployment", id, "application", d.Application, "environment", d.Environment,
+			"required", req.Approval.RequiredOrZero(), "change_approval", req.Change != nil && req.Change.Approval, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
 	opts := deployOptions(req, id)
@@ -355,9 +375,9 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 // govern applica le regole di governance a un deploy reale: freeze, promozione obbligatoria e
 // approvazioni. Restituisce le approvazioni richieste, o nil. Il dry-run non è soggetto alle
 // regole perché non modifica gli ambienti.
-func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governance.Approvals, error) {
+func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governance.Approvals, *governance.Change, error) {
 	if e.governance == nil || d.DryRun {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if d.FreezeOverride == "" && (d.Schedule == nil || d.Schedule.Cron == "") {
 		at := e.now()
@@ -365,24 +385,45 @@ func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governa
 			at = *d.Schedule.At
 		}
 		if w := e.governance.Frozen(d.Application, d.Environment, at); w != nil {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidRequest, freezeMessage(w))
+			return nil, nil, fmt.Errorf("%w: %s", ErrInvalidRequest, freezeMessage(w))
 		}
 	}
 	rule := e.governance.Rule(d.Application, d.Environment)
 	for _, env := range rule.Requires {
 		rel, err := e.findRelease(ctx, d.Application, env, func(s Status) bool { return sameArtifact(s, d) })
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if rel == nil {
-			return nil, fmt.Errorf("%w: %s %s non risulta rilasciato con successo in %s: va promosso da lì (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
+			return nil, nil, fmt.Errorf("%w: %s %s non risulta rilasciato con successo in %s: va promosso da lì (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
 		}
 	}
+	var approvals *governance.Approvals
 	if rule.Approvals.Required > 0 {
 		a := rule.Approvals
-		return &a, nil
+		approvals = &a
 	}
-	return nil, nil
+	var change *governance.Change
+	if rule.Change != nil {
+		c := *rule.Change
+		change = &c
+	}
+	return approvals, change, nil
+}
+
+// changeTicket legge il ticket di change dagli attributi del workflow.
+func changeTicket(st dbos.WorkflowStatus) *ChangeTicket {
+	n := attr(st, attrChange)
+	if n == "" {
+		return nil
+	}
+	return &ChangeTicket{Number: n, URL: attr(st, attrChangeURL)}
+}
+
+// needsApproval indica se il deploy attende un'approvazione prima dell'accodamento: di
+// identità di manent, del change nel sistema ITSM o di entrambi.
+func needsApproval(req Request) bool {
+	return req.Approval != nil || (req.Change != nil && req.Change.Approval)
 }
 
 // freezeMessage descrive il freeze che blocca un deploy.
@@ -433,6 +474,9 @@ const (
 	attrOutcome     = "outcome"
 	attrSHA256      = "sha256"
 	attrRollback    = "rollback"
+	// attrChange e attrChangeURL sono il numero e il link del ticket di change.
+	attrChange    = "change"
+	attrChangeURL = "change_url"
 	// attrRolloutProgress riassume un rollout a ondate: "stadi superati/stadi totali".
 	attrRolloutProgress = "rollout_progress"
 )
@@ -453,7 +497,7 @@ func attributes(req Request) map[string]any {
 	if d.DryRun {
 		a[attrDryRun] = "true"
 	}
-	if req.Approval != nil {
+	if needsApproval(req) {
 		a[attrApproval] = "required"
 	}
 	if len(d.After) > 0 {
@@ -769,7 +813,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		Application: attr(st, attrApplication), Environment: attr(st, attrEnvironment),
 		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256),
 		Kind: attr(st, attrKind), Source: attr(st, attrSource), DryRun: attr(st, attrDryRun) == "true",
-		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress),
+		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
 	}
 	if s.Application == "" {
 		// Deploy accodati prima degli attributi: la chiave di partizione è "<application>/<environment>".

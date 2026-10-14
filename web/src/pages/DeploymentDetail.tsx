@@ -61,6 +61,17 @@ function Facts({ d }: { d: Status }) {
           </Link>
         </Fact>
       )}
+      {d.change && (
+        <Fact label={t("detail.change")}>
+          {d.change.url ? (
+            <a className="font-mono text-sm text-accent hover:underline" href={d.change.url} target="_blank" rel="noreferrer">
+              {d.change.number}
+            </a>
+          ) : (
+            <span className="font-mono text-sm">{d.change.number}</span>
+          )}
+        </Fact>
+      )}
       <Fact label={t("detail.requestedBy")}>{d.requested_by || "—"}</Fact>
       <Fact label={t("detail.created")}>
         <time dateTime={d.created_at}>{formatDateTime(d.created_at, locale)}</time>
@@ -124,6 +135,11 @@ function ApprovalPanel({ d }: { d: Status }) {
           <span className="text-muted"> · {t("detail.approval.expires", { time: formatRelative(a.expires_at, locale) })}</span>
         )}
       </p>
+      {a.change && (
+        <p className="mt-2 text-sm">
+          {t(`detail.approval.change.${a.change.approval ?? "pending"}` as MessageKey, { number: a.change.number })}
+        </p>
+      )}
       {a.decisions && a.decisions.length > 0 && (
         <ul className="mt-3 space-y-2">
           {a.decisions.map((x, i) => (

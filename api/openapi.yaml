@@ -443,6 +443,29 @@ paths:
       security: []
       responses:
         '200': {description: Configurazione, content: {application/json: {schema: {$ref: '#/components/schemas/UIConfig'}}}}
+  /integrations/slack/interactions:
+    post:
+      tags: [integrations]
+      summary: Clic sui pulsanti di approvazione dei messaggi Slack (Interactivity Request URL dell'app)
+      description: >-
+        Autenticata dalla firma di Slack (X-Slack-Signature, X-Slack-Request-Timestamp), non da un bearer.
+        La decisione è registrata con l'identità di manent associata all'utente Slack; l'esito arriva
+        all'utente con un messaggio effimero.
+      operationId: slackInteractions
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: {type: string, description: Payload JSON dell'interazione (block_actions)}
+      responses:
+        '200': {description: Ricevuta}
+        '401': {description: Firma non valida o richiesta scaduta}
+        '503': {description: Integrazione non disponibile}
   /healthz:
     get:
       tags: [probes]
@@ -555,6 +578,16 @@ components:
         allow_self: {type: boolean}
         expires_at: {type: string, format: date-time}
         decisions: {type: array, items: {$ref: '#/components/schemas/Decision'}}
+        change: {$ref: '#/components/schemas/ChangeTicket'}
+    ChangeTicket:
+      type: object
+      description: Ticket di change management (ServiceNow, Jira) del deploy
+      required: [number]
+      properties:
+        id: {type: string, description: Identificativo tecnico nel sistema ITSM}
+        number: {type: string, description: Riferimento leggibile, es. CHG0031337}
+        url: {type: string}
+        approval: {type: string, enum: [pending, approved, rejected]}
     RolloutPass:
       type: object
       required: [name, hosts]
@@ -598,6 +631,7 @@ components:
         dry_run: {type: boolean}
         steps: {type: array, items: {$ref: '#/components/schemas/StepResult'}}
         rollout: {$ref: '#/components/schemas/RolloutState'}
+        change: {$ref: '#/components/schemas/ChangeTicket'}
     Status:
       type: object
       required: [id, state, created_at, updated_at]
@@ -624,6 +658,7 @@ components:
         queue: {type: string}
         last_step: {type: string, description: Ultimo step registrato di un deploy in corso (solo in /activity)}
         approval: {$ref: '#/components/schemas/ApprovalState'}
+        change: {$ref: '#/components/schemas/ChangeTicket'}
         after: {$ref: '#/components/schemas/AfterState'}
         release: {type: string, description: Release composta a cui appartiene il deploy}
         rollout: {$ref: '#/components/schemas/RolloutState'}

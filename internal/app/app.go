@@ -27,6 +27,8 @@ import (
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/authz"
 	"github.com/joeg-ita/manent/internal/callback"
+	"github.com/joeg-ita/manent/internal/change"
+	"github.com/joeg-ita/manent/internal/chat"
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/config"
 	"github.com/joeg-ita/manent/internal/deploylog"
@@ -68,6 +70,8 @@ type App struct {
 	metrics  *telemetry.Metrics
 	registry cluster.Registry
 	// admin è creato al primo uso: nei comandi CLI che non lo usano non serve il registro.
+	// slack riceve i pulsanti di approvazione dei messaggi Slack (nil se non configurato).
+	slack     http.Handler
 	adminOnce sync.Once
 	admin     *engine.Admin
 	draining  atomic.Bool
@@ -308,6 +312,9 @@ func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
 		if a := r.Approvals; a != nil {
 			rules[i].Approvals = governance.Approvals{Required: a.Required, AllowSelf: a.AllowSelf, Timeout: a.Timeout}
 		}
+		if ch := r.Change; ch != nil {
+			rules[i].Change = &governance.Change{Approval: ch.Approval, Timeout: cmp.Or(ch.Timeout, 72*time.Hour)}
+		}
 	}
 	windows := make([]governance.Window, len(g.Freezes))
 	for i, f := range g.Freezes {
@@ -390,6 +397,9 @@ type components struct {
 	authz      authz.Policy
 	audit      audit.Recorder
 	governance *governance.Policy
+	secrets    secrets.Provider
+	chat       *chat.Notifier
+	change     change.Provider
 	health     rollout.Checker
 	metrics    *telemetry.Metrics
 	closers    []io.Closer
@@ -404,12 +414,24 @@ func (c *components) service(cfg *config.Config, client dbos.Client, executors e
 // engine costruisce l'Engine senza permessi: il worker lo usa per i rollback delle release,
 // già autorizzati all'invio.
 func (c *components) engine(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) *engine.Engine {
-	return engine.NewService(engine.ServiceOptions{
+	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
 		Resolver: c.resolver, Governance: c.governance, Health: c.health, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
-	})
+	}
+	if c.chat != nil {
+		opts.Notifications = c.chat
+	}
+	return engine.NewService(opts)
+}
+
+// chatNotifier restituisce il notificatore come interfaccia, nil senza destinazioni.
+func (c *components) chatNotifier() engine.ChatNotifier {
+	if c.chat == nil {
+		return nil
+	}
+	return c.chat
 }
 
 // guard avvolge l'Engine con i permessi.
@@ -484,6 +506,9 @@ func newComponents(cfg *config.Config) (*components, error) {
 		authz:      authzPolicy,
 		audit:      auditRec,
 		governance: gov,
+		secrets:    sp,
+		chat:       NewChatNotifier(cfg, sp, log),
+		change:     NewChangeProvider(cfg, sp),
 		closers:    []io.Closer{auditCloser},
 	}, nil
 }
@@ -523,6 +548,10 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Cleaner:              c.store,
 		Notifier:             c.notifier,
 		CallbackRetries:      cfg.Callbacks.MaxRetries,
+		Chat:                 c.chatNotifier(),
+		Change:               c.change,
+		ChangePoll:           cfg.Integrations.Change.PollInterval,
+		PublicURL:            cfg.Integrations.PublicURL,
 		Rollback:             c.rollback,
 		Audit:                c.audit,
 		Governance:           c.governance,
@@ -557,10 +586,12 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		}
 		return nil, fmt.Errorf("avvio DBOS: %w", err)
 	}
+	svc := c.guard(eng)
 	return &App{
 		Config:   cfg,
 		Logger:   c.log,
-		Service:  c.guard(eng),
+		Service:  svc,
+		slack:    NewSlackInteractions(cfg, c.secrets, svc, c.log),
 		worker:   w,
 		plugins:  c.plugins,
 		closers:  c.closers,
@@ -597,6 +628,7 @@ func NewClient(cfg *config.Config) (*App, error) {
 		metrics: c.metrics,
 	}
 	a.Service = c.service(cfg, client, lazyAdmin{a})
+	a.slack = NewSlackInteractions(cfg, c.secrets, a.Service, c.log)
 	return a, nil
 }
 
@@ -673,7 +705,7 @@ func (a *App) OpsHandler() http.Handler {
 // APIOptions sono le opzioni del router dell'API: metriche, /metrics, /readyz e, se attiva,
 // l'interfaccia web con la sua configurazione.
 func (a *App) APIOptions() api.Options {
-	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready}
+	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready, SlackInteractions: a.slack}
 	if a.metrics != nil {
 		o.MetricsHandler = a.metrics.Handler()
 	}

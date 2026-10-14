@@ -52,6 +52,9 @@ type Options struct {
 	UIConfig *UIConfig
 	// EventInterval è l'intervallo di aggiornamento dello stream SSE (default 1s).
 	EventInterval time.Duration
+	// SlackInteractions, se presente, riceve i clic sui pulsanti dei messaggi Slack su
+	// /integrations/slack/interactions: l'autenticazione è la firma di Slack, non un bearer.
+	SlackInteractions http.Handler
 }
 
 // NewRouter crea il router Gin con tutte le rotte. Con authn nil l'autenticazione è
@@ -76,6 +79,9 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	AddProbes(r, o.Ready)
 	if o.MetricsHandler != nil {
 		r.GET("/metrics", gin.WrapH(o.MetricsHandler))
+	}
+	if o.SlackInteractions != nil {
+		r.POST("/integrations/slack/interactions", gin.WrapH(o.SlackInteractions))
 	}
 	v1 := r.Group("/api/v1", s.authenticate())
 	v1.POST("/deployments", s.submit)

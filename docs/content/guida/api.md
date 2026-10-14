@@ -53,6 +53,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/schedules/{name}/resume` | Resumes a schedule. |
 | `DELETE` | `/api/v1/schedules/{name}` | Deletes a schedule. |
 | `GET` | `/ui/config.json` | Public configuration of the [web interface](interfaccia-web.md). No authentication. |
+| `POST` | `/integrations/slack/interactions` | Approval buttons of Slack messages, authenticated by Slack's signature (see [Chat and change management](integrazioni.md#approvazioni-da-chat)). Registered only with `integrations.slack.signing_secret_ref`. |
 | `GET` | `/healthz` | The process is alive. No authentication. |
 | `GET` | `/readyz` | The process can reach the database and is not shutting down. No authentication. |
 | `GET` | `/metrics` | Prometheus metrics (with `observability.metrics`). No authentication. |

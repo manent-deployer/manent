@@ -130,6 +130,39 @@ rollback:
     migration:
       allowed: false       # le migration di database di norma non sono reversibili
 
+# Integrazioni: notifiche in Slack e Teams, approvazioni da Slack e ticket di change
+# (docs/content/guida/integrazioni.md). I riferimenti *_ref puntano al gestore dei segreti.
+# integrations:
+#   public_url: https://manent.example.com
+#   language: it
+#   slack:
+#     bot_token_ref: "vault:secret/data/manent/slack#bot_token"
+#     signing_secret_ref: "vault:secret/data/manent/slack#signing_secret"   # pulsanti di approvazione
+#     identities:
+#       U024BE7LH: {subject: "oidc:alice", groups: [cab]}
+#     # email_identity: "oidc:{email}"
+#   notifications:
+#     - {name: prod, applications: ["*"], environments: [prod], slack: {channel: C0123456789}}
+#     - {name: cab, applications: ["*"], environments: ["prod*"], events: [approval], teams: {webhook_ref: "vault:secret/data/manent/teams#webhook"}}
+#   change:
+#     provider: servicenow              # o jira
+#     servicenow:
+#       url: https://acme.service-now.com
+#       username: manent
+#       password_ref: "vault:secret/data/manent/servicenow#password"
+#       fields: {assignment_group: "Release Management", cmdb_ci: "{application}"}
+#     # jira:
+#     #   url: https://acme.atlassian.net
+#     #   username: manent@acme.com
+#     #   token_ref: "vault:secret/data/manent/jira#token"
+#     #   project: CHG
+#     #   issue_type: Change
+#     #   approved_statuses: [Approved]
+#     #   rejected_statuses: [Declined]
+#     #   transitions: {start: Implement, success: Done, failure: Failed}
+# Con il change management, nelle regole di governance:
+#   governance: {rules: [{name: prod, applications: ["*"], environments: [prod], change: {approval: true, timeout: 72h}}]}
+
 # Autenticazione dell'API. none = nessuna autenticazione né permessi: solo sviluppo.
 # In produzione: mode enabled con OIDC (utenti) e/o token statici (CI).
 auth:

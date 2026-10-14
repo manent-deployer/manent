@@ -115,3 +115,45 @@ siem:
 		}
 	}
 }
+
+func TestIntegrazioni(t *testing.T) {
+	cfg, err := load(t, `
+integrations:
+  public_url: https://manent.example.com
+  language: it
+  slack:
+    bot_token_ref: "env:SLACK_BOT_TOKEN"
+    signing_secret_ref: "env:SLACK_SIGNING_SECRET"
+    identities:
+      U024BE7LH: {subject: "oidc:alice", groups: [cab]}
+  notifications:
+    - {name: prod, applications: ["*"], environments: [prod], slack: {channel: C0123}}
+    - {name: teams-cab, applications: ["*"], environments: ["prod*"], events: [approval], teams: {webhook_ref: "env:TEAMS_WEBHOOK"}}
+  change:
+    provider: servicenow
+    servicenow: {url: "https://acme.service-now.com", username: manent, password_ref: "env:SN_PASSWORD"}
+governance:
+  rules:
+    - {name: prod, applications: ["*"], environments: [prod], change: {approval: true}}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Integrations.Notifications) != 2 || cfg.Governance.Rules[0].Change == nil || !cfg.Governance.Rules[0].Change.Approval {
+		t.Errorf("integrazioni: %+v", cfg.Integrations)
+	}
+	for in, want := range map[string]string{
+		"integrations: {notifications: [{name: Prod, applications: ['*'], environments: ['*'], teams: {webhook_ref: x}}]}\n":                                                                                                    "name",
+		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*']}]}\n":                                                                                                                                "slack oppure teams",
+		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*'], slack: {channel: C1}}]}\n":                                                                                                          "bot_token_ref",
+		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*'], events: [deploy], teams: {webhook_ref: x}}]}\n":                                                                                     "events",
+		"integrations: {slack: {bot_token_ref: x, identities: {U1: {subject: alice}}}}\n":                                                                                                                                       "U1",
+		"governance: {rules: [{applications: ['*'], environments: [prod], change: {}}]}\n":                                                                                                                                      "integrations.change.provider",
+		"integrations: {change: {provider: jira, jira: {url: 'https://jira', token_ref: x, project: CHG, issue_type: Change}}}\ngovernance: {rules: [{applications: ['*'], environments: [prod], change: {approval: true}}]}\n": "approved_statuses",
+		"integrations: {change: {provider: remedy}}\n":                                                                                                                                                                          "remedy",
+	} {
+		if _, err := load(t, in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: errore %v, atteso %q", in, err, want)
+		}
+	}
+}

@@ -47,6 +47,7 @@ type Config struct {
 	Chains           Chains                    `yaml:"chains"`
 	Recovery         Recovery                  `yaml:"recovery"`
 	Retention        Retention                 `yaml:"retention"`
+	Integrations     Integrations              `yaml:"integrations"`
 }
 
 // Observability configura metriche, tracing e sonde dei processi di lunga durata.
@@ -358,6 +359,8 @@ type GovernanceRule struct {
 	// Requires elenca gli ambienti in cui lo stesso artefatto deve essere già stato rilasciato.
 	Requires  []string          `yaml:"requires"`
 	Approvals *ApprovalSettings `yaml:"approvals"`
+	// Change apre un ticket di change management per ogni deploy (integrations.change).
+	Change *ChangeRule `yaml:"change"`
 }
 
 // ApprovalSettings configura le approvazioni richieste prima del deploy.
@@ -607,6 +610,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateSecurity()...)
 	errs = append(errs, c.validateOperations()...)
 	errs = append(errs, c.validateSIEM()...)
+	errs = append(errs, c.validateIntegrations()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
 	}

@@ -144,6 +144,14 @@ artifact:
 
     [:octicons-arrow-right-24: Governance](guida/governance.md)
 
+-   :material-forum-outline:{ .lg .middle } **Chat e change management**
+
+    ---
+
+    Notifiche di deploy e approvazioni in Slack e Teams, approvazioni con i pulsanti di Slack, ticket di change in ServiceNow o Jira aperti e chiusi con ogni deploy.
+
+    [:octicons-arrow-right-24: Integrazioni](guida/integrazioni.md)
+
 -   :material-earth:{ .lg .middle } **Rilasci a ondate**
 
     ---

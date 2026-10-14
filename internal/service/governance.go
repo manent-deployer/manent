@@ -36,6 +36,18 @@ type ApprovalState struct {
 	AllowSelf bool       `json:"allow_self,omitempty"`
 	ExpiresAt time.Time  `json:"expires_at"`
 	Decisions []Decision `json:"decisions,omitempty"`
+	// Change è il ticket di change da approvare nel sistema ITSM, se richiesto.
+	Change *ChangeTicket `json:"change,omitempty"`
+}
+
+// ChangeTicket è il ticket di change management di un deploy.
+type ChangeTicket struct {
+	// ID è l'identificativo tecnico nel sistema ITSM (sys_id, id dell'issue).
+	ID     string `json:"id,omitempty"`
+	Number string `json:"number"`
+	URL    string `json:"url,omitempty"`
+	// Approval è lo stato dell'approvazione nel sistema ITSM: pending, approved, rejected.
+	Approval string `json:"approval,omitempty"`
 }
 
 // InventoryFilter filtra l'inventario.

@@ -315,7 +315,7 @@ func (e *Engine) notifyWaiters(id string) {
 
 // enqueueSatisfied accoda ciò che segue l'attesa: l'approvazione, se richiesta, o il deploy.
 func (w *Worker) enqueueSatisfied(ctx dbos.Context, in afterInput) error {
-	if in.Request.Approval != nil {
+	if needsApproval(in.Request) {
 		return enqueueApproval(ctx, in.QueueName, in.Request, in.DeploymentID)
 	}
 	return w.enqueueApproved(ctx, approvalInput{DeploymentID: in.DeploymentID, Request: in.Request, QueueName: in.QueueName})
