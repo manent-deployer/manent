@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/joeg-ita/manent/internal/customspec"
 )
 
 // Modalità di uno step nella pipeline.
@@ -395,6 +397,9 @@ type DescriptorPolicy struct {
 	SecretRefs []string `yaml:"secret_refs"`
 	// Targets ammette target indicati dal descrittore.
 	Targets *bool `yaml:"targets"`
+	// StepParams elenca per step personalizzato i pattern dei parametri impostabili dal
+	// descrittore. Default: nessuno, i parametri arrivano dalla configurazione di ambiente.
+	StepParams map[string][]string `yaml:"step_params"`
 }
 
 // Secrets configura i provider di segreti aggiuntivi a env: e file:.
@@ -460,6 +465,8 @@ type ArtifactAuth struct {
 // Pipeline elenca gli step disponibili nell'ordine di esecuzione.
 type Pipeline struct {
 	Steps []Step `yaml:"steps"`
+	// Custom configura gli step personalizzati (step con type).
+	Custom CustomSteps `yaml:"custom"`
 }
 
 // Step definisce la configurazione statica di uno step.
@@ -469,6 +476,8 @@ type Step struct {
 	// Enabled è il default per gli step opzionali, sovrascrivibile dal descrittore.
 	Enabled    bool `yaml:"enabled"`
 	MaxRetries int  `yaml:"max_retries"`
+	// Spec, con type, definisce uno step personalizzato (internal/customspec).
+	customspec.Spec `yaml:",inline"`
 }
 
 // Default restituisce una configurazione funzionante per lo sviluppo locale.
@@ -538,6 +547,7 @@ func (c *Config) applyDefaults() {
 		t := true
 		c.Artifacts.AllowUnlisted = &t
 	}
+	c.Pipeline.applyDefaults()
 }
 
 // SecurityWarnings elenca le impostazioni adatte solo allo sviluppo.
@@ -559,6 +569,7 @@ func (c *Config) SecurityWarnings() []string {
 	if c.Artifacts.AllowUnlisted != nil && *c.Artifacts.AllowUnlisted {
 		w = append(w, "artifacts.allow_unlisted: il worker scarica artefatti da qualsiasi sorgente, anche file locali")
 	}
+	w = append(w, c.Pipeline.securityWarnings()...)
 	return w
 }
 
@@ -611,6 +622,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateOperations()...)
 	errs = append(errs, c.validateSIEM()...)
 	errs = append(errs, c.validateIntegrations()...)
+	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
 	}

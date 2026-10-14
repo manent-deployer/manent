@@ -31,6 +31,11 @@ type Entry struct {
 	Schedule    string    `json:"schedule,omitempty"`
 	DryRun      bool      `json:"dry_run,omitempty"`
 	Rollback    string    `json:"rollback,omitempty"`
+	// Step, Spec e Targets descrivono l'esecuzione di uno step personalizzato: nome, sha256
+	// della specifica e target raggiunti.
+	Step    string   `json:"step,omitempty"`
+	Spec    string   `json:"spec,omitempty"`
+	Targets []string `json:"targets,omitempty"`
 	// Comment è il commento di un'approvazione o il motivo di una deroga al freeze.
 	Comment string `json:"comment,omitempty"`
 	Reason  string `json:"reason,omitempty"`
@@ -58,11 +63,15 @@ func (r LogRecorder) Record(ctx context.Context, e Entry) error {
 	attrs := []any{"audit", true, "actor", e.Actor, "action", e.Action, "outcome", e.Outcome}
 	for _, kv := range [][2]string{
 		{"application", e.Application}, {"environment", e.Environment}, {"deployment", e.Deployment},
-		{"schedule", e.Schedule}, {"rollback", e.Rollback}, {"comment", e.Comment}, {"reason", e.Reason},
+		{"schedule", e.Schedule}, {"rollback", e.Rollback}, {"step", e.Step}, {"spec", e.Spec},
+		{"comment", e.Comment}, {"reason", e.Reason},
 	} {
 		if kv[1] != "" {
 			attrs = append(attrs, kv[0], kv[1])
 		}
+	}
+	if len(e.Targets) > 0 {
+		attrs = append(attrs, "targets", e.Targets)
 	}
 	if e.DryRun {
 		attrs = append(attrs, "dry_run", true)

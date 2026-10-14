@@ -13,6 +13,7 @@ La configurazione di default è pensata per lo sviluppo. All'avvio, `serve` e `w
 - [ ] Segreti in Vault (`secrets.vault`), non in variabili d'ambiente del worker. Vedi [Segreti e sorgenti degli artefatti](segreti-artefatti.md).
 - [ ] `artifacts.allow_unlisted: false`, con le sorgenti e le relative credenziali in `artifacts.sources`.
 - [ ] `callbacks.allowed_hosts` impostato.
+- [ ] Con gli [step personalizzati](../guida/step-personalizzati.md): `pipeline.custom.spec_key_refs` impostato, un utente SSH dedicato (`ssh.user`) con privilegi minimi, segreti di sola lettura per `dry_run`, i controlli dichiarati `mandatory` e nessun `insecure_ignore_host_key`.
 - [ ] `sha256` per ogni plugin esterno, binari in una directory non scrivibile dal worker.
 - [ ] TLS terminato davanti a `serve` (reverse proxy o load balancer).
 - [ ] Accesso al database DBOS solo per worker, `serve` e operatori della piattaforma.

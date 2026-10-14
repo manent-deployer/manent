@@ -119,6 +119,10 @@ Tutti questi campi possono arrivare dalla [configurazione di ambiente](configura
 
 Attiva o disattiva gli step opzionali per nome. Vedi [Pipeline e step](../concetti/pipeline.md#il-piano).
 
+### `stepParams`
+
+Parametri degli [step personalizzati](step-personalizzati.md), per step (`stepParams: {db-migrate: {database: shop}}`). Di norma arrivano dalla configurazione di ambiente: il descrittore può impostare solo quelli ammessi da `descriptor_policy.step_params`, e ogni valore deve rispettare il pattern dichiarato dallo step.
+
 ### `postTest`
 
 Controlli HTTP eseguiti dallo step `post-test`:

@@ -552,6 +552,13 @@ components:
       additionalProperties: true
       properties:
         name: {type: string}
+        max_retries: {type: integer}
+        type:
+          type: string
+          description: Tipo dello step personalizzato (command, http); assente per gli step standard.
+        spec_hash:
+          type: string
+          description: Sha256 della specifica dello step personalizzato, come in pipeline.custom.revoked_specs. Comandi e URL non sono esposti.
     Submission:
       type: object
       required: [state]

@@ -349,6 +349,28 @@ steps:
   post-test: true
 ```
 
+### Step personalizzati
+
+Uno step con `type` in `pipeline.steps` aggiunge una fase senza scrivere codice: un comando sui target via SSH (`command`) o una richiesta HTTP con attesa dell'esito (`http`). Comandi e URL si scrivono solo in `manent.yml`; la configurazione di ambiente fornisce i parametri (`step_params`), dichiarati con un pattern, e il descrittore può impostare solo quelli ammessi da `descriptor_policy.step_params`.
+
+- I valori sostituiti nei segnaposto non sono fidati: non diventano opzioni dei comandi, sono codificati negli URL e non alterano il corpo JSON.
+- I segreti arrivano sul target come file in una directory su tmpfs, rimossa alla fine e a ogni nuovo tentativo; nel log sono sostituiti da `***`.
+- La specifica è registrata nel piano e firmata (`pipeline.custom.spec_key_refs`); una specifica difettosa si blocca con `pipeline.custom.revoked_specs`, anche nelle schedule già create.
+- Ogni esecuzione è registrata nell'audit; gli output dichiarati restano nello stato del deploy e non vanno ai callback.
+
+```yaml
+- name: db-migrate
+  mode: optional
+  type: command
+  ssh: {user: migrator, key_secret: ssh-migrate}
+  params: {database: {pattern: "[a-z]+", required: true}}
+  run:
+    run_once: true
+    command: ["/opt/tools/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+```
+
+Vedi [Step personalizzati](docs/content/guida/step-personalizzati.it.md).
+
 ## Interfaccia web
 
 `manent-server` serve un'interfaccia web su `/`, allo stesso indirizzo dell'API: deploy con ondate e log in tempo reale, approvazioni, inventario con promozioni e rollback (sempre dopo un dry-run), freeze, schedule e metriche DORA. Usa il login OIDC (Authorization Code + PKCE, `auth.oidc.ui`) e gli stessi permessi dell'API, è accessibile (WCAG 2.1 AA, verificata con axe) e disponibile in inglese e italiano. Il codice è in `web/` (React, TypeScript, Vite), incorporato nel binario da `internal/webui`; il contratto dell'API è `api/openapi.yaml`.

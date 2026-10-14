@@ -19,6 +19,40 @@ With [rollback](../guida/rollback.md) enabled the worker adds further DBOS steps
 | `checkpoint:deploy` | Before `deploy`: checks rollback support and records the live release. | `plugin`, `locator`, `previous_version` |
 | `rollback:<step>` | After a step in `rollback.on` fails, for every already-started step that can undo itself (`deploy`, `activation`), in reverse order. | `rollback` (`completed` or `skipped`), `version`, `result` |
 
+## Custom steps
+
+Besides the standard steps, `pipeline.steps` can contain **custom steps**: phases added without writing Go, identified by a `type`.
+
+| Type | What it does | Typical uses |
+|---|---|---|
+| `command` | Runs a command on the deploy targets over SSH, on all of them or on the first only (`run_once`). | Database migrations, cache warm-up, maintenance scripts. |
+| `http` | Sends an HTTP request from the worker and, if needed, waits for the outcome by polling a URL. | CDN invalidation, notifying external systems, starting a job and waiting for it. |
+
+```yaml title="manent.yml"
+pipeline:
+  steps:
+    - {name: deploy, mode: mandatory}
+    - name: cdn-purge
+      mode: optional
+      enabled: true
+      type: http
+      secrets: [cdn-token]
+      params:
+        zone: {pattern: "[a-f0-9]{32}", required: true}
+      run:
+        url: "https://api.cdn.example.com/zones/{{ .Params.zone }}/purge"
+        auth: {type: bearer, secret: cdn-token}
+```
+
+They follow the same rules as the standard steps (mode, order, retries, dry-run) with a few differences:
+
+- **Who defines them.** Commands and URLs are written only in `manent.yml`, managed by the manent administrators. The environment configuration provides parameter values (`step_params`); the descriptor can turn optional steps on or off and set only the parameters allowed by `descriptor_policy.step_params`.
+- **Declared inputs and outputs.** Every parameter and every output key is declared with a pattern; substituted values are checked for the context they end up in (command arguments, URLs, JSON bodies).
+- **Stored in the plan.** The complete specification is stored in the plan, optionally signed: a deploy resumed after a crash runs the definition it started with, and a faulty specification can be revoked.
+- **Position.** With [wave rollouts](../guida/ondate.md), a custom step between `deploy` and `activation` runs for every batch with the batch's targets.
+
+See [Custom steps](../guida/step-personalizzati.md) for the full reference.
+
 ## The plan { #il-piano }
 
 The plan is the ordered list of steps to run. It is computed **before** the deploy is enqueued, by combining the configuration (`pipeline.steps` in `manent.yml`) with the descriptor's `steps` section, and it is passed to the workflow as input.

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func load(t *testing.T, yaml string) (*Config, error) {
@@ -155,5 +156,95 @@ governance:
 		if _, err := load(t, in); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: errore %v, atteso %q", in, err, want)
 		}
+	}
+}
+
+func TestStepPersonalizzati(t *testing.T) {
+	cfg, err := load(t, `
+pipeline:
+  custom:
+    spec_key_refs: ["env:MANENT_SPEC_KEY"]
+    revoked_specs: ["`+strings.Repeat("ab", 32)+`"]
+  steps:
+    - {name: secrets, mode: mandatory}
+    - {name: artifacts, mode: mandatory}
+    - name: db-migrate
+      mode: optional
+      type: command
+      timeout: 15m
+      secrets: [db-admin]
+      params:
+        database: {pattern: "[a-z][a-z0-9_]{0,62}", required: true}
+      outputs:
+        applied: {pattern: "[0-9]{1,6}"}
+      ssh: {user: migrator, key_secret: ssh-migrate}
+      run:
+        run_once: true
+        command: ["/opt/tools/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+      dry_run:
+        command: ["/opt/tools/migrate", "plan", "--to", "{{ .Version }}"]
+        secrets: [db-readonly]
+    - {name: deploy, mode: mandatory}
+    - name: cdn-purge
+      mode: optional
+      enabled: true
+      type: http
+      secrets: [cdn-token]
+      run:
+        url: "https://api.cdn.example.com/zones/{{ .Params.zone }}/purge"
+        auth: {type: bearer, secret: cdn-token}
+        json: {tags: ["{{ .Application }}"], purge_everything: false}
+      params:
+        zone: {pattern: "[a-f0-9]{32}", required: true}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps := cfg.Pipeline.Steps
+	m, c := steps[2], steps[4]
+	if m.Type != "command" || m.Timeout != 15*time.Minute || m.Run.On != "targets" || m.DryRun.On != "targets" || !m.DryRun.RunOnce || m.SSH.User != "migrator" {
+		t.Errorf("step command: %+v", m.Spec)
+	}
+	if c.Run.Method != "POST" || c.Timeout != 10*time.Minute || c.Run.JSON.(map[string]any)["purge_everything"] != false {
+		t.Errorf("step http: %+v", c.Run)
+	}
+	if !cfg.Pipeline.HasCustom() || cfg.Pipeline.Custom.SecretsDir != DefaultCustomSecretsDir {
+		t.Errorf("pipeline.custom: %+v", cfg.Pipeline.Custom)
+	}
+	for _, w := range cfg.SecurityWarnings() {
+		if strings.Contains(w, "spec_key_refs") {
+			t.Errorf("avviso inatteso con le chiavi configurate: %s", w)
+		}
+	}
+
+	_, err = load(t, `
+pipeline:
+  custom:
+    revoked_specs: ["abc"]
+    secrets_dir: "/dev/shm/../etc"
+  steps:
+    - {name: deploy, mode: mandatory, type: command, run: {command: ["/bin/true"]}, ssh: {key_secret: k}}
+    - {name: hook, mode: optional, type: http, run: {url: "http://example.com/x"}}
+    - {name: qa, mode: optional, timeout: 1m}
+`)
+	for _, want := range []string{`step "deploy": il nome è di uno step standard`, `schema "http" non ammesso`, "richiedono type", "revoked_specs", "secrets_dir"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("atteso errore %q, ricevuto %v", want, err)
+		}
+	}
+
+	cfg, err = load(t, `
+pipeline:
+  custom: {insecure_ignore_host_key: true}
+  steps:
+    - {name: deploy, mode: mandatory}
+    - {name: hook, mode: optional, type: http, run: {url: "https://example.com/x"}}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := strings.Join(cfg.SecurityWarnings(), "\n")
+	if !strings.Contains(w, "spec_key_refs") || !strings.Contains(w, "insecure_ignore_host_key") {
+		t.Errorf("avvisi: %s", w)
 	}
 }

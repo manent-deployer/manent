@@ -120,6 +120,7 @@ Vedi [Governance dei rilasci](../guida/governance.md).
 | `params` | `{"*": ["*"]}` | Parametri impostabili dal descrittore, per plugin. |
 | `secret_refs` | `["*"]` | Riferimenti ai segreti dichiarabili dal descrittore. |
 | `targets` | `true` | Target indicati dal descrittore. |
+| `step_params` | `{}` | Parametri degli [step personalizzati](../guida/step-personalizzati.md) impostabili dal descrittore, per step (`"*"` = tutti). Default: nessuno. |
 
 Vedi [Sicurezza](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
@@ -138,6 +139,17 @@ Vedi [Segreti e sorgenti degli artefatti](segreti-artefatti.md).
 ### `pipeline`
 
 Elenco ordinato degli step, con `name`, `mode` (`mandatory` oppure `optional`), `enabled` (default degli step opzionali) e `max_retries`. Vedi [Pipeline e step](../concetti/pipeline.md).
+
+Uno step con `type` (`command` o `http`) è uno [step personalizzato](../guida/step-personalizzati.md), definito da `timeout`, `secrets`, `params`, `outputs`, `ssh`, `run` e `dry_run`. Si configurano in `pipeline.custom`:
+
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `pipeline.custom.spec_key_refs` | `[]` | Chiavi HMAC (almeno 32 byte) che firmano le specifiche registrate nei piani; la prima firma, tutte verificano. |
+| `pipeline.custom.revoked_specs` | `[]` | SHA-256 delle specifiche da non eseguire più. |
+| `pipeline.custom.known_hosts` | `~/.ssh/known_hosts` | Host key dei target per gli step command. |
+| `pipeline.custom.insecure_ignore_host_key` | `false` | Salta la verifica della host key: solo per lo sviluppo. |
+| `pipeline.custom.secrets_dir` | `/dev/shm/manent` | Directory dei segreti sui target. |
+| `pipeline.custom.allow_http` | `false` | Ammette URL `http` negli step http. |
 
 ### `plugins`
 

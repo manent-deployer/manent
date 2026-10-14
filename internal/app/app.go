@@ -31,6 +31,7 @@ import (
 	"github.com/joeg-ita/manent/internal/chat"
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/config"
+	"github.com/joeg-ita/manent/internal/customstep"
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/envconfig"
@@ -339,7 +340,7 @@ func NewHealthChecker(cfg *config.Config) rollout.Checker {
 // NewDescriptorPolicy restituisce la policy sui descrittori della configurazione.
 func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 	dp := cfg.DescriptorPolicy
-	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets}
+	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams}
 }
 
 // NewResolver crea il resolver della configurazione di ambiente in base al provider configurato.
@@ -397,6 +398,7 @@ type components struct {
 	authz      authz.Policy
 	audit      audit.Recorder
 	governance *governance.Policy
+	custom     *customstep.Builder
 	secrets    secrets.Provider
 	chat       *chat.Notifier
 	change     change.Provider
@@ -478,6 +480,10 @@ func newComponents(cfg *config.Config) (*components, error) {
 	if err != nil {
 		return nil, err
 	}
+	specKeys, err := NewSpecKeys(cfg, sp)
+	if err != nil {
+		return nil, err
+	}
 	policy := NewCallbackPolicy(cfg)
 	notifier := callback.HTTPNotifier{
 		Client:  callback.NewHTTPClient(cfg.Callbacks.Timeout),
@@ -499,7 +505,8 @@ func newComponents(cfg *config.Config) (*components, error) {
 		siem:       sender,
 		steps:      reg,
 		store:      store,
-		planner:    pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg},
+		planner:    pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg, Keys: specKeys},
+		custom:     NewCustomSteps(cfg, sp, specKeys, auditRec, gov, log),
 		resolver:   resolver,
 		rollback:   NewRollbackPolicy(cfg, locators),
 		sources:    sources,
@@ -543,6 +550,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
 		},
 		Steps:                c.steps,
+		Custom:               c.custom,
 		Resolver:             c.resolver,
 		ResolverRetries:      cfg.EnvConfig.MaxRetries,
 		Cleaner:              c.store,

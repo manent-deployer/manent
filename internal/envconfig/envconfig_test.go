@@ -284,3 +284,49 @@ rollout:
 		t.Fatal("target con etichette diverse accettati")
 	}
 }
+
+func TestStepParams(t *testing.T) {
+	c, err := Parse([]byte(`
+targets: [{host: h1}]
+step_params:
+  db-migrate: {database: shop}
+  cdn-purge: {zone: abc}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := baseDescriptor()
+	d.StepParams = map[string]map[string]string{"db-migrate": {"database": "shop", "mode": "safe"}}
+	eff, err := Merge(d, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := eff.StepParams; got["db-migrate"]["database"] != "shop" || got["db-migrate"]["mode"] != "safe" || got["cdn-purge"]["zone"] != "abc" {
+		t.Errorf("parametri fusi: %v", got)
+	}
+	if d.StepParams["db-migrate"]["database"] != "shop" || len(d.StepParams) != 1 {
+		t.Error("la fusione ha modificato il descrittore originale")
+	}
+	d.StepParams["db-migrate"]["database"] = "other"
+	if _, err := Merge(d, c); err == nil || !strings.Contains(err.Error(), "stepParams.db-migrate.database") {
+		t.Errorf("conflitto non rilevato: %v", err)
+	}
+
+	// Il descrittore imposta solo i parametri ammessi dalla policy; quelli dell'ambiente no.
+	pol := &DescriptorPolicy{StepParams: map[string][]string{"db-migrate": {"mode"}}}
+	d.StepParams = map[string]map[string]string{"db-migrate": {"database": "shop", "mode": "safe"}}
+	if err := pol.Check(d, c); err != nil {
+		t.Errorf("parametri ammessi rifiutati: %v", err)
+	}
+	d.StepParams["cdn-purge"] = map[string]string{"zone": "abc", "extra": "1"}
+	d.StepParams["db-migrate"]["dsn"] = "x"
+	err = pol.Check(d, EnvConfig{})
+	for _, want := range []string{"stepParams.cdn-purge.extra", "stepParams.cdn-purge.zone", "stepParams.db-migrate.database", "stepParams.db-migrate.dsn"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("atteso errore su %s: %v", want, err)
+		}
+	}
+	if err := (&DescriptorPolicy{}).Check(descriptor.Descriptor{StepParams: map[string]map[string]string{"x": {"a": "1"}}}, EnvConfig{}); err == nil {
+		t.Error("senza step_params nella policy il descrittore non può impostare parametri")
+	}
+}

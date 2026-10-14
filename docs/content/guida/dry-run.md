@@ -42,6 +42,7 @@ In a dry-run a step runs only if it declares that it can simulate itself. A step
 | `deploy` | Picks and validates the plugin as in a real deploy, then asks it to **check** the targets without changing them. |
 | `post-test` | Skipped. |
 | `activation` | Skipped. |
+| [custom steps](step-personalizzati.md#dry-run) | Run their `dry_run` section, with its own secrets, if they have one; otherwise skipped. During a freeze, command steps are skipped. |
 
 In the result, skipped steps have output `{"dry_run": "skipped"}`. The `deploy` step reports `"dry_run": "checked"` with the outcome per target, or `"dry_run": "validated"` if the plugin cannot check targets and the run stopped at request validation.
 

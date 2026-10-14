@@ -294,6 +294,8 @@ type passInput struct {
 	Started     []startedStep `json:"started,omitempty"`
 	Error       string        `json:"error,omitempty"`
 	TraceParent string        `json:"trace_parent,omitempty"`
+	// RequestedBy è l'identità del richiedente, registrata nell'audit degli step personalizzati.
+	RequestedBy string `json:"requested_by,omitempty"`
 }
 
 // passOutput è l'esito di un passo. Un passo fallito non fa fallire il workflow figlio:
@@ -323,6 +325,7 @@ func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descript
 		DeploymentID: id, Descriptor: *d, Steps: steps, Pass: p, Outputs: outputs,
 		Undo: undo != nil, Started: undo, Error: cause,
 		TraceParent: telemetry.TraceParent(trace.ContextWithSpanContext(context.Background(), ev.span)),
+		RequestedBy: ev.requestedBy,
 	}
 	opts := []dbos.WorkflowOption{
 		dbos.WithWorkflowID(childID), dbos.WithQueue(q),
@@ -342,7 +345,7 @@ func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error
 	_, span := telemetry.Tracer().Start(telemetry.WithTraceParent(context.Background(), in.TraceParent), "pass "+in.Pass.Name,
 		trace.WithAttributes(attribute.String("manent.deployment.id", in.DeploymentID), attribute.String("manent.region", in.Pass.Region), attribute.String("manent.az", in.Pass.AZ)))
 	defer span.End()
-	ev := &events{w: w, ctx: ctx, id: in.DeploymentID, silent: true, span: span.SpanContext()}
+	ev := &events{w: w, ctx: ctx, id: in.DeploymentID, requestedBy: in.RequestedBy, silent: true, span: span.SpanContext()}
 	var res Result
 	var out passOutput
 	d := &in.Descriptor

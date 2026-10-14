@@ -42,6 +42,7 @@ In dry-run uno step viene eseguito solo se dichiara di saperlo simulare. Uno ste
 | `deploy` | Sceglie e valida il plugin come in un deploy reale, poi gli chiede di **verificare** i target senza modificarli. |
 | `post-test` | Saltato. |
 | `activation` | Saltato. |
+| [step personalizzati](step-personalizzati.md#dry-run) | Eseguono la sezione `dry_run`, con i suoi segreti, se ce l'hanno; altrimenti vengono saltati. Durante un freeze gli step command vengono saltati. |
 
 Nel risultato, gli step saltati hanno output `{"dry_run": "skipped"}`. Lo step `deploy` riporta `"dry_run": "checked"` con l'esito per target, oppure `"dry_run": "validated"` se il plugin non sa verificare i target e ci si è fermati alla validazione della richiesta.
 

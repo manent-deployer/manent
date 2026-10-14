@@ -118,7 +118,7 @@ func (c *ValidateCmd) Execute([]string) error {
 	if eff, err = rbPolicy.Apply(eff); err != nil {
 		return err
 	}
-	out := map[string]any{"valid": true, "plan": plan, "rollback": eff.Rollback}
+	out := map[string]any{"valid": true, "plan": plan.Public(), "rollback": eff.Rollback}
 	gov, err := app.NewGovernance(cfg)
 	if err != nil {
 		return err

@@ -1,0 +1,330 @@
+package customstep
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
+	"path"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/joeg-ita/manent/internal/descriptor"
+)
+
+// SSHAuth sono le credenziali risolte al momento della connessione.
+type SSHAuth struct {
+	PrivateKey string
+	Password   string
+}
+
+// Dialer apre connessioni verso i target; astratto per i test.
+type Dialer interface {
+	Dial(ctx context.Context, t descriptor.Target, user string, auth SSHAuth) (Conn, error)
+}
+
+// Conn esegue comandi su un target.
+type Conn interface {
+	// Exec esegue cmd con la shell di login del target e restituisce il codice di uscita.
+	// L'errore indica un problema di trasporto o un comando terminato senza codice.
+	Exec(ctx context.Context, cmd string, stdin io.Reader, stdout, stderr io.Writer) (int, error)
+	Close() error
+}
+
+// Codici di uscita con un significato per manent.
+const (
+	// ExitTempFail (EX_TEMPFAIL) chiede un nuovo tentativo.
+	ExitTempFail = 75
+	// exitTimeout è il codice di timeout(1) allo scadere del tempo.
+	exitTimeout = 124
+)
+
+// Limiti del file degli output.
+const maxOutputFile = 16 << 10
+
+// script esegue il comando sul target. Riceve la directory del tentativo e gli argomenti come
+// parametri posizionali, quindi nessun valore passa per l'interpretazione della shell; carica
+// le variabili MANENT_* dal file d'ambiente (non dalla riga di comando, visibile con ps) e, se
+// disponibile, limita la durata con timeout(1), così il processo non sopravvive allo step.
+// Un'interruzione rimuove la directory dei segreti.
+const script = `d=$1; shift
+trap 'rm -rf -- "$d"; exit 143' HUP INT TERM
+set -a; . "$d/env"; set +a
+: > "$d/output"
+if command -v timeout >/dev/null 2>&1; then timeout -k 10 %d "$@"; else "$@"; fi`
+
+// command esegue il comando su ogni target del deploy (o del lotto), in sequenza, o sul
+// primo con run_once. Restituisce gli output dell'ultimo target.
+func (r *run) command(ctx context.Context) (map[string]string, error) {
+	targets := slices.Clone(r.d.Deploy.Targets)
+	if len(targets) == 0 {
+		return nil, permanent("nessun target su cui eseguire il comando")
+	}
+	if r.action.RunOnce {
+		targets = targets[:1]
+	}
+	args := make([]string, len(r.action.Command))
+	for i, a := range r.action.Command {
+		v, err := renderArg(i, a, r.data)
+		if err != nil {
+			// La specifica e i valori non cambiano tra un tentativo e l'altro.
+			return nil, permanent("%w", err)
+		}
+		args[i] = v
+	}
+	auth, err := r.sshAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budget := &logBudget{left: maxLogBytes}
+	var out map[string]string
+	for _, t := range targets {
+		r.targets = append(r.targets, safeHost(t))
+		if out, err = r.onTarget(ctx, t, args, auth, budget); err != nil {
+			return nil, fmt.Errorf("target %s: %w", safeHost(t), err)
+		}
+	}
+	return out, nil
+}
+
+func (r *run) sshAuth(ctx context.Context) (SSHAuth, error) {
+	var a SSHAuth
+	ssh := r.s.doc.SSH
+	res := r.s.b.Secrets
+	for name, dst := range map[string]*string{ssh.KeySecret: &a.PrivateKey, ssh.PasswordSecret: &a.Password} {
+		if name == "" {
+			continue
+		}
+		ref, _ := r.d.SecretRefByName(name)
+		v, err := res.Resolve(ctx, ref)
+		if err != nil {
+			return a, fmt.Errorf("credenziali SSH: %w", err)
+		}
+		*dst = v
+	}
+	return a, nil
+}
+
+// onTarget esegue il protocollo su un target: directory del tentativo, file d'ambiente e
+// segreti, verifica del binario, comando, lettura degli output e pulizia.
+func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, auth SSHAuth, budget *logBudget) (map[string]string, error) {
+	user := t.User
+	if r.s.doc.SSH.User != "" {
+		user = r.s.doc.SSH.User
+	}
+	if user == "" {
+		return nil, permanent("utente SSH non indicato (target.user o ssh.user)")
+	}
+	conn, err := r.s.b.Dialer.Dial(ctx, t, user, auth)
+	if err != nil {
+		return nil, temporary("connessione SSH: %w", err)
+	}
+	defer conn.Close()
+
+	base := path.Join(r.s.b.SecretsDir, pathSafe(r.in.DeploymentID), r.s.ps.Name)
+	dir := path.Join(base, nonce())
+	// I tentativi precedenti (anche interrotti da un crash) vengono rimossi prima di iniziare.
+	defer func() {
+		c, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if code, err := conn.Exec(c, "rm -rf -- "+Quote(base), nil, io.Discard, io.Discard); err != nil || code != 0 {
+			r.log.WarnContext(ctx, "pulizia della directory dei segreti fallita: verrà ripetuta al prossimo tentativo", "target", t.Host, "code", code, "error", err)
+		}
+	}()
+	if err := r.exec(ctx, conn, "umask 077 && rm -rf -- "+Quote(base)+" && mkdir -p -- "+Quote(path.Join(dir, "secrets")), nil, "preparazione della directory"); err != nil {
+		return nil, err
+	}
+	if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "env")), strings.NewReader(r.envFile(t, dir)), "scrittura dell'ambiente"); err != nil {
+		return nil, err
+	}
+	for _, name := range slices.Sorted(maps.Keys(r.secrets)) {
+		if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "secrets", name)), strings.NewReader(r.secrets[name]), "scrittura dei segreti"); err != nil {
+			return nil, err
+		}
+	}
+	if want := r.action.SHA256; want != "" {
+		if err := r.verifyBinary(ctx, conn, args[0], want); err != nil {
+			return nil, err
+		}
+	}
+
+	timeout := int(r.s.doc.Timeout / time.Second)
+	if dl, ok := ctx.Deadline(); ok {
+		timeout = max(1, int(time.Until(dl)/time.Second))
+	}
+	cmd := "/bin/sh -c " + Quote(fmt.Sprintf(script, timeout)) + " manent " + Quote(dir)
+	for _, a := range args {
+		cmd += " " + Quote(a)
+	}
+	attrs := []any{"target", t.Host}
+	stdout := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stdout")}
+	stderr := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stderr")}
+	r.log.InfoContext(ctx, "comando avviato", "target", t.Host, "command", args[0], "args", len(args)-1, "dry_run", r.dry)
+	code, err := conn.Exec(ctx, cmd, nil, stdout, stderr)
+	stdout.flush()
+	stderr.flush()
+	switch {
+	case ctx.Err() != nil:
+		return nil, temporary("comando interrotto: %w", ctx.Err())
+	case err != nil:
+		return nil, temporary("esecuzione del comando: %w", err)
+	case code == exitTimeout:
+		return nil, temporary("comando terminato per timeout dopo %ds", timeout)
+	case code == ExitTempFail:
+		return nil, temporary("il comando ha chiesto un nuovo tentativo (exit %d)", code)
+	case code != 0:
+		return nil, permanent("il comando è uscito con codice %d", code)
+	}
+	r.log.InfoContext(ctx, "comando completato", "target", t.Host)
+	if len(r.s.doc.Outputs) == 0 {
+		return nil, nil
+	}
+	var buf bytes.Buffer
+	w := &limitedWriter{w: &buf, left: maxOutputFile + 1}
+	if code, err := conn.Exec(ctx, "cat -- "+Quote(path.Join(dir, "output")), nil, w, io.Discard); err != nil || code != 0 {
+		return nil, temporary("lettura degli output: codice %d, %v", code, err)
+	}
+	if buf.Len() > maxOutputFile {
+		return nil, permanent("output oltre %d byte", maxOutputFile)
+	}
+	return parseOutputs(buf.String())
+}
+
+// exec esegue un comando di servizio; un codice diverso da zero è un errore permanente con
+// la descrizione indicata (ad esempio secrets_dir non scrivibile).
+func (r *run) exec(ctx context.Context, conn Conn, cmd string, stdin io.Reader, what string) error {
+	var stderr bytes.Buffer
+	code, err := conn.Exec(ctx, cmd, stdin, io.Discard, &limitedWriter{w: &stderr, left: 2048})
+	switch {
+	case err != nil:
+		return temporary("%s: %w", what, err)
+	case code != 0:
+		return permanent("%s: codice %d: %s", what, code, strings.TrimSpace(r.red.apply(stderr.String())))
+	}
+	return nil
+}
+
+// verifyBinary confronta lo sha256 del binario sul target con quello della specifica.
+func (r *run) verifyBinary(ctx context.Context, conn Conn, bin, want string) error {
+	var out bytes.Buffer
+	q := Quote(bin)
+	cmd := "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- " + q + "; else shasum -a 256 -- " + q + "; fi"
+	code, err := conn.Exec(ctx, cmd, nil, &limitedWriter{w: &out, left: 4096}, io.Discard)
+	if err != nil {
+		return temporary("verifica del binario: %w", err)
+	}
+	got, _, _ := strings.Cut(strings.TrimSpace(out.String()), " ")
+	if code != 0 || !strings.EqualFold(got, want) {
+		return permanent("lo sha256 di %s sul target non corrisponde a quello della specifica", bin)
+	}
+	return nil
+}
+
+// envFile produce le variabili MANENT_* nel formato di un file letto da sh.
+func (r *run) envFile(t descriptor.Target, dir string) string {
+	vars := map[string]string{
+		"MANENT_DEPLOYMENT_ID":   r.in.DeploymentID,
+		"MANENT_STEP":            r.s.ps.Name,
+		"MANENT_APPLICATION":     r.d.Application,
+		"MANENT_ENVIRONMENT":     r.d.Environment,
+		"MANENT_VERSION":         r.d.Artifact.Version,
+		"MANENT_ARTIFACT_SHA256": r.data.SHA256,
+		"MANENT_DRY_RUN":         strconv.FormatBool(r.dry),
+		"MANENT_TARGET":          t.Host,
+		"MANENT_SECRETS_DIR":     path.Join(dir, "secrets"),
+		"MANENT_OUTPUT":          path.Join(dir, "output"),
+	}
+	for k, v := range r.data.Params {
+		vars["MANENT_PARAM_"+envName(k)] = v
+	}
+	for step, out := range r.in.Outputs {
+		for k, v := range out {
+			vars["MANENT_OUTPUT_"+envName(step)+"_"+envName(k)] = v
+		}
+	}
+	var b strings.Builder
+	for _, k := range slices.Sorted(maps.Keys(vars)) {
+		if strings.ContainsRune(vars[k], 0) {
+			continue
+		}
+		b.WriteString(k + "=" + Quote(vars[k]) + "\n")
+	}
+	return b.String()
+}
+
+var envUnsafe = regexp.MustCompile(`[^A-Z0-9]+`)
+
+// envName trasforma un nome in una parte di nome di variabile (post-test → POST_TEST).
+func envName(s string) string { return envUnsafe.ReplaceAllString(strings.ToUpper(s), "_") }
+
+// pathSafe rende un ID utilizzabile come componente di un percorso.
+func pathSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == 0 {
+			return '_'
+		}
+		return r
+	}, strings.TrimLeft(s, "."))
+}
+
+// Quote quota un argomento per una shell POSIX: tra apici singoli, con ' come '\”.
+func Quote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// parseOutputs legge le righe chiave=valore del file degli output.
+func parseOutputs(s string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || k == "" {
+			return nil, permanent("output non valido: righe chiave=valore")
+		}
+		if _, dup := out[k]; dup {
+			return nil, permanent("output %q ripetuto", k)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// limitedWriter scarta ciò che supera il limite.
+type limitedWriter struct {
+	w    io.Writer
+	left int
+}
+
+func (l *limitedWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	if l.left <= 0 {
+		return n, nil
+	}
+	if len(p) > l.left {
+		p = p[:l.left]
+	}
+	l.left -= len(p)
+	if _, err := l.w.Write(p); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// nonce distingue la directory di un tentativo.
+func nonce() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(errors.New("generatore casuale non disponibile"))
+	}
+	return hex.EncodeToString(b)
+}

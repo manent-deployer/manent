@@ -35,6 +35,8 @@ type EnvConfig struct {
 	Rollback *descriptor.Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
 	// Rollout è la strategia di rilascio a ondate dell'ambiente.
 	Rollout *descriptor.Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
+	// StepParams sono i parametri degli step personalizzati, per step.
+	StepParams map[string]map[string]string `json:"step_params,omitempty" yaml:"step_params,omitempty"`
 }
 
 // Document è una configurazione letta dal provider, con i metadati per l'audit.
@@ -102,6 +104,25 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		params[k] = c.Params[k]
 	}
 	d.Deploy.Params = params
+
+	if len(c.StepParams) > 0 {
+		sp := map[string]map[string]string{}
+		for step, params := range d.StepParams {
+			sp[step] = maps.Clone(params)
+		}
+		for _, step := range slices.Sorted(maps.Keys(c.StepParams)) {
+			if sp[step] == nil {
+				sp[step] = map[string]string{}
+			}
+			for _, k := range slices.Sorted(maps.Keys(c.StepParams[step])) {
+				if v, ok := sp[step][k]; ok && v != c.StepParams[step][k] {
+					errs = append(errs, fmt.Errorf("stepParams.%s.%s: valore diverso tra configurazione di ambiente e descrittore", step, k))
+				}
+				sp[step][k] = c.StepParams[step][k]
+			}
+		}
+		d.StepParams = sp
+	}
 
 	secrets := slices.Clone(c.Secrets)
 	for _, s := range d.Secrets {

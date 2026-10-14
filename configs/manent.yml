@@ -287,6 +287,28 @@ pipeline:
     - name: activation
       mode: optional
       enabled: true
+    # Step personalizzati: comandi sui target via SSH o richieste HTTP, definiti solo qui.
+    # Vedi docs/content/guida/step-personalizzati.md.
+    # - name: db-migrate
+    #   mode: optional
+    #   type: command
+    #   max_retries: 0
+    #   timeout: 15m
+    #   secrets: [db-admin]
+    #   ssh: {user: migrator, key_secret: ssh-migrate}
+    #   params:
+    #     database: {pattern: "[a-z][a-z0-9_]{0,62}", required: true}
+    #   run:
+    #     run_once: true
+    #     command: ["/opt/tools/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+    #   dry_run:
+    #     command: ["/opt/tools/migrate", "plan", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+    #     secrets: [db-readonly]
+  # custom:
+  #   spec_key_refs: ["vault:secret/data/manent/pipeline#spec_key"]   # firma delle specifiche nei piani
+  #   revoked_specs: []                                              # sha256 delle specifiche revocate
+  #   known_hosts: ~/.ssh/known_hosts
+  #   secrets_dir: /dev/shm/manent
 
 # Plugin attivi e relativa configurazione
 plugins:

@@ -34,8 +34,12 @@ type Descriptor struct {
 	Secrets     []SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	Deploy      Deploy      `json:"deploy" yaml:"deploy"`
 	// Steps attiva o disattiva gli step opzionali per nome.
-	Steps    map[string]bool `json:"steps,omitempty" yaml:"steps,omitempty"`
-	PostTest PostTest        `json:"postTest,omitempty" yaml:"postTest,omitempty"`
+	Steps map[string]bool `json:"steps,omitempty" yaml:"steps,omitempty"`
+	// StepParams sono i parametri degli step personalizzati, per step. Di norma arrivano dalla
+	// configurazione di ambiente: il descrittore può impostare solo quelli ammessi da
+	// descriptor_policy.step_params.
+	StepParams map[string]map[string]string `json:"stepParams,omitempty" yaml:"stepParams,omitempty"`
+	PostTest   PostTest                     `json:"postTest,omitempty" yaml:"postTest,omitempty"`
 	// Schedule, se presente, pianifica il deploy invece di eseguirlo subito.
 	Schedule *Schedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
 	// DryRun esegue la pipeline in simulazione: gli step senza effetti sugli ambienti vengono
@@ -305,6 +309,13 @@ func (d *Descriptor) Validate() error {
 		}
 		seen[s.Name] = true
 	}
+	for _, step := range slices.Sorted(maps.Keys(d.StepParams)) {
+		for k, v := range d.StepParams[step] {
+			if k == "" || len(v) > maxStepParam || strings.ContainsRune(v, 0) {
+				errs = append(errs, fmt.Errorf("stepParams.%s.%s: nome vuoto o valore non valido (max %d caratteri)", step, k, maxStepParam))
+			}
+		}
+	}
 	if len(d.Callbacks) > maxCallbacks {
 		errs = append(errs, fmt.Errorf("callbacks: al massimo %d", maxCallbacks))
 	}
@@ -394,6 +405,9 @@ func (d *Descriptor) AfterWait() (time.Duration, error) {
 
 // maxOverride limita la lunghezza del motivo di una deroga al freeze.
 const maxOverride = 500
+
+// maxStepParam limita la lunghezza dei parametri degli step personalizzati.
+const maxStepParam = 1024
 
 // maxCallbacks limita i callback di un deploy: ogni evento genera una chiamata per callback.
 const maxCallbacks = 5

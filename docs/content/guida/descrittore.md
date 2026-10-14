@@ -119,6 +119,10 @@ All these fields can come from the [environment configuration](configurazione-am
 
 Enables or disables optional steps by name. See [Pipeline and steps](../concetti/pipeline.md#il-piano).
 
+### `stepParams`
+
+Parameters of the [custom steps](step-personalizzati.md), per step (`stepParams: {db-migrate: {database: shop}}`). Usually they come from the environment configuration: the descriptor can set only those allowed by `descriptor_policy.step_params`, and every value must match the pattern declared by the step.
+
 ### `postTest`
 
 HTTP checks run by the `post-test` step:

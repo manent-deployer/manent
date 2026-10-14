@@ -106,6 +106,7 @@ The environment configuration is **authoritative**: the descriptor can only add 
 | `targets` | If the configuration defines them, the descriptor can omit them or repeat them identically, labels included. |
 | `params` | The descriptor can add keys; a key present in both must have the same value. |
 | `secrets` | The descriptor can add secrets; the same name must have the same reference. |
+| `step_params` | Parameters of the [custom steps](step-personalizzati.md), per step: the descriptor (`stepParams`) can add keys allowed by `descriptor_policy.step_params`; a key present in both must have the same value. |
 | `rollout` | The environment's [wave rollout](ondate.md) strategy is authoritative: the descriptor can omit it or repeat it identically. |
 | `rollback` | `enabled`, `on` and `locator` follow the same rule: if defined in both they must match. This way an environment can enforce [rollback](rollback.md) without the descriptor being able to disable it. The artifact type's `allowed` limit still applies. |
 

@@ -560,6 +560,11 @@ export interface components {
         };
         PlannedStep: {
             name?: string;
+            max_retries?: number;
+            /** @description Tipo dello step personalizzato (command, http); assente per gli step standard. */
+            type?: string;
+            /** @description Sha256 della specifica dello step personalizzato, come in pipeline.custom.revoked_specs. Comandi e URL non sono esposti. */
+            spec_hash?: string;
         } & {
             [key: string]: unknown;
         };

@@ -106,6 +106,7 @@ La configurazione di ambiente è **autorevole**: il descrittore può solo aggiun
 | `targets` | Se la configurazione li definisce, il descrittore può ometterli o ripeterli identici, etichette comprese. |
 | `params` | Il descrittore può aggiungere chiavi; una chiave presente in entrambi deve avere lo stesso valore. |
 | `secrets` | Il descrittore può aggiungere segreti; lo stesso nome deve avere lo stesso riferimento. |
+| `step_params` | Parametri degli [step personalizzati](step-personalizzati.md), per step: il descrittore (`stepParams`) può aggiungere le chiavi ammesse da `descriptor_policy.step_params`; una chiave presente in entrambi deve avere lo stesso valore. |
 | `rollout` | La strategia di [rilascio a ondate](ondate.md) dell'ambiente è autorevole: il descrittore può ometterla o ripeterla identica. |
 | `rollback` | `enabled`, `on` e `locator` seguono la stessa regola: se definiti in entrambi devono coincidere. Così un ambiente può imporre il [rollback](rollback.md) senza che il descrittore possa disattivarlo. Resta valido il limite `allowed` del tipo di artefatto. |
 

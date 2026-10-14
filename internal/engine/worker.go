@@ -52,6 +52,8 @@ type WorkerOptions struct {
 	ExecutorID string
 	Queue      QueueOptions
 	Steps      *pipeline.Registry
+	// Custom costruisce gli step personalizzati del piano.
+	Custom CustomSteps
 	// Resolver, se presente, produce il descrittore effettivo dalla configurazione di ambiente.
 	Resolver ConfigResolver
 	// ResolverRetries sono i tentativi aggiuntivi dello step config (es. Consul non raggiungibile).
@@ -127,6 +129,7 @@ type Worker struct {
 	dbos            dbos.Context
 	queue           dbos.Queue
 	steps           *pipeline.Registry
+	custom          CustomSteps
 	resolver        ConfigResolver
 	resolverRetries int
 	cleaner         pipeline.Cleaner
@@ -182,6 +185,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	w := &Worker{
 		dbos:            ctx,
 		steps:           opts.Steps,
+		custom:          opts.Custom,
 		resolver:        opts.Resolver,
 		resolverRetries: opts.ResolverRetries,
 		cleaner:         opts.Cleaner,
@@ -630,9 +634,9 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 // target); skipped indica uno step saltato in dry-run.
 func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, ps pipeline.PlannedStep, label string,
 	targets []descriptor.Target, outputs map[string]pipeline.Output, res *Result) (out pipeline.Output, started *startedStep, skipped bool, err error) {
-	step, ok := w.steps.Get(ps.Name)
-	if !ok {
-		return nil, nil, false, fmt.Errorf("step %q non implementato", ps.Name)
+	step, err := w.stepFor(ps, ev.requestedBy)
+	if err != nil {
+		return nil, nil, false, err
 	}
 	exec := step.Run
 	if d.DryRun {
@@ -676,7 +680,13 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 		dbos.WithStepMaxRetries(ps.MaxRetries),
 		dbos.WithStepRetryPredicate(pipeline.Retryable),
 	)
-	ev.send(d, stepEvent(label, out, err))
+	// Gli output degli step personalizzati non vanno ai callback, definiti dal descrittore:
+	// restano nello stato del deploy, visibile con i permessi di lettura.
+	if ps.IsCustom() {
+		ev.send(d, stepEvent(label, nil, err))
+	} else {
+		ev.send(d, stepEvent(label, out, err))
+	}
 	if compensable {
 		started = &rec
 	}
@@ -831,7 +841,7 @@ func (w *Worker) undo(ctx dbos.Context, id string, ev *events, d *descriptor.Des
 	rbErr := &RollbackError{Err: stepErr, Status: RollbackSkipped}
 	for i := len(started) - 1; i >= 0; i-- {
 		s := started[i]
-		step, _ := w.steps.Get(s.Step.Name)
+		step, _ := w.stepFor(s.Step, ev.requestedBy)
 		comp, ok := step.(pipeline.Compensator)
 		if !ok {
 			continue

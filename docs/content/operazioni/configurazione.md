@@ -120,6 +120,7 @@ See [Release governance](../guida/governance.md).
 | `params` | `{"*": ["*"]}` | Parameters the descriptor may set, per plugin. |
 | `secret_refs` | `["*"]` | Secret references the descriptor may declare. |
 | `targets` | `true` | Targets given by the descriptor. |
+| `step_params` | `{}` | Parameters of [custom steps](../guida/step-personalizzati.md) the descriptor may set, per step (`"*"` = all). Default: none. |
 
 See [Security](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
@@ -138,6 +139,17 @@ See [Secrets and artifact sources](segreti-artefatti.md).
 ### `pipeline`
 
 Ordered list of steps, with `name`, `mode` (`mandatory` or `optional`), `enabled` (default of optional steps) and `max_retries`. See [Pipeline and steps](../concetti/pipeline.md).
+
+A step with `type` (`command` or `http`) is a [custom step](../guida/step-personalizzati.md), defined by `timeout`, `secrets`, `params`, `outputs`, `ssh`, `run` and `dry_run`. They are configured by `pipeline.custom`:
+
+| Key | Default | Description |
+|---|---|---|
+| `pipeline.custom.spec_key_refs` | `[]` | HMAC keys (at least 32 bytes) that sign the specifications stored in plans; the first signs, all verify. |
+| `pipeline.custom.revoked_specs` | `[]` | SHA-256 of specifications that must not run any more. |
+| `pipeline.custom.known_hosts` | `~/.ssh/known_hosts` | Host keys of the targets for command steps. |
+| `pipeline.custom.insecure_ignore_host_key` | `false` | Skips the host key check: development only. |
+| `pipeline.custom.secrets_dir` | `/dev/shm/manent` | Secrets directory on the targets. |
+| `pipeline.custom.allow_http` | `false` | Allows `http` URLs in HTTP steps. |
 
 ### `plugins`
 

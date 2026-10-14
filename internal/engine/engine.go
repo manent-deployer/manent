@@ -157,8 +157,11 @@ func NewService(opts ServiceOptions) *Engine {
 }
 
 // Plan delega al planner configurato.
+// Il piano restituito non contiene le specifiche degli step personalizzati (comandi e URL),
+// solo tipo e hash.
 func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
-	return e.planner.Plan(d)
+	plan, err := e.planner.Plan(d)
+	return plan.Public(), err
 }
 
 // submitMeta descrive l'origine di una richiesta di deploy.
@@ -309,7 +312,7 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 	if err != nil {
 		return nil, err
 	}
-	v.Plan = plan
+	v.Plan = plan.Public()
 	if e.governance != nil {
 		rule := e.governance.Rule(d.Application, d.Environment)
 		v.Governance = &GovernanceValidation{Rule: rule.Name, Requires: rule.Requires, Approvals: rule.Approvals.Required}
@@ -364,6 +367,15 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		}
 		v.Rollout = newRolloutState(p, eff.Rollout)
 		v.Rollout.Status = "planned"
+	}
+	// Senza configurazione di ambiente letta i parametri obbligatori e i segreti possono ancora
+	// arrivare da lì: si verificano solo i valori già presenti.
+	plan, err := e.planner.Plan(d)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	if err := checkCustomSteps(plan, eff, e.resolver == nil || v.Config != nil); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	v.Deploy, v.Rollback = &eff.Deploy, eff.Rollback
 	for _, sec := range eff.Secrets {

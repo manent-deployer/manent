@@ -108,6 +108,7 @@ plugins:
             Release governance: Governance dei rilasci
             Wave rollouts: Rilasci a ondate
             Deploy chains: Catene di deploy
+            Custom steps: Step personalizzati
             Chat and change management: Chat e change management
             Web interface: Interfaccia web
             Operations: Operazioni
@@ -171,6 +172,7 @@ nav:
       - Release governance: guida/governance.md
       - Wave rollouts: guida/ondate.md
       - Deploy chains: guida/catene.md
+      - Custom steps: guida/step-personalizzati.md
       - Chat and change management: guida/integrazioni.md
       - Web interface: guida/interfaccia-web.md
   - Operations:
