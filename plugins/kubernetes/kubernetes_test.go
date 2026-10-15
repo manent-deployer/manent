@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,8 @@ type fakeCluster struct {
 	objects map[string]Object // percorso → oggetto
 	applies int
 	dryRuns int
+	// rv è il resourceVersion globale, incrementato a ogni scrittura.
+	rv int
 }
 
 var discovery = map[string]string{
@@ -36,7 +39,8 @@ var discovery = map[string]string{
 		{"name":"services","kind":"Service","namespaced":true},
 		{"name":"namespaces","kind":"Namespace","namespaced":false},
 		{"name":"namespaces/status","kind":"Namespace","namespaced":false}]}`,
-	"/apis/apps/v1": `{"resources":[{"name":"deployments","kind":"Deployment","namespaced":true}]}`,
+	"/apis/apps/v1":                      `{"resources":[{"name":"deployments","kind":"Deployment","namespaced":true}]}`,
+	"/apis/gateway.networking.k8s.io/v1": `{"resources":[{"name":"httproutes","kind":"HTTPRoute","namespaced":true}]}`,
 	"/apis": `{"groups":[{"name":"apps","versions":[{"groupVersion":"apps/v1"}]},
 		{"name":"monitoring.coreos.com","versions":[{"groupVersion":"monitoring.coreos.com/v1"}]}]}`,
 }
@@ -59,6 +63,26 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodPatch:
+		if r.Header.Get("Content-Type") == "application/merge-patch+json" {
+			prev, ok := c.objects[r.URL.Path]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"kind":"Status","message":"not found","reason":"NotFound"}`))
+				return
+			}
+			var patch map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&patch)
+			if md, _ := patch["metadata"].(map[string]any); md != nil && md["resourceVersion"] != nil && md["resourceVersion"] != prev.str("metadata", "resourceVersion") {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"kind":"Status","message":"the object has been modified","reason":"Conflict"}`))
+				return
+			}
+			mergePatch(prev, patch)
+			c.rv++
+			prev.metadata()["resourceVersion"] = strconv.Itoa(c.rv)
+			_ = json.NewEncoder(w).Encode(prev)
+			return
+		}
 		if r.Header.Get("Content-Type") != "application/apply-patch+yaml" || r.URL.Query().Get("fieldManager") != FieldManager {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -79,6 +103,8 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			o.metadata()["creationTimestamp"] = time.Now().UTC().Format(time.RFC3339Nano)
 		}
 		o.metadata()["generation"] = float64(gen)
+		c.rv++
+		o.metadata()["resourceVersion"] = strconv.Itoa(c.rv)
 		if o.Kind() == "Deployment" {
 			st := map[string]any{"observedGeneration": float64(gen), "replicas": float64(1), "updatedReplicas": float64(1), "availableReplicas": float64(1)}
 			for _, img := range images(o) {
@@ -120,6 +146,25 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(c.objects, r.URL.Path)
 		_, _ = w.Write([]byte(`{}`))
+	}
+}
+
+// mergePatch applica una JSON merge patch (RFC 7386).
+func mergePatch(dst, patch map[string]any) {
+	for k, v := range patch {
+		switch pv := v.(type) {
+		case nil:
+			delete(dst, k)
+		case map[string]any:
+			cur, ok := dst[k].(map[string]any)
+			if !ok {
+				cur = map[string]any{}
+				dst[k] = cur
+			}
+			mergePatch(cur, pv)
+		default:
+			dst[k] = pv
+		}
 	}
 }
 

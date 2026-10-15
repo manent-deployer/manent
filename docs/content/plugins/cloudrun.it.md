@@ -87,6 +87,12 @@ Il passaggio è immediato quando la revisione è pronta. Per un canary graduale 
 
 Il tipo di artefatto `cloudrun` ammette il rollback (`rollback.artifact_types.cloudrun.allowed: true` nei default).
 
+## Rilasci per percentuale { #rilasci-per-percentuale }
+
+Con un rollout `strategy: traffic` ([Rilasci per percentuale](../guida/traffico.md)) le revisioni sono gli slot: il deploy crea una revisione con un nome fisso derivato dal deploy (`<servizio>-m<hash>`) lasciando tutto il traffico sulla revisione stabile; con `testers.tag` la candidata riceve un tag e un URL dedicato per i tester. I gradini dividono il traffico del servizio tra le due revisioni; la promozione torna a mandare tutto il traffico all'ultima revisione. Il ritorno fissa il traffico sulla revisione stabile. Le revisioni senza traffico scalano a zero da sole.
+
+Con il traffico diviso, la release in esercizio (rollback, inventario) è la revisione con la quota maggiore; a parità non è determinabile.
+
 ## Dry-run
 
 In [dry-run](../guida/dry-run.md), per ogni region: credenziali, servizio e container, poi l'aggiornamento viene inviato con `validateOnly`. Cloud Run lo verifica con i permessi del service account, ma non cambia nulla.

@@ -172,7 +172,10 @@ func stepOf(s service.Status) string {
 	if s.LastStep != "" {
 		parts = append(parts, "step "+s.LastStep)
 	}
-	if s.RolloutProgress != "" {
+	switch {
+	case s.Rollout != nil && s.Rollout.Traffic != nil:
+		parts = append(parts, fmt.Sprintf("traffico alla candidata %d%%", s.Rollout.Traffic.Weight))
+	case s.RolloutProgress != "":
 		parts = append(parts, "ondate "+s.RolloutProgress)
 	}
 	return strings.Join(parts, ", ")

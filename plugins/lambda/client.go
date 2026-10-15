@@ -98,7 +98,11 @@ func (a sdkAPI) GetAlias(ctx context.Context, name, alias string) (*Alias, error
 	if err != nil {
 		return nil, notFound(err)
 	}
-	return &Alias{Name: aws.ToString(out.Name), FunctionVersion: aws.ToString(out.FunctionVersion), Description: aws.ToString(out.Description)}, nil
+	res := &Alias{Name: aws.ToString(out.Name), FunctionVersion: aws.ToString(out.FunctionVersion), Description: aws.ToString(out.Description)}
+	if out.RoutingConfig != nil && len(out.RoutingConfig.AdditionalVersionWeights) > 0 {
+		res.Weights = out.RoutingConfig.AdditionalVersionWeights
+	}
+	return res, nil
 }
 
 func (a sdkAPI) PutAlias(ctx context.Context, name, alias, version, description string, create bool) error {
@@ -115,6 +119,14 @@ func (a sdkAPI) PutAlias(ctx context.Context, name, alias, version, description 
 	_, err := a.c.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 		FunctionName: aws.String(name), Name: aws.String(alias), FunctionVersion: aws.String(version), Description: aws.String(description),
 		RoutingConfig: &types.AliasRoutingConfiguration{AdditionalVersionWeights: map[string]float64{}},
+	})
+	return notFound(err)
+}
+
+func (a sdkAPI) RouteAlias(ctx context.Context, name, alias, version, description string, weights map[string]float64) error {
+	_, err := a.c.UpdateAlias(ctx, &lambda.UpdateAliasInput{
+		FunctionName: aws.String(name), Name: aws.String(alias), FunctionVersion: aws.String(version), Description: aws.String(description),
+		RoutingConfig: &types.AliasRoutingConfiguration{AdditionalVersionWeights: weights},
 	})
 	return notFound(err)
 }

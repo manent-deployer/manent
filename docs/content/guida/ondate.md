@@ -2,6 +2,8 @@
 
 With several regions and AZs a deploy is released in **waves**: a canary, then one region at a time, one AZ at a time, with a bake time and a **health gate** between one step and the next. The deploy stays a single one (one ID, one outcome) and stops, or rolls back, at the first step that fails the check.
 
+Behind a load balancer every batch can be [drained](svuotamento.md) before the deploy and put back in service afterwards. To shift traffic by percentages to a version running side by side, rather than by nodes, use the [`traffic`](traffico.md) strategy.
+
 ```mermaid
 flowchart TB
     C[Config and plan] --> K[Canary: 1 node in eu-1a]

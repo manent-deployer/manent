@@ -608,6 +608,8 @@ export interface components {
             region?: string;
             az?: string;
             hosts: string[];
+            /** @description Membri del pool fuori dal load balancer in questo momento */
+            drained?: string[];
         };
         RolloutStage: {
             name: string;
@@ -620,14 +622,33 @@ export interface components {
             error?: string;
         };
         RolloutState: {
+            /**
+             * @description Vuoto per i rilasci a ondate
+             * @enum {string}
+             */
+            strategy?: "waves" | "traffic";
             /** @enum {string} */
-            status: "planned" | "running" | "paused-approval" | "paused-freeze" | "succeeded" | "failed";
+            status: "planned" | "running" | "paused-approval" | "paused-freeze" | "paused-drift" | "succeeded" | "failed";
             stage?: string;
             paused?: string;
             stages: components["schemas"]["RolloutStage"][];
             approval?: components["schemas"]["ApprovalState"];
             on_failure: string;
             rollback?: string;
+            traffic?: components["schemas"]["TrafficState"];
+        };
+        /** @description Rilascio per percentuale (strategy traffic); gli stadi sono i gradini */
+        TrafficState: {
+            router?: string;
+            /** @description Slot della versione stabile */
+            stable?: string;
+            /** @description Slot della versione candidata */
+            candidate?: string;
+            /** @description Quota di traffico corrente della candidata */
+            weight: number;
+            steps: number[];
+            testers?: boolean;
+            promoted?: boolean;
         };
         StepResult: {
             name: string;

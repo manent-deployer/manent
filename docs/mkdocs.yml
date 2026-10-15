@@ -107,6 +107,8 @@ plugins:
             Callbacks: Callback
             Release governance: Governance dei rilasci
             Wave rollouts: Rilasci a ondate
+            Load balancer draining: Svuotamento dal load balancer
+            Percentage rollouts: Rilasci per percentuale
             Deploy chains: Catene di deploy
             Custom steps: Step personalizzati
             Chat and change management: Chat e change management
@@ -171,6 +173,8 @@ nav:
       - Rollback: guida/rollback.md
       - Release governance: guida/governance.md
       - Wave rollouts: guida/ondate.md
+      - Load balancer draining: guida/svuotamento.md
+      - Percentage rollouts: guida/traffico.md
       - Deploy chains: guida/catene.md
       - Custom steps: guida/step-personalizzati.md
       - Chat and change management: guida/integrazioni.md

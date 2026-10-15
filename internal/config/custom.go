@@ -31,7 +31,7 @@ const DefaultCustomSecretsDir = "/dev/shm/manent"
 var (
 	specHashRe   = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	remoteDirRe  = regexp.MustCompile(`^/[A-Za-z0-9._/-]+$`)
-	standardStep = []string{"secrets", "artifacts", "qa", "deploy", "post-test", "activation"}
+	standardStep = []string{"secrets", "artifacts", "qa", "deploy", "post-test", "activation", "drain", "restore"}
 )
 
 // HasCustom indica se la pipeline contiene step personalizzati.

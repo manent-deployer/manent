@@ -78,6 +78,10 @@ Moving the alias is atomic: invocations go to the old version until the alias mo
 
 The `lambda` artifact type allows rollback (`rollback.artifact_types.lambda.allowed: true` in the defaults).
 
+## Percentage rollouts { #rilasci-per-percentuale }
+
+With a `strategy: traffic` rollout ([Percentage rollouts](../guida/traffico.md)) the published versions are the slots: the deploy updates the code and publishes the version **without moving the alias**; the steps leave the alias on the stable version and send the candidate its share with `AdditionalVersionWeights`; the promotion moves the alias to the candidate and clears the weights. The return sends the alias back to the stable version, without weights. Testers invoke the candidate version directly (ARN qualified with the version number, reported in the output of `traffic:testers`). A rollout does not start if the alias already splits traffic. Versions without traffic use no resources: there is nothing to scale down.
+
 ## Dry-run
 
 In [dry-run](../guida/dry-run.md), for each region: credentials, function, package type, alias, and `UpdateFunctionCode` with `DryRun`, which checks the request and the permissions without changing the code.

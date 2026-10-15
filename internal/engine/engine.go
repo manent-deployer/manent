@@ -84,6 +84,8 @@ type ServiceOptions struct {
 	Notifications NotificationRouter
 	// Health, se presente, verifica che i controlli di salute dei rollout siano eseguibili.
 	Health rollout.Checker
+	// Traffic, se presente, verifica la configurazione di load balancer e router.
+	Traffic TrafficOps
 	// Executors, se presente, fornisce a Workers il registro dei worker; StaleAfter è il
 	// ritardo di heartbeat oltre il quale un worker è considerato perso.
 	Executors  ExecutorLister
@@ -125,6 +127,7 @@ type Engine struct {
 	governance Governance
 	notify     NotificationRouter
 	health     rollout.Checker
+	traffic    TrafficOps
 	executors  ExecutorLister
 	staleAfter time.Duration
 	logger     *slog.Logger
@@ -149,6 +152,7 @@ func NewService(opts ServiceOptions) *Engine {
 		governance: opts.Governance,
 		notify:     opts.Notifications,
 		health:     opts.Health,
+		traffic:    opts.Traffic,
 		executors:  opts.Executors,
 		staleAfter: cmp.Or(opts.StaleAfter, time.Minute),
 		logger:     opts.Logger.With("component", "engine"),
@@ -361,11 +365,14 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 	}
 	if eff.Rollout != nil && v.Config != nil {
 		// Con la configurazione di ambiente letta il piano a ondate è quello definitivo.
-		p, err := checkRollout(eff, e.health)
+		p, err := checkRollout(eff, e.health, e.traffic)
 		if err != nil {
 			return nil, fmt.Errorf("%w: rollout: %w", ErrInvalidRequest, err)
 		}
 		v.Rollout = newRolloutState(p, eff.Rollout)
+		if eff.Rollout.IsTraffic() {
+			v.Rollout = newTrafficState(&eff, nil)
+		}
 		v.Rollout.Status = "planned"
 	}
 	// Senza configurazione di ambiente letta i parametri obbligatori e i segreti possono ancora
@@ -583,8 +590,9 @@ func (e *Engine) readRollout(s *Status, st dbos.WorkflowStatus) {
 	}
 	if rs, err := dbos.GetEvent[RolloutState](e.client, st.ID, rolloutEvent, 0); err == nil && rs.Status != "" {
 		s.Rollout = &rs
-		if rs.Status == service.RolloutPausedApproval && st.Status == dbos.WorkflowStatusPending {
-			// Approvazione tra due ondate: il deploy è in corso ma attende una decisione.
+		if awaitsDecision(rs.Status) && st.Status == dbos.WorkflowStatusPending {
+			// Approvazione tra due ondate o gradini, o pesi cambiati da altri: il deploy è in
+			// corso ma attende una decisione.
 			s.State, s.Approval = StateAwaitingApproval, rs.Approval
 		}
 	}

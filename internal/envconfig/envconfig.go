@@ -37,6 +37,9 @@ type EnvConfig struct {
 	Rollout *descriptor.Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
 	// StepParams sono i parametri degli step personalizzati, per step.
 	StepParams map[string]map[string]string `json:"step_params,omitempty" yaml:"step_params,omitempty"`
+	// Traffic è l'integrazione con load balancer e router: svuotamento dei target e
+	// spostamento del traffico tra gli slot.
+	Traffic *descriptor.TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
 }
 
 // Document è una configurazione letta dal provider, con i metadati per l'audit.
@@ -164,6 +167,18 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		}
 		r := *c.Rollout
 		d.Rollout = &r
+	}
+	// Load balancer e router sono infrastruttura: solo la configurazione di ambiente li definisce.
+	if d.Traffic != nil {
+		errs = append(errs, errors.New("traffic si configura solo nella configurazione di ambiente, non nel descrittore"))
+	}
+	d.Traffic = nil
+	if c.Traffic != nil {
+		if err := c.Traffic.Validate(); err != nil {
+			errs = append(errs, err)
+		}
+		t := *c.Traffic
+		d.Traffic = &t
 	}
 	if len(d.Deploy.Targets) == 0 {
 		errs = append(errs, errors.New("nessun target di deploy: né nella configurazione di ambiente né nel descrittore"))

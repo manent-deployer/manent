@@ -185,6 +185,10 @@ The `activation` step is optional: for many artifacts the deploy is enough. When
 
 To go back after a **successful** deploy, use `manent rollback` (`POST /api/v1/rollbacks`): it releases a previous version again as a new deploy, with the same per-artifact-type policy. See [Release governance](governance.md#rollback-manuale).
 
+## Percentage rollouts and draining
+
+In [percentage rollouts](traffico.md) going back to the stable version is a traffic shift made by the engine (`traffic:revert`): it does not use the plugin, the locator nor `rollback.enabled`, and `onFailure` is `rollback-all` by default. With a pool ([draining](svuotamento.md)) the `drain` and `restore` steps take part in the compensations: a batch is drained before the deploy rollback and put back in service afterwards.
+
 ## Limits
 
 - **Cancelled deploy:** `manent cancel` interrupts the workflow, so compensations cannot run. The same holds for a worker that stops during rollback: on restart, recovery resumes the workflow from where it stopped.

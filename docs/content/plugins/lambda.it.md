@@ -78,6 +78,10 @@ Lo spostamento dell'alias è atomico: le invocazioni vanno alla versione vecchia
 
 Il tipo di artefatto `lambda` ammette il rollback (`rollback.artifact_types.lambda.allowed: true` nei default).
 
+## Rilasci per percentuale { #rilasci-per-percentuale }
+
+Con un rollout `strategy: traffic` ([Rilasci per percentuale](../guida/traffico.md)) le versioni pubblicate sono gli slot: il deploy aggiorna il codice e pubblica la versione **senza spostare l'alias**; i gradini lasciano l'alias sulla versione stabile e mandano alla candidata la sua quota con `AdditionalVersionWeights`; la promozione sposta l'alias sulla candidata e azzera i pesi. Il ritorno riporta l'alias alla stabile, senza pesi. I tester invocano direttamente la versione candidata (ARN qualificato con il numero di versione, riportato nell'output di `traffic:testers`). Un rilascio non parte se l'alias divide già il traffico. Le versioni senza traffico non consumano risorse: non c'è nulla da ridimensionare.
+
 ## Dry-run
 
 In [dry-run](../guida/dry-run.md), per ogni region: credenziali, funzione, tipo di pacchetto, alias, e `UpdateFunctionCode` con `DryRun`, che verifica la richiesta e i permessi senza cambiare il codice.

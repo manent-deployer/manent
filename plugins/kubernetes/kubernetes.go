@@ -69,6 +69,9 @@ const (
 	dataSHA256          = "sha256"
 	dataDeployment      = "deployment"
 	binaryObjects       = "objects.json.gz"
+	dataSlot            = "slot"
+	dataPreviousVersion = "previous_version"
+	dataPreviousSlot    = "previous_slot"
 	configMapAPIVersion = "v1"
 )
 
@@ -164,6 +167,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 		errs = append(errs, errors.New("l'artefatto è un'immagine: il plugin kubernetes rilascia manifest (file .yaml o archivio .tar.gz) o chart Helm (.tgz)"))
 	}
 	errs = append(errs, validateHelm(req.Params)...)
+	errs = append(errs, validateTraffic(req)...)
 	if len(req.Targets) == 0 {
 		errs = append(errs, errors.New("nessun cluster tra i target"))
 	}
@@ -587,6 +591,10 @@ type release struct {
 	version string
 	name    string
 	objects []ObjectRef
+	// slot è lo slot della release nei rilasci per percentuale ("" per un rilascio in place).
+	slot string
+	// previousVersion e previousSlot sono la release sostituita dalla promozione di uno slot.
+	previousVersion, previousSlot string
 }
 
 // readPointer legge la release in esercizio (nil se non ce n'è una) con i suoi oggetti.
@@ -605,7 +613,10 @@ func readPointer(ctx context.Context, api API, ns string, n names) (*release, er
 	rel, err := readRelease(ctx, api, ns, n, v)
 	if errors.Is(err, ErrNotFound) {
 		// Storico incompleto (es. ConfigMap eliminata a mano): si conosce solo la versione.
-		return &release{version: v, name: n.release(v)}, nil
+		rel, err = &release{version: v, name: n.release(v)}, nil
+	}
+	if rel != nil {
+		rel.slot, rel.previousVersion, rel.previousSlot = cm.str("data", dataSlot), cm.str("data", dataPreviousVersion), cm.str("data", dataPreviousSlot)
 	}
 	return rel, err
 }
@@ -708,10 +719,19 @@ func saveRelease(ctx context.Context, api API, ns string, n names, req *plugin.R
 
 // writePointer indica la release in esercizio.
 func writePointer(ctx context.Context, api API, ns string, n names, req *plugin.Request, version string) error {
+	return writePointerData(ctx, api, ns, n, req, version, nil)
+}
+
+// writePointerData indica la release in esercizio con dati aggiuntivi (es. lo slot).
+func writePointerData(ctx context.Context, api API, ns string, n names, req *plugin.Request, version string, extra map[string]any) error {
+	data := map[string]any{dataVersion: version, dataRelease: n.release(version), dataDeployment: req.DeploymentID}
+	for k, v := range extra {
+		data[k] = v
+	}
 	cm := Object{
 		"apiVersion": "v1", "kind": "ConfigMap",
 		"metadata": map[string]any{"name": n.pointer, "namespace": ns, "labels": historyLabels(req, rolePointer)},
-		"data":     map[string]any{dataVersion: version, dataRelease: n.release(version), dataDeployment: req.DeploymentID},
+		"data":     data,
 	}
 	if _, err := api.Apply(ctx, cm, false); err != nil {
 		return fmt.Errorf("aggiornamento della release in esercizio: %w", err)

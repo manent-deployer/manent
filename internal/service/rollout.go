@@ -5,8 +5,10 @@ const (
 	RolloutRunning        = "running"
 	RolloutPausedApproval = "paused-approval"
 	RolloutPausedFreeze   = "paused-freeze"
-	RolloutSucceeded      = "succeeded"
-	RolloutFailed         = "failed"
+	// RolloutPausedDrift indica pesi del router diversi da quelli impostati da manent.
+	RolloutPausedDrift = "paused-drift"
+	RolloutSucceeded   = "succeeded"
+	RolloutFailed      = "failed"
 
 	StagePending    = "pending"
 	StageRunning    = "running"
@@ -18,7 +20,9 @@ const (
 
 // RolloutState è lo stato di un rilascio a ondate, pubblicato dal workflow a ogni cambiamento.
 type RolloutState struct {
-	Status string `json:"status"`
+	// Strategy è waves (vuoto) o traffic.
+	Strategy string `json:"strategy,omitempty"`
+	Status   string `json:"status"`
 	// Stage è lo stadio corrente (o quello fallito).
 	Stage string `json:"stage,omitempty"`
 	// Paused spiega la pausa: approvazione dopo un'ondata o freeze di una region.
@@ -30,6 +34,24 @@ type RolloutState struct {
 	OnFailure string `json:"on_failure"`
 	// Rollback è l'esito del rollback dei passi, se eseguito.
 	Rollback string `json:"rollback,omitempty"`
+	// Traffic è lo stato del rilascio per percentuale (strategy: traffic).
+	Traffic *TrafficState `json:"traffic,omitempty"`
+}
+
+// TrafficState è lo stato di un rilascio per percentuale: gli stadi sono i gradini.
+type TrafficState struct {
+	// Router è il router (provider dell'ambiente o plugin di deploy).
+	Router string `json:"router,omitempty"`
+	// Stable e Candidate sono gli slot della versione stabile e della candidata, se noti.
+	Stable    string `json:"stable,omitempty"`
+	Candidate string `json:"candidate,omitempty"`
+	// Weight è la quota di traffico corrente della candidata.
+	Weight int   `json:"weight"`
+	Steps  []int `json:"steps"`
+	// Testers indica le richieste dei tester già instradate verso la candidata.
+	Testers bool `json:"testers,omitempty"`
+	// Promoted indica la candidata diventata la versione in esercizio.
+	Promoted bool `json:"promoted,omitempty"`
 }
 
 // RolloutStage è uno stadio: i passi eseguiti insieme, poi bake e health gate.
@@ -49,6 +71,8 @@ type RolloutPass struct {
 	Region string   `json:"region,omitempty"`
 	AZ     string   `json:"az,omitempty"`
 	Hosts  []string `json:"hosts"`
+	// Drained sono i membri del pool fuori dal load balancer in questo momento.
+	Drained []string `json:"drained,omitempty"`
 }
 
 // Completed restituisce gli stadi superati.

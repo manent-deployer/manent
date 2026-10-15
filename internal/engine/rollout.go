@@ -86,7 +86,29 @@ func newRolloutState(p rollout.Plan, r *descriptor.Rollout) *RolloutState {
 
 // checkRollout verifica il rollout del descrittore effettivo: piano coerente con i target,
 // rollback attivo se richiesto da onFailure, controlli di salute eseguibili.
-func checkRollout(d descriptor.Descriptor, health rollout.Checker) (rollout.Plan, error) {
+func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOps) (rollout.Plan, error) {
+	if d.Traffic != nil {
+		if ops == nil {
+			return rollout.Plan{}, errors.New("traffic: integrazione con load balancer e router non disponibile su questo server")
+		}
+		if err := ops.Check(&d); err != nil {
+			return rollout.Plan{}, err
+		}
+	}
+	if d.Rollout.IsTraffic() {
+		if ops == nil {
+			return rollout.Plan{}, errors.New("strategy: traffic non disponibile su questo server")
+		}
+		if h := d.Rollout.Health; h != nil {
+			if health == nil {
+				return rollout.Plan{}, errors.New("rollout.health: health gate non configurato su questo server")
+			}
+			if err := health.Supports(h); err != nil {
+				return rollout.Plan{}, err
+			}
+		}
+		return trafficPlan(d), nil
+	}
 	p, err := rollout.Build(d.Deploy.Targets, d.Rollout)
 	if err != nil {
 		return p, err
@@ -116,7 +138,10 @@ type passRun struct {
 // sui worker della region), il tempo di osservazione con l'health gate e, se previsto,
 // un'approvazione; infine gli step finali. Lo stato è pubblicato con SetEvent.
 func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result) error {
-	plan, err := checkRollout(*d, w.health)
+	if d.Rollout.IsTraffic() {
+		return w.runTraffic(ctx, id, req, d, ev, res)
+	}
+	plan, err := checkRollout(*d, w.health, w.traffic)
 	if err != nil {
 		return fmt.Errorf("rollout: %w", err)
 	}
@@ -147,12 +172,12 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 		}
 		rs.Stage, rs.Stages[i].State = stage.Name, service.StageRunning
 		w.publishRollout(ctx, rs)
-		run, err := w.runStage(ctx, id, req, d, ev, perPass, stage, outputs, res)
+		run, err := w.runStage(ctx, id, req, d, ev, perPass, stage, outputs, res, rs, i)
 		done = append(done, run)
 		if err == nil && !d.DryRun {
 			rs.Stages[i].State = service.StageBaking
 			w.publishRollout(ctx, rs)
-			err = w.healthGate(ctx, id, d, stage, i, rs)
+			err = w.healthGate(ctx, id, d, stage, i, rs, stage.Bake, nil)
 		}
 		if err != nil {
 			return w.rolloutFailure(ctx, id, d, ev, res, done, rs, i, err)
@@ -161,7 +186,7 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 		w.publishRollout(ctx, rs)
 		ev.send(d, callback.Event{Type: descriptor.CallbackEventStep, Step: "stage:" + stage.Name, Status: callback.StatusSucceeded})
 		if stage.LastOfWave && i < len(plan.Stages)-1 && !d.DryRun && slices.Contains(d.Rollout.ApprovalsBetween, stage.Wave) {
-			if err := w.waitRolloutApproval(ctx, id, req, stage.Wave, rs); err != nil {
+			if err := w.waitRolloutApproval(ctx, id, req, "l'ondata "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
 				return w.rolloutFailure(ctx, id, d, ev, res, done, rs, i, err)
 			}
 		}
@@ -194,7 +219,7 @@ func (w *Worker) publishRollout(ctx dbos.Context, rs *RolloutState) {
 // runStage esegue i passi di uno stadio: quelli instradati alla loro region come workflow
 // figli, in parallelo; gli altri in linea, uno dopo l'altro. Attende la fine di tutti.
 func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, steps pipeline.Plan,
-	stage rollout.Stage, outputs map[string]pipeline.Output, res *Result) ([]passRun, error) {
+	stage rollout.Stage, outputs map[string]pipeline.Output, res *Result, rs *RolloutState, si int) ([]passRun, error) {
 	run := make([]passRun, len(stage.Passes))
 	type child struct {
 		i  int
@@ -215,7 +240,7 @@ func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descripto
 			children = append(children, child{i: i, id: childID, h: h})
 			continue
 		}
-		st, err := w.runPass(ctx, id, ev, d, steps, p, outputs, res)
+		st, err := w.runPass(ctx, id, ev, d, steps, p, outputs, res, &passTrack{rs: rs, pass: &rs.Stages[si].Passes[i]})
 		run[i].started = st
 		w.passFinished(d, p, err)
 		if err != nil {
@@ -257,16 +282,40 @@ func (w *Worker) passFinished(d *descriptor.Descriptor, p rollout.Pass, err erro
 // runPass esegue gli step per passo sui lotti di un passo, un lotto dopo l'altro. Ogni lotto
 // vede gli output degli step iniziali e dei propri step precedenti.
 func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, steps pipeline.Plan,
-	p rollout.Pass, outputs map[string]pipeline.Output, res *Result) ([]startedStep, error) {
+	p rollout.Pass, outputs map[string]pipeline.Output, res *Result, track *passTrack) ([]startedStep, error) {
 	var started []startedStep
+	// Con un pool ogni lotto viene svuotato dal load balancer prima del deploy e rimesso in
+	// servizio prima dell'attivazione (o alla fine).
+	pool := d.Traffic != nil && d.Traffic.Pool != nil && !d.DryRun
 	for b, batch := range p.Batches {
 		bo := maps.Clone(outputs)
 		if bo == nil {
 			// Nel workflow figlio una mappa vuota arriva nulla (omessa nel JSON).
 			bo = map[string]pipeline.Output{}
 		}
+		suffix := "@" + p.Name + "#" + strconv.Itoa(b)
+		restored := !pool
+		if pool {
+			st, err := w.drainBatch(ctx, id, ev, d, batch, suffix, bo, res, track)
+			if st != nil {
+				started = append(started, *st)
+			}
+			if err != nil {
+				return started, err
+			}
+		}
 		for _, ps := range steps {
-			label := ps.Name + "@" + p.Name + "#" + strconv.Itoa(b)
+			if !restored && ps.Name == "activation" {
+				st, err := w.restoreBatch(ctx, id, ev, d, batch, suffix, bo, res, track)
+				if st != nil {
+					started = append(started, *st)
+				}
+				if err != nil {
+					return started, err
+				}
+				restored = true
+			}
+			label := ps.Name + suffix
 			out, st, skipped, err := w.execStep(ctx, id, ev, d, ps, label, batch, bo, res)
 			if st != nil {
 				started = append(started, *st)
@@ -276,6 +325,15 @@ func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.
 			}
 			if !skipped {
 				bo[ps.Name] = out
+			}
+		}
+		if !restored {
+			st, err := w.restoreBatch(ctx, id, ev, d, batch, suffix, bo, res, track)
+			if st != nil {
+				started = append(started, *st)
+			}
+			if err != nil {
+				return started, err
 			}
 		}
 	}
@@ -358,7 +416,7 @@ func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error
 			}
 		}
 	} else {
-		st, err := w.runPass(ctx, in.DeploymentID, ev, d, in.Steps, in.Pass, in.Outputs, &res)
+		st, err := w.runPass(ctx, in.DeploymentID, ev, d, in.Steps, in.Pass, in.Outputs, &res, nil)
 		out.Started = st
 		if err != nil {
 			out.Error = err.Error()
@@ -390,8 +448,9 @@ func (w *Worker) copyPassLogs(ctx dbos.Context, childID string) {
 // intervallo: si ferma appena i controlli rossi consecutivi arrivano a failuresToStop e
 // richiede che l'ultima lettura sia verde. Attese e letture sono durevoli: dopo una recovery
 // il bake già trascorso non viene ripetuto.
-func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descriptor, stage rollout.Stage, i int, rs *RolloutState) error {
-	h, bake := d.Rollout.Health, stage.Bake
+func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descriptor, stage rollout.Stage, i int, rs *RolloutState,
+	bake time.Duration, tracks *rollout.GateInput) error {
+	h := d.Rollout.Health
 	if h == nil {
 		if bake > 0 {
 			if _, err := dbos.Sleep(ctx, bake); err != nil {
@@ -401,6 +460,9 @@ func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descripto
 		return nil
 	}
 	in := rollout.GateInput{Application: d.Application, Environment: d.Environment, Stage: stage.Name, Passes: stage.Passes, Health: *h}
+	if tracks != nil {
+		in.Track, in.StableTrack, in.Version = tracks.Track, tracks.StableTrack, tracks.Version
+	}
 	interval, limit := h.IntervalDuration(), max(1, h.FailuresToStop)
 	fails, n := 0, 0
 	var last rollout.GateResult
@@ -566,7 +628,7 @@ func (w *Worker) waitFreeze(ctx dbos.Context, d *descriptor.Descriptor, stage ro
 // waitRolloutApproval attende le approvazioni richieste dopo un'ondata. Valgono la regola di
 // governance del deploy (numero di approvazioni, auto-approvazione, scadenza) o, senza, una
 // sola approvazione di un'altra identità.
-func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, wave string, rs *RolloutState) error {
+func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, after, status string, rs *RolloutState) error {
 	rule := governance.Approvals{Required: 1, Timeout: governance.DefaultApprovalTimeout}
 	if a := req.Approval; a != nil {
 		rule.Required, rule.AllowSelf = max(1, a.Required), a.AllowSelf
@@ -579,8 +641,11 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, w
 		return err
 	}
 	st := ApprovalState{Status: ApprovalPending, Required: rule.Required, AllowSelf: rule.AllowSelf, ExpiresAt: t.Add(rule.Timeout)}
-	rs.Status, rs.Paused, rs.Approval = service.RolloutPausedApproval, "approvazione dopo l'ondata "+wave, &st
-	log := w.logger.With("deployment", id, "wave", wave)
+	rs.Status, rs.Paused, rs.Approval = status, "approvazione dopo "+after, &st
+	if status == service.RolloutPausedDrift {
+		rs.Paused = after
+	}
+	log := w.logger.With("deployment", id, "after", after)
 	for st.Status == ApprovalPending {
 		w.publishRollout(ctx, rs)
 		t, err := now(ctx)
@@ -612,10 +677,10 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, w
 			st.Status = ApprovalApproved
 		}
 	}
-	log.Info("approvazione tra le ondate conclusa", "status", st.Status)
+	log.Info("approvazione del rollout conclusa", "status", st.Status)
 	if st.Status != ApprovalApproved {
 		w.publishRollout(ctx, rs)
-		return fmt.Errorf("rollout fermato dopo l'ondata %s: approvazione %s", wave, st.Status)
+		return fmt.Errorf("rollout fermato (%s): approvazione %s", rs.Paused, st.Status)
 	}
 	rs.Status, rs.Paused = service.RolloutRunning, ""
 	w.publishRollout(ctx, rs)

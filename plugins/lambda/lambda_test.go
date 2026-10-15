@@ -158,6 +158,7 @@ func (f *fakeLambda) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a["FunctionVersion"], a["Description"] = in["FunctionVersion"], in["Description"]
+		a["RoutingConfig"] = in["RoutingConfig"]
 		reply(http.StatusOK, a)
 	default:
 		f.t.Errorf("richiesta inattesa %s %s", r.Method, r.URL.Path)

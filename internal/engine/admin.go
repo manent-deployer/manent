@@ -19,7 +19,7 @@ import (
 )
 
 // workflowNames sono tutti i workflow registrati da manent.
-var workflowNames = []string{workflowName, scheduledWorkflowName, approvalWorkflowName, passWorkflowName, gateWorkflowName, afterWorkflowName, releaseWorkflowName}
+var workflowNames = []string{workflowName, scheduledWorkflowName, approvalWorkflowName, passWorkflowName, gateWorkflowName, afterWorkflowName, releaseWorkflowName, retireWorkflowName}
 
 // Admin raccoglie le operazioni della piattaforma: stato degli executor, recovery dei
 // workflow di un nodo perso, migrazione a una nuova versione dei workflow e retention dello

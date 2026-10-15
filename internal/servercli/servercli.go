@@ -101,7 +101,7 @@ func (c *ValidateCmd) Execute([]string) error {
 		return err
 	}
 	locators := app.NewLocators(cfg, log)
-	reg, err := app.NewSteps(plugins, &artifact.Store{}, sp, locators, log)
+	reg, _, err := app.NewSteps(plugins, &artifact.Store{}, sp, locators, log)
 	if err != nil {
 		return err
 	}

@@ -603,6 +603,7 @@ components:
         region: {type: string}
         az: {type: string}
         hosts: {type: array, items: {type: string}}
+        drained: {type: array, items: {type: string}, description: Membri del pool fuori dal load balancer in questo momento}
     RolloutStage:
       type: object
       required: [name, wave, state, passes]
@@ -617,13 +618,27 @@ components:
       type: object
       required: [status, stages, on_failure]
       properties:
-        status: {type: string, enum: [planned, running, paused-approval, paused-freeze, succeeded, failed]}
+        strategy: {type: string, enum: [waves, traffic], description: Vuoto per i rilasci a ondate}
+        status: {type: string, enum: [planned, running, paused-approval, paused-freeze, paused-drift, succeeded, failed]}
         stage: {type: string}
         paused: {type: string}
         stages: {type: array, items: {$ref: '#/components/schemas/RolloutStage'}}
         approval: {$ref: '#/components/schemas/ApprovalState'}
         on_failure: {type: string}
         rollback: {type: string}
+        traffic: {$ref: '#/components/schemas/TrafficState'}
+    TrafficState:
+      type: object
+      description: Rilascio per percentuale (strategy traffic); gli stadi sono i gradini
+      required: [weight, steps]
+      properties:
+        router: {type: string}
+        stable: {type: string, description: Slot della versione stabile}
+        candidate: {type: string, description: Slot della versione candidata}
+        weight: {type: integer, description: Quota di traffico corrente della candidata}
+        steps: {type: array, items: {type: integer}}
+        testers: {type: boolean}
+        promoted: {type: boolean}
     StepResult:
       type: object
       required: [name]

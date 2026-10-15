@@ -87,6 +87,12 @@ The switch is immediate when the revision is ready. For a gradual canary, Cloud 
 
 The `cloudrun` artifact type allows rollback (`rollback.artifact_types.cloudrun.allowed: true` in the defaults).
 
+## Percentage rollouts { #rilasci-per-percentuale }
+
+With a `strategy: traffic` rollout ([Percentage rollouts](../guida/traffico.md)) revisions are the slots: the deploy creates a revision with a fixed name derived from the deploy (`<service>-m<hash>`) leaving all the traffic on the stable revision; with `testers.tag` the candidate gets a tag and a dedicated URL for testers. The steps split the service traffic between the two revisions; the promotion sends all the traffic back to the latest revision. The return pins the traffic on the stable revision. Revisions without traffic scale to zero on their own.
+
+With split traffic, the release in service (rollback, inventory) is the revision with the larger share; with equal shares it cannot be determined.
+
 ## Dry-run
 
 In [dry-run](../guida/dry-run.md), for each region: credentials, service and container, then the update is sent with `validateOnly`. Cloud Run checks it with the permissions of the service account, but changes nothing.

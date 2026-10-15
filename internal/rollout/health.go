@@ -21,6 +21,11 @@ type GateInput struct {
 	Stage       string
 	Passes      []Pass
 	Health      descriptor.Health
+	// Track e StableTrack sono gli slot della versione candidata e di quella stabile nei
+	// rilasci per percentuale ({track} nelle query); Version è la versione candidata.
+	Track       string `json:",omitempty"`
+	StableTrack string `json:",omitempty"`
+	Version     string `json:",omitempty"`
 }
 
 // CheckResult è l'esito di un singolo controllo.
@@ -166,16 +171,55 @@ func (c *HTTPChecker) probe(ctx context.Context, pr descriptor.Probe, p Pass, ho
 // non vede traffico non può dire che il rilascio è sano (per accettarlo, "or vector(0)").
 func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in GateInput, p Pass) CheckResult {
 	r := CheckResult{Kind: KindMetric, Name: m.Name, Region: p.Region, AZ: p.AZ}
-	q := strings.NewReplacer("{application}", in.Application, "{environment}", in.Environment, "{region}", p.Region, "{az}", p.AZ).Replace(m.Query)
-	v, err := c.query(ctx, q)
+	expand := func(q, track string) string {
+		return strings.NewReplacer("{application}", in.Application, "{environment}", in.Environment, "{region}", p.Region, "{az}", p.AZ,
+			"{track}", track, "{version}", in.Version).Replace(q)
+	}
+	if m.SamplesQuery != "" && m.MinSamples > 0 {
+		n, err := c.query(ctx, expand(m.SamplesQuery, in.Track))
+		if err != nil {
+			r.Detail = "campioni: " + err.Error()
+			return r
+		}
+		if n < m.MinSamples {
+			r.Detail = fmt.Sprintf("campioni insufficienti: %g, minimo %g", n, m.MinSamples)
+			return r
+		}
+	}
+	v, err := c.query(ctx, expand(m.Query, in.Track))
 	if err != nil {
 		r.Detail = err.Error()
 		return r
 	}
 	r.Value = &v
-	r.OK = (m.Max == nil || v <= *m.Max) && (m.Min == nil || v >= *m.Min)
-	if !r.OK {
-		r.Detail = fmt.Sprintf("valore %g fuori soglia", v)
+	if m.Compare != descriptor.CompareStable {
+		r.OK = (m.Max == nil || v <= *m.Max) && (m.Min == nil || v >= *m.Min)
+		if !r.OK {
+			r.Detail = fmt.Sprintf("valore %g fuori soglia", v)
+		}
+		return r
+	}
+	if in.StableTrack == "" {
+		// Primo rilascio: non c'è una versione stabile con cui confrontare.
+		r.OK, r.Detail = true, "nessuna versione stabile da confrontare"
+		return r
+	}
+	base, err := c.query(ctx, expand(m.Query, in.StableTrack))
+	if err != nil {
+		r.Detail = "versione stabile: " + err.Error()
+		return r
+	}
+	r.OK = true
+	if m.MaxDelta != nil && v-base > *m.MaxDelta {
+		r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile %g: differenza oltre %g", v, base, *m.MaxDelta)
+	}
+	if m.MaxRatio != nil {
+		switch {
+		case base > 0 && v/base > *m.MaxRatio:
+			r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile %g: rapporto %.2f oltre %g", v, base, v/base, *m.MaxRatio)
+		case base == 0 && v > 0 && m.MaxDelta == nil:
+			r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile 0", v)
+		}
 	}
 	return r
 }

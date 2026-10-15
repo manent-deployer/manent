@@ -69,7 +69,16 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		return nil, err
 	}
 	log.InfoContext(ctx, "deploy avviato", "targets", len(req.Targets))
-	res, err := dep.Deploy(ctx, req)
+	deploy := dep.Deploy
+	if req.Traffic != nil {
+		// Rilascio per percentuale: la nuova versione va accanto a quella stabile, senza traffico.
+		sd, ok := dep.(plugin.SlotDeployer)
+		if !ok {
+			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
+		}
+		deploy = sd.DeployCandidate
+	}
+	res, err := deploy(ctx, req)
 	if err != nil {
 		log.ErrorContext(ctx, "deploy fallito", "error", err)
 		return nil, err
@@ -167,6 +176,7 @@ func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string
 		},
 		Params:  d.Deploy.Params,
 		Secrets: secrets.DescriptorResolver{Provider: s.Secrets, Descriptor: d},
+		Traffic: trafficRequest(in),
 	}
 	for _, t := range d.Deploy.Targets {
 		req.Targets = append(req.Targets, plugin.Target{Host: t.Host, Port: t.Port, User: t.User})
@@ -189,6 +199,10 @@ const (
 // Checkpoint verifica che il plugin supporti il rollback e registra, tramite il locator della
 // policy, la release in esercizio prima del deploy. Non modifica i target.
 func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
+	if _, ok := in.Outputs[TrafficOutput]; ok {
+		// Nei rilasci per percentuale il ritorno è uno spostamento di traffico, fatto dal motore.
+		return pipeline.Output{"mode": "traffic"}, nil
+	}
 	dep, log, err := s.selectPlugin(in)
 	if err != nil {
 		return nil, err
@@ -229,6 +243,9 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 // Compensate riporta i target alla release registrata dal checkpoint. Senza una release
 // precedente (primo deploy) non c'è nulla da ripristinare.
 func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.Output) (pipeline.Output, error) {
+	if cp["mode"] == "traffic" {
+		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "rilascio per percentuale: il traffico torna alla versione stabile"}, nil
+	}
 	dep, log, err := s.selectPlugin(in)
 	if err != nil {
 		return nil, err

@@ -151,6 +151,38 @@ Il **rollback** riapplica su ogni cluster gli oggetti salvati della release prec
 
 Il tipo di artefatto `kubernetes` ammette il rollback (`rollback.artifact_types.kubernetes.allowed: true` nei default).
 
+## Rilasci per percentuale { #rilasci-per-percentuale }
+
+Con un rollout `strategy: traffic` ([Rilasci per percentuale](../guida/traffico.md)) il plugin tiene due versioni affiancate in due **slot**, `a` e `b`, alternati a ogni rilascio, e sposta il traffico con i pesi di una `HTTPRoute` (o `GRPCRoute`) della Gateway API.
+
+- **Oggetti dello slot.** Deployment, StatefulSet, DaemonSet, Service, HorizontalPodAutoscaler e PodDisruptionBudget dei manifest ricevono il suffisso `-<slot>` (`shop` → `shop-b`) e l'etichetta `manent.io/track: <slot>`, anche nei selettori e nei pod; `serviceName` degli StatefulSet e `scaleTargetRef` degli HPA seguono il nuovo nome. Gli altri oggetti (ConfigMap, Secret, …) sono comuni ai due slot: una modifica vale subito anche per la stabile.
+- **La route** è dell'infrastruttura: manent cambia solo i pesi dei `backendRefs` `<traffic_service>-a` e `<traffic_service>-b` (deve averli entrambi) con una merge patch condizionata al `resourceVersion` letto. La regola con un match sull'header dei tester (`rollout.traffic.testers.header`) porta solo alla candidata.
+- **Storico.** La ConfigMap della release in esercizio registra anche lo slot e, dopo una promozione, la release sostituita. Il ritorno ridimensiona a zero la candidata; dopo `scaleDownDelay` il ritiro porta a zero i workload dello slot sostituito ed elimina i suoi HPA.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}
+spec:
+  parentRefs: [{name: public}]
+  rules:
+    - matches: [{headers: [{name: x-canary, value: always}]}]
+      backendRefs: [{name: shop-a, port: 80}]
+    - backendRefs:
+        - {name: shop-a, port: 80, weight: 100}
+        - {name: shop-b, port: 80, weight: 0}
+```
+
+| Parametro | Default | Descrizione |
+|---|---|---|
+| `traffic_route` | | Nome della route che divide il traffico. |
+| `traffic_service` | | Nome base dei Service degli slot (`<nome>-a`, `<nome>-b`). |
+| `traffic_route_kind` | `HTTPRoute` | `HTTPRoute` o `GRPCRoute`. |
+| `traffic_route_namespace` | `namespace` | Namespace della route. |
+| `traffic_router` | `gateway-api` | Router della route. |
+
+Un'applicazione già rilasciata senza slot (oggetti senza suffisso) passa agli slot con un'operazione esplicita: il primo rilascio per percentuale crea `shop-a` accanto a `shop` e riceve subito tutto il traffico (non c'è una versione stabile negli slot); la route va preparata con i backend `shop-a` e `shop-b` e gli oggetti senza suffisso vanno rimossi a mano dopo la verifica.
+
 ## Dry-run
 
 In [dry-run](../guida/dry-run.md), per ogni cluster: versione e credenziali, poi ogni oggetto viene applicato con `dryRun=All`. Il cluster lo valida con schema, admission webhook e RBAC, ma non salva nulla. Gli oggetti in un namespace che i manifest stessi creerebbero non sono verificabili e vengono contati in `objects_skipped`.

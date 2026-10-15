@@ -40,6 +40,9 @@ type API interface {
 	// Apply applica l'oggetto con server-side apply; con dryRun nulla viene salvato.
 	Apply(ctx context.Context, obj Object, dryRun bool) (Object, error)
 	Get(ctx context.Context, apiVersion, kind, namespace, name string) (Object, error)
+	// Patch applica una JSON merge patch: con metadata.resourceVersion nella patch il server
+	// la rifiuta se l'oggetto è cambiato nel frattempo.
+	Patch(ctx context.Context, apiVersion, kind, namespace, name string, patch map[string]any) (Object, error)
 	Delete(ctx context.Context, apiVersion, kind, namespace, name string) error
 	// List elenca gli oggetti di un tipo in un namespace con il selettore di etichette.
 	List(ctx context.Context, apiVersion, kind, namespace, selector string) ([]Object, error)
@@ -226,6 +229,23 @@ func (a *httpAPI) Get(ctx context.Context, apiVersion, kind, namespace, name str
 	var out Object
 	if err := a.do(ctx, http.MethodGet, p, "", nil, &out); err != nil {
 		return nil, err
+	}
+	return out, nil
+}
+
+func (a *httpAPI) Patch(ctx context.Context, apiVersion, kind, namespace, name string, patch map[string]any) (Object, error) {
+	p, err := a.path(ctx, apiVersion, kind, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(patch)
+	if err != nil {
+		return nil, err
+	}
+	var out Object
+	q := url.Values{"fieldManager": {FieldManager}}
+	if err := a.do(ctx, http.MethodPatch, p+"?"+q.Encode(), "application/merge-patch+json", body, &out); err != nil {
+		return nil, fmt.Errorf("%s/%s %s: %w", kind, name, namespace, err)
 	}
 	return out, nil
 }

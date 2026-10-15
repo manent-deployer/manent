@@ -93,6 +93,9 @@ type WorkerOptions struct {
 	Maintenance MaintenanceOptions
 	// Health esegue l'health gate dei rollout a ondate.
 	Health rollout.Checker
+	// Traffic, se presente, integra load balancer e router: svuotamento dei lotti
+	// (traffic.pool) e rilasci per percentuale (strategy: traffic).
+	Traffic TrafficOps
 	// HealthTimeout limita ogni lettura dell'health gate (default 30s).
 	HealthTimeout time.Duration
 	// Region è la region del worker: con RegionRouting esegue i passi dei rollout di quella
@@ -143,6 +146,7 @@ type Worker struct {
 	audit           audit.Recorder
 	governance      Governance
 	health          rollout.Checker
+	traffic         TrafficOps
 	healthTimeout   time.Duration
 	region          string
 	regionRouting   bool
@@ -199,6 +203,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		audit:           opts.Audit,
 		governance:      opts.Governance,
 		health:          opts.Health,
+		traffic:         opts.Traffic,
 		healthTimeout:   cmp.Or(opts.HealthTimeout, 30*time.Second),
 		region:          opts.Region,
 		regionRouting:   opts.RegionRouting,
@@ -226,6 +231,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	dbos.RegisterWorkflow(ctx, w.gateWorkflow, dbos.WithWorkflowName(gateWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.afterWorkflow, dbos.WithWorkflowName(afterWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.releaseWorkflow, dbos.WithWorkflowName(releaseWorkflowName))
+	dbos.RegisterWorkflow(ctx, w.retireWorkflow, dbos.WithWorkflowName(retireWorkflowName))
 
 	q := opts.Queue
 	qopts := []dbos.QueueOption{
@@ -744,12 +750,25 @@ func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor) (re
 			meta["rollback"] = "enabled"
 		}
 	}
+	if d.Traffic != nil && d.Traffic.Pool != nil && d.Rollout == nil {
+		return resolvedConfig{}, pipeline.Permanent(errors.New("traffic.pool richiede un rilascio a lotti (rollout.waves con maxUnavailable): senza, tutti i target verrebbero svuotati insieme"))
+	}
 	if d.Rollout != nil {
-		p, err := checkRollout(d, w.health)
+		p, err := checkRollout(d, w.health, w.traffic)
 		if err != nil {
 			return resolvedConfig{}, pipeline.Permanent(fmt.Errorf("rollout: %w", err))
 		}
 		meta["rollout"] = strconv.Itoa(len(p.Stages)) + " stadi, " + strconv.Itoa(p.TotalPasses()) + " passi"
+		if d.Rollout.IsTraffic() {
+			meta["rollout"] = "traffico per gradini: " + fmt.Sprint(d.Rollout.Traffic.Steps)
+		}
+	} else if d.Traffic != nil && w.traffic != nil {
+		if err := w.traffic.Check(&d); err != nil {
+			return resolvedConfig{}, pipeline.Permanent(err)
+		}
+	}
+	if m := trafficMeta(d); m != "" {
+		meta["traffic"] = m
 	}
 	return resolvedConfig{Descriptor: d, Meta: meta}, nil
 }

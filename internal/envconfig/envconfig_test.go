@@ -330,3 +330,25 @@ step_params:
 		t.Error("senza step_params nella policy il descrittore non può impostare parametri")
 	}
 }
+
+func TestMergeTraffic(t *testing.T) {
+	d := descriptor.Descriptor{Application: "shop", Environment: "prod", Deploy: descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}}}
+	cfg := EnvConfig{Traffic: &descriptor.TrafficConfig{Pool: &descriptor.PoolConfig{Provider: "haproxy"}}}
+	eff, err := Merge(d, cfg)
+	if err != nil || eff.Traffic == nil || eff.Traffic.Pool.Provider != "haproxy" {
+		t.Fatalf("fusione: %+v %v", eff.Traffic, err)
+	}
+	// Il descrittore non può definire load balancer e router.
+	d.Traffic = &descriptor.TrafficConfig{Pool: &descriptor.PoolConfig{Provider: "haproxy"}}
+	if _, err := Merge(d, cfg); err == nil || !strings.Contains(err.Error(), "solo nella configurazione di ambiente") {
+		t.Errorf("traffic nel descrittore: %v", err)
+	}
+	cfg.Traffic.Pool.OnTimeout = "boh"
+	d.Traffic = nil
+	if _, err := Merge(d, cfg); err == nil || !strings.Contains(err.Error(), "on_timeout") {
+		t.Errorf("configurazione non valida: %v", err)
+	}
+	if _, err := Parse([]byte("traffic:\n  pool:\n    provider: aws-elb\n    settings: {region: eu-west-1}\n")); err != nil {
+		t.Errorf("parse: %v", err)
+	}
+}

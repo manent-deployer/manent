@@ -160,6 +160,7 @@ const stageStyle: Record<string, { tone: Tone; icon: LucideIcon; spin?: boolean 
   "rolled-back": { tone: "warn", icon: Undo2 },
   "paused-approval": { tone: "warn", icon: ShieldQuestion },
   "paused-freeze": { tone: "warn", icon: PauseCircle },
+  "paused-drift": { tone: "warn", icon: PauseCircle },
   planned: { tone: "muted", icon: CircleDashed },
 };
 

@@ -4,6 +4,7 @@ import type { components, paths } from "./schema";
 
 export type Status = components["schemas"]["Status"];
 export type RolloutState = components["schemas"]["RolloutState"];
+export type TrafficState = components["schemas"]["TrafficState"];
 export type RolloutStage = components["schemas"]["RolloutStage"];
 export type ApprovalState = components["schemas"]["ApprovalState"];
 export type StepRecord = components["schemas"]["StepRecord"];

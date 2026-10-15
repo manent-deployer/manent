@@ -185,6 +185,10 @@ Lo step `activation` è opzionale: per molti artefatti basta il deploy. Quando �
 
 Per tornare indietro dopo un deploy **riuscito** si usa `manent rollback` (`POST /api/v1/rollbacks`): rilascia di nuovo una versione precedente come nuovo deploy, con la stessa policy per tipo di artefatto. Vedi [Governance dei rilasci](governance.md#rollback-manuale).
 
+## Rilasci per percentuale e svuotamento
+
+Nei [rilasci per percentuale](traffico.md) il ritorno alla versione stabile è uno spostamento di traffico fatto dal motore (`traffic:revert`): non usa il plugin, il locator né `rollback.enabled`, e `onFailure` vale `rollback-all` per default. Con un pool ([svuotamento](svuotamento.md)) gli step `drain` e `restore` partecipano alle compensazioni: un lotto viene svuotato prima del rollback del deploy e rimesso in servizio dopo.
+
 ## Limiti
 
 - **Deploy annullato:** `manent cancel` interrompe il workflow, quindi le compensazioni non possono essere eseguite. Lo stesso vale per un worker che si arresta durante il rollback: al riavvio, la recovery riprende il workflow dal punto in cui si era fermato.

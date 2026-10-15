@@ -2,6 +2,8 @@
 
 Con più region e AZ un deploy si rilascia a **ondate**: una canary, poi una region alla volta, un'AZ alla volta, con un tempo di osservazione e un **health gate** tra un passo e il successivo. Il deploy resta uno solo (un ID, un esito) e si ferma, o torna indietro, al primo passo che non supera il controllo.
 
+Dietro un load balancer ogni lotto può essere [svuotato](svuotamento.md) prima del deploy e rimesso in servizio dopo. Per spostare il traffico per percentuali verso una versione affiancata, invece che per nodi, si usa la strategia [`traffic`](traffico.md).
+
 ```mermaid
 flowchart TB
     C[Config e piano] --> K[Canary: 1 nodo in eu-1a]

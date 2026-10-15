@@ -61,6 +61,9 @@ type Descriptor struct {
 	After []string `json:"after,omitempty" yaml:"after,omitempty"`
 	// AfterTimeout è il tempo massimo di attesa delle dipendenze (es. "2h", default 24h).
 	AfterTimeout string `json:"afterTimeout,omitempty" yaml:"afterTimeout,omitempty"`
+	// Traffic è l'integrazione con load balancer e router dell'ambiente. Arriva solo dalla
+	// configurazione di ambiente (envconfig.Merge rifiuta un descrittore che la definisce).
+	Traffic *TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
 }
 
 // Rollback configura il rollback automatico. Nel descrittore effettivo (dopo lo step config)
@@ -298,6 +301,9 @@ func (d *Descriptor) Validate() error {
 	}
 	if d.Rollout != nil {
 		errs = append(errs, d.Rollout.Validate())
+	}
+	if d.Traffic != nil {
+		errs = append(errs, errors.New("traffic si configura solo nella configurazione di ambiente, non nel descrittore"))
 	}
 	seen := map[string]bool{}
 	for i, s := range d.Secrets {

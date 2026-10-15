@@ -44,9 +44,11 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 	"github.com/joeg-ita/manent/internal/steps"
 	"github.com/joeg-ita/manent/internal/telemetry"
+	"github.com/joeg-ita/manent/internal/traffic"
 	"github.com/joeg-ita/manent/internal/version"
 	"github.com/joeg-ita/manent/internal/webui"
 	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/joeg-ita/manent/plugins/awselb"
 	"github.com/joeg-ita/manent/plugins/cloudrun"
 	"github.com/joeg-ita/manent/plugins/container"
 	"github.com/joeg-ita/manent/plugins/ecs"
@@ -171,22 +173,41 @@ func NewRollbackPolicy(cfg *config.Config, locators map[string]plugin.ReleaseLoc
 
 // NewSteps crea il registry degli step standard. Lo store degli artefatti è condiviso
 // tra lo step artifacts, lo step deploy (che lo riscarica se manca) e la pulizia finale.
-func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provider, locators map[string]plugin.ReleaseLocator, log *slog.Logger) (*pipeline.Registry, error) {
+// Restituisce anche le operazioni su load balancer e router usate dal motore (svuotamento dei
+// lotti e rilasci per percentuale), che condividono il plugin di deploy e i segreti.
+func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provider, locators map[string]plugin.ReleaseLocator, log *slog.Logger) (*pipeline.Registry, *steps.Traffic, error) {
 	stepLog := log.With("component", "step")
-	return pipeline.NewRegistry(
+	deploy := steps.Deploy{
+		Policies:  map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
+		Secrets:   sp,
+		Artifacts: store,
+		Locators:  locators,
+		Logger:    stepLog,
+	}
+	providers := NewTrafficProviders()
+	pool := steps.Pool{Providers: providers, Secrets: sp, Logger: log.With("component", "traffic")}
+	reg, err := pipeline.NewRegistry(
 		steps.Secrets{Provider: sp, Logger: stepLog},
 		steps.Artifacts{Store: store, Logger: stepLog},
 		steps.QA{Checkers: []steps.Checker{steps.NonEmptyChecker{}, steps.ChecksumChecker{}}, Logger: stepLog},
-		steps.Deploy{
-			Policies:  map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
-			Secrets:   sp,
-			Artifacts: store,
-			Locators:  locators,
-			Logger:    stepLog,
-		},
+		deploy,
 		steps.PostTest{Client: &http.Client{Timeout: 10 * time.Second}, Logger: stepLog},
 		steps.Activation{Activator: steps.LogActivator{Logger: stepLog}},
+		steps.Drain{Pool: pool},
+		steps.Restore{Pool: pool},
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return reg, &steps.Traffic{Deploy: deploy, Pool: pool, Providers: providers, Logger: log.With("component", "traffic")}, nil
+}
+
+// NewTrafficProviders restituisce i provider di load balancer e router: quelli HTTP e SSH di
+// internal/traffic e quelli basati sugli SDK dei cloud.
+func NewTrafficProviders() *traffic.Providers {
+	p := traffic.Default()
+	p.Pools["aws-elb"] = traffic.Provider[traffic.PoolFactory]{New: awselb.NewPool(awselb.SDKConnector{}), Validate: awselb.ValidatePool}
+	return p
 }
 
 // NewSecretProvider crea il secret provider con gli schemi env:, file: e, se abilitato, vault:.
@@ -403,6 +424,7 @@ type components struct {
 	chat       *chat.Notifier
 	change     change.Provider
 	health     rollout.Checker
+	traffic    *steps.Traffic
 	metrics    *telemetry.Metrics
 	closers    []io.Closer
 }
@@ -419,7 +441,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
-		Resolver: c.resolver, Governance: c.governance, Health: c.health, Logger: c.log,
+		Resolver: c.resolver, Governance: c.governance, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	}
 	if c.chat != nil {
@@ -464,7 +486,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 	}
 	store := &artifact.Store{Fetcher: artifact.DefaultFetcher{Sources: sources}, WorkDir: cfg.WorkDir}
 	locators := NewLocators(cfg, log)
-	reg, err := NewSteps(plugins, store, sp, locators, log)
+	reg, trafficOps, err := NewSteps(plugins, store, sp, locators, log)
 	if err != nil {
 		return nil, err
 	}
@@ -498,6 +520,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 	return &components{
 		metrics:    metrics,
 		health:     NewHealthChecker(cfg),
+		traffic:    trafficOps,
 		plugins:    plugins,
 		policy:     policy,
 		notifier:   notifier,
@@ -568,6 +591,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Metrics:              recorder(c.metrics),
 		Registry:             reg,
 		Health:               c.health,
+		Traffic:              c.traffic,
 		HealthTimeout:        cfg.Rollout.CheckTimeout,
 		Region:               cfg.DBOS.Region,
 		RegionRouting:        cfg.DBOS.RegionRouting,

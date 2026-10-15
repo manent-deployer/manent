@@ -108,6 +108,7 @@ La configurazione di ambiente è **autorevole**: il descrittore può solo aggiun
 | `secrets` | Il descrittore può aggiungere segreti; lo stesso nome deve avere lo stesso riferimento. |
 | `step_params` | Parametri degli [step personalizzati](step-personalizzati.md), per step: il descrittore (`stepParams`) può aggiungere le chiavi ammesse da `descriptor_policy.step_params`; una chiave presente in entrambi deve avere lo stesso valore. |
 | `rollout` | La strategia di [rilascio a ondate](ondate.md) dell'ambiente è autorevole: il descrittore può ometterla o ripeterla identica. |
+| `traffic` | Load balancer e router dell'ambiente ([svuotamento](svuotamento.md), [rilasci per percentuale](traffico.md)): solo nella configurazione di ambiente, un descrittore che la definisce è rifiutato. |
 | `rollback` | `enabled`, `on` e `locator` seguono la stessa regola: se definiti in entrambi devono coincidere. Così un ambiente può imporre il [rollback](rollback.md) senza che il descrittore possa disattivarlo. Resta valido il limite `allowed` del tipo di artefatto. |
 
 Un valore in conflitto fa fallire il deploy: non viene mai sovrascritto in silenzio. Dopo la fusione deve esserci almeno un target.

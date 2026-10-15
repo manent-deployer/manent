@@ -15,7 +15,6 @@ import (
 	"github.com/joeg-ita/manent/internal/change"
 	"github.com/joeg-ita/manent/internal/chat"
 	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/service"
 )
 
 const (
@@ -369,8 +368,8 @@ func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error
 	}
 	dec := Decision{Approver: approver, Approve: r.Approve, Comment: r.Comment, Time: e.now().UTC()}
 	target, topic := id+approvalSuffix, approvalTopic
-	if st.Rollout != nil && st.Rollout.Status == service.RolloutPausedApproval {
-		// Approvazione tra due ondate: la decisione va al workflow del deploy.
+	if st.Rollout != nil && awaitsDecision(st.Rollout.Status) {
+		// Approvazione tra due ondate o gradini: la decisione va al workflow del deploy.
 		target, topic = id, rolloutApprovalTopic
 	}
 	if err := dbos.Send(e.client, target, dec, topic); err != nil {

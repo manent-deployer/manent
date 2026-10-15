@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { ChevronRight, Server } from "lucide-react";
 
-import type { RolloutState } from "@/api/client";
+import type { RolloutState, TrafficState } from "@/api/client";
 import { useI18n } from "@/i18n/i18n";
 
 import { StageBadge } from "./ui";
@@ -14,6 +14,34 @@ const stageBorder: Record<string, string> = {
   baking: "border-violet/60",
   pending: "border-border",
 };
+
+/** TrafficBar mostra la quota di traffico della versione candidata rispetto alla stabile. */
+function TrafficBar({ traffic }: { traffic: TrafficState }) {
+  const { t } = useI18n();
+  const w = Math.max(0, Math.min(100, traffic.weight));
+  return (
+    <div className="mb-4 space-y-1.5">
+      <div
+        className="flex h-3 overflow-hidden rounded-full bg-border"
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={w}
+        aria-label={t("detail.rollout.traffic.weight", { weight: w })}
+      >
+        <div className="bg-muted/40" style={{ width: `${100 - w}%` }} />
+        <div className="bg-accent" style={{ width: `${w}%` }} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <span>{t("detail.rollout.traffic.stable", { slot: traffic.stable || "-", weight: 100 - w })}</span>
+        <span className="text-accent">{t("detail.rollout.traffic.candidate", { slot: traffic.candidate || "-", weight: w })}</span>
+        {traffic.router && <span>{t("detail.rollout.traffic.router", { router: traffic.router })}</span>}
+        {traffic.testers && <span>{t("detail.rollout.traffic.testers")}</span>}
+        {traffic.promoted && <span className="text-ok">{t("detail.rollout.traffic.promoted")}</span>}
+      </div>
+    </div>
+  );
+}
 
 /**
  * RolloutView disegna il piano a ondate: gli stadi in ordine di esecuzione (lista ordinata,
@@ -28,6 +56,7 @@ export function RolloutView({ rollout }: { rollout: RolloutState }) {
         <span className="text-muted">{t("detail.rollout.onFailure", { policy: rollout.on_failure })}</span>
         {rollout.paused && <span className="text-warn">{t("detail.rollout.paused", { reason: rollout.paused })}</span>}
       </div>
+      {rollout.traffic && <TrafficBar traffic={rollout.traffic} />}
       <ol aria-label={t("detail.rollout.stageList")} className="flex flex-wrap items-stretch gap-2">
         {rollout.stages.map((s, i) => (
           <li key={s.name} className="flex items-stretch gap-2">
@@ -55,6 +84,9 @@ export function RolloutView({ rollout }: { rollout: RolloutState }) {
                     <span className="truncate font-mono" title={p.hosts.join(", ")}>
                       {[p.region, p.az].filter(Boolean).join(" / ") || p.name}
                     </span>
+                    {p.drained && p.drained.length > 0 && (
+                      <span className="shrink-0 text-warn">{t("detail.rollout.drained", { count: p.drained.length })}</span>
+                    )}
                     <span className="ml-auto shrink-0">{t("detail.rollout.hosts", { count: p.hosts.length })}</span>
                   </li>
                 ))}

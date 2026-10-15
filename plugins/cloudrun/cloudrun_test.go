@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -55,10 +56,13 @@ func newFakeRun(t *testing.T) *fakeRun {
 	return f
 }
 
-// addRevision crea una revisione dal template corrente.
-func (f *fakeRun) addRevision(ann map[string]any, broken bool) string {
+// addRevision crea una revisione dal template corrente, con il nome indicato o generato.
+func (f *fakeRun) addRevision(ann map[string]any, broken bool, fixed ...string) string {
 	f.clock = f.clock.Add(time.Minute)
 	name := fmt.Sprintf("%s/revisions/shop-%05d", svcName, len(f.revisions)+1)
+	if len(fixed) > 0 && fixed[0] != "" {
+		name = svcName + "/revisions/" + fixed[0]
+	}
 	rev := Object{"name": name, "createTime": f.clock.Format(time.RFC3339), "annotations": ann}
 	f.revisions = append(f.revisions, rev)
 	f.svc["latestCreatedRevision"] = name
@@ -70,12 +74,19 @@ func (f *fakeRun) addRevision(ann map[string]any, broken bool) string {
 }
 
 func (f *fakeRun) updateStatus() {
-	tr := f.svc["traffic"].([]any)[0].(map[string]any)
-	st := Object{"type": tr["type"], "percent": tr["percent"]}
-	if tr["type"] == trafficRevision {
-		st["revision"] = tr["revision"]
+	var sts []any
+	for _, raw := range f.svc["traffic"].([]any) {
+		tr := raw.(map[string]any)
+		st := Object{"type": tr["type"], "percent": tr["percent"]}
+		if tr["type"] == trafficRevision {
+			st["revision"] = tr["revision"]
+		}
+		if tag, _ := tr["tag"].(string); tag != "" {
+			st["tag"], st["uri"] = tag, "https://"+tag+"---shop-abc.a.run.app"
+		}
+		sts = append(sts, st)
 	}
-	f.svc["trafficStatuses"] = []any{st}
+	f.svc["trafficStatuses"] = sts
 }
 
 func (f *fakeRun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -118,10 +129,12 @@ func (f *fakeRun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.patches++
-		if _, ok := get(in, "template", "revision").(string); ok {
-			f.t.Error("il template inviato ha ancora un nome di revisione fisso")
-		}
+		// Un template cambiato con il nome di una revisione esistente è rifiutato da Cloud Run.
+		fixed, _ := get(in, "template", "revision").(string)
 		changed := fmt.Sprint(in["template"]) != fmt.Sprint(f.svc["template"])
+		if changed && fixed != "" && slices.ContainsFunc(f.revisions, func(r Object) bool { return short(str(r, "name")) == fixed }) {
+			f.t.Error("il template inviato ha il nome di una revisione esistente")
+		}
 		f.svc["template"], f.svc["traffic"] = in["template"], in["traffic"]
 		f.svc["etag"] = fmt.Sprintf("e%d", f.patches+1)
 		op := &Operation{Name: fmt.Sprintf("projects/acme-prod/locations/europe-west1/operations/op%d", f.patches)}
@@ -130,7 +143,7 @@ func (f *fakeRun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			image := str(containers(in)[0], "image")
 			ann, _ := get(in, "template", "annotations").(map[string]any)
 			broken := strings.Contains(image, "broken")
-			rev := f.addRevision(ann, broken)
+			rev := f.addRevision(ann, broken, fixed)
 			if broken {
 				f.ops[op.Name] = &Operation{Name: op.Name, Done: true, Error: &OpFailure{Code: 9, Message: "Revision '" + short(rev) + "' is not ready and cannot serve traffic."}}
 			}
@@ -286,9 +299,15 @@ func TestDeployERollback(t *testing.T) {
 		t.Fatalf("deploy dopo il rollback: %v, traffico %s", err, f.traffic())
 	}
 
+	// Con il traffico diviso (rilascio per percentuale in corso) vale la revisione con la quota
+	// maggiore; a parità la release in esercizio non è determinabile.
 	f.svc["trafficStatuses"] = []any{Object{"type": trafficRevision, "revision": "shop-00004", "percent": 90.0}, Object{"type": trafficRevision, "revision": "shop-00005", "percent": 10.0}}
-	if _, err := p.CurrentRelease(ctx, req3); err == nil || !strings.Contains(err.Error(), "traffico diviso") {
-		t.Errorf("traffico diviso: %v", err)
+	if rel, err := p.CurrentRelease(ctx, req3); err != nil || rel.Details[DetailRevision+"@europe-west1"] != "shop-00004" {
+		t.Errorf("traffico diviso: %v %+v", err, rel)
+	}
+	f.svc["trafficStatuses"] = []any{Object{"type": trafficRevision, "revision": "shop-00004", "percent": 50.0}, Object{"type": trafficRevision, "revision": "shop-00005", "percent": 50.0}}
+	if _, err := p.CurrentRelease(ctx, req3); err == nil || !strings.Contains(err.Error(), "parti uguali") {
+		t.Errorf("traffico diviso a metà: %v", err)
 	}
 }
 

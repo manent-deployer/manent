@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,15 +33,21 @@ const (
 // etichette), ogni ondata in passi per AZ o region, e tra un passo e l'altro c'è un tempo di
 // osservazione con un health gate.
 type Rollout struct {
+	// Strategy è waves (default: ondate di target) o traffic (versione affiancata e traffico
+	// spostato per percentuali).
+	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
+	// Traffic sono i gradini della strategia traffic.
+	Traffic *TrafficRollout `json:"traffic,omitempty" yaml:"traffic,omitempty"`
 	// Regions è l'ordine delle region; quelle non elencate seguono in ordine alfabetico.
 	Regions []string `json:"regions,omitempty" yaml:"regions,omitempty"`
-	Waves   []Wave   `json:"waves" yaml:"waves"`
+	Waves   []Wave   `json:"waves,omitempty" yaml:"waves,omitempty"`
 	// MaxUnavailable sono i target aggiornati insieme in un passo: un numero o una
 	// percentuale ("25%") dei target del passo. Default 1.
 	MaxUnavailable string `json:"maxUnavailable,omitempty" yaml:"maxUnavailable,omitempty"`
 	// OnFailure è stop (default), rollback-wave o rollback-all.
 	OnFailure string `json:"onFailure,omitempty" yaml:"onFailure,omitempty"`
-	// ApprovalsBetween elenca le ondate dopo le quali il rollout attende un'approvazione.
+	// ApprovalsBetween elenca le ondate dopo le quali il rollout attende un'approvazione; con la
+	// strategia traffic, i gradini ("0" dopo i test a peso 0, "25" dopo il gradino del 25%).
 	ApprovalsBetween []string `json:"approvalsBetween,omitempty" yaml:"approvalsBetween,omitempty"`
 	Health           *Health  `json:"health,omitempty" yaml:"health,omitempty"`
 }
@@ -77,13 +84,27 @@ type Probe struct {
 }
 
 // MetricGate è una query PromQL valutata per ogni passo; {application}, {environment},
-// {region} e {az} vengono sostituiti. Il risultato deve stare tra Min e Max.
+// {region} e {az} vengono sostituiti, e con la strategia traffic {track} (slot) e {version}.
+// Il risultato deve stare tra Min e Max; con Compare "stable" la query è valutata per la
+// versione candidata e per quella stabile e si confrontano i due valori.
 type MetricGate struct {
 	Name  string   `json:"name" yaml:"name"`
 	Query string   `json:"query" yaml:"query"`
 	Max   *float64 `json:"max,omitempty" yaml:"max,omitempty"`
 	Min   *float64 `json:"min,omitempty" yaml:"min,omitempty"`
+	// Compare è "stable" per confrontare la versione candidata con quella stabile.
+	Compare string `json:"compare,omitempty" yaml:"compare,omitempty"`
+	// MaxRatio è il rapporto massimo candidata/stabile (es. 1.5).
+	MaxRatio *float64 `json:"maxRatio,omitempty" yaml:"maxRatio,omitempty"`
+	// MaxDelta è la differenza massima candidata - stabile.
+	MaxDelta *float64 `json:"maxDelta,omitempty" yaml:"maxDelta,omitempty"`
+	// SamplesQuery conta le richieste osservate; sotto MinSamples il controllo non è verde.
+	SamplesQuery string  `json:"samplesQuery,omitempty" yaml:"samplesQuery,omitempty"`
+	MinSamples   float64 `json:"minSamples,omitempty" yaml:"minSamples,omitempty"`
 }
+
+// CompareStable confronta la versione candidata con quella stabile.
+const CompareStable = "stable"
 
 // AlertGate blocca il passo se in Alertmanager c'è un allarme attivo che soddisfa tutte le
 // condizioni di BlockOn (es. "severity=critical") e riguarda l'applicazione, la region o l'AZ.
@@ -129,6 +150,10 @@ func (r *Rollout) MaxUnavailableFor(n int) int {
 // OnFailureOrDefault restituisce il comportamento in caso di passo fallito.
 func (r *Rollout) OnFailureOrDefault() string {
 	if r.OnFailure == "" {
+		if r.IsTraffic() {
+			// Tornare alla versione stabile è uno spostamento di traffico: è il default.
+			return OnFailureRollbackAll
+		}
 		return OnFailureStop
 	}
 	return r.OnFailure
@@ -138,8 +163,25 @@ func (r *Rollout) OnFailureOrDefault() string {
 // la fusione con la configurazione di ambiente (internal/rollout).
 func (r *Rollout) Validate() error {
 	var errs []error
-	if len(r.Waves) == 0 {
-		errs = append(errs, errors.New("rollout.waves: almeno un'ondata"))
+	switch r.Strategy {
+	case "", StrategyWaves:
+		if len(r.Waves) == 0 {
+			errs = append(errs, errors.New("rollout.waves: almeno un'ondata"))
+		}
+		if r.Traffic != nil {
+			errs = append(errs, errors.New("rollout.traffic richiede strategy: traffic"))
+		}
+	case StrategyTraffic:
+		if len(r.Waves) > 0 {
+			errs = append(errs, errors.New("rollout.waves non è supportato con strategy: traffic"))
+		}
+		if r.Traffic == nil {
+			errs = append(errs, errors.New("rollout.traffic obbligatorio con strategy: traffic"))
+		} else {
+			errs = append(errs, r.Traffic.validate())
+		}
+	default:
+		errs = append(errs, fmt.Errorf("rollout.strategy %q non valida (waves|traffic)", r.Strategy))
 	}
 	names := map[string]bool{}
 	for i, w := range r.Waves {
@@ -177,6 +219,9 @@ func (r *Rollout) Validate() error {
 		errs = append(errs, fmt.Errorf("rollout.onFailure %q non valido (stop|rollback-wave|rollback-all)", r.OnFailure))
 	}
 	for _, a := range r.ApprovalsBetween {
+		if r.IsTraffic() && r.Traffic != nil && slices.Contains(r.Traffic.stageNames(), a) {
+			continue
+		}
 		if !names[a] {
 			errs = append(errs, fmt.Errorf("rollout.approvalsBetween: ondata %q inesistente", a))
 		}
@@ -212,8 +257,20 @@ func (h *Health) validate() error {
 		}
 	}
 	for i, m := range h.Metrics {
-		if !validName(m.Name) || strings.TrimSpace(m.Query) == "" || (m.Max == nil && m.Min == nil) {
-			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: name, query e almeno uno tra min e max obbligatori", i))
+		switch m.Compare {
+		case "":
+			if !validName(m.Name) || strings.TrimSpace(m.Query) == "" || (m.Max == nil && m.Min == nil) {
+				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: name, query e almeno uno tra min e max obbligatori", i))
+			}
+		case CompareStable:
+			if !validName(m.Name) || !strings.Contains(m.Query, "{track}") || (m.MaxRatio == nil && m.MaxDelta == nil) {
+				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: con compare: stable servono name, una query con {track} e maxRatio o maxDelta", i))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d].compare %q non valido (stable)", i, m.Compare))
+		}
+		if m.MinSamples < 0 || (m.MinSamples > 0 && strings.TrimSpace(m.SamplesQuery) == "") {
+			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: minSamples richiede samplesQuery", i))
 		}
 	}
 	if a := h.Alerts; a != nil {

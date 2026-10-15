@@ -237,11 +237,14 @@ func chooseContainer(svc Object, req *plugin.Request) (Object, error) {
 	return nil, fmt.Errorf("container %q assente dal servizio (container: %s): indicare %q", want, strings.Join(names, ", "), ParamContainer)
 }
 
-// serving restituisce la revisione che riceve tutto il traffico ("" se nessuna).
+// serving restituisce la revisione che riceve il traffico ("" se nessuna). Con il traffico
+// diviso (es. un rilascio per percentuale in corso) è quella con la quota maggiore; a parità
+// è un errore.
 func serving(svc Object) (string, error) {
 	statuses, _ := svc["trafficStatuses"].([]any)
 	var active []string
-	rev := ""
+	rev, best := "", 0.0
+	tie := false
 	for _, s := range statuses {
 		m, _ := s.(map[string]any)
 		pct, _ := m["percent"].(float64)
@@ -254,12 +257,15 @@ func serving(svc Object) (string, error) {
 		}
 		r = short(r)
 		active = append(active, fmt.Sprintf("%s %.0f%%", r, pct))
-		if pct >= 100 {
-			rev = r
+		switch {
+		case pct > best:
+			rev, best, tie = r, pct, false
+		case pct == best && r != rev:
+			tie = true
 		}
 	}
-	if len(active) > 1 {
-		return "", fmt.Errorf("traffico diviso tra più revisioni (%s)", strings.Join(active, ", "))
+	if tie {
+		return "", fmt.Errorf("traffico diviso in parti uguali tra più revisioni (%s)", strings.Join(active, ", "))
 	}
 	return rev, nil
 }

@@ -81,6 +81,8 @@ type Alias struct {
 	Name            string
 	FunctionVersion string
 	Description     string
+	// Weights sono le versioni aggiuntive con la loro quota di traffico (0-1).
+	Weights map[string]float64
 }
 
 // Code è il nuovo codice: un'immagine o un pacchetto .zip.
@@ -98,6 +100,8 @@ type API interface {
 	GetAlias(ctx context.Context, name, alias string) (*Alias, error)
 	// PutAlias crea l'alias o lo sposta sulla versione, azzerando eventuali pesi di traffico.
 	PutAlias(ctx context.Context, name, alias, version, description string, create bool) error
+	// RouteAlias lascia l'alias sulla versione e manda alle versioni di weights la loro quota.
+	RouteAlias(ctx context.Context, name, alias, version, description string, weights map[string]float64) error
 	ListVersions(ctx context.Context, name string) ([]Function, error)
 }
 
@@ -318,47 +322,59 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 			return details, nil
 		}
 	}
-	c, err := code(req.Artifact, s.region)
-	if err != nil {
-		return details, err
-	}
 	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	v, err := p.publish(ctx, s, req, details, log)
+	if err != nil {
+		return details, err
+	}
+	if err := s.api.PutAlias(ctx, name, aliasName(req), v, description(req.Artifact.Version, req.DeploymentID), s.alias == nil); err != nil {
+		return details, fmt.Errorf("aggiornamento dell'alias %s: %w", aliasName(req), err)
+	}
+	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "alias", aliasName(req), "function_version", v)
+	return details, nil
+}
+
+// publish aggiorna il codice della funzione e pubblica una versione, senza toccare l'alias.
+// Restituisce la versione della funzione pubblicata.
+func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, details map[string]string, log *slog.Logger) (string, error) {
+	name := functionName(req)
+	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
+	c, err := code(req.Artifact, s.region)
+	if err != nil {
+		return "", err
+	}
 	// Un aggiornamento in corso (es. della configurazione) farebbe fallire quello del codice;
 	// uno fallito in precedenza no.
 	if _, err := p.waitFunction(ctx, s.api, name, "", timeout, false, log); err != nil {
-		return details, err
+		return "", err
 	}
 	if _, err := s.api.UpdateCode(ctx, name, c, false); err != nil {
-		return details, fmt.Errorf("aggiornamento del codice: %w", err)
+		return "", fmt.Errorf("aggiornamento del codice: %w", err)
 	}
 	if c.ImageURI != "" {
 		details["image"] = c.ImageURI
 	}
 	fn, err := p.waitFunction(ctx, s.api, name, "", timeout, true, log)
 	if err != nil {
-		return details, err
+		return "", err
 	}
 	if c.ZipFile != nil {
 		if want, err := hexToBase64(req.Artifact.SHA256); err == nil && want != "" && fn.CodeSha256 != want {
-			return details, fmt.Errorf("sha256 del codice caricato (%s) diverso da quello dell'artefatto (%s)", fn.CodeSha256, want)
+			return "", fmt.Errorf("sha256 del codice caricato (%s) diverso da quello dell'artefatto (%s)", fn.CodeSha256, want)
 		}
 	}
 	// CodeSha256 impedisce di pubblicare codice cambiato nel frattempo da un altro aggiornamento.
 	v, err := s.api.PublishVersion(ctx, name, fn.CodeSha256, description(req.Artifact.Version, req.DeploymentID))
 	if err != nil {
-		return details, fmt.Errorf("pubblicazione della versione: %w", err)
+		return "", fmt.Errorf("pubblicazione della versione: %w", err)
 	}
 	details[DetailFunctionVersion] = v.Version
 	if _, err := p.waitFunction(ctx, s.api, name, v.Version, timeout, true, log); err != nil {
-		return details, err
+		return "", err
 	}
-	if err := s.api.PutAlias(ctx, name, aliasName(req), v.Version, description(req.Artifact.Version, req.DeploymentID), s.alias == nil); err != nil {
-		return details, fmt.Errorf("aggiornamento dell'alias %s: %w", aliasName(req), err)
-	}
-	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "alias", aliasName(req), "function_version", v.Version)
-	return details, nil
+	return v.Version, nil
 }
 
 func hexToBase64(h string) (string, error) {

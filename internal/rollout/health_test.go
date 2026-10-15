@@ -81,3 +81,43 @@ func TestHealthGate(t *testing.T) {
 		t.Error("metriche e allarmi accettati senza Prometheus e Alertmanager")
 	}
 }
+
+func TestGateComparativo(t *testing.T) {
+	values := map[string]string{"b": "0.03", "a": "0.01", "samples": "500"}
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query().Get("query")
+		v := values["samples"]
+		switch {
+		case strings.Contains(q, `track="b"`) && strings.Contains(q, "errors"):
+			v = values["b"]
+		case strings.Contains(q, `track="a"`) && strings.Contains(q, "errors"):
+			v = values["a"]
+		}
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"` + v + `"]}]}}`))
+	}))
+	defer prom.Close()
+	c := &HTTPChecker{Client: http.DefaultClient, PrometheusURL: prom.URL}
+	ratio := 2.0
+	h := descriptor.Health{Metrics: []descriptor.MetricGate{{Name: "errori", Query: `rate(errors{app="{application}",track="{track}"}[5m])`,
+		Compare: descriptor.CompareStable, MaxRatio: &ratio, SamplesQuery: `sum(requests{track="{track}"})`, MinSamples: 200}}}
+	in := GateInput{Application: "shop", Passes: []Pass{{Name: "traffic"}}, Health: h, Track: "b", StableTrack: "a", Version: "2.0.0"}
+	ctx := context.Background()
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "rapporto 3.00 oltre 2") {
+		t.Fatalf("candidata peggiore della stabile non rilevata: %s", r.Failed())
+	}
+	values["b"] = "0.015"
+	if r := c.Check(ctx, in); !r.OK {
+		t.Fatalf("gate verde atteso: %s", r.Failed())
+	}
+	// Pochi campioni: il gate non può dire che la candidata è sana.
+	values["samples"] = "50"
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "campioni insufficienti") {
+		t.Fatalf("campioni: %s", r.Failed())
+	}
+	// Primo rilascio: niente da confrontare.
+	values["samples"], in.StableTrack = "500", ""
+	if r := c.Check(ctx, in); !r.OK {
+		t.Fatalf("primo rilascio: %s", r.Failed())
+	}
+}

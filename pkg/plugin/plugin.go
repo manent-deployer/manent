@@ -66,6 +66,8 @@ type Request struct {
 	// Params sono parametri specifici del plugin, presi dal descrittore.
 	Params  map[string]string
 	Secrets SecretResolver
+	// Traffic è presente solo nei rilasci per percentuale di traffico (SlotDeployer).
+	Traffic *TrafficRequest
 }
 
 // TargetResult è l'esito del deploy su un singolo target.
