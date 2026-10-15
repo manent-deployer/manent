@@ -204,6 +204,25 @@ pipeline:
       - 3b0f4c…e91a   # db-migrate prima della correzione del 14/10/2026
 ```
 
+Per sapere quali deploy falliranno e quali schedule vanno riapplicate, `manent-server admin specs` elenca i workflow non ancora conclusi (in coda, pianificati con `schedule.at`, in attesa di approvazione o di dipendenze, in esecuzione) e le schedule cron il cui piano contiene una specifica revocata. Legge `revoked_specs` dalla configurazione, oppure gli hash indicati con `--hash`; `--all` elenca tutte le specifiche fotografate nei piani.
+
+```sh
+manent-server -c manent.yml admin specs
+manent-server -c manent.yml admin specs --hash 3b0f4c…e91a
+```
+
+```json
+{
+  "hashes": ["3b0f4c…e91a"],
+  "uses": [
+    {"kind": "schedule", "id": "shop-prod", "status": "ACTIVE", "application": "shop", "environment": "prod", "step": "db-migrate", "spec_hash": "3b0f4c…e91a"},
+    {"kind": "workflow", "id": "shop-1.5.0", "workflow": "manent.approval", "status": "PENDING", "application": "shop", "environment": "prod", "step": "db-migrate", "spec_hash": "3b0f4c…e91a"}
+  ]
+}
+```
+
+Un deploy in coda si annulla (`manent cancel`) e si invia di nuovo, così il suo piano fotografa la specifica attuale; una schedule si aggiorna inviando di nuovo il suo descrittore. L'hash viene ricalcolato dalla specifica fotografata: `mismatch` segnala un piano il cui `spec_hash` registrato non corrisponde.
+
 ## Audit e visibilità
 
 Ogni esecuzione di uno step personalizzato, compresi tentativi falliti e dry-run, scrive una voce di audit `step.custom.run` con l'identità che ha richiesto il deploy, lo step, l'hash della specifica, i target e l'esito. Gli output restano nello stato del deploy, leggibili con `deployment.read`. I [callback](callback.md), definiti dal descrittore, ricevono l'esito dello step ma **non i suoi output**.

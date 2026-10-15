@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -56,6 +57,7 @@ func Run(args []string) error {
 			{Name: "executors", Short: "Elenca i worker registrati e i loro workflow in sospeso", Cmd: &ExecutorsCmd{global: g}},
 			{Name: "recover", Short: "Riprende i workflow di un worker perso o di una versione precedente", Cmd: &RecoverCmd{global: g}},
 			{Name: "prune", Short: "Elimina lo storico dei workflow più vecchio della retention", Cmd: &PruneCmd{global: g}},
+			{Name: "specs", Short: "Elenca deploy in attesa e schedule che contengono specifiche revocate degli step personalizzati", Cmd: &SpecsCmd{global: g}},
 		}); err != nil {
 		return err
 	}
@@ -408,6 +410,39 @@ func (c *PruneCmd) Execute([]string) error {
 			return errors.New("indicare --max-age o configurare retention.max_age")
 		}
 		rep, err := adm.Prune(ctx, o)
+		if err != nil {
+			return err
+		}
+		return cliutil.PrintJSON(rep)
+	})
+}
+
+// SpecsCmd elenca i workflow non conclusi e le schedule che contengono le specifiche
+// revocate degli step personalizzati (pipeline.custom.revoked_specs o --hash).
+type SpecsCmd struct {
+	global *GlobalOptions
+	Hash   []string `long:"hash" description:"sha256 della specifica da cercare, al posto di pipeline.custom.revoked_specs (ripetibile)"`
+	All    bool     `long:"all" description:"elenca tutte le specifiche fotografate nei piani, revocate o no"`
+}
+
+// Execute implementa flags.Commander.
+func (c *SpecsCmd) Execute([]string) error {
+	return withAdmin(c.global, func(ctx context.Context, a *app.App, adm *engine.Admin) error {
+		var hashes []string
+		for _, h := range c.Hash {
+			h = strings.ToLower(strings.TrimSpace(h))
+			if len(h) != 64 || strings.Trim(h, "0123456789abcdef") != "" {
+				return fmt.Errorf("--hash %q: atteso uno sha256 esadecimale (64 caratteri)", h)
+			}
+			hashes = append(hashes, h)
+		}
+		if len(hashes) == 0 {
+			hashes = a.Config.Pipeline.Custom.RevokedSpecs
+		}
+		if len(hashes) == 0 && !c.All {
+			return errors.New("nessuna specifica revocata in pipeline.custom.revoked_specs: indicare --hash o --all")
+		}
+		rep, err := adm.Specs(ctx, engine.SpecsOptions{Hashes: hashes, All: c.All})
 		if err != nil {
 			return err
 		}

@@ -201,6 +201,25 @@ pipeline:
       - 3b0f4c…e91a   # db-migrate before the fix of 2026-10-14
 ```
 
+To find out which deploys will fail and which schedules need to be reapplied, `manent-server admin specs` lists the workflows not yet concluded (queued, scheduled with `schedule.at`, waiting for approval or dependencies, running) and the cron schedules whose plan contains a revoked specification. It reads `revoked_specs` from the configuration, or the hashes given with `--hash`; `--all` lists every specification captured in the plans.
+
+```sh
+manent-server -c manent.yml admin specs
+manent-server -c manent.yml admin specs --hash 3b0f4c…e91a
+```
+
+```json
+{
+  "hashes": ["3b0f4c…e91a"],
+  "uses": [
+    {"kind": "schedule", "id": "shop-prod", "status": "ACTIVE", "application": "shop", "environment": "prod", "step": "db-migrate", "spec_hash": "3b0f4c…e91a"},
+    {"kind": "workflow", "id": "shop-1.5.0", "workflow": "manent.approval", "status": "PENDING", "application": "shop", "environment": "prod", "step": "db-migrate", "spec_hash": "3b0f4c…e91a"}
+  ]
+}
+```
+
+A queued deploy is cancelled (`manent cancel`) and submitted again, so that its plan captures the current specification; a schedule is updated by submitting its descriptor again. The hash is recomputed from the captured specification: `mismatch` reports a plan whose recorded `spec_hash` does not match it.
+
 ## Audit and visibility
 
 Every run of a custom step, including failed attempts and dry-runs, writes an audit entry `step.custom.run` with the identity that requested the deploy, the step, the specification hash, the targets and the outcome. The outputs stay in the deploy status, readable with `deployment.read`; the [callbacks](callback.md), which the descriptor defines, receive the outcome of the step but **not its outputs**.

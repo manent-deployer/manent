@@ -355,7 +355,7 @@ Uno step con `type` in `pipeline.steps` aggiunge una fase senza scrivere codice:
 
 - I valori sostituiti nei segnaposto non sono fidati: non diventano opzioni dei comandi, sono codificati negli URL e non alterano il corpo JSON.
 - I segreti arrivano sul target come file in una directory su tmpfs, rimossa alla fine e a ogni nuovo tentativo; nel log sono sostituiti da `***`.
-- La specifica è registrata nel piano e firmata (`pipeline.custom.spec_key_refs`); una specifica difettosa si blocca con `pipeline.custom.revoked_specs`, anche nelle schedule già create.
+- La specifica è registrata nel piano e firmata (`pipeline.custom.spec_key_refs`); una specifica difettosa si blocca con `pipeline.custom.revoked_specs`, anche nelle schedule già create; `manent-server admin specs` elenca i deploy in attesa e le schedule che la contengono.
 - Ogni esecuzione è registrata nell'audit; gli output dichiarati restano nello stato del deploy e non vanno ai callback.
 
 ```yaml

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/joeg-ita/manent/internal/config"
 	"github.com/joeg-ita/manent/internal/customspec"
@@ -181,6 +182,42 @@ func TestStepPersonalizzati(t *testing.T) {
 	}
 	if _, err := e.Wait(alice, sub.ID); err == nil || !strings.Contains(err.Error(), "revocata") {
 		t.Errorf("specifica revocata eseguita: %v", err)
+	}
+
+	// admin specs trova i deploy non ancora eseguiti e le schedule con la specifica revocata.
+	at := time.Now().Add(time.Hour)
+	later := *d
+	later.ID, later.Artifact.Version, later.Schedule = "migrazione-notturna", "1.5.0", &descriptor.Schedule{At: &at}
+	if _, err := e.Submit(alice, &later); err != nil {
+		t.Fatal(err)
+	}
+	cron := *d
+	cron.Schedule = &descriptor.Schedule{Cron: "0 3 1 1 *", Name: "migrazione-annuale"}
+	if _, err := e.Submit(alice, &cron); err != nil {
+		t.Fatal(err)
+	}
+	revoked := opts.Custom.(*customstep.Builder).Revoked
+	adm := NewAdmin(AdminOptions{Client: w.Client(), Logger: discard})
+	rep, err := adm.Specs(context.Background(), SpecsOptions{Hashes: revoked})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, u := range rep.Uses {
+		if u.SpecHash != revoked[0] || u.Step != "db-migrate" || u.Application != d.Application {
+			t.Errorf("uso inatteso: %+v", u)
+		}
+		got = append(got, u.Kind+":"+u.ID+":"+u.Status)
+	}
+	if want := "schedule:migrazione-annuale:ACTIVE,workflow:migrazione-notturna:DELAYED"; strings.Join(got, ",") != want {
+		t.Errorf("usi della specifica revocata: %s, attesi %s", strings.Join(got, ","), want)
+	}
+	all, err := adm.Specs(context.Background(), SpecsOptions{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Uses) != 4 { // db-migrate e cdn-purge, nel deploy pianificato e nella schedule
+		t.Errorf("tutte le specifiche: %+v", all.Uses)
 	}
 }
 
