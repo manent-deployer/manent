@@ -81,7 +81,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	res, err := deploy(ctx, req)
 	if err != nil {
 		log.ErrorContext(ctx, "deploy fallito", "error", err)
-		return nil, err
+		return nil, unsupported(dep, err)
 	}
 	raw, err := json.Marshal(res)
 	if err != nil {

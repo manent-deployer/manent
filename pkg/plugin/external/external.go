@@ -69,6 +69,10 @@ const (
 	CapabilityDryRun         = "dry_run"
 	CapabilityCurrentRelease = "current_release"
 	CapabilityRollback       = "rollback"
+	CapabilitySlots          = "slots"
+	CapabilityTrafficRouter  = "traffic_router"
+	CapabilityTesters        = "testers"
+	CapabilityScale          = "scale"
 )
 
 // capabilities restituisce le interfacce opzionali implementate dal deployer.
@@ -82,6 +86,18 @@ func capabilities(d plugin.Deployer) []string {
 	}
 	if _, ok := d.(plugin.Rollbacker); ok {
 		caps = append(caps, CapabilityRollback)
+	}
+	if _, ok := d.(plugin.SlotDeployer); ok {
+		caps = append(caps, CapabilitySlots)
+	}
+	if _, ok := d.(plugin.TrafficRouter); ok {
+		caps = append(caps, CapabilityTrafficRouter)
+	}
+	if _, ok := d.(plugin.TesterRouter); ok {
+		caps = append(caps, CapabilityTesters)
+	}
+	if _, ok := d.(plugin.SlotScaler); ok {
+		caps = append(caps, CapabilityScale)
 	}
 	return caps
 }
@@ -134,6 +150,100 @@ func (c *Client) Rollback(ctx context.Context, req *plugin.Request, previous plu
 			return nil, plugin.ErrRollbackUnsupported
 		}
 		return resp, err
+	})
+}
+
+// TrafficSupported implementa plugin.TrafficChecker con le capacità dichiarate in Configure.
+func (c *Client) TrafficSupported(context.Context) (plugin.TrafficSupport, error) {
+	return plugin.TrafficSupport{Slots: c.Has(CapabilitySlots), Router: c.Has(CapabilityTrafficRouter),
+		Testers: c.Has(CapabilityTesters), Scale: c.Has(CapabilityScale)}, nil
+}
+
+// unsupported traduce UNIMPLEMENTED in plugin.ErrTrafficUnsupported.
+func unsupported(err error) error {
+	if status.Code(err) == codes.Unimplemented {
+		return plugin.ErrTrafficUnsupported
+	}
+	return err
+}
+
+// empty esegue una chiamata senza risultato con i segreti serviti.
+func (c *Client) empty(req *plugin.Request, call func(*pb.DeployRequest) error) error {
+	_, err := c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
+		return &pb.DeployResponse{}, unsupported(call(r))
+	})
+	return err
+}
+
+// PrepareSlots implementa plugin.SlotDeployer.
+func (c *Client) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
+	var state map[string]string
+	err := c.empty(req, func(r *pb.DeployRequest) error {
+		resp, err := c.rpc.PrepareSlots(ctx, r)
+		state = resp.GetState()
+		return err
+	})
+	return state, err
+}
+
+// DeployCandidate implementa plugin.SlotDeployer.
+func (c *Client) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
+	return c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
+		resp, err := c.rpc.DeployCandidate(ctx, r)
+		return resp, unsupported(err)
+	})
+}
+
+// PromoteCandidate implementa plugin.SlotDeployer.
+func (c *Client) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
+	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.PromoteCandidate(ctx, r); return err })
+}
+
+// RevertCandidate implementa plugin.SlotDeployer.
+func (c *Client) RevertCandidate(ctx context.Context, req *plugin.Request) error {
+	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.RevertCandidate(ctx, r); return err })
+}
+
+// RetirePrevious implementa plugin.SlotDeployer.
+func (c *Client) RetirePrevious(ctx context.Context, req *plugin.Request) error {
+	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.RetirePrevious(ctx, r); return err })
+}
+
+// SetCandidateWeight implementa plugin.TrafficRouter.
+func (c *Client) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
+	return c.empty(req, func(r *pb.DeployRequest) error {
+		_, err := c.rpc.SetCandidateWeight(ctx, &pb.WeightRequest{Request: r, Percent: int32(percent)})
+		return err
+	})
+}
+
+// CandidateWeight implementa plugin.TrafficRouter.
+func (c *Client) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
+	w := 0
+	err := c.empty(req, func(r *pb.DeployRequest) error {
+		resp, err := c.rpc.CandidateWeight(ctx, r)
+		w = int(resp.GetPercent())
+		return err
+	})
+	return w, err
+}
+
+// RouteTesters implementa plugin.TesterRouter.
+func (c *Client) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
+	var details map[string]string
+	err := c.empty(req, func(r *pb.DeployRequest) error {
+		resp, err := c.rpc.RouteTesters(ctx, r)
+		details = resp.GetDetails()
+		return err
+	})
+	return details, err
+}
+
+// ScaleCandidate implementa plugin.SlotScaler.
+func (c *Client) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
+	return c.empty(req, func(r *pb.DeployRequest) error {
+		_, err := c.rpc.ScaleCandidate(ctx, &pb.WeightRequest{Request: r, Percent: int32(percent)})
+		return err
 	})
 }
 
@@ -212,6 +322,9 @@ func (c *Client) withSecrets(req *plugin.Request, call func(*pb.DeployRequest) (
 		}()
 	}
 	resp, err := call(toProtoRequest(req, id))
+	if errors.Is(err, plugin.ErrTrafficUnsupported) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, fromStatus(err)
 	}
@@ -259,6 +372,9 @@ func toProtoRequest(req *plugin.Request, secretsID uint32) *pb.DeployRequest {
 		Params:          req.Params,
 		SecretsBrokerId: secretsID,
 	}
+	if t := req.Traffic; t != nil {
+		r.Traffic = &pb.TrafficRequest{State: t.State, TesterHeader: t.TesterHeader, TesterTag: t.TesterTag}
+	}
 	for _, t := range req.Targets {
 		r.Targets = append(r.Targets, &pb.Target{Host: t.Host, Port: int32(t.Port), User: t.User})
 	}
@@ -279,6 +395,9 @@ func fromProtoRequest(r *pb.DeployRequest) *plugin.Request {
 			SHA256:    a.GetSha256(),
 		},
 		Params: r.GetParams(),
+	}
+	if t := r.GetTraffic(); t != nil {
+		req.Traffic = &plugin.TrafficRequest{State: t.GetState(), TesterHeader: t.GetTesterHeader(), TesterTag: t.GetTesterTag()}
 	}
 	for _, t := range r.GetTargets() {
 		req.Targets = append(req.Targets, plugin.Target{Host: t.GetHost(), Port: int(t.GetPort()), User: t.GetUser()})

@@ -229,6 +229,85 @@ func (p *Process) RollbackSupported(context.Context) (bool, error) {
 	return c.Has(external.CapabilityRollback), nil
 }
 
+// TrafficSupported implementa plugin.TrafficChecker: avvia il processo, se necessario, e
+// legge le capacità dichiarate per i rilasci per percentuale.
+func (p *Process) TrafficSupported(ctx context.Context) (plugin.TrafficSupport, error) {
+	c, err := p.conn()
+	if err != nil {
+		return plugin.TrafficSupport{}, err
+	}
+	return c.TrafficSupported(ctx)
+}
+
+// PrepareSlots inoltra plugin.SlotDeployer.PrepareSlots al processo.
+func (p *Process) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
+	c, err := p.conn()
+	if err != nil {
+		return nil, err
+	}
+	return c.PrepareSlots(ctx, req)
+}
+
+// DeployCandidate inoltra plugin.SlotDeployer.DeployCandidate al processo.
+func (p *Process) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
+	c, err := p.conn()
+	if err != nil {
+		return nil, err
+	}
+	return c.DeployCandidate(ctx, req)
+}
+
+// PromoteCandidate inoltra plugin.SlotDeployer.PromoteCandidate al processo.
+func (p *Process) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
+	return p.with(func(c *external.Client) error { return c.PromoteCandidate(ctx, req) })
+}
+
+// RevertCandidate inoltra plugin.SlotDeployer.RevertCandidate al processo.
+func (p *Process) RevertCandidate(ctx context.Context, req *plugin.Request) error {
+	return p.with(func(c *external.Client) error { return c.RevertCandidate(ctx, req) })
+}
+
+// RetirePrevious inoltra plugin.SlotDeployer.RetirePrevious al processo.
+func (p *Process) RetirePrevious(ctx context.Context, req *plugin.Request) error {
+	return p.with(func(c *external.Client) error { return c.RetirePrevious(ctx, req) })
+}
+
+// SetCandidateWeight inoltra plugin.TrafficRouter.SetCandidateWeight al processo.
+func (p *Process) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
+	return p.with(func(c *external.Client) error { return c.SetCandidateWeight(ctx, req, percent) })
+}
+
+// CandidateWeight inoltra plugin.TrafficRouter.CandidateWeight al processo.
+func (p *Process) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
+	c, err := p.conn()
+	if err != nil {
+		return 0, err
+	}
+	return c.CandidateWeight(ctx, req)
+}
+
+// RouteTesters inoltra plugin.TesterRouter.RouteTesters al processo.
+func (p *Process) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
+	c, err := p.conn()
+	if err != nil {
+		return nil, err
+	}
+	return c.RouteTesters(ctx, req)
+}
+
+// ScaleCandidate inoltra plugin.SlotScaler.ScaleCandidate al processo.
+func (p *Process) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
+	return p.with(func(c *external.Client) error { return c.ScaleCandidate(ctx, req, percent) })
+}
+
+func (p *Process) with(fn func(*external.Client) error) error {
+	c, err := p.conn()
+	if err != nil {
+		return err
+	}
+	return fn(c)
+}
+
 // Close arresta il processo del plugin (go-plugin attende la chiusura e poi lo termina).
 func (p *Process) Close() error {
 	p.mu.Lock()

@@ -58,10 +58,38 @@ Le metriche dell'applicazione devono avere l'etichetta dello slot: su Kubernetes
 | Router | Slot | Come si sposta il traffico | Tester |
 |---|---|---|---|
 | [kubernetes](../plugins/kubernetes.md#rilasci-per-percentuale) con Gateway API | oggetti con suffisso `-a`/`-b` | pesi dei `backendRefs` `<servizio>-a` e `<servizio>-b` di una `HTTPRoute` | regola della route con un match sull'header |
+| [kubernetes](../plugins/kubernetes.md#rilasci-per-percentuale) con Istio | workload con suffisso, Service comune | pesi delle route verso i subset `a` e `b` di un `VirtualService` | voce `http` con un match sull'header |
 | [lambda](../plugins/lambda.md#rilasci-per-percentuale) | versioni pubblicate | alias con un peso aggiuntivo (`AdditionalVersionWeights`) | invocazione diretta della versione candidata |
 | [cloudrun](../plugins/cloudrun.md#rilasci-per-percentuale) | revisioni | traffico del servizio diviso tra due revisioni | URL del tag della revisione (`testers.tag`) |
 
-Su Lambda e Cloud Run le versioni senza traffico non consumano risorse: un blue/green non raddoppia la capacità.
+Su Lambda e Cloud Run le versioni senza traffico non consumano risorse: un blue/green non raddoppia la capacità. Anche un [plugin esterno](../plugins/esterni.md) può fare da router, dichiarando le capacità `slots` e `traffic_router`.
+
+### Router dell'ambiente e slot sui target
+
+Con plugin che aggiornano i target in place (`remote-copy`, `container`, `ecs` con due servizi), gli slot sono **gruppi di target**: ogni target ha l'etichetta `slot: a` o `slot: b`, il deploy aggiorna solo i target dello slot libero e un router della configurazione di ambiente sposta il traffico tra i due gruppi.
+
+```yaml title="envconfig/shop/prod.yml"
+targets:
+  - {host: 10.0.1.10, labels: {slot: a}}
+  - {host: 10.0.2.10, labels: {slot: b}}
+traffic:
+  router:
+    provider: aws-alb
+    settings:
+      region: eu-west-1
+      forward_arn: arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener/app/shop/…
+      target_group_a: arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/shop-a/…
+      target_group_b: arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/shop-b/…
+      tester_rule_arn: arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener-rule/app/shop/…
+```
+
+Lo slot stabile è quello con il peso maggiore nel router; il primo rilascio va nello slot `a`. Il ritiro non ridimensiona nulla: lo slot sostituito resta pronto per il rilascio successivo.
+
+| Router | Impostazioni |
+|---|---|
+| `aws-alb` | `region`, `forward_arn` (listener o regola con l'azione forward), `target_group_a`, `target_group_b`, `tester_rule_arn` facoltativa (regola, ad esempio su un header, che porta i tester alla candidata), credenziali come per `aws-elb`. Permessi: `elasticloadbalancing:Describe*`, `ModifyListener` o `ModifyRule`. |
+
+Per i servizi ECS con una strategia nativa (blue/green, lineare, canary) c'è anche la [modalità delegata](../plugins/ecs.md#strategie-native): ECS sposta il traffico da solo e manent ne attende la fine.
 
 **Convivenza con GitOps.** Se la route è gestita anche da Argo CD o Flux, i due strumenti si contendono i pesi: manent cambia solo le regole della route (con una patch condizionata al `resourceVersion` letto), e va configurato `ignoreDifferences` (Argo CD) o l'equivalente sui pesi.
 

@@ -108,7 +108,8 @@ func (x *ConfigureRequest) GetConfigJson() []byte {
 type ConfigureResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback".
+	// Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback",
+	// "slots", "traffic_router", "testers", "scale".
 	// Un plugin compilato con un SDK precedente non ne dichiara nessuna.
 	Capabilities  []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -394,8 +395,10 @@ type DeployRequest struct {
 	Params       map[string]string      `protobuf:"bytes,6,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// ID del broker su cui è servito Secrets (0 = nessun resolver, es. in Validate).
 	SecretsBrokerId uint32 `protobuf:"varint,7,opt,name=secrets_broker_id,json=secretsBrokerId,proto3" json:"secrets_broker_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Presente solo nei rilasci per percentuale.
+	Traffic       *TrafficRequest `protobuf:"bytes,8,opt,name=traffic,proto3" json:"traffic,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeployRequest) Reset() {
@@ -477,6 +480,257 @@ func (x *DeployRequest) GetSecretsBrokerId() uint32 {
 	return 0
 }
 
+func (x *DeployRequest) GetTraffic() *TrafficRequest {
+	if x != nil {
+		return x.Traffic
+	}
+	return nil
+}
+
+type TrafficRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         map[string]string      `protobuf:"bytes,1,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	TesterHeader  string                 `protobuf:"bytes,2,opt,name=tester_header,json=testerHeader,proto3" json:"tester_header,omitempty"`
+	TesterTag     string                 `protobuf:"bytes,3,opt,name=tester_tag,json=testerTag,proto3" json:"tester_tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrafficRequest) Reset() {
+	*x = TrafficRequest{}
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrafficRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrafficRequest) ProtoMessage() {}
+
+func (x *TrafficRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrafficRequest.ProtoReflect.Descriptor instead.
+func (*TrafficRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TrafficRequest) GetState() map[string]string {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *TrafficRequest) GetTesterHeader() string {
+	if x != nil {
+		return x.TesterHeader
+	}
+	return ""
+}
+
+func (x *TrafficRequest) GetTesterTag() string {
+	if x != nil {
+		return x.TesterTag
+	}
+	return ""
+}
+
+type StateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         map[string]string      `protobuf:"bytes,1,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StateResponse) Reset() {
+	*x = StateResponse{}
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StateResponse) ProtoMessage() {}
+
+func (x *StateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StateResponse.ProtoReflect.Descriptor instead.
+func (*StateResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StateResponse) GetState() map[string]string {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type WeightRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Request       *DeployRequest         `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Percent       int32                  `protobuf:"varint,2,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WeightRequest) Reset() {
+	*x = WeightRequest{}
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightRequest) ProtoMessage() {}
+
+func (x *WeightRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightRequest.ProtoReflect.Descriptor instead.
+func (*WeightRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *WeightRequest) GetRequest() *DeployRequest {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *WeightRequest) GetPercent() int32 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
+type WeightResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Percent       int32                  `protobuf:"varint,1,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WeightResponse) Reset() {
+	*x = WeightResponse{}
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightResponse) ProtoMessage() {}
+
+func (x *WeightResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightResponse.ProtoReflect.Descriptor instead.
+func (*WeightResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *WeightResponse) GetPercent() int32 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
+type DetailsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Details       map[string]string      `protobuf:"bytes,1,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DetailsResponse) Reset() {
+	*x = DetailsResponse{}
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DetailsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DetailsResponse) ProtoMessage() {}
+
+func (x *DetailsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DetailsResponse.ProtoReflect.Descriptor instead.
+func (*DetailsResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DetailsResponse) GetDetails() map[string]string {
+	if x != nil {
+		return x.Details
+	}
+	return nil
+}
+
 type TargetResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
@@ -488,7 +742,7 @@ type TargetResult struct {
 
 func (x *TargetResult) Reset() {
 	*x = TargetResult{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[8]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -500,7 +754,7 @@ func (x *TargetResult) String() string {
 func (*TargetResult) ProtoMessage() {}
 
 func (x *TargetResult) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[8]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -513,7 +767,7 @@ func (x *TargetResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TargetResult.ProtoReflect.Descriptor instead.
 func (*TargetResult) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{8}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TargetResult) GetHost() string {
@@ -547,7 +801,7 @@ type DeployResponse struct {
 
 func (x *DeployResponse) Reset() {
 	*x = DeployResponse{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[9]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +813,7 @@ func (x *DeployResponse) String() string {
 func (*DeployResponse) ProtoMessage() {}
 
 func (x *DeployResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[9]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +826,7 @@ func (x *DeployResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResponse.ProtoReflect.Descriptor instead.
 func (*DeployResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{9}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeployResponse) GetPlugin() string {
@@ -598,7 +852,7 @@ type SecretRequest struct {
 
 func (x *SecretRequest) Reset() {
 	*x = SecretRequest{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[10]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +864,7 @@ func (x *SecretRequest) String() string {
 func (*SecretRequest) ProtoMessage() {}
 
 func (x *SecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[10]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +877,7 @@ func (x *SecretRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretRequest.ProtoReflect.Descriptor instead.
 func (*SecretRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{10}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SecretRequest) GetName() string {
@@ -642,7 +896,7 @@ type SecretResponse struct {
 
 func (x *SecretResponse) Reset() {
 	*x = SecretResponse{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[11]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +908,7 @@ func (x *SecretResponse) String() string {
 func (*SecretResponse) ProtoMessage() {}
 
 func (x *SecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[11]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +921,7 @@ func (x *SecretResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretResponse.ProtoReflect.Descriptor instead.
 func (*SecretResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{11}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SecretResponse) GetValue() string {
@@ -687,7 +941,7 @@ type Release struct {
 
 func (x *Release) Reset() {
 	*x = Release{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[12]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -699,7 +953,7 @@ func (x *Release) String() string {
 func (*Release) ProtoMessage() {}
 
 func (x *Release) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[12]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -712,7 +966,7 @@ func (x *Release) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Release.ProtoReflect.Descriptor instead.
 func (*Release) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{12}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Release) GetVersion() string {
@@ -739,7 +993,7 @@ type CurrentReleaseResponse struct {
 
 func (x *CurrentReleaseResponse) Reset() {
 	*x = CurrentReleaseResponse{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[13]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -751,7 +1005,7 @@ func (x *CurrentReleaseResponse) String() string {
 func (*CurrentReleaseResponse) ProtoMessage() {}
 
 func (x *CurrentReleaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[13]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -764,7 +1018,7 @@ func (x *CurrentReleaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrentReleaseResponse.ProtoReflect.Descriptor instead.
 func (*CurrentReleaseResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{13}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CurrentReleaseResponse) GetRelease() *Release {
@@ -784,7 +1038,7 @@ type RollbackRequest struct {
 
 func (x *RollbackRequest) Reset() {
 	*x = RollbackRequest{}
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[14]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +1050,7 @@ func (x *RollbackRequest) String() string {
 func (*RollbackRequest) ProtoMessage() {}
 
 func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[14]
+	mi := &file_pkg_plugin_external_proto_deployer_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +1063,7 @@ func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackRequest.ProtoReflect.Descriptor instead.
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{14}
+	return file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RollbackRequest) GetRequest() *DeployRequest {
@@ -852,7 +1106,7 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\x06Target\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x12\n" +
-	"\x04user\x18\x03 \x01(\tR\x04user\"\x90\x03\n" +
+	"\x04user\x18\x03 \x01(\tR\x04user\"\xcc\x03\n" +
 	"\rDeployRequest\x12#\n" +
 	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12 \n" +
 	"\vapplication\x18\x02 \x01(\tR\vapplication\x12 \n" +
@@ -860,8 +1114,34 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\bartifact\x18\x04 \x01(\v2\x1a.manent.plugin.v1.ArtifactR\bartifact\x122\n" +
 	"\atargets\x18\x05 \x03(\v2\x18.manent.plugin.v1.TargetR\atargets\x12C\n" +
 	"\x06params\x18\x06 \x03(\v2+.manent.plugin.v1.DeployRequest.ParamsEntryR\x06params\x12*\n" +
-	"\x11secrets_broker_id\x18\a \x01(\rR\x0fsecretsBrokerId\x1a9\n" +
+	"\x11secrets_broker_id\x18\a \x01(\rR\x0fsecretsBrokerId\x12:\n" +
+	"\atraffic\x18\b \x01(\v2 .manent.plugin.v1.TrafficRequestR\atraffic\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd1\x01\n" +
+	"\x0eTrafficRequest\x12A\n" +
+	"\x05state\x18\x01 \x03(\v2+.manent.plugin.v1.TrafficRequest.StateEntryR\x05state\x12#\n" +
+	"\rtester_header\x18\x02 \x01(\tR\ftesterHeader\x12\x1d\n" +
+	"\n" +
+	"tester_tag\x18\x03 \x01(\tR\ttesterTag\x1a8\n" +
+	"\n" +
+	"StateEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x01\n" +
+	"\rStateResponse\x12@\n" +
+	"\x05state\x18\x01 \x03(\v2*.manent.plugin.v1.StateResponse.StateEntryR\x05state\x1a8\n" +
+	"\n" +
+	"StateEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
+	"\rWeightRequest\x129\n" +
+	"\arequest\x18\x01 \x01(\v2\x1f.manent.plugin.v1.DeployRequestR\arequest\x12\x18\n" +
+	"\apercent\x18\x02 \x01(\x05R\apercent\"*\n" +
+	"\x0eWeightResponse\x12\x18\n" +
+	"\apercent\x18\x01 \x01(\x05R\apercent\"\x97\x01\n" +
+	"\x0fDetailsResponse\x12H\n" +
+	"\adetails\x18\x01 \x03(\v2..manent.plugin.v1.DetailsResponse.DetailsEntryR\adetails\x1a:\n" +
+	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbd\x01\n" +
 	"\fTargetResult\x12\x12\n" +
@@ -888,7 +1168,8 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\arelease\x18\x01 \x01(\v2\x19.manent.plugin.v1.ReleaseR\arelease\"\x83\x01\n" +
 	"\x0fRollbackRequest\x129\n" +
 	"\arequest\x18\x01 \x01(\v2\x1f.manent.plugin.v1.DeployRequestR\arequest\x125\n" +
-	"\bprevious\x18\x02 \x01(\v2\x19.manent.plugin.v1.ReleaseR\bprevious2\xc1\x04\n" +
+	"\bprevious\x18\x02 \x01(\v2\x19.manent.plugin.v1.ReleaseR\bprevious2\x96\n" +
+	"\n" +
 	"\bDeployer\x12T\n" +
 	"\tConfigure\x12\".manent.plugin.v1.ConfigureRequest\x1a#.manent.plugin.v1.ConfigureResponse\x12Q\n" +
 	"\bSupports\x12!.manent.plugin.v1.SupportsRequest\x1a\".manent.plugin.v1.SupportsResponse\x12D\n" +
@@ -896,7 +1177,16 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\x06Deploy\x12\x1f.manent.plugin.v1.DeployRequest\x1a .manent.plugin.v1.DeployResponse\x12K\n" +
 	"\x06DryRun\x12\x1f.manent.plugin.v1.DeployRequest\x1a .manent.plugin.v1.DeployResponse\x12[\n" +
 	"\x0eCurrentRelease\x12\x1f.manent.plugin.v1.DeployRequest\x1a(.manent.plugin.v1.CurrentReleaseResponse\x12O\n" +
-	"\bRollback\x12!.manent.plugin.v1.RollbackRequest\x1a .manent.plugin.v1.DeployResponse2V\n" +
+	"\bRollback\x12!.manent.plugin.v1.RollbackRequest\x1a .manent.plugin.v1.DeployResponse\x12P\n" +
+	"\fPrepareSlots\x12\x1f.manent.plugin.v1.DeployRequest\x1a\x1f.manent.plugin.v1.StateResponse\x12T\n" +
+	"\x0fDeployCandidate\x12\x1f.manent.plugin.v1.DeployRequest\x1a .manent.plugin.v1.DeployResponse\x12L\n" +
+	"\x10PromoteCandidate\x12\x1f.manent.plugin.v1.DeployRequest\x1a\x17.manent.plugin.v1.Empty\x12K\n" +
+	"\x0fRevertCandidate\x12\x1f.manent.plugin.v1.DeployRequest\x1a\x17.manent.plugin.v1.Empty\x12J\n" +
+	"\x0eRetirePrevious\x12\x1f.manent.plugin.v1.DeployRequest\x1a\x17.manent.plugin.v1.Empty\x12N\n" +
+	"\x12SetCandidateWeight\x12\x1f.manent.plugin.v1.WeightRequest\x1a\x17.manent.plugin.v1.Empty\x12T\n" +
+	"\x0fCandidateWeight\x12\x1f.manent.plugin.v1.DeployRequest\x1a .manent.plugin.v1.WeightResponse\x12R\n" +
+	"\fRouteTesters\x12\x1f.manent.plugin.v1.DeployRequest\x1a!.manent.plugin.v1.DetailsResponse\x12J\n" +
+	"\x0eScaleCandidate\x12\x1f.manent.plugin.v1.WeightRequest\x1a\x17.manent.plugin.v1.Empty2V\n" +
 	"\aSecrets\x12K\n" +
 	"\x06Secret\x12\x1f.manent.plugin.v1.SecretRequest\x1a .manent.plugin.v1.SecretResponseB?Z=github.com/joeg-ita/manent/pkg/plugin/external/proto;pluginpbb\x06proto3"
 
@@ -912,7 +1202,7 @@ func file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP() []byte {
 	return file_pkg_plugin_external_proto_deployer_proto_rawDescData
 }
 
-var file_pkg_plugin_external_proto_deployer_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_pkg_plugin_external_proto_deployer_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_pkg_plugin_external_proto_deployer_proto_goTypes = []any{
 	(*Empty)(nil),                  // 0: manent.plugin.v1.Empty
 	(*ConfigureRequest)(nil),       // 1: manent.plugin.v1.ConfigureRequest
@@ -922,48 +1212,79 @@ var file_pkg_plugin_external_proto_deployer_proto_goTypes = []any{
 	(*Artifact)(nil),               // 5: manent.plugin.v1.Artifact
 	(*Target)(nil),                 // 6: manent.plugin.v1.Target
 	(*DeployRequest)(nil),          // 7: manent.plugin.v1.DeployRequest
-	(*TargetResult)(nil),           // 8: manent.plugin.v1.TargetResult
-	(*DeployResponse)(nil),         // 9: manent.plugin.v1.DeployResponse
-	(*SecretRequest)(nil),          // 10: manent.plugin.v1.SecretRequest
-	(*SecretResponse)(nil),         // 11: manent.plugin.v1.SecretResponse
-	(*Release)(nil),                // 12: manent.plugin.v1.Release
-	(*CurrentReleaseResponse)(nil), // 13: manent.plugin.v1.CurrentReleaseResponse
-	(*RollbackRequest)(nil),        // 14: manent.plugin.v1.RollbackRequest
-	nil,                            // 15: manent.plugin.v1.DeployRequest.ParamsEntry
-	nil,                            // 16: manent.plugin.v1.TargetResult.DetailsEntry
-	nil,                            // 17: manent.plugin.v1.Release.DetailsEntry
+	(*TrafficRequest)(nil),         // 8: manent.plugin.v1.TrafficRequest
+	(*StateResponse)(nil),          // 9: manent.plugin.v1.StateResponse
+	(*WeightRequest)(nil),          // 10: manent.plugin.v1.WeightRequest
+	(*WeightResponse)(nil),         // 11: manent.plugin.v1.WeightResponse
+	(*DetailsResponse)(nil),        // 12: manent.plugin.v1.DetailsResponse
+	(*TargetResult)(nil),           // 13: manent.plugin.v1.TargetResult
+	(*DeployResponse)(nil),         // 14: manent.plugin.v1.DeployResponse
+	(*SecretRequest)(nil),          // 15: manent.plugin.v1.SecretRequest
+	(*SecretResponse)(nil),         // 16: manent.plugin.v1.SecretResponse
+	(*Release)(nil),                // 17: manent.plugin.v1.Release
+	(*CurrentReleaseResponse)(nil), // 18: manent.plugin.v1.CurrentReleaseResponse
+	(*RollbackRequest)(nil),        // 19: manent.plugin.v1.RollbackRequest
+	nil,                            // 20: manent.plugin.v1.DeployRequest.ParamsEntry
+	nil,                            // 21: manent.plugin.v1.TrafficRequest.StateEntry
+	nil,                            // 22: manent.plugin.v1.StateResponse.StateEntry
+	nil,                            // 23: manent.plugin.v1.DetailsResponse.DetailsEntry
+	nil,                            // 24: manent.plugin.v1.TargetResult.DetailsEntry
+	nil,                            // 25: manent.plugin.v1.Release.DetailsEntry
 }
 var file_pkg_plugin_external_proto_deployer_proto_depIdxs = []int32{
 	5,  // 0: manent.plugin.v1.DeployRequest.artifact:type_name -> manent.plugin.v1.Artifact
 	6,  // 1: manent.plugin.v1.DeployRequest.targets:type_name -> manent.plugin.v1.Target
-	15, // 2: manent.plugin.v1.DeployRequest.params:type_name -> manent.plugin.v1.DeployRequest.ParamsEntry
-	16, // 3: manent.plugin.v1.TargetResult.details:type_name -> manent.plugin.v1.TargetResult.DetailsEntry
-	8,  // 4: manent.plugin.v1.DeployResponse.targets:type_name -> manent.plugin.v1.TargetResult
-	17, // 5: manent.plugin.v1.Release.details:type_name -> manent.plugin.v1.Release.DetailsEntry
-	12, // 6: manent.plugin.v1.CurrentReleaseResponse.release:type_name -> manent.plugin.v1.Release
-	7,  // 7: manent.plugin.v1.RollbackRequest.request:type_name -> manent.plugin.v1.DeployRequest
-	12, // 8: manent.plugin.v1.RollbackRequest.previous:type_name -> manent.plugin.v1.Release
-	1,  // 9: manent.plugin.v1.Deployer.Configure:input_type -> manent.plugin.v1.ConfigureRequest
-	3,  // 10: manent.plugin.v1.Deployer.Supports:input_type -> manent.plugin.v1.SupportsRequest
-	7,  // 11: manent.plugin.v1.Deployer.Validate:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 12: manent.plugin.v1.Deployer.Deploy:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 13: manent.plugin.v1.Deployer.DryRun:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 14: manent.plugin.v1.Deployer.CurrentRelease:input_type -> manent.plugin.v1.DeployRequest
-	14, // 15: manent.plugin.v1.Deployer.Rollback:input_type -> manent.plugin.v1.RollbackRequest
-	10, // 16: manent.plugin.v1.Secrets.Secret:input_type -> manent.plugin.v1.SecretRequest
-	2,  // 17: manent.plugin.v1.Deployer.Configure:output_type -> manent.plugin.v1.ConfigureResponse
-	4,  // 18: manent.plugin.v1.Deployer.Supports:output_type -> manent.plugin.v1.SupportsResponse
-	0,  // 19: manent.plugin.v1.Deployer.Validate:output_type -> manent.plugin.v1.Empty
-	9,  // 20: manent.plugin.v1.Deployer.Deploy:output_type -> manent.plugin.v1.DeployResponse
-	9,  // 21: manent.plugin.v1.Deployer.DryRun:output_type -> manent.plugin.v1.DeployResponse
-	13, // 22: manent.plugin.v1.Deployer.CurrentRelease:output_type -> manent.plugin.v1.CurrentReleaseResponse
-	9,  // 23: manent.plugin.v1.Deployer.Rollback:output_type -> manent.plugin.v1.DeployResponse
-	11, // 24: manent.plugin.v1.Secrets.Secret:output_type -> manent.plugin.v1.SecretResponse
-	17, // [17:25] is the sub-list for method output_type
-	9,  // [9:17] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	20, // 2: manent.plugin.v1.DeployRequest.params:type_name -> manent.plugin.v1.DeployRequest.ParamsEntry
+	8,  // 3: manent.plugin.v1.DeployRequest.traffic:type_name -> manent.plugin.v1.TrafficRequest
+	21, // 4: manent.plugin.v1.TrafficRequest.state:type_name -> manent.plugin.v1.TrafficRequest.StateEntry
+	22, // 5: manent.plugin.v1.StateResponse.state:type_name -> manent.plugin.v1.StateResponse.StateEntry
+	7,  // 6: manent.plugin.v1.WeightRequest.request:type_name -> manent.plugin.v1.DeployRequest
+	23, // 7: manent.plugin.v1.DetailsResponse.details:type_name -> manent.plugin.v1.DetailsResponse.DetailsEntry
+	24, // 8: manent.plugin.v1.TargetResult.details:type_name -> manent.plugin.v1.TargetResult.DetailsEntry
+	13, // 9: manent.plugin.v1.DeployResponse.targets:type_name -> manent.plugin.v1.TargetResult
+	25, // 10: manent.plugin.v1.Release.details:type_name -> manent.plugin.v1.Release.DetailsEntry
+	17, // 11: manent.plugin.v1.CurrentReleaseResponse.release:type_name -> manent.plugin.v1.Release
+	7,  // 12: manent.plugin.v1.RollbackRequest.request:type_name -> manent.plugin.v1.DeployRequest
+	17, // 13: manent.plugin.v1.RollbackRequest.previous:type_name -> manent.plugin.v1.Release
+	1,  // 14: manent.plugin.v1.Deployer.Configure:input_type -> manent.plugin.v1.ConfigureRequest
+	3,  // 15: manent.plugin.v1.Deployer.Supports:input_type -> manent.plugin.v1.SupportsRequest
+	7,  // 16: manent.plugin.v1.Deployer.Validate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 17: manent.plugin.v1.Deployer.Deploy:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 18: manent.plugin.v1.Deployer.DryRun:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 19: manent.plugin.v1.Deployer.CurrentRelease:input_type -> manent.plugin.v1.DeployRequest
+	19, // 20: manent.plugin.v1.Deployer.Rollback:input_type -> manent.plugin.v1.RollbackRequest
+	7,  // 21: manent.plugin.v1.Deployer.PrepareSlots:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 22: manent.plugin.v1.Deployer.DeployCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 23: manent.plugin.v1.Deployer.PromoteCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 24: manent.plugin.v1.Deployer.RevertCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 25: manent.plugin.v1.Deployer.RetirePrevious:input_type -> manent.plugin.v1.DeployRequest
+	10, // 26: manent.plugin.v1.Deployer.SetCandidateWeight:input_type -> manent.plugin.v1.WeightRequest
+	7,  // 27: manent.plugin.v1.Deployer.CandidateWeight:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 28: manent.plugin.v1.Deployer.RouteTesters:input_type -> manent.plugin.v1.DeployRequest
+	10, // 29: manent.plugin.v1.Deployer.ScaleCandidate:input_type -> manent.plugin.v1.WeightRequest
+	15, // 30: manent.plugin.v1.Secrets.Secret:input_type -> manent.plugin.v1.SecretRequest
+	2,  // 31: manent.plugin.v1.Deployer.Configure:output_type -> manent.plugin.v1.ConfigureResponse
+	4,  // 32: manent.plugin.v1.Deployer.Supports:output_type -> manent.plugin.v1.SupportsResponse
+	0,  // 33: manent.plugin.v1.Deployer.Validate:output_type -> manent.plugin.v1.Empty
+	14, // 34: manent.plugin.v1.Deployer.Deploy:output_type -> manent.plugin.v1.DeployResponse
+	14, // 35: manent.plugin.v1.Deployer.DryRun:output_type -> manent.plugin.v1.DeployResponse
+	18, // 36: manent.plugin.v1.Deployer.CurrentRelease:output_type -> manent.plugin.v1.CurrentReleaseResponse
+	14, // 37: manent.plugin.v1.Deployer.Rollback:output_type -> manent.plugin.v1.DeployResponse
+	9,  // 38: manent.plugin.v1.Deployer.PrepareSlots:output_type -> manent.plugin.v1.StateResponse
+	14, // 39: manent.plugin.v1.Deployer.DeployCandidate:output_type -> manent.plugin.v1.DeployResponse
+	0,  // 40: manent.plugin.v1.Deployer.PromoteCandidate:output_type -> manent.plugin.v1.Empty
+	0,  // 41: manent.plugin.v1.Deployer.RevertCandidate:output_type -> manent.plugin.v1.Empty
+	0,  // 42: manent.plugin.v1.Deployer.RetirePrevious:output_type -> manent.plugin.v1.Empty
+	0,  // 43: manent.plugin.v1.Deployer.SetCandidateWeight:output_type -> manent.plugin.v1.Empty
+	11, // 44: manent.plugin.v1.Deployer.CandidateWeight:output_type -> manent.plugin.v1.WeightResponse
+	12, // 45: manent.plugin.v1.Deployer.RouteTesters:output_type -> manent.plugin.v1.DetailsResponse
+	0,  // 46: manent.plugin.v1.Deployer.ScaleCandidate:output_type -> manent.plugin.v1.Empty
+	16, // 47: manent.plugin.v1.Secrets.Secret:output_type -> manent.plugin.v1.SecretResponse
+	31, // [31:48] is the sub-list for method output_type
+	14, // [14:31] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_pkg_plugin_external_proto_deployer_proto_init() }
@@ -977,7 +1298,7 @@ func file_pkg_plugin_external_proto_deployer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_plugin_external_proto_deployer_proto_rawDesc), len(file_pkg_plugin_external_proto_deployer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

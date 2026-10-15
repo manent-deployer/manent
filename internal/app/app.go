@@ -207,6 +207,7 @@ func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provid
 func NewTrafficProviders() *traffic.Providers {
 	p := traffic.Default()
 	p.Pools["aws-elb"] = traffic.Provider[traffic.PoolFactory]{New: awselb.NewPool(awselb.SDKConnector{}), Validate: awselb.ValidatePool}
+	p.Routers["aws-alb"] = traffic.Provider[traffic.RouterFactory]{New: awselb.NewRouter(awselb.SDKConnector{}), Validate: awselb.ValidateRouter}
 	return p
 }
 

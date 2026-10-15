@@ -87,6 +87,12 @@ Per ogni region, in sequenza:
 
 Il deploy si ferma alla prima region che fallisce. Il modo in cui i task vengono sostituiti (`minimumHealthyPercent`, `maximumPercent`, health check del load balancer, circuit breaker) dipende dalla configurazione del servizio: ECS sostituisce i task senza interruzioni se è impostata di conseguenza.
 
+## Strategie native di ECS { #strategie-native }
+
+Il controller ECS ha strategie che spostano il traffico da sole, sull'ALB, sull'NLB o su Service Connect: `BLUE_GREEN`, `LINEAR` e `CANARY` (`deploymentConfiguration.strategy` del servizio, impostata con l'infrastruttura). Il plugin non le sostituisce: le **delega**. Aggiorna il servizio come sempre, riporta la strategia nei dettagli del target (`strategy`) e allunga l'attesa del deployment della durata prevista (bake finale, più i gradini della lineare o l'attesa della canary). Gradini, bake, hook del ciclo di vita e ritorno sui CloudWatch alarm li gestisce ECS.
+
+Con la delega i gate, le approvazioni tra gradini e i freeze di manent non entrano tra un gradino e l'altro. Per averli si usa un [rilascio per percentuale](../guida/traffico.md) con due servizi ECS, uno per slot (target con l'etichetta `slot`), e il router `aws-alb` sui loro target group.
+
 ## Rollback
 
 - **Release in esercizio** (locator `plugin`): il tag `manent.version` della task definition in uso. Un servizio la cui task definition non ha il tag (mai rilasciato da manent) non ha release; versioni diverse tra le region fermano il deploy al checkpoint.

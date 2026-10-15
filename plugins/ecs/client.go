@@ -59,6 +59,16 @@ func (a sdkAPI) DescribeService(ctx context.Context, cluster, service string) (*
 	if s.DeploymentController != nil {
 		svc.Controller = string(s.DeploymentController.Type)
 	}
+	if dc := s.DeploymentConfiguration; dc != nil {
+		svc.Strategy = string(dc.Strategy)
+		svc.Native.BakeMinutes = aws.ToInt32(dc.BakeTimeInMinutes)
+		if l := dc.LinearConfiguration; l != nil {
+			svc.Native.StepPercent, svc.Native.StepBakeMinutes = aws.ToFloat64(l.StepPercent), aws.ToInt32(l.StepBakeTimeInMinutes)
+		}
+		if c := dc.CanaryConfiguration; c != nil {
+			svc.Native.CanaryPercent, svc.Native.CanaryBakeMinutes = aws.ToFloat64(c.CanaryPercent), aws.ToInt32(c.CanaryBakeTimeInMinutes)
+		}
+	}
 	for _, d := range s.Deployments {
 		svc.Deployments = append(svc.Deployments, Deployment{
 			ID: aws.ToString(d.Id), Status: aws.ToString(d.Status), TaskDefinition: aws.ToString(d.TaskDefinition),

@@ -87,6 +87,12 @@ For each region, in sequence:
 
 The deploy stops at the first region that fails. How tasks are replaced (`minimumHealthyPercent`, `maximumPercent`, load balancer health checks, circuit breaker) is the service's configuration: ECS replaces tasks without downtime when it is set accordingly.
 
+## Native ECS strategies { #strategie-native }
+
+The ECS controller has strategies that shift traffic on their own, on the ALB, the NLB or Service Connect: `BLUE_GREEN`, `LINEAR` and `CANARY` (`deploymentConfiguration.strategy` of the service, set with the infrastructure). The plugin does not replace them: it **delegates** to them. It updates the service as usual, reports the strategy in the target details (`strategy`) and extends the wait for the deployment by the expected duration (final bake, plus the steps of the linear strategy or the canary wait). Steps, bake, lifecycle hooks and the return on CloudWatch alarms are handled by ECS.
+
+With delegation manent's gates, approvals between steps and freezes do not come between one step and the next. To have them, use a [percentage rollout](../guida/traffico.md) with two ECS services, one per slot (targets with the `slot` label), and the `aws-alb` router on their target groups.
+
 ## Rollback
 
 - **Live release** (`plugin` locator): the `manent.version` tag of the task definition in use. A service whose task definition has no tag (never released by manent) has no release; different versions across regions stop the deploy at the checkpoint.

@@ -1,6 +1,9 @@
 package plugin
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // TrafficRequest sono i dati di un rilascio per percentuale di traffico (rollout con strategy:
 // traffic): la nuova versione, la candidata, viene rilasciata accanto a quella in esercizio,
@@ -58,4 +61,33 @@ type TesterRouter interface {
 // proporzione alla quota di traffico (rollout.traffic.replicas: proportional).
 type SlotScaler interface {
 	ScaleCandidate(ctx context.Context, req *Request, percent int) error
+}
+
+// TrafficSupport sono le interfacce dei rilasci per percentuale supportate da un plugin.
+type TrafficSupport struct {
+	Slots, Router, Testers, Scale bool
+}
+
+// TrafficChecker è implementato dai Deployer che conoscono il supporto ai rilasci per
+// percentuale solo a runtime (es. un plugin esterno, che lo dichiara all'avvio del processo).
+// I loro metodi di SlotDeployer, TrafficRouter, TesterRouter e SlotScaler restituiscono
+// ErrTrafficUnsupported se il plugin non li implementa.
+type TrafficChecker interface {
+	TrafficSupported(ctx context.Context) (TrafficSupport, error)
+}
+
+// ErrTrafficUnsupported indica un plugin che non supporta un'operazione dei rilasci per percentuale.
+var ErrTrafficUnsupported = errors.New("operazione dei rilasci per percentuale non supportata dal plugin")
+
+// SupportsTraffic indica le interfacce dei rilasci per percentuale supportate dal Deployer.
+func SupportsTraffic(ctx context.Context, d Deployer) (TrafficSupport, error) {
+	if c, ok := d.(TrafficChecker); ok {
+		return c.TrafficSupported(ctx)
+	}
+	var s TrafficSupport
+	_, s.Slots = d.(SlotDeployer)
+	_, s.Router = d.(TrafficRouter)
+	_, s.Testers = d.(TesterRouter)
+	_, s.Scale = d.(SlotScaler)
+	return s, nil
 }

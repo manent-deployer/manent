@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
@@ -37,6 +38,8 @@ type fakeService struct {
 	taskDef     string
 	deployments []map[string]any
 	reads       int
+	// config è la deploymentConfiguration del servizio (strategia nativa).
+	config map[string]any
 }
 
 func newFakeECS(t *testing.T) *fakeECS {
@@ -101,10 +104,14 @@ func (f *fakeECS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.deployments = s.deployments[:1]
 			}
 		}
-		reply(map[string]any{"services": []any{map[string]any{
+		svc := map[string]any{
 			"serviceName": in["services"].([]any)[0], "status": "ACTIVE", "taskDefinition": s.taskDef,
 			"desiredCount": 2, "runningCount": 2, "deploymentController": map[string]any{"type": "ECS"}, "deployments": s.deployments,
-		}}})
+		}
+		if s.config != nil {
+			svc["deploymentConfiguration"] = s.config
+		}
+		reply(map[string]any{"services": []any{svc}})
 	case "DescribeTaskDefinition":
 		arn := in["taskDefinition"].(string)
 		td, ok := f.taskDefs[arn]
@@ -349,5 +356,29 @@ func TestTarget(t *testing.T) {
 	}
 	if got, _ := parseTarget(plugin.Target{Host: "eu-west-1"}, &plugin.Request{}); got.cluster != defaultCluster {
 		t.Errorf("cluster di default: %q", got.cluster)
+	}
+}
+
+func TestStrategiaNativaDelegata(t *testing.T) {
+	p, f := setup(t)
+	f.services["prod/shop"].config = map[string]any{"strategy": "LINEAR", "bakeTimeInMinutes": 2,
+		"linearConfiguration": map[string]any{"stepPercent": 25.0, "stepBakeTimeInMinutes": 1}}
+	res, err := p.Deploy(context.Background(), request(t, "2.0.0", "123456789012.dkr.ecr.eu-west-1.amazonaws.com/shop@"+digest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Targets[0].Details["strategy"] != "LINEAR" {
+		t.Errorf("dettagli: %v", res.Targets[0].Details)
+	}
+	svc := &Service{Strategy: "LINEAR", Native: NativeStrategy{BakeMinutes: 2, StepPercent: 25, StepBakeMinutes: 1}}
+	if d := svc.nativeDuration(); d != 6*time.Minute || !svc.delegated() {
+		t.Errorf("durata della strategia lineare: %s", d)
+	}
+	canary := &Service{Strategy: "CANARY", Native: NativeStrategy{BakeMinutes: 5, CanaryPercent: 10, CanaryBakeMinutes: 15}}
+	if d := canary.nativeDuration(); d != 20*time.Minute {
+		t.Errorf("durata della strategia canary: %s", d)
+	}
+	if (&Service{Strategy: "ROLLING"}).delegated() {
+		t.Error("rolling delegato")
 	}
 }

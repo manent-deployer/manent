@@ -180,3 +180,38 @@ func TestValidatePool(t *testing.T) {
 		}
 	}
 }
+
+func TestRouterALB(t *testing.T) {
+	const (
+		listener = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener/app/shop/0123456789abcdef/0123456789abcdef"
+		rule     = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener-rule/app/shop/0123456789abcdef/0123456789abcdef/0123456789abcdef"
+		tgA      = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/shop-a/0123456789abcdef"
+		tgB      = "arn:aws:elasticloadbalancing:eu-west-1:123456789012:targetgroup/shop-b/0123456789abcdef"
+	)
+	f := &fakeAWS{weights: map[string]map[string]int32{listener: {tgA: 100, tgB: 0}}}
+	settings := map[string]string{SettingRegion: "eu-west-1", SettingForwardARN: listener, SettingTargetGroupA: tgA, SettingTargetGroupB: tgB, SettingTesterRuleARN: rule}
+	if err := ValidateRouter(settings); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	r, err := NewRouter(f)(ctx, traffic.Env{Settings: settings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, err := r.Weights(ctx); err != nil || w["a"] != 100 || w["b"] != 0 {
+		t.Fatalf("pesi: %v %v", w, err)
+	}
+	if err := r.SetWeights(ctx, map[string]int{"a": 75, "b": 25}); err != nil {
+		t.Fatal(err)
+	}
+	if w := f.weights[listener]; w[tgA] != 75 || w[tgB] != 25 {
+		t.Errorf("azione forward: %v", w)
+	}
+	if _, err := r.(traffic.TesterRouter).RouteTesters(ctx, "b"); err != nil || f.weights[rule][tgB] != 1 || len(f.weights[rule]) != 1 {
+		t.Errorf("tester: %v %v", f.weights[rule], err)
+	}
+	bad := map[string]string{SettingRegion: "eu-west-1", SettingForwardARN: tg, SettingTargetGroupA: tgA, SettingTargetGroupB: tgA}
+	if err := ValidateRouter(bad); err == nil || !strings.Contains(err.Error(), "diversi") || !strings.Contains(err.Error(), SettingForwardARN) {
+		t.Errorf("validazione: %v", err)
+	}
+}

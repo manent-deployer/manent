@@ -77,7 +77,42 @@ func (rbFake) Rollback(ctx context.Context, r *plugin.Request, prev plugin.Relea
 	}}}, nil
 }
 
+// slotFake supporta i rilasci per percentuale: lo stato registrato torna in ogni chiamata.
+type slotFake struct {
+	fake
+	weight *int
+}
+
+func (slotFake) PrepareSlots(context.Context, *plugin.Request) (map[string]string, error) {
+	return map[string]string{plugin.StateHasStable: "true", "stable": "a"}, nil
+}
+
+func (slotFake) DeployCandidate(ctx context.Context, r *plugin.Request) (*plugin.Result, error) {
+	secret, err := r.Secrets.Secret(ctx, r.Params["secret"])
+	if err != nil {
+		return nil, err
+	}
+	return &plugin.Result{Plugin: "fake", Targets: []plugin.TargetResult{{Host: r.Targets[0].Host, Status: plugin.StatusDeployed,
+		Details: map[string]string{"stable": r.Traffic.State["stable"], "header": r.Traffic.TesterHeader, "secret_len": strconv.Itoa(len(secret))}}}}, nil
+}
+
+func (slotFake) PromoteCandidate(context.Context, *plugin.Request) error { return nil }
+func (slotFake) RevertCandidate(context.Context, *plugin.Request) error  { return nil }
+func (slotFake) RetirePrevious(context.Context, *plugin.Request) error   { return nil }
+
+func (s slotFake) SetCandidateWeight(_ context.Context, _ *plugin.Request, p int) error {
+	*s.weight = p
+	return nil
+}
+
+func (s slotFake) CandidateWeight(context.Context, *plugin.Request) (int, error) {
+	return *s.weight, nil
+}
+
 func factory(cfg map[string]any, log *slog.Logger) (plugin.Deployer, error) {
+	if v, _ := cfg["slots"].(bool); v {
+		return slotFake{fake: fake{log: log}, weight: new(int)}, nil
+	}
 	if v, _ := cfg["fail"].(bool); v {
 		return nil, errors.New("configurazione rifiutata")
 	}

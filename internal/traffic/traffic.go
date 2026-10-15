@@ -122,6 +122,8 @@ func Default() *Providers {
 		Pools: map[string]Provider[PoolFactory]{
 			"haproxy":     {New: NewHAProxyPool, Validate: validateHAProxy},
 			"health-flag": {New: NewHealthFlagPool, Validate: validateHealthFlag},
+			"f5":          {New: NewF5Pool, Validate: validateF5},
+			"nginx-plus":  {New: NewNginxPlusPool, Validate: validateNginxPlus},
 		},
 		Routers: map[string]Provider[RouterFactory]{},
 	}

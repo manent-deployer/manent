@@ -179,7 +179,12 @@ spec:
 | `traffic_service` | | Nome base dei Service degli slot (`<nome>-a`, `<nome>-b`). |
 | `traffic_route_kind` | `HTTPRoute` | `HTTPRoute` o `GRPCRoute`. |
 | `traffic_route_namespace` | `namespace` | Namespace della route. |
-| `traffic_router` | `gateway-api` | Router della route. |
+| `traffic_router` | `gateway-api` | `gateway-api` o `istio`. |
+| `traffic_rename` | `true` | `false` se il chart dà già i nomi per slot: manent aggiunge solo l'etichetta `manent.io/track`. |
+
+**Istio.** Con `traffic_router: istio` la route è un `VirtualService` (`networking.istio.io/v1`): manent cambia i pesi delle route verso i subset `a` e `b`, definiti da una `DestinationRule` sull'etichetta `manent.io/track`, e la voce `http` con un match sull'header dei tester porta solo alla candidata. I Service non hanno suffisso e restano comuni ai due slot; il traffico tra servizi della mesh segue gli stessi pesi.
+
+**Chart Helm.** Il chart riceve lo slot in `.Values.manent.slot`. Se lo usa già nei nomi degli oggetti, `traffic_rename: "false"` evita il doppio suffisso.
 
 Un'applicazione già rilasciata senza slot (oggetti senza suffisso) passa agli slot con un'operazione esplicita: il primo rilascio per percentuale crea `shop-a` accanto a `shop` e riceve subito tutto il traffico (non c'è una versione stabile negli slot); la route va preparata con i backend `shop-a` e `shop-b` e gli oggetti senza suffisso vanno rimossi a mano dopo la verifica.
 

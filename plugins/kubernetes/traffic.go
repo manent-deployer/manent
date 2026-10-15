@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -19,6 +20,7 @@ const (
 	ParamTrafficRouteKind      = "traffic_route_kind"      // gateway-api: HTTPRoute (default) o GRPCRoute
 	ParamTrafficRouteNamespace = "traffic_route_namespace" // namespace della route (default: namespace)
 	ParamTrafficService        = "traffic_service"         // gateway-api: nome base dei Service degli slot (<nome>-a, <nome>-b)
+	ParamTrafficRename         = "traffic_rename"          // "false": il chart dà già i nomi per slot (manent.slot), manent aggiunge solo le etichette
 )
 
 // Router supportati.
@@ -30,7 +32,10 @@ const (
 // LabelTrack è l'etichetta dello slot sugli oggetti e sui pod.
 const LabelTrack = "manent.io/track"
 
-const gatewayAPIVersion = "gateway.networking.k8s.io/v1"
+const (
+	gatewayAPIVersion = "gateway.networking.k8s.io/v1"
+	istioAPIVersion   = "networking.istio.io/v1"
+)
 
 // Chiavi dello stato registrato da PrepareSlots, per cluster ("<chiave>@<host>").
 const (
@@ -57,8 +62,9 @@ func validateTraffic(req *plugin.Request) []error {
 		if k := req.Params[ParamTrafficRouteKind]; k != "" && k != "HTTPRoute" && k != "GRPCRoute" {
 			errs = append(errs, fmt.Errorf("%s %q non valido (HTTPRoute|GRPCRoute)", ParamTrafficRouteKind, k))
 		}
+	case RouterIstio:
 	default:
-		errs = append(errs, fmt.Errorf("%s %q non valido (%s)", ParamTrafficRouter, r, RouterGatewayAPI))
+		errs = append(errs, fmt.Errorf("%s %q non valido (%s|%s)", ParamTrafficRouter, r, RouterGatewayAPI, RouterIstio))
 	}
 	if !dnsLabelRe.MatchString(req.Params[ParamTrafficRoute]) {
 		errs = append(errs, fmt.Errorf("%s obbligatorio: la route che divide il traffico tra gli slot", ParamTrafficRoute))
@@ -86,10 +92,10 @@ func routeNamespace(req *plugin.Request) string {
 // slotObjects duplica gli oggetti per lo slot: suffisso -<slot> ai nomi di workload, Service,
 // HPA e PDB, etichetta manent.io/track su oggetti, selettori e pod. Con Istio i Service restano
 // comuni ai due slot (il router sceglie il subset dall'etichetta dei pod).
-func slotObjects(objs []Object, slot string, services bool) ([]Object, error) {
+func slotObjects(objs []Object, slot string, services, rename bool) ([]Object, error) {
 	renamed := map[string]bool{}
 	for _, o := range objs {
-		if slices.Contains(slotted, o.Kind()) && (services || o.Kind() != "Service") {
+		if rename && slices.Contains(slotted, o.Kind()) && (services || o.Kind() != "Service") {
 			renamed[o.Kind()+"/"+o.Name()] = true
 		}
 	}
@@ -97,14 +103,15 @@ func slotObjects(objs []Object, slot string, services bool) ([]Object, error) {
 	var errs []error
 	for _, o := range objs {
 		o.setMap("labels", LabelTrack, slot)
-		if !renamed[o.Kind()+"/"+o.Name()] {
+		if renamed[o.Kind()+"/"+o.Name()] {
+			name := o.Name() + suffix
+			if len(name) > 63 {
+				errs = append(errs, fmt.Errorf("%s: nome %q troppo lungo per lo slot (massimo 63 caratteri)", o.Ref(), name))
+			}
+			o.metadata()["name"] = name
+		} else if !slices.Contains(slotted, o.Kind()) {
 			continue
 		}
-		name := o.Name() + suffix
-		if len(name) > 63 {
-			errs = append(errs, fmt.Errorf("%s: nome %q troppo lungo per lo slot (massimo 63 caratteri)", o.Ref(), name))
-		}
-		o.metadata()["name"] = name
 		spec, _ := o["spec"].(map[string]any)
 		if spec == nil {
 			continue
@@ -117,7 +124,8 @@ func slotObjects(objs []Object, slot string, services bool) ([]Object, error) {
 				spec["serviceName"] = sn + suffix
 			}
 		case "Service":
-			if sel, ok := spec["selector"].(map[string]any); ok && len(sel) > 0 {
+			// Con Istio il Service è comune ai due slot: il selettore non cambia.
+			if sel, ok := spec["selector"].(map[string]any); ok && len(sel) > 0 && services {
 				sel[LabelTrack] = slot
 			}
 		case "PodDisruptionBudget":
@@ -226,11 +234,15 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	if err != nil {
 		return nil, err
 	}
-	pr, err := p.prepare(ctx, api, req)
+	// Un chart Helm riceve lo slot in .Values.manent.slot, per usarlo nei nomi se serve.
+	sreq := *req
+	sreq.Params = maps.Clone(req.Params)
+	sreq.Params[ParamHelmValuePrefix+"manent.slot"] = cand
+	pr, err := p.prepare(ctx, api, &sreq)
 	if err != nil {
 		return nil, err
 	}
-	if pr.objects, err = slotObjects(pr.objects, cand, router(req) != RouterIstio); err != nil {
+	if pr.objects, err = slotObjects(pr.objects, cand, router(req) != RouterIstio, req.Params[ParamTrafficRename] != "false"); err != nil {
 		return nil, err
 	}
 	pr.refs = pr.refs[:0]
@@ -469,7 +481,7 @@ func (p *Plugin) RetirePrevious(ctx context.Context, req *plugin.Request) error 
 // elimina i suoi HPA, che altrimenti le riporterebbero su. Gli oggetti restano: il prossimo
 // rilascio nello slot li riapplica.
 func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request, version, slot string) error {
-	if version == "" {
+	if version == "" || slot == "" {
 		return nil
 	}
 	rel, err := readRelease(ctx, api, namespace(req), historyNames(req), version)
@@ -479,10 +491,8 @@ func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request,
 	if err != nil {
 		return err
 	}
+	// La release è stata applicata nello slot: tutti i suoi workload appartengono allo slot.
 	for _, r := range rel.objects {
-		if !strings.HasSuffix(r.Name, "-"+slot) {
-			continue
-		}
 		switch r.Kind {
 		case "Deployment", "StatefulSet":
 			if _, err := api.Patch(ctx, r.APIVersion, r.Kind, r.Namespace, r.Name, map[string]any{"spec": map[string]any{"replicas": 0}}); err != nil && !errors.Is(err, ErrNotFound) {
@@ -530,7 +540,161 @@ type routeEditor interface {
 }
 
 func (p *Plugin) editor(req *plugin.Request) routeEditor {
+	if router(req) == RouterIstio {
+		return istioEditor{}
+	}
 	return gatewayEditor{service: req.Params[ParamTrafficService]}
+}
+
+// istioEditor lavora su un VirtualService di Istio: le route verso i subset a e b (definiti da
+// una DestinationRule sull'etichetta manent.io/track) hanno i loro pesi; la voce http con un
+// match sull'header dei tester porta solo alla candidata. I Service sono comuni ai due slot.
+type istioEditor struct{}
+
+func (istioEditor) apiVersion() string { return istioAPIVersion }
+
+func (istioEditor) kind(*plugin.Request) string { return "VirtualService" }
+
+// istioTester indica una voce http con un match sull'header dei tester.
+func istioTester(entry map[string]any, header string) bool {
+	if header == "" {
+		return false
+	}
+	name, _, _ := strings.Cut(header, ":")
+	name = strings.TrimSpace(name)
+	matches, _ := entry["match"].([]any)
+	for _, m := range matches {
+		mm, _ := m.(map[string]any)
+		hs, _ := mm["headers"].(map[string]any)
+		for k := range hs {
+			if strings.EqualFold(k, name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func subsetOf(route any) (map[string]any, string) {
+	m, _ := route.(map[string]any)
+	dest, _ := m["destination"].(map[string]any)
+	s, _ := dest["subset"].(string)
+	return m, s
+}
+
+func (istioEditor) weight(vs Object, req *plugin.Request, cand string) (int, error) {
+	w := -2
+	for _, e := range rulesOf(vs, "http") {
+		entry, _ := e.(map[string]any)
+		if istioTester(entry, testerHeader(req)) {
+			continue
+		}
+		routes, _ := entry["route"].([]any)
+		var c, total int
+		found := false
+		for _, r := range routes {
+			m, subset := subsetOf(r)
+			if subset != "a" && subset != "b" {
+				continue
+			}
+			wt := 100
+			if v, ok := m["weight"]; ok {
+				wt = num64(v)
+			} else if len(routes) > 1 {
+				wt = 0
+			}
+			total += wt
+			if subset == cand {
+				c += wt
+			}
+			found = true
+		}
+		if !found {
+			continue
+		}
+		pct := 0
+		if total > 0 {
+			pct = int(math.Round(float64(c) * 100 / float64(total)))
+		}
+		if w != -2 && pct != w {
+			return -1, nil
+		}
+		w = pct
+	}
+	if w == -2 {
+		return 0, errors.New("il VirtualService non ha route verso i subset a e b")
+	}
+	return w, nil
+}
+
+func (istioEditor) setWeights(vs Object, req *plugin.Request, stable, cand string, percent int) (map[string]any, bool, error) {
+	entries := rulesOf(vs, "http")
+	found, changed := false, false
+	for _, e := range entries {
+		entry, _ := e.(map[string]any)
+		if istioTester(entry, testerHeader(req)) {
+			continue
+		}
+		routes, _ := entry["route"].([]any)
+		for _, r := range routes {
+			m, subset := subsetOf(r)
+			var want int
+			switch subset {
+			case cand:
+				want = percent
+			case stable:
+				want = 100 - percent
+			case otherSlot(cand):
+				want = 0
+			default:
+				continue
+			}
+			found = true
+			if cur, ok := m["weight"]; !ok || num64(cur) != want {
+				m["weight"] = want
+				changed = true
+			}
+		}
+	}
+	if !found {
+		return nil, false, fmt.Errorf("il VirtualService %s non ha route verso i subset a e b", vs.Name())
+	}
+	return routePatch(vs, "http", entries), changed, nil
+}
+
+func (istioEditor) testers(vs Object, req *plugin.Request, slot string) (map[string]any, error) {
+	entries := rulesOf(vs, "http")
+	found := false
+	for _, e := range entries {
+		entry, _ := e.(map[string]any)
+		if !istioTester(entry, req.Traffic.TesterHeader) {
+			continue
+		}
+		found = true
+		routes, _ := entry["route"].([]any)
+		route := map[string]any{}
+		if len(routes) > 0 {
+			if m, ok := routes[0].(map[string]any); ok {
+				for k, v := range m {
+					route[k] = v
+				}
+			}
+		}
+		dest := map[string]any{}
+		if d, ok := route["destination"].(map[string]any); ok {
+			for k, v := range d {
+				dest[k] = v
+			}
+		}
+		dest["subset"] = slot
+		route["destination"] = dest
+		delete(route, "weight")
+		entry["route"] = []any{route}
+	}
+	if !found {
+		return nil, fmt.Errorf("il VirtualService %s non ha una voce http con match sull'header dei tester (%s)", vs.Name(), req.Traffic.TesterHeader)
+	}
+	return routePatch(vs, "http", entries), nil
 }
 
 // gatewayEditor lavora su una HTTPRoute (o GRPCRoute) della Gateway API: le regole hanno i

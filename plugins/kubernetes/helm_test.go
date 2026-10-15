@@ -275,3 +275,19 @@ func TestHelmValuesEValidazione(t *testing.T) {
 		t.Errorf("percorso esterno: %v", err)
 	}
 }
+
+func TestHelmSlot(t *testing.T) {
+	cmd, log := fakeHelm(t)
+	p, _, server := setup(t)
+	p.helm.Command = cmd
+	req := helmRequest(t, server, "1.0.0", writeChart(t, shopChart))
+	req.Params[ParamTrafficRoute], req.Params[ParamTrafficService] = "shop", "shop"
+	req.Traffic = &plugin.TrafficRequest{State: map[string]string{"candidate@" + server: "b"}}
+	if _, err := p.DeployCandidate(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	// Il chart riceve lo slot in .Values.manent.slot.
+	if vals, _ := os.ReadFile(log + ".values"); !strings.Contains(string(vals), "slot: b") {
+		t.Errorf("values: %s", vals)
+	}
+}

@@ -309,6 +309,11 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 		// Il plugin si sceglie con la configurazione di ambiente: lo verifica lo step config.
 		return nil
 	}
+	if _, ok := dep.(plugin.TrafficChecker); ok {
+		// Un plugin esterno dichiara il supporto all'avvio: si verifica all'esecuzione, senza
+		// avviare il processo all'accodamento.
+		return nil
+	}
 	if _, ok := dep.(plugin.SlotDeployer); !ok {
 		return fmt.Errorf("strategy: traffic: il plugin %q non sa rilasciare una versione affiancata; configurare traffic.router nell'ambiente", dep.Name())
 	}
@@ -401,7 +406,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 	}
 	state, err := sd.PrepareSlots(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, unsupported(dep, err)
 	}
 	raw, err := json.Marshal(state)
 	if err != nil {
@@ -459,7 +464,7 @@ func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) 
 		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa spostare il traffico", dep.Name()))
 	}
 	if err := tr.SetCandidateWeight(ctx, req, percent); err != nil {
-		return nil, err
+		return nil, unsupported(dep, err)
 	}
 	log.InfoContext(ctx, "traffico spostato", "percent", percent)
 	return pipeline.Output{"weight": strconv.Itoa(percent)}, nil
@@ -495,7 +500,7 @@ func (t Traffic) Weight(ctx context.Context, in pipeline.Input) (pipeline.Output
 			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa spostare il traffico", dep.Name()))
 		}
 		if w, err = tr.CandidateWeight(ctx, req); err != nil {
-			return nil, err
+			return nil, unsupported(dep, err)
 		}
 	}
 	return pipeline.Output{"weight": strconv.Itoa(w)}, nil
@@ -527,7 +532,7 @@ func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa instradare i tester", dep.Name()))
 		}
 		if details, err = tr.RouteTesters(ctx, req); err != nil {
-			return nil, err
+			return nil, unsupported(dep, err)
 		}
 	}
 	out := pipeline.Output{"testers": "routed"}
@@ -551,7 +556,7 @@ func (t Traffic) Scale(ctx context.Context, in pipeline.Input, percent int) (pip
 		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non dimensiona la candidata", dep.Name()))
 	}
 	if err := sc.ScaleCandidate(ctx, req, percent); err != nil {
-		return nil, err
+		return nil, unsupported(dep, err)
 	}
 	return pipeline.Output{"replicas_percent": strconv.Itoa(percent)}, nil
 }
@@ -607,7 +612,7 @@ func (t Traffic) slotCall(ctx context.Context, in pipeline.Input, status string,
 		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
 	}
 	if err := fn(sd, ctx, req); err != nil {
-		return nil, err
+		return nil, unsupported(dep, err)
 	}
 	log.InfoContext(ctx, "rilascio affiancato: "+status)
 	return pipeline.Output{"status": status}, nil
@@ -625,4 +630,13 @@ func trafficRequest(in pipeline.Input) *plugin.TrafficRequest {
 		tr.TesterHeader, tr.TesterTag = r.Traffic.Testers.Header, r.Traffic.Testers.Tag
 	}
 	return tr
+}
+
+// unsupported rende permanente l'errore di un'operazione non supportata dal plugin (un plugin
+// esterno lo scopre solo a runtime): un nuovo tentativo non cambierebbe l'esito.
+func unsupported(dep plugin.Deployer, err error) error {
+	if errors.Is(err, plugin.ErrTrafficUnsupported) {
+		return pipeline.Permanent(fmt.Errorf("plugin %q: %w", dep.Name(), err))
+	}
+	return err
 }

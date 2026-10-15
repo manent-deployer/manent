@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -66,6 +67,43 @@ type Service struct {
 	// Controller è il tipo di deployment controller: ECS, CODE_DEPLOY o EXTERNAL.
 	Controller  string
 	Deployments []Deployment
+	// Strategy è la strategia nativa del controller ECS: ROLLING (default), BLUE_GREEN,
+	// LINEAR o CANARY. Con le ultime tre ECS sposta il traffico da solo (modalità delegata).
+	Strategy string
+	// Native sono i tempi della strategia nativa.
+	Native NativeStrategy
+}
+
+// NativeStrategy sono i tempi di una strategia nativa di ECS, per stimarne la durata.
+type NativeStrategy struct {
+	// BakeMinutes è l'attesa dopo che tutto il traffico è passato alla nuova revisione.
+	BakeMinutes int32
+	// StepPercent e StepBakeMinutes sono gradino e attesa della strategia LINEAR.
+	StepPercent     float64
+	StepBakeMinutes int32
+	// CanaryPercent e CanaryBakeMinutes sono quota e attesa della strategia CANARY.
+	CanaryPercent     float64
+	CanaryBakeMinutes int32
+}
+
+// nativeDuration stima la durata dello spostamento del traffico di una strategia nativa.
+func (s *Service) nativeDuration() time.Duration {
+	n := s.Native
+	minutes := float64(n.BakeMinutes)
+	switch s.Strategy {
+	case "LINEAR":
+		if n.StepPercent > 0 {
+			minutes += math.Ceil(100/n.StepPercent) * float64(n.StepBakeMinutes)
+		}
+	case "CANARY":
+		minutes += float64(n.CanaryBakeMinutes)
+	}
+	return time.Duration(minutes * float64(time.Minute))
+}
+
+// delegated indica una strategia nativa che sposta il traffico (blue/green, lineare, canary).
+func (s *Service) delegated() bool {
+	return s.Strategy == "BLUE_GREEN" || s.Strategy == "LINEAR" || s.Strategy == "CANARY"
 }
 
 // Deployment è un deployment di ECS in corso o concluso sul servizio.
@@ -344,6 +382,12 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		}
 	}
 	details[DetailTaskDefinition] = td.ARN
+	if s.service.delegated() {
+		// Modalità delegata: i gradini, il bake e il ritorno sui CloudWatch alarm li gestisce
+		// ECS. manent attende la fine con un tempo che copre la durata prevista.
+		details["strategy"] = s.service.Strategy
+		log.InfoContext(ctx, "strategia nativa di ECS: lo spostamento del traffico è delegato al servizio", "strategy", s.service.Strategy, "expected", s.service.nativeDuration())
+	}
 	if err := p.wait(ctx, s, td.ARN, req, log); err != nil {
 		return details, err
 	}
@@ -355,6 +399,9 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 // Un deployment FAILED (circuit breaker di ECS) è un errore immediato.
 func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Request, log *slog.Logger) error {
 	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
+	if s.service != nil && s.service.delegated() {
+		timeout += s.service.nativeDuration()
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	last := ""

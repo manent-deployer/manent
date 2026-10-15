@@ -41,6 +41,7 @@ var discovery = map[string]string{
 		{"name":"namespaces/status","kind":"Namespace","namespaced":false}]}`,
 	"/apis/apps/v1":                      `{"resources":[{"name":"deployments","kind":"Deployment","namespaced":true}]}`,
 	"/apis/gateway.networking.k8s.io/v1": `{"resources":[{"name":"httproutes","kind":"HTTPRoute","namespaced":true}]}`,
+	"/apis/networking.istio.io/v1":       `{"resources":[{"name":"virtualservices","kind":"VirtualService","namespaced":true}]}`,
 	"/apis": `{"groups":[{"name":"apps","versions":[{"groupVersion":"apps/v1"}]},
 		{"name":"monitoring.coreos.com","versions":[{"groupVersion":"monitoring.coreos.com/v1"}]}]}`,
 }

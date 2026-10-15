@@ -22,13 +22,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Deployer_Configure_FullMethodName      = "/manent.plugin.v1.Deployer/Configure"
-	Deployer_Supports_FullMethodName       = "/manent.plugin.v1.Deployer/Supports"
-	Deployer_Validate_FullMethodName       = "/manent.plugin.v1.Deployer/Validate"
-	Deployer_Deploy_FullMethodName         = "/manent.plugin.v1.Deployer/Deploy"
-	Deployer_DryRun_FullMethodName         = "/manent.plugin.v1.Deployer/DryRun"
-	Deployer_CurrentRelease_FullMethodName = "/manent.plugin.v1.Deployer/CurrentRelease"
-	Deployer_Rollback_FullMethodName       = "/manent.plugin.v1.Deployer/Rollback"
+	Deployer_Configure_FullMethodName          = "/manent.plugin.v1.Deployer/Configure"
+	Deployer_Supports_FullMethodName           = "/manent.plugin.v1.Deployer/Supports"
+	Deployer_Validate_FullMethodName           = "/manent.plugin.v1.Deployer/Validate"
+	Deployer_Deploy_FullMethodName             = "/manent.plugin.v1.Deployer/Deploy"
+	Deployer_DryRun_FullMethodName             = "/manent.plugin.v1.Deployer/DryRun"
+	Deployer_CurrentRelease_FullMethodName     = "/manent.plugin.v1.Deployer/CurrentRelease"
+	Deployer_Rollback_FullMethodName           = "/manent.plugin.v1.Deployer/Rollback"
+	Deployer_PrepareSlots_FullMethodName       = "/manent.plugin.v1.Deployer/PrepareSlots"
+	Deployer_DeployCandidate_FullMethodName    = "/manent.plugin.v1.Deployer/DeployCandidate"
+	Deployer_PromoteCandidate_FullMethodName   = "/manent.plugin.v1.Deployer/PromoteCandidate"
+	Deployer_RevertCandidate_FullMethodName    = "/manent.plugin.v1.Deployer/RevertCandidate"
+	Deployer_RetirePrevious_FullMethodName     = "/manent.plugin.v1.Deployer/RetirePrevious"
+	Deployer_SetCandidateWeight_FullMethodName = "/manent.plugin.v1.Deployer/SetCandidateWeight"
+	Deployer_CandidateWeight_FullMethodName    = "/manent.plugin.v1.Deployer/CandidateWeight"
+	Deployer_RouteTesters_FullMethodName       = "/manent.plugin.v1.Deployer/RouteTesters"
+	Deployer_ScaleCandidate_FullMethodName     = "/manent.plugin.v1.Deployer/ScaleCandidate"
 )
 
 // DeployerClient is the client API for Deployer service.
@@ -50,6 +59,18 @@ type DeployerClient interface {
 	CurrentRelease(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*CurrentReleaseResponse, error)
 	// Rollback riporta i target alla release indicata; UNIMPLEMENTED se non supportato.
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*DeployResponse, error)
+	// Rilasci per percentuale (plugin.SlotDeployer, plugin.TrafficRouter, plugin.TesterRouter,
+	// plugin.SlotScaler): UNIMPLEMENTED se non supportati. DeployRequest.traffic porta lo stato
+	// registrato da PrepareSlots.
+	PrepareSlots(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*StateResponse, error)
+	DeployCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*DeployResponse, error)
+	PromoteCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error)
+	RevertCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error)
+	RetirePrevious(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error)
+	SetCandidateWeight(ctx context.Context, in *WeightRequest, opts ...grpc.CallOption) (*Empty, error)
+	CandidateWeight(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*WeightResponse, error)
+	RouteTesters(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*DetailsResponse, error)
+	ScaleCandidate(ctx context.Context, in *WeightRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type deployerClient struct {
@@ -130,6 +151,96 @@ func (c *deployerClient) Rollback(ctx context.Context, in *RollbackRequest, opts
 	return out, nil
 }
 
+func (c *deployerClient) PrepareSlots(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*StateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StateResponse)
+	err := c.cc.Invoke(ctx, Deployer_PrepareSlots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) DeployCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*DeployResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeployResponse)
+	err := c.cc.Invoke(ctx, Deployer_DeployCandidate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) PromoteCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Deployer_PromoteCandidate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) RevertCandidate(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Deployer_RevertCandidate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) RetirePrevious(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Deployer_RetirePrevious_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) SetCandidateWeight(ctx context.Context, in *WeightRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Deployer_SetCandidateWeight_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) CandidateWeight(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*WeightResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WeightResponse)
+	err := c.cc.Invoke(ctx, Deployer_CandidateWeight_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) RouteTesters(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*DetailsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetailsResponse)
+	err := c.cc.Invoke(ctx, Deployer_RouteTesters_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deployerClient) ScaleCandidate(ctx context.Context, in *WeightRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Deployer_ScaleCandidate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DeployerServer is the server API for Deployer service.
 // All implementations must embed UnimplementedDeployerServer
 // for forward compatibility.
@@ -149,6 +260,18 @@ type DeployerServer interface {
 	CurrentRelease(context.Context, *DeployRequest) (*CurrentReleaseResponse, error)
 	// Rollback riporta i target alla release indicata; UNIMPLEMENTED se non supportato.
 	Rollback(context.Context, *RollbackRequest) (*DeployResponse, error)
+	// Rilasci per percentuale (plugin.SlotDeployer, plugin.TrafficRouter, plugin.TesterRouter,
+	// plugin.SlotScaler): UNIMPLEMENTED se non supportati. DeployRequest.traffic porta lo stato
+	// registrato da PrepareSlots.
+	PrepareSlots(context.Context, *DeployRequest) (*StateResponse, error)
+	DeployCandidate(context.Context, *DeployRequest) (*DeployResponse, error)
+	PromoteCandidate(context.Context, *DeployRequest) (*Empty, error)
+	RevertCandidate(context.Context, *DeployRequest) (*Empty, error)
+	RetirePrevious(context.Context, *DeployRequest) (*Empty, error)
+	SetCandidateWeight(context.Context, *WeightRequest) (*Empty, error)
+	CandidateWeight(context.Context, *DeployRequest) (*WeightResponse, error)
+	RouteTesters(context.Context, *DeployRequest) (*DetailsResponse, error)
+	ScaleCandidate(context.Context, *WeightRequest) (*Empty, error)
 	mustEmbedUnimplementedDeployerServer()
 }
 
@@ -179,6 +302,33 @@ func (UnimplementedDeployerServer) CurrentRelease(context.Context, *DeployReques
 }
 func (UnimplementedDeployerServer) Rollback(context.Context, *RollbackRequest) (*DeployResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Rollback not implemented")
+}
+func (UnimplementedDeployerServer) PrepareSlots(context.Context, *DeployRequest) (*StateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareSlots not implemented")
+}
+func (UnimplementedDeployerServer) DeployCandidate(context.Context, *DeployRequest) (*DeployResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeployCandidate not implemented")
+}
+func (UnimplementedDeployerServer) PromoteCandidate(context.Context, *DeployRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PromoteCandidate not implemented")
+}
+func (UnimplementedDeployerServer) RevertCandidate(context.Context, *DeployRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevertCandidate not implemented")
+}
+func (UnimplementedDeployerServer) RetirePrevious(context.Context, *DeployRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RetirePrevious not implemented")
+}
+func (UnimplementedDeployerServer) SetCandidateWeight(context.Context, *WeightRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetCandidateWeight not implemented")
+}
+func (UnimplementedDeployerServer) CandidateWeight(context.Context, *DeployRequest) (*WeightResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CandidateWeight not implemented")
+}
+func (UnimplementedDeployerServer) RouteTesters(context.Context, *DeployRequest) (*DetailsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RouteTesters not implemented")
+}
+func (UnimplementedDeployerServer) ScaleCandidate(context.Context, *WeightRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScaleCandidate not implemented")
 }
 func (UnimplementedDeployerServer) mustEmbedUnimplementedDeployerServer() {}
 func (UnimplementedDeployerServer) testEmbeddedByValue()                  {}
@@ -327,6 +477,168 @@ func _Deployer_Rollback_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Deployer_PrepareSlots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).PrepareSlots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_PrepareSlots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).PrepareSlots(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_DeployCandidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).DeployCandidate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_DeployCandidate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).DeployCandidate(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_PromoteCandidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).PromoteCandidate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_PromoteCandidate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).PromoteCandidate(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_RevertCandidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).RevertCandidate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_RevertCandidate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).RevertCandidate(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_RetirePrevious_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).RetirePrevious(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_RetirePrevious_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).RetirePrevious(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_SetCandidateWeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WeightRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).SetCandidateWeight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_SetCandidateWeight_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).SetCandidateWeight(ctx, req.(*WeightRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_CandidateWeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).CandidateWeight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_CandidateWeight_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).CandidateWeight(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_RouteTesters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeployRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).RouteTesters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_RouteTesters_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).RouteTesters(ctx, req.(*DeployRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Deployer_ScaleCandidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WeightRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeployerServer).ScaleCandidate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Deployer_ScaleCandidate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeployerServer).ScaleCandidate(ctx, req.(*WeightRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Deployer_ServiceDesc is the grpc.ServiceDesc for Deployer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -361,6 +673,42 @@ var Deployer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Rollback",
 			Handler:    _Deployer_Rollback_Handler,
+		},
+		{
+			MethodName: "PrepareSlots",
+			Handler:    _Deployer_PrepareSlots_Handler,
+		},
+		{
+			MethodName: "DeployCandidate",
+			Handler:    _Deployer_DeployCandidate_Handler,
+		},
+		{
+			MethodName: "PromoteCandidate",
+			Handler:    _Deployer_PromoteCandidate_Handler,
+		},
+		{
+			MethodName: "RevertCandidate",
+			Handler:    _Deployer_RevertCandidate_Handler,
+		},
+		{
+			MethodName: "RetirePrevious",
+			Handler:    _Deployer_RetirePrevious_Handler,
+		},
+		{
+			MethodName: "SetCandidateWeight",
+			Handler:    _Deployer_SetCandidateWeight_Handler,
+		},
+		{
+			MethodName: "CandidateWeight",
+			Handler:    _Deployer_CandidateWeight_Handler,
+		},
+		{
+			MethodName: "RouteTesters",
+			Handler:    _Deployer_RouteTesters_Handler,
+		},
+		{
+			MethodName: "ScaleCandidate",
+			Handler:    _Deployer_ScaleCandidate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

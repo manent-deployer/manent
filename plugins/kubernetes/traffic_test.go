@@ -203,12 +203,81 @@ metadata: {name: shared}
 	if err != nil {
 		t.Fatal(err)
 	}
-	objs, err = slotObjects(objs, "b", true)
+	objs, err = slotObjects(objs, "b", true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if objs[0].Name() != "db-b" || objs[0].str("spec", "serviceName") != "db-b" || objs[1].str("spec", "selector", LabelTrack) != "b" ||
 		objs[2].str("spec", "scaleTargetRef", "name") != "db-b" || objs[3].Name() != "shared" {
 		t.Errorf("oggetti dello slot: %v", objs)
+	}
+}
+
+const vsPath = "/apis/networking.istio.io/v1/namespaces/shop/virtualservices/shop"
+
+func TestSlotEIstio(t *testing.T) {
+	ctx := context.Background()
+	p, fc, server := setup(t)
+	fc.mu.Lock()
+	fc.objects[vsPath] = Object{
+		"apiVersion": istioAPIVersion, "kind": "VirtualService",
+		"metadata": map[string]any{"name": "shop", "namespace": "shop", "resourceVersion": "1"},
+		"spec": map[string]any{"hosts": []any{"shop"}, "http": []any{
+			map[string]any{"match": []any{map[string]any{"headers": map[string]any{"x-canary": map[string]any{"exact": "1"}}}},
+				"route": []any{map[string]any{"destination": map[string]any{"host": "shop", "subset": "a"}}}},
+			map[string]any{"route": []any{
+				map[string]any{"destination": map[string]any{"host": "shop", "subset": "a"}, "weight": float64(100)},
+				map[string]any{"destination": map[string]any{"host": "shop", "subset": "b"}, "weight": float64(0)},
+			}},
+		}},
+	}
+	fc.mu.Unlock()
+	req := request(server, "1.0.0", manifestV1, t)
+	req.Params[ParamTrafficRouter], req.Params[ParamTrafficRoute] = RouterIstio, "shop"
+	req.Traffic = &plugin.TrafficRequest{TesterHeader: "x-canary: 1", State: map[string]string{"stable@" + server: "a", "candidate@" + server: "b"}}
+	if err := p.Validate(req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DeployCandidate(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	// Con Istio il Service resta comune ai due slot; i pod portano l'etichetta dello slot.
+	if svc := fc.get(servicePath); svc == nil || svc.str("spec", "selector", LabelTrack) != "" {
+		t.Errorf("service comune: %v", svc)
+	}
+	if fc.get("/apis/apps/v1/namespaces/shop/deployments/shop-b").str("spec", "template", "metadata", "labels", LabelTrack) != "b" {
+		t.Error("pod senza l'etichetta dello slot")
+	}
+	if _, err := p.RouteTesters(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetCandidateWeight(ctx, req, 30); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := p.CandidateWeight(ctx, req); err != nil || w != 30 {
+		t.Errorf("peso: %d %v", w, err)
+	}
+	http := rulesOf(fc.get(vsPath), "http")
+	tester := http[0].(map[string]any)["route"].([]any)[0].(map[string]any)["destination"].(map[string]any)["subset"]
+	main := http[1].(map[string]any)["route"].([]any)
+	if tester != "b" || main[0].(map[string]any)["weight"] != float64(70) || main[1].(map[string]any)["weight"] != float64(30) {
+		t.Errorf("virtual service: %v", http)
+	}
+}
+
+func TestSlotChartConNomiPropri(t *testing.T) {
+	objs, err := parseObjects([]byte(`
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: shop-b-web}
+spec: {selector: {matchLabels: {app: web}}, template: {metadata: {labels: {app: web}}}}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Con traffic_rename: "false" il chart dà già i nomi per slot: manent aggiunge solo le etichette.
+	objs, _ = slotObjects(objs, "b", true, false)
+	if objs[0].Name() != "shop-b-web" || objs[0].str("spec", "selector", "matchLabels", LabelTrack) != "b" {
+		t.Errorf("oggetto: %v", objs[0])
 	}
 }

@@ -240,3 +240,48 @@ func TestAttivazioneErrori(t *testing.T) {
 		t.Errorf("errore di configurazione non propagato: %v", err)
 	}
 }
+
+func TestRilascioPerPercentuale(t *testing.T) {
+	ctx := context.Background()
+	// Plugin senza slot: le capacità dichiarate lo escludono e le chiamate non sono supportate.
+	p, _ := newProcess(t, map[string]any{"command": fakeBin}, nil)
+	if s, err := plugin.SupportsTraffic(ctx, p); err != nil || s.Slots || s.Router {
+		t.Fatalf("supporto inatteso: %+v %v", s, err)
+	}
+	if _, err := p.PrepareSlots(ctx, request(nil)); !errors.Is(err, plugin.ErrTrafficUnsupported) {
+		t.Fatalf("atteso ErrTrafficUnsupported, ricevuto %v", err)
+	}
+
+	p, _ = newProcess(t, map[string]any{"command": fakeBin}, map[string]any{"slots": true})
+	if s, err := plugin.SupportsTraffic(ctx, p); err != nil || !s.Slots || !s.Router || s.Testers || s.Scale {
+		t.Fatalf("supporto: %+v %v", s, err)
+	}
+	req := request(map[string]string{"secret": "tok"})
+	state, err := p.PrepareSlots(ctx, req)
+	if err != nil || state["stable"] != "a" {
+		t.Fatalf("stato: %v %v", state, err)
+	}
+	req.Traffic = &plugin.TrafficRequest{State: state, TesterHeader: "x-canary: 1"}
+	res, err := p.DeployCandidate(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stato del rilascio e segreti arrivano al processo del plugin.
+	if d := res.Targets[0].Details; d["stable"] != "a" || d["header"] != "x-canary: 1" || d["secret_len"] != "6" {
+		t.Errorf("candidata: %v", d)
+	}
+	if err := p.SetCandidateWeight(ctx, req, 25); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := p.CandidateWeight(ctx, req); err != nil || w != 25 {
+		t.Errorf("peso: %d %v", w, err)
+	}
+	for _, fn := range []func(context.Context, *plugin.Request) error{p.PromoteCandidate, p.RevertCandidate, p.RetirePrevious} {
+		if err := fn(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.RouteTesters(ctx, req); !errors.Is(err, plugin.ErrTrafficUnsupported) {
+		t.Errorf("tester non supportati: %v", err)
+	}
+}

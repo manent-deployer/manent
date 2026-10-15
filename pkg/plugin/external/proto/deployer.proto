@@ -21,6 +21,19 @@ service Deployer {
   rpc CurrentRelease(DeployRequest) returns (CurrentReleaseResponse);
   // Rollback riporta i target alla release indicata; UNIMPLEMENTED se non supportato.
   rpc Rollback(RollbackRequest) returns (DeployResponse);
+
+  // Rilasci per percentuale (plugin.SlotDeployer, plugin.TrafficRouter, plugin.TesterRouter,
+  // plugin.SlotScaler): UNIMPLEMENTED se non supportati. DeployRequest.traffic porta lo stato
+  // registrato da PrepareSlots.
+  rpc PrepareSlots(DeployRequest) returns (StateResponse);
+  rpc DeployCandidate(DeployRequest) returns (DeployResponse);
+  rpc PromoteCandidate(DeployRequest) returns (Empty);
+  rpc RevertCandidate(DeployRequest) returns (Empty);
+  rpc RetirePrevious(DeployRequest) returns (Empty);
+  rpc SetCandidateWeight(WeightRequest) returns (Empty);
+  rpc CandidateWeight(DeployRequest) returns (WeightResponse);
+  rpc RouteTesters(DeployRequest) returns (DetailsResponse);
+  rpc ScaleCandidate(WeightRequest) returns (Empty);
 }
 
 // Secrets è servito da manent per la durata di una chiamata Deploy o DryRun, tramite il broker
@@ -38,7 +51,8 @@ message ConfigureRequest {
 
 message ConfigureResponse {
   string name = 1;
-  // Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback".
+  // Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback",
+  // "slots", "traffic_router", "testers", "scale".
   // Un plugin compilato con un SDK precedente non ne dichiara nessuna.
   repeated string capabilities = 2;
 }
@@ -75,6 +89,31 @@ message DeployRequest {
   map<string, string> params = 6;
   // ID del broker su cui è servito Secrets (0 = nessun resolver, es. in Validate).
   uint32 secrets_broker_id = 7;
+  // Presente solo nei rilasci per percentuale.
+  TrafficRequest traffic = 8;
+}
+
+message TrafficRequest {
+  map<string, string> state = 1;
+  string tester_header = 2;
+  string tester_tag = 3;
+}
+
+message StateResponse {
+  map<string, string> state = 1;
+}
+
+message WeightRequest {
+  DeployRequest request = 1;
+  int32 percent = 2;
+}
+
+message WeightResponse {
+  int32 percent = 1;
+}
+
+message DetailsResponse {
+  map<string, string> details = 1;
 }
 
 message TargetResult {

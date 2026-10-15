@@ -49,6 +49,8 @@ In dry-run the pool is not touched.
 | `haproxy` | Data Plane API on every active instance: `admin_state: drain` | current sessions (`scur`) at 0 on every instance | `admin_state: ready`; healthy if `operational_state: up` everywhere |
 | `aws-elb` | `DeregisterTargets` from the target group, or `EnterStandby` when an Auto Scaling group is set | target no longer `draining` | `RegisterTargets` or `ExitStandby`; healthy if `healthy` in the target group |
 | `health-flag` | the application answers 503 to its own health check: an HTTP call or a flag file over SSH | after `drain_delay` | flag removed; healthy if `health_url` answers 200 |
+| `f5` | iControl REST on the LTM pool member: `session: user-disabled` (existing and persistent connections go on) | `serverside.curConns` at 0 | `session: user-enabled`, `state: user-up`; healthy if the monitor sees it `up` |
+| `nginx-plus` | NGINX Plus API on every instance: `drain: true` on the upstream server | `active` connections at 0 on every instance | `drain: false`, `down: false`; healthy if `up` for the active health checks |
 
 ### haproxy
 
@@ -71,6 +73,24 @@ In dry-run the pool is not touched.
 
 Minimum permissions: `elasticloadbalancing:DescribeTargetHealth`, `RegisterTargets`, `DeregisterTargets` on the target group; with the Auto Scaling group also `autoscaling:DescribeAutoScalingInstances`, `EnterStandby`, `ExitStandby`.
 
+### f5
+
+| Setting | Description |
+|---|---|
+| `management_url` | Management URL of the active BIG-IP. |
+| `pool`, `partition` | LTM pool and partition (default `Common`). The member is `address:port` (`member: "{host}:{port}"`). |
+| `credentials_secret` | Secret `user:password` of a role limited to the pool members. |
+| `sync_group` | Device group to synchronise (`config-sync to-group`) after every change. |
+
+### nginx-plus
+
+| Setting | Description |
+|---|---|
+| `api_urls` | API URL of every instance (e.g. `https://lb1:8080/api`), comma separated. |
+| `upstream` | `http` upstream with the servers; the member is the server as in the upstream (`member: "{host}:{port}"`). |
+| `api_version` | API version (default `9`). |
+| `credentials_secret` | Optional: secret `user:password` if the API is protected with basic auth. |
+
 ### health-flag
 
 It works with any load balancer, but it does not know the other members of the pool: the capacity check is not available and the wait is a fixed time.
@@ -88,7 +108,7 @@ It works with any load balancer, but it does not know the other members of the p
 
 | `traffic.pool` | Default | Description |
 |---|---|---|
-| `provider` | | `haproxy`, `aws-elb`, `health-flag`. |
+| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`. |
 | `member` | `{host}` | Member name of a target: `{host}`, `{port}`, `{label.<name>}`. |
 | `drain_timeout` | `5m` | Maximum wait for capacity and remaining connections. |
 | `restore_timeout` | `5m` | Maximum wait for the restore to become healthy. |

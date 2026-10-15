@@ -87,6 +87,10 @@ Se il deployer implementa `plugin.Rollbacker` e `plugin.ReleaseInspector`, il [r
 
 Un plugin compilato con un SDK precedente non dichiara nessuna capacità: funziona come prima, ma per manent non supporta il rollback.
 
+### Rilasci per percentuale
+
+Un deployer che implementa `plugin.SlotDeployer`, `plugin.TrafficRouter` ed eventualmente `plugin.TesterRouter` e `plugin.SlotScaler` partecipa ai [rilasci per percentuale](../guida/traffico.md) come un plugin interno: le capacità `slots`, `traffic_router`, `testers` e `scale` lo dichiarano a manent, e lo stato registrato da `PrepareSlots` arriva in ogni chiamata (`DeployRequest.traffic`). Le chiamate non implementate restituiscono `UNIMPLEMENTED` e il deploy fallisce senza retry.
+
 ## Configurare manent
 
 Il plugin si attiva nella sezione `plugins` di `manent.yml`, sotto il nome con cui i descrittori lo riferiranno (`deploy.plugin`). La chiave `external` lo identifica come esterno; tutte le altre chiavi sono la configurazione passata alla Factory del plugin.
@@ -148,6 +152,16 @@ service Deployer {
   rpc DryRun(DeployRequest) returns (DeployResponse);   // UNIMPLEMENTED se non supportato
   rpc CurrentRelease(DeployRequest) returns (CurrentReleaseResponse);   // idem
   rpc Rollback(RollbackRequest) returns (DeployResponse);               // idem
+  // Rilasci per percentuale, UNIMPLEMENTED se non supportati
+  rpc PrepareSlots(DeployRequest) returns (StateResponse);
+  rpc DeployCandidate(DeployRequest) returns (DeployResponse);
+  rpc PromoteCandidate(DeployRequest) returns (Empty);
+  rpc RevertCandidate(DeployRequest) returns (Empty);
+  rpc RetirePrevious(DeployRequest) returns (Empty);
+  rpc SetCandidateWeight(WeightRequest) returns (Empty);
+  rpc CandidateWeight(DeployRequest) returns (WeightResponse);
+  rpc RouteTesters(DeployRequest) returns (DetailsResponse);
+  rpc ScaleCandidate(WeightRequest) returns (Empty);
 }
 
 service Secrets {
@@ -157,7 +171,7 @@ service Secrets {
 
 | Chiamata | Note |
 |---|---|
-| `Configure` | Prima chiamata dopo ogni avvio. Riceve la configurazione in JSON e restituisce il nome del plugin e le capacità (`dry_run`, `current_release`, `rollback`). |
+| `Configure` | Prima chiamata dopo ogni avvio. Riceve la configurazione in JSON e restituisce il nome del plugin e le capacità (`dry_run`, `current_release`, `rollback`, `slots`, `traffic_router`, `testers`, `scale`). |
 | `Supports` | Interrogata dalla policy di selezione. Un errore di comunicazione vale "non supportato". |
 | `Validate` | Senza accesso ai segreti. Timeout di 30 secondi. |
 | `Deploy`, `DryRun`, `CurrentRelease`, `Rollback` | Con il contesto del deploy: un annullamento si propaga al plugin. `secrets_broker_id` indica dove è esposto il servizio `Secrets`. |
