@@ -202,49 +202,71 @@ func (w *Worker) poolWait(ctx dbos.Context, id string, ev *events, d *descriptor
 	}
 }
 
-// trafficPlan è il piano di un rilascio per percentuale: un solo passo con tutti i target.
-func trafficPlan(d descriptor.Descriptor) rollout.Plan {
+// trafficPlan è il piano di un rilascio per percentuale: con le ondate i passi del piano a
+// ondate (un cluster o una region alla volta), ciascuno con tutti i gradini; senza, un solo
+// passo con tutti i target.
+func trafficPlan(d descriptor.Descriptor) (rollout.Plan, error) {
+	if len(d.Rollout.Waves) > 0 {
+		return rollout.Build(d.Deploy.Targets, d.Rollout)
+	}
 	p := rollout.Pass{Name: "traffic", Wave: "traffic", Targets: d.Deploy.Targets, Batches: [][]descriptor.Target{d.Deploy.Targets}}
-	return rollout.Plan{Stages: []rollout.Stage{{Name: "traffic", Wave: "traffic", Passes: []rollout.Pass{p}}}}
+	return rollout.Plan{Stages: []rollout.Stage{{Name: "traffic", Wave: "traffic", Passes: []rollout.Pass{p}, LastOfWave: true}}}, nil
 }
 
-// stageName è il nome dello stadio di un gradino.
-func stageName(percent int) string { return strconv.Itoa(percent) + "%" }
+// multiPass indica un rilascio per percentuale a ondate: nomi degli step e degli stadi
+// riportano il passo.
+func multiPass(d *descriptor.Descriptor) bool { return len(d.Rollout.Waves) > 0 }
 
-// newTrafficState crea lo stato di un rilascio per percentuale: uno stadio per gradino.
-func newTrafficState(d *descriptor.Descriptor, hosts []string) *RolloutState {
+// stageName è il nome dello stadio di un gradino ("25%", o "<passo>/25%" con le ondate).
+func stageName(d *descriptor.Descriptor, pass string, percent int) string {
+	name := strconv.Itoa(percent) + "%"
+	if multiPass(d) {
+		name = pass + "/" + name
+	}
+	return name
+}
+
+// newTrafficState crea lo stato di un rilascio per percentuale: uno stadio per gradino di
+// ogni passo.
+func newTrafficState(d *descriptor.Descriptor, plan rollout.Plan) *RolloutState {
 	r := d.Rollout
 	st := &RolloutState{Strategy: descriptor.StrategyTraffic, Status: service.RolloutRunning, OnFailure: r.OnFailureOrDefault(),
 		Traffic: &service.TrafficState{Steps: slices.Clone(r.Traffic.Steps)}}
-	if hosts == nil {
-		for _, t := range d.Deploy.Targets {
-			hosts = append(hosts, t.Host)
+	for _, stage := range plan.Stages {
+		for _, p := range stage.Passes {
+			for _, pct := range r.Traffic.Steps {
+				st.Stages = append(st.Stages, RolloutStage{Name: stageName(d, p.Name, pct), Wave: p.Wave, State: service.StagePending,
+					Passes: []RolloutPass{{Name: p.Name, Region: p.Region, AZ: p.AZ, Hosts: p.Hosts()}}})
+			}
 		}
-	}
-	for _, p := range r.Traffic.Steps {
-		st.Stages = append(st.Stages, RolloutStage{Name: stageName(p), Wave: "traffic", State: service.StagePending,
-			Passes: []RolloutPass{{Name: "traffic", Hosts: hosts}}})
 	}
 	return st
 }
 
-// trafficRun è lo stato di un rilascio per percentuale, per il ritorno in caso di errore.
+// trafficRun è lo stato del rilascio di un passo, per il ritorno in caso di errore.
 type trafficRun struct {
+	pass rollout.Pass
+	// base è l'indice del primo stadio del passo in RolloutState.Stages.
+	base int
+	// sfx è il suffisso dei nomi degli step del passo ("" senza ondate).
+	sfx      string
 	in       pipeline.Input
 	prepared bool
+	promoted bool
 	started  []startedStep
 }
 
-// runTraffic esegue un rilascio per percentuale: step iniziali; preparazione (versione
-// stabile, slot candidato); gli step da deploy ad activation esclusa sulla candidata, senza
-// traffico; instradamento dei tester; i gradini (pesi, bake, gate, approvazioni); promozione;
-// activation e step finali. Alla fine un workflow figlio ridimensiona la versione sostituita
-// dopo scaleDownDelay.
+// runTraffic esegue un rilascio per percentuale: step iniziali; per ogni passo (uno solo
+// senza ondate) preparazione (versione stabile, slot candidato), gli step da deploy ad
+// activation esclusa sulla candidata senza traffico, tester, gradini (pesi, bake, gate,
+// approvazioni), promozione e activation; infine gli step finali. Un workflow figlio per passo
+// ridimensiona la versione sostituita dopo scaleDownDelay.
 func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result) error {
 	if w.traffic == nil {
 		return pipeline.Permanent(errors.New("strategy: traffic non disponibile su questo server"))
 	}
-	if _, err := checkRollout(*d, w.health, w.traffic); err != nil {
+	plan, err := checkRollout(*d, w.health, w.traffic)
+	if err != nil {
 		return fmt.Errorf("rollout: %w", err)
 	}
 	prefix, perPass, suffix := splitPlan(req.Plan)
@@ -262,12 +284,35 @@ func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descrip
 			outputs[ps.Name] = out
 		}
 	}
-	rs := newTrafficState(d, nil)
+	rs := newTrafficState(d, plan)
 	res.Rollout = rs
 	w.publishRollout(ctx, rs)
-	run := &trafficRun{}
-	if err := w.trafficPass(ctx, id, req, d, ev, res, rs, perPass, outputs, run); err != nil {
-		return w.trafficFailure(ctx, id, d, ev, res, rs, run, err)
+	var runs []*trafficRun
+	base := 0
+	for si, stage := range plan.Stages {
+		if !d.DryRun {
+			if err := w.waitFreeze(ctx, d, stage, rs); err != nil {
+				return err
+			}
+		}
+		for _, p := range stage.Passes {
+			dd := *d
+			dd.Deploy.Targets = p.Targets
+			run := &trafficRun{pass: p, base: base}
+			if multiPass(d) {
+				run.sfx = "@" + p.Name
+			}
+			runs = append(runs, run)
+			if err := w.trafficPass(ctx, id, req, &dd, ev, res, rs, perPass, outputs, run); err != nil {
+				return w.trafficFailure(ctx, id, d, ev, res, rs, runs, err)
+			}
+			base += len(d.Rollout.Traffic.Steps)
+		}
+		if multiPass(d) && stage.LastOfWave && si < len(plan.Stages)-1 && !d.DryRun && slices.Contains(d.Rollout.ApprovalsBetween, stage.Wave) {
+			if err := w.waitRolloutApproval(ctx, id, req, "l'ondata "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
+				return w.trafficFailure(ctx, id, d, ev, res, rs, runs, err)
+			}
+		}
 	}
 	started = nil
 	for _, ps := range suffix {
@@ -284,35 +329,41 @@ func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descrip
 	}
 	rs.Status, rs.Stage = service.RolloutSucceeded, ""
 	w.publishRollout(ctx, rs)
-	if !d.DryRun && rs.Traffic.Promoted && run.in.Outputs[steps.TrafficOutput][steps.OutMode] == steps.ModePlugin &&
-		run.in.Outputs[steps.TrafficOutput][steps.OutHasStable] == "true" {
-		w.scheduleRetire(ctx, id, req, d, run.in)
+	for _, run := range runs {
+		prep := run.in.Outputs[steps.TrafficOutput]
+		if !d.DryRun && run.promoted && prep[steps.OutMode] == steps.ModePlugin && prep[steps.OutHasStable] == "true" {
+			w.scheduleRetire(ctx, id, req, run)
+		}
 	}
 	return nil
 }
 
-// trafficPass esegue il rilascio affiancato sui target del descrittore.
+// trafficPass esegue il rilascio affiancato sui target del passo (d ha i soli target del passo).
 func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result,
 	rs *RolloutState, perPass pipeline.Plan, outputs map[string]pipeline.Output, run *trafficRun) error {
 	tr := d.Rollout.Traffic
 	bo := maps.Clone(outputs)
 	in := pipeline.Input{DeploymentID: id, Descriptor: d, Outputs: bo}
-	prep, err := w.trafficOp(ctx, ev, d, res, "traffic:prepare", false, in, w.traffic.Prepare)
+	prep, err := w.trafficOp(ctx, ev, d, res, "traffic:prepare"+run.sfx, false, in, w.traffic.Prepare)
 	if err != nil {
 		return err
 	}
 	bo[steps.TrafficOutput] = prep
 	run.in, run.prepared = in, true
 	t := rs.Traffic
-	t.Router, t.Stable, t.Candidate = prep[steps.OutRouter], prep[steps.OutStable], prep[steps.OutCandidate]
+	t.Pass, t.Router, t.Stable, t.Candidate = "", prep[steps.OutRouter], prep[steps.OutStable], prep[steps.OutCandidate]
+	t.Weight, t.Testers, t.Promoted = 0, false, false
+	if multiPass(d) {
+		t.Pass = run.pass.Name
+	}
 	targets := steps.CandidateTargets(d, prep)
 	if targets != nil {
 		hosts := make([]string, len(targets))
 		for i, tg := range targets {
 			hosts[i] = tg.Host
 		}
-		for i := range rs.Stages {
-			rs.Stages[i].Passes[0].Hosts = hosts
+		for i := range tr.Steps {
+			rs.Stages[run.base+i].Passes[0].Hosts = hosts
 		}
 	}
 	w.publishRollout(ctx, rs)
@@ -325,7 +376,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 	}
 	exec := func(list pipeline.Plan) error {
 		for _, ps := range list {
-			out, st, skipped, err := w.execStep(ctx, id, ev, d, ps, ps.Name, targets, bo, res)
+			out, st, skipped, err := w.execStep(ctx, id, ev, d, ps, ps.Name+run.sfx, targets, bo, res)
 			if st != nil {
 				run.started = append(run.started, *st)
 			}
@@ -346,7 +397,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		return exec(perPass[act:])
 	}
 	if tr.Testers != nil && hasStable {
-		if _, err := w.trafficOp(ctx, ev, d, res, "traffic:testers", false, in, w.traffic.Testers); err != nil {
+		if _, err := w.trafficOp(ctx, ev, d, res, "traffic:testers"+run.sfx, false, in, w.traffic.Testers); err != nil {
 			return err
 		}
 		t.Testers = true
@@ -358,7 +409,8 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		}
 	}
 	last := 0
-	for i, pct := range tr.Steps {
+	for k, pct := range tr.Steps {
+		i := run.base + k
 		if !hasStable && pct < 100 {
 			// Primo rilascio: non c'è traffico da dividere, la candidata riceve subito tutto.
 			rs.Stages[i].State = service.StageSucceeded
@@ -367,18 +419,18 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		rs.Stage, rs.Stages[i].State = rs.Stages[i].Name, service.StageRunning
 		w.publishRollout(ctx, rs)
 		if hasStable && tr.OnDrift != descriptor.OnDriftIgnore {
-			if err := w.checkDrift(ctx, id, req, d, ev, res, rs, in, pct, last); err != nil {
+			if err := w.checkDrift(ctx, id, req, d, ev, res, rs, in, run.sfx, pct, last); err != nil {
 				return err
 			}
 		}
 		if tr.Replicas == descriptor.ReplicasProportional && hasStable {
-			if _, err := w.trafficOp(ctx, ev, d, res, "traffic:scale@"+strconv.Itoa(pct), false, in, func(c context.Context, in pipeline.Input) (pipeline.Output, error) {
+			if _, err := w.trafficOp(ctx, ev, d, res, "traffic:scale@"+strconv.Itoa(pct)+run.sfx, false, in, func(c context.Context, in pipeline.Input) (pipeline.Output, error) {
 				return w.traffic.Scale(c, in, pct)
 			}); err != nil {
 				return err
 			}
 		}
-		if _, err := w.trafficOp(ctx, ev, d, res, "traffic@"+strconv.Itoa(pct), false, in, func(c context.Context, in pipeline.Input) (pipeline.Output, error) {
+		if _, err := w.trafficOp(ctx, ev, d, res, "traffic@"+strconv.Itoa(pct)+run.sfx, false, in, func(c context.Context, in pipeline.Input) (pipeline.Output, error) {
 			return w.traffic.SetWeight(c, in, pct)
 		}); err != nil {
 			return err
@@ -390,7 +442,9 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		}
 		rs.Stages[i].State = service.StageBaking
 		w.publishRollout(ctx, rs)
-		stage := rollout.Stage{Name: "traffic@" + strconv.Itoa(pct), Wave: "traffic", Bake: bake, Passes: []rollout.Pass{{Name: "traffic", Targets: cmpTargets(targets, d.Deploy.Targets)}}}
+		p := run.pass
+		p.Targets = cmpTargets(targets, d.Deploy.Targets)
+		stage := rollout.Stage{Name: "traffic@" + strconv.Itoa(pct) + run.sfx, Wave: p.Wave, Bake: bake, Passes: []rollout.Pass{p}}
 		if err := w.healthGate(ctx, id, d, stage, i, rs, bake, tracks); err != nil {
 			return err
 		}
@@ -398,15 +452,15 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		w.publishRollout(ctx, rs)
 		ev.send(d, callback.Event{Type: descriptor.CallbackEventStep, Step: "stage:" + rs.Stages[i].Name, Status: callback.StatusSucceeded})
 		if pct < 100 && slices.Contains(d.Rollout.ApprovalsBetween, strconv.Itoa(pct)) {
-			if err := w.waitRolloutApproval(ctx, id, req, "il gradino del "+stageName(pct), service.RolloutPausedApproval, rs); err != nil {
+			if err := w.waitRolloutApproval(ctx, id, req, "il gradino del "+rs.Stages[i].Name, service.RolloutPausedApproval, rs); err != nil {
 				return err
 			}
 		}
 	}
-	if _, err := w.trafficOp(ctx, ev, d, res, "traffic:promote", false, in, w.traffic.Promote); err != nil {
+	if _, err := w.trafficOp(ctx, ev, d, res, "traffic:promote"+run.sfx, false, in, w.traffic.Promote); err != nil {
 		return err
 	}
-	t.Weight, t.Promoted = 100, true
+	t.Weight, t.Promoted, run.promoted = 100, true, true
 	w.publishRollout(ctx, rs)
 	return exec(perPass[act:])
 }
@@ -421,8 +475,8 @@ func cmpTargets(a, b []descriptor.Target) []descriptor.Target {
 // checkDrift verifica che i pesi del router siano quelli impostati da manent: se qualcuno li
 // ha cambiati, il rollout si ferma in attesa di una decisione invece di sovrascriverli.
 func (w *Worker) checkDrift(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result,
-	rs *RolloutState, in pipeline.Input, pct, last int) error {
-	out, err := w.trafficOp(ctx, ev, d, res, "traffic:weight@"+strconv.Itoa(pct), true, in, w.traffic.Weight)
+	rs *RolloutState, in pipeline.Input, sfx string, pct, last int) error {
+	out, err := w.trafficOp(ctx, ev, d, res, "traffic:weight@"+strconv.Itoa(pct)+sfx, true, in, w.traffic.Weight)
 	if err != nil {
 		return err
 	}
@@ -435,43 +489,56 @@ func (w *Worker) checkDrift(ctx dbos.Context, id string, req Request, d *descrip
 	return w.waitRolloutApproval(ctx, id, req, msg, service.RolloutPausedDrift, rs)
 }
 
-// trafficFailure riporta tutto il traffico alla versione stabile (salvo onFailure: stop) e
-// compensa gli step avviati.
+// trafficFailure riporta il traffico alla versione stabile (salvo onFailure: stop): con
+// rollback-wave solo nel passo fallito, con rollback-all in tutti i passi già eseguiti, in
+// ordine inverso. Poi compensa gli step avviati di quei passi.
 func (w *Worker) trafficFailure(ctx dbos.Context, id string, d *descriptor.Descriptor, ev *events, res *Result,
-	rs *RolloutState, run *trafficRun, cause error) error {
+	rs *RolloutState, runs []*trafficRun, cause error) error {
 	rs.Status = service.RolloutFailed
-	if i := slices.IndexFunc(rs.Stages, func(s RolloutStage) bool { return s.Name == rs.Stage }); i >= 0 {
+	if i := slices.IndexFunc(rs.Stages, func(s RolloutStage) bool { return s.Name == rs.Stage }); i >= 0 && rs.Stages[i].State != service.StageSucceeded {
 		rs.Stages[i].State, rs.Stages[i].Error = service.StageFailed, cause.Error()
 	}
 	w.publishRollout(ctx, rs)
-	if d.DryRun || d.Rollout.OnFailureOrDefault() == descriptor.OnFailureStop || !run.prepared || ctx.Err() != nil {
+	onFailure := d.Rollout.OnFailureOrDefault()
+	if d.DryRun || onFailure == descriptor.OnFailureStop || len(runs) == 0 || ctx.Err() != nil {
 		return cause
 	}
+	from := 0
+	if onFailure == descriptor.OnFailureRollbackWave {
+		from = len(runs) - 1
+	}
 	rbErr := &RollbackError{Err: cause, Status: RollbackSkipped}
-	out, err := w.trafficOp(ctx, ev, d, res, "traffic:revert", false, run.in, w.traffic.Revert)
-	if err != nil {
-		rbErr.Status, rbErr.Cause = RollbackFailed, err
-		rs.Rollback = RollbackFailed
-		w.publishRollout(ctx, rs)
-		return rbErr
-	}
-	if out[pipeline.OutRollback] == pipeline.RollbackCompleted {
-		rbErr.Status = RollbackCompleted
-		rs.Traffic.Weight, rs.Traffic.Promoted, rs.Traffic.Testers = 0, false, false
-	}
-	if len(run.started) > 0 {
-		if rb, ok := errors.AsType[*RollbackError](w.undo(ctx, id, ev, d, res, run.started, cause)); ok {
-			if rb.Status == RollbackFailed {
+	for r := len(runs) - 1; r >= from; r-- {
+		run := runs[r]
+		if !run.prepared {
+			continue
+		}
+		out, err := w.trafficOp(ctx, ev, run.in.Descriptor, res, "traffic:revert"+run.sfx, false, run.in, w.traffic.Revert)
+		if err != nil {
+			rbErr.Status, rbErr.Cause = RollbackFailed, err
+			rs.Rollback = RollbackFailed
+			w.publishRollout(ctx, rs)
+			return rbErr
+		}
+		if out[pipeline.OutRollback] == pipeline.RollbackCompleted {
+			rbErr.Status = RollbackCompleted
+			rs.Traffic.Weight, rs.Traffic.Promoted, rs.Traffic.Testers = 0, false, false
+		}
+		if len(run.started) > 0 {
+			if rb, ok := errors.AsType[*RollbackError](w.undo(ctx, id, ev, run.in.Descriptor, res, run.started, cause)); ok && rb.Status == RollbackFailed {
 				rbErr.Status, rbErr.Cause = RollbackFailed, rb.Cause
+				rs.Rollback = RollbackFailed
+				w.publishRollout(ctx, rs)
+				return rbErr
+			}
+		}
+		for i := run.base; i < run.base+len(d.Rollout.Traffic.Steps) && i < len(rs.Stages); i++ {
+			if rs.Stages[i].State == service.StageSucceeded {
+				rs.Stages[i].State = service.StageRolledBack
 			}
 		}
 	}
 	rs.Rollback = rbErr.Status
-	for i := range rs.Stages {
-		if rs.Stages[i].State == service.StageSucceeded {
-			rs.Stages[i].State = service.StageRolledBack
-		}
-	}
 	w.publishRollout(ctx, rs)
 	return rbErr
 }
@@ -485,15 +552,21 @@ type retireInput struct {
 }
 
 // scheduleRetire avvia, con un ritardo pari a scaleDownDelay, il workflow figlio che
-// ridimensiona la versione sostituita. Gira sulla coda delle approvazioni: non occupa uno slot
-// dell'ambiente, così il deploy si conclude subito.
-func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, in pipeline.Input) {
+// ridimensiona la versione sostituita nel passo (ID <id>.retire, o <id>.retire.<passo> con le
+// ondate). Gira sulla coda delle approvazioni: non occupa uno slot dell'ambiente, così il
+// deploy si conclude subito.
+func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *trafficRun) {
 	q, err := dbos.RetrieveQueue(w.dbos, approvalQueue(w.queueName))
 	if err != nil {
 		w.logger.Warn("ridimensionamento della versione sostituita non pianificato", "deployment", id, "error", err)
 		return
 	}
-	opts := []dbos.WorkflowOption{dbos.WithWorkflowID(id + ".retire"), dbos.WithQueue(q)}
+	wid := id + ".retire"
+	if run.sfx != "" {
+		wid += "." + run.pass.Name
+	}
+	d := run.in.Descriptor
+	opts := []dbos.WorkflowOption{dbos.WithWorkflowID(wid), dbos.WithQueue(q)}
 	if delay := d.Rollout.Traffic.ScaleDownDelayDuration(); delay > 0 {
 		opts = append(opts, dbos.WithDelay(delay))
 	}
@@ -502,7 +575,7 @@ func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, d *des
 	}
 	keep := map[string]pipeline.Output{}
 	for _, k := range []string{"artifacts", steps.TrafficOutput} {
-		if o, ok := in.Outputs[k]; ok {
+		if o, ok := run.in.Outputs[k]; ok {
 			keep[k] = o
 		}
 	}

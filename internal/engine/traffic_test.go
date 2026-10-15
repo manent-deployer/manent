@@ -162,13 +162,15 @@ func TestPoolSvuotaILotti(t *testing.T) {
 
 // fakeOps simula le operazioni sul router: registra le chiamate e tiene il peso corrente.
 type fakeOps struct {
-	mu        sync.Mutex
-	log       *waveLog
-	weight    int
+	mu  sync.Mutex
+	log *waveLog
+	// weight è la quota della candidata per passo (primo target del passo).
+	weight    map[string]int
 	hasStable bool
 	// drift, se diverso da -1, è il peso letto al gradino indicato da driftAt (modifica esterna).
 	driftAt, drift int
 	retired        chan struct{}
+	retireOnce     sync.Once
 }
 
 func (f *fakeOps) Check(*descriptor.Descriptor) error { return nil }
@@ -188,21 +190,24 @@ func (f *fakeOps) Testers(context.Context, pipeline.Input) (pipeline.Output, err
 	return pipeline.Output{"tester_header": "x-canary: 1"}, nil
 }
 
-func (f *fakeOps) SetWeight(_ context.Context, _ pipeline.Input, p int) (pipeline.Output, error) {
+func passKey(in pipeline.Input) string { return in.Descriptor.Deploy.Targets[0].Host }
+
+func (f *fakeOps) SetWeight(_ context.Context, in pipeline.Input, p int) (pipeline.Output, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.weight = p
+	f.weight[passKey(in)] = p
 	f.log.add("weight:" + strconv.Itoa(p))
 	return pipeline.Output{"weight": strconv.Itoa(p)}, nil
 }
 
-func (f *fakeOps) Weight(context.Context, pipeline.Input) (pipeline.Output, error) {
+func (f *fakeOps) Weight(_ context.Context, in pipeline.Input) (pipeline.Output, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.drift >= 0 && f.weight == f.driftAt {
-		f.weight, f.drift = f.drift, -1
+	k := passKey(in)
+	if f.drift >= 0 && f.weight[k] == f.driftAt {
+		f.weight[k], f.drift = f.drift, -1
 	}
-	return pipeline.Output{"weight": strconv.Itoa(f.weight)}, nil
+	return pipeline.Output{"weight": strconv.Itoa(f.weight[k])}, nil
 }
 
 func (f *fakeOps) Scale(_ context.Context, _ pipeline.Input, p int) (pipeline.Output, error) {
@@ -222,7 +227,7 @@ func (f *fakeOps) Revert(context.Context, pipeline.Input) (pipeline.Output, erro
 
 func (f *fakeOps) Retire(context.Context, pipeline.Input) (pipeline.Output, error) {
 	f.log.add("retire")
-	close(f.retired)
+	f.retireOnce.Do(func() { close(f.retired) })
 	return pipeline.Output{}, nil
 }
 
@@ -258,7 +263,7 @@ func newTrafficEngine(t *testing.T) trafficEnv {
 	sl := slog.New(deploylog.NewHandler(slog.NewTextHandler(io.Discard, nil)))
 	reg, planner := testRegistry(t, countingStep{name: "prepare", n: new(atomic.Int32)},
 		waveStep{name: "deploy", worker: "w1", log: l, slog: sl}, waveStep{name: "activation", worker: "w1", log: l, slog: sl})
-	ops := &fakeOps{log: l, hasStable: true, drift: -1, retired: make(chan struct{})}
+	ops := &fakeOps{log: l, hasStable: true, drift: -1, retired: make(chan struct{}), weight: map[string]int{}}
 	ch := &stageChecker{}
 	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Traffic, opts.Health = ops, ch
@@ -380,6 +385,98 @@ func TestPrimoRilascioPerPercentuale(t *testing.T) {
 	// Senza versione stabile niente tester né gradini intermedi, e niente da ridimensionare.
 	want := []string{"prepare", "deploy:w1:cluster-1", "weight:100", "promote", "activation:w1:cluster-1"}
 	if got := env.log.get(); !slices.Equal(got, want) {
+		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
+	}
+}
+
+func TestRilascioPerPercentualeAOndate(t *testing.T) {
+	env := newTrafficEngine(t)
+	d := trafficDescriptor("canary-ondate")
+	d.Deploy.Targets = []descriptor.Target{
+		{Host: "eu-cluster", Labels: map[string]string{"region": "eu-1", "canary": "true"}},
+		{Host: "us-cluster", Labels: map[string]string{"region": "us-1"}},
+	}
+	d.Rollout.Waves = []descriptor.Wave{{Name: "eu", Select: "canary=true"}, {Name: "resto", Select: "canary!=true"}}
+	d.Rollout.Traffic.Steps, d.Rollout.Traffic.Testers = []int{50, 100}, nil
+	d.Rollout.ApprovalsBetween = []string{"eu"}
+	sub, err := env.e.Submit(alice, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Dopo l'ondata eu il rilascio attende l'approvazione prima del cluster successivo.
+	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
+	if st.Rollout.Paused != "approvazione dopo l'ondata eu" || st.Rollout.Traffic.Pass != "eu" || !st.Rollout.Traffic.Promoted {
+		t.Fatalf("pausa: %+v %+v", st.Rollout, st.Rollout.Traffic)
+	}
+	if err := env.e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(context.Background(), sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"prepare", "deploy:w1:eu-cluster", "weight:50", "weight:100", "promote", "activation:w1:eu-cluster",
+		"prepare", "deploy:w1:us-cluster", "weight:50", "weight:100", "promote", "activation:w1:us-cluster"}
+	got := env.log.get()
+	if len(got) < len(want) || !slices.Equal(got[:len(want)], want) {
+		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
+	}
+	st, _ = env.e.Status(context.Background(), sub.ID)
+	if len(st.Rollout.Stages) != 4 || st.Rollout.Stages[2].Name != "resto/50%" || st.Rollout.Stages[3].State != service.StageSucceeded {
+		t.Errorf("stadi: %+v", st.Rollout.Stages)
+	}
+	// Un ridimensionamento per passo.
+	res, _ := env.e.Steps(context.Background(), sub.ID)
+	for _, s := range res {
+		if strings.HasPrefix(s.Name, "traffic:promote") && s.Name != "traffic:promote@eu" && s.Name != "traffic:promote@resto" {
+			t.Errorf("nome dello step: %s", s.Name)
+		}
+	}
+}
+
+func TestRilascioPerPercentualeAOndateRollbackAll(t *testing.T) {
+	env := newTrafficEngine(t)
+	env.ch.red = "traffic@50@resto"
+	d := trafficDescriptor("canary-ondate-rb")
+	d.Deploy.Targets = []descriptor.Target{
+		{Host: "eu-cluster", Labels: map[string]string{"canary": "true"}},
+		{Host: "us-cluster", Labels: map[string]string{"canary": "false"}},
+	}
+	d.Rollout.Waves = []descriptor.Wave{{Name: "eu", Select: "canary=true"}, {Name: "resto", Select: "canary=false"}}
+	d.Rollout.Traffic.Steps, d.Rollout.Traffic.Testers = []int{50, 100}, nil
+	sub, err := env.e.Submit(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(context.Background(), sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completato") {
+		t.Fatalf("atteso il ritorno: %v", err)
+	}
+	// Il ritorno riguarda prima il passo fallito, poi quello già promosso.
+	var reverts []string
+	res, _ := env.e.Steps(context.Background(), sub.ID)
+	for _, s := range res {
+		if strings.HasPrefix(s.Name, "traffic:revert") {
+			reverts = append(reverts, s.Name)
+		}
+	}
+	if !slices.Equal(reverts, []string{"traffic:revert@resto", "traffic:revert@eu"}) {
+		t.Errorf("ritorni: %v", reverts)
+	}
+}
+
+func TestRilascioPerPercentualeRepliche(t *testing.T) {
+	env := newTrafficEngine(t)
+	d := trafficDescriptor("canary-repliche")
+	d.Rollout.Traffic.Replicas, d.Rollout.Traffic.Testers = descriptor.ReplicasProportional, nil
+	sub, err := env.e.Submit(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(context.Background(), sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	// La candidata cresce prima di ricevere ogni quota di traffico.
+	want := []string{"prepare", "deploy:w1:cluster-1", "scale:10", "weight:10", "scale:50", "weight:50", "scale:100", "weight:100", "promote"}
+	if got := env.log.get(); len(got) < len(want) || !slices.Equal(got[:len(want)], want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
 	}
 }

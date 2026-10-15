@@ -24,7 +24,6 @@ func TestRolloutTraffic(t *testing.T) {
 		"testers.header":                   {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}, Testers: &Testers{Header: "senza valore"}}},
 		"approvalsBetween: ondata \"50\"":  {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
 		"richiede strategy: traffic":       {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
-		"non è supportato":                 {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y"}}},
 		"strategy \"blu\"":                 {Strategy: "blu"},
 	}
 	for want, r := range cases {

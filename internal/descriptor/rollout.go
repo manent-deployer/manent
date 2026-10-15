@@ -172,9 +172,6 @@ func (r *Rollout) Validate() error {
 			errs = append(errs, errors.New("rollout.traffic richiede strategy: traffic"))
 		}
 	case StrategyTraffic:
-		if len(r.Waves) > 0 {
-			errs = append(errs, errors.New("rollout.waves non è supportato con strategy: traffic"))
-		}
 		if r.Traffic == nil {
 			errs = append(errs, errors.New("rollout.traffic obbligatorio con strategy: traffic"))
 		} else {

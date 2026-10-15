@@ -184,6 +184,8 @@ spec:
 
 **Istio.** With `traffic_router: istio` the route is a `VirtualService` (`networking.istio.io/v1`): manent changes the weights of the routes to the `a` and `b` subsets, defined by a `DestinationRule` on the `manent.io/track` label, and the `http` entry with a match on the testers' header leads only to the candidate. Services have no suffix and stay shared by the two slots; traffic between mesh services follows the same weights.
 
+**Proportional replicas.** With `rollout.traffic.replicas: proportional` the candidate starts with one replica (the replicas of the manifests are kept in the `manent.io/replicas` annotation) and before every step grows to `ceil(replicas × percentage / 100)`, waiting for the pods to be available. Workloads managed by a HorizontalPodAutoscaler are not touched.
+
 **Helm charts.** The chart receives the slot in `.Values.manent.slot`. If it already uses it in object names, `traffic_rename: "false"` avoids the double suffix.
 
 An application already released without slots (objects without suffix) moves to slots with an explicit operation: the first percentage rollout creates `shop-a` next to `shop` and receives all the traffic at once (there is no stable version in the slots); the route must be prepared with the `shop-a` and `shop-b` backends and the objects without suffix removed by hand after checking.

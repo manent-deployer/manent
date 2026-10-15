@@ -83,10 +83,13 @@ traffic:
       tester_rule_arn: arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener-rule/app/shop/…
 ```
 
-Lo slot stabile è quello con il peso maggiore nel router; il primo rilascio va nello slot `a`. Il ritiro non ridimensiona nulla: lo slot sostituito resta pronto per il rilascio successivo.
+Con i router dei load balancer (`haproxy`, `f5`, `nginx-plus`) i due slot sono server dello stesso backend: la quota di uno slot è divisa tra i suoi server, e l'impostazione `member` (default `{host}`, anche `{host}:{port}` o `{label.<nome>}`) dà il nome del server di un target. Lo slot stabile è quello con il peso maggiore nel router; il primo rilascio va nello slot `a`. Il ritiro non ridimensiona nulla: lo slot sostituito resta pronto per il rilascio successivo.
 
 | Router | Impostazioni |
 |---|---|
+| `haproxy` | Come il [pool haproxy](svuotamento.md#haproxy); i pesi (0-256) dei server del backend cambiano con l'API di configurazione della Data Plane API su ogni istanza. |
+| `f5` | Come il [pool f5](svuotamento.md#f5); il pool deve usare un bilanciamento *ratio (member)*: manent cambia il ratio dei membri e disabilita quelli con peso 0. |
+| `nginx-plus` | Come il [pool nginx-plus](svuotamento.md#nginx-plus); manent cambia il peso dei server dell'upstream e mette in drain quelli con peso 0. |
 | `aws-alb` | `region`, `forward_arn` (listener o regola con l'azione forward), `target_group_a`, `target_group_b`, `tester_rule_arn` facoltativa (regola, ad esempio su un header, che porta i tester alla candidata), credenziali come per `aws-elb`. Permessi: `elasticloadbalancing:Describe*`, `ModifyListener` o `ModifyRule`. |
 
 Per i servizi ECS con una strategia nativa (blue/green, lineare, canary) c'è anche la [modalità delegata](../plugins/ecs.md#strategie-native): ECS sposta il traffico da solo e manent ne attende la fine.
@@ -107,5 +110,22 @@ Per i servizi ECS con una strategia nativa (blue/green, lineare, canary) c'è an
 | `testers.tag` | | Tag della revisione candidata (Cloud Run). |
 | `scaleDownDelay` | `30m` | Attesa prima di ridimensionare la versione sostituita. |
 | `onDrift` | `pause` | `pause` o `ignore`. |
+| `replicas` | | `proportional`: la candidata parte con una replica e cresce prima di ogni gradino fino alle repliche dei manifest (plugin che implementano `plugin.SlotScaler`, come `kubernetes`). |
 
-`approvalsBetween` con questa strategia accetta `"0"` e le percentuali dei gradini tranne l'ultimo. `rollout.waves` non è ammesso.
+`approvalsBetween` con questa strategia accetta `"0"`, le percentuali dei gradini tranne l'ultimo e, con le ondate, i nomi delle ondate.
+
+## Su più cluster o region { #ondate }
+
+Con `rollout.waves` il rilascio per percentuale procede un passo alla volta: per esempio prima il cluster europeo, poi gli altri. Ogni passo (un cluster o una region, secondo `select` e `by` delle [ondate](ondate.md)) esegue l'intera sequenza (preparazione, candidata, tester, gradini, promozione) prima del successivo, e un'ondata elencata in `approvalsBetween` mette in pausa il rilascio prima di passare all'ondata seguente. Gli step hanno il nome del passo (`traffic@25@eu`, `deploy@eu`), gli stadi pure (`eu/25%`), e i freeze per region valgono come nelle ondate. In caso di errore `rollback-wave` riporta alla versione stabile solo il passo fallito, `rollback-all` anche quelli già promossi, in ordine inverso.
+
+```yaml
+rollout:
+  strategy: traffic
+  waves:
+    - {name: eu, select: "region=eu-1"}
+    - {name: resto, select: "region!=eu-1", by: region}
+  traffic: {steps: [5, 25, 100], bake: 15m}
+  approvalsBetween: ["eu"]
+```
+
+Le ondate richiedono un router nel plugin (un passo per cluster o per region): un router dell'ambiente (`traffic.router`) sposta il traffico di tutto l'ambiente e non è ammesso con le ondate. I passi girano sul worker che esegue il deploy, anche con il routing per region.

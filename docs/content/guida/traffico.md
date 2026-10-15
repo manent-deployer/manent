@@ -83,10 +83,13 @@ traffic:
       tester_rule_arn: arn:aws:elasticloadbalancing:eu-west-1:123456789012:listener-rule/app/shop/…
 ```
 
-The stable slot is the one with the larger weight in the router; the first release goes to slot `a`. Retirement scales nothing down: the replaced slot stays ready for the next release.
+With the load balancer routers (`haproxy`, `f5`, `nginx-plus`) the two slots are servers of the same backend: a slot's share is split among its servers, and the `member` setting (default `{host}`, also `{host}:{port}` or `{label.<name>}`) gives the server name of a target. The stable slot is the one with the larger weight in the router; the first release goes to slot `a`. Retirement scales nothing down: the replaced slot stays ready for the next release.
 
 | Router | Settings |
 |---|---|
+| `haproxy` | As the [haproxy pool](svuotamento.md#haproxy); the weights (0-256) of the backend servers change with the configuration API of the Data Plane API on every instance. |
+| `f5` | As the [f5 pool](svuotamento.md#f5); the pool must use *ratio (member)* load balancing: manent changes the members' ratio and disables those with weight 0. |
+| `nginx-plus` | As the [nginx-plus pool](svuotamento.md#nginx-plus); manent changes the weight of the upstream servers and drains those with weight 0. |
 | `aws-alb` | `region`, `forward_arn` (listener or rule with the forward action), `target_group_a`, `target_group_b`, optional `tester_rule_arn` (a rule, for example on a header, that leads testers to the candidate), credentials as for `aws-elb`. Permissions: `elasticloadbalancing:Describe*`, `ModifyListener` or `ModifyRule`. |
 
 For ECS services with a native strategy (blue/green, linear, canary) there is also the [delegated mode](../plugins/ecs.md#strategie-native): ECS shifts the traffic on its own and manent waits for it to finish.
@@ -107,5 +110,22 @@ For ECS services with a native strategy (blue/green, linear, canary) there is al
 | `testers.tag` | | Tag of the candidate revision (Cloud Run). |
 | `scaleDownDelay` | `30m` | Wait before scaling down the replaced version. |
 | `onDrift` | `pause` | `pause` or `ignore`. |
+| `replicas` | | `proportional`: the candidate starts with one replica and grows before every step up to the replicas of the manifests (plugins implementing `plugin.SlotScaler`, such as `kubernetes`). |
 
-With this strategy `approvalsBetween` accepts `"0"` and the percentages of every step but the last. `rollout.waves` is not allowed.
+With this strategy `approvalsBetween` accepts `"0"`, the percentages of every step but the last and, with waves, the wave names.
+
+## Across several clusters or regions { #ondate }
+
+With `rollout.waves` the percentage rollout proceeds one pass at a time: for example the European cluster first, then the others. Every pass (a cluster or a region, according to `select` and `by` of the [waves](ondate.md)) runs the whole sequence (preparation, candidate, testers, steps, promotion) before the next one, and a wave listed in `approvalsBetween` pauses the rollout before moving to the following wave. Steps carry the pass name (`traffic@25@eu`, `deploy@eu`), and so do stages (`eu/25%`); freezes per region apply as in waves. On error `rollback-wave` returns only the failed pass to the stable version, `rollback-all` also the ones already promoted, in reverse order.
+
+```yaml
+rollout:
+  strategy: traffic
+  waves:
+    - {name: eu, select: "region=eu-1"}
+    - {name: rest, select: "region!=eu-1", by: region}
+  traffic: {steps: [5, 25, 100], bake: 15m}
+  approvalsBetween: ["eu"]
+```
+
+Waves need a router in the plugin (one pass per cluster or region): an environment router (`traffic.router`) shifts traffic for the whole environment and is not allowed with waves. Passes run on the worker that runs the deploy, also with region routing.

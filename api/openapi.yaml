@@ -632,6 +632,7 @@ components:
       description: Rilascio per percentuale (strategy traffic); gli stadi sono i gradini
       required: [weight, steps]
       properties:
+        pass: {type: string, description: Passo in corso nei rilasci a ondate}
         router: {type: string}
         stable: {type: string, description: Slot della versione stabile}
         candidate: {type: string, description: Slot della versione candidata}

@@ -51,6 +51,7 @@ In dry-run the pool is not touched.
 | `health-flag` | the application answers 503 to its own health check: an HTTP call or a flag file over SSH | after `drain_delay` | flag removed; healthy if `health_url` answers 200 |
 | `f5` | iControl REST on the LTM pool member: `session: user-disabled` (existing and persistent connections go on) | `serverside.curConns` at 0 | `session: user-enabled`, `state: user-up`; healthy if the monitor sees it `up` |
 | `nginx-plus` | NGINX Plus API on every instance: `drain: true` on the upstream server | `active` connections at 0 on every instance | `drain: false`, `down: false`; healthy if `up` for the active health checks |
+| `nginx` | Open source NGINX over SSH: `down` parameter on the server in a dedicated file included in the upstream, then `nginx -t && nginx -s reload` on every instance | after `drain_delay` | `down` removed and reload; healthy if present and not `down` |
 
 ### haproxy
 
@@ -91,6 +92,18 @@ Minimum permissions: `elasticloadbalancing:DescribeTargetHealth`, `RegisterTarge
 | `api_version` | API version (default `9`). |
 | `credentials_secret` | Optional: secret `user:password` if the API is protected with basic auth. |
 
+### nginx
+
+Open source NGINX has no runtime API: manent rewrites over SSH a **dedicated** file (`include` inside the `upstream` block), with a temporary copy and a rename, and reloads NGINX on every instance. It knows neither the connections nor the health of the servers.
+
+| Setting | Description |
+|---|---|
+| `lb_hosts` | Hosts of the NGINX instances, comma separated (`ssh_port`, default 22). |
+| `upstream_file` | Absolute path of the file with the `server address:port …;` lines managed by manent; the member is the address (`member: "{host}:{port}"`). |
+| `ssh_user`, `ssh_key_secret` or `ssh_password_secret`, `known_hosts` | SSH access to the instances, with a user that can write the file and reload NGINX. |
+| `reload_command` | Check and reload (default `nginx -t && nginx -s reload`). |
+| `drain_delay` | Wait after the reload (default 30s). |
+
 ### health-flag
 
 It works with any load balancer, but it does not know the other members of the pool: the capacity check is not available and the wait is a fixed time.
@@ -108,7 +121,7 @@ It works with any load balancer, but it does not know the other members of the p
 
 | `traffic.pool` | Default | Description |
 |---|---|---|
-| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`. |
+| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`, `nginx`. |
 | `member` | `{host}` | Member name of a target: `{host}`, `{port}`, `{label.<name>}`. |
 | `drain_timeout` | `5m` | Maximum wait for capacity and remaining connections. |
 | `restore_timeout` | `5m` | Maximum wait for the restore to become healthy. |

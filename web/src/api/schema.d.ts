@@ -639,6 +639,8 @@ export interface components {
         };
         /** @description Rilascio per percentuale (strategy traffic); gli stadi sono i gradini */
         TrafficState: {
+            /** @description Passo in corso nei rilasci a ondate */
+            pass?: string;
             router?: string;
             /** @description Slot della versione stabile */
             stable?: string;

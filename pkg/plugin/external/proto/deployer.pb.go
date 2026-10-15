@@ -488,12 +488,13 @@ func (x *DeployRequest) GetTraffic() *TrafficRequest {
 }
 
 type TrafficRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	State         map[string]string      `protobuf:"bytes,1,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	TesterHeader  string                 `protobuf:"bytes,2,opt,name=tester_header,json=testerHeader,proto3" json:"tester_header,omitempty"`
-	TesterTag     string                 `protobuf:"bytes,3,opt,name=tester_tag,json=testerTag,proto3" json:"tester_tag,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	State                map[string]string      `protobuf:"bytes,1,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	TesterHeader         string                 `protobuf:"bytes,2,opt,name=tester_header,json=testerHeader,proto3" json:"tester_header,omitempty"`
+	TesterTag            string                 `protobuf:"bytes,3,opt,name=tester_tag,json=testerTag,proto3" json:"tester_tag,omitempty"`
+	ProportionalReplicas bool                   `protobuf:"varint,4,opt,name=proportional_replicas,json=proportionalReplicas,proto3" json:"proportional_replicas,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *TrafficRequest) Reset() {
@@ -545,6 +546,13 @@ func (x *TrafficRequest) GetTesterTag() string {
 		return x.TesterTag
 	}
 	return ""
+}
+
+func (x *TrafficRequest) GetProportionalReplicas() bool {
+	if x != nil {
+		return x.ProportionalReplicas
+	}
+	return false
 }
 
 type StateResponse struct {
@@ -1118,12 +1126,13 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\atraffic\x18\b \x01(\v2 .manent.plugin.v1.TrafficRequestR\atraffic\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd1\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x02\n" +
 	"\x0eTrafficRequest\x12A\n" +
 	"\x05state\x18\x01 \x03(\v2+.manent.plugin.v1.TrafficRequest.StateEntryR\x05state\x12#\n" +
 	"\rtester_header\x18\x02 \x01(\tR\ftesterHeader\x12\x1d\n" +
 	"\n" +
-	"tester_tag\x18\x03 \x01(\tR\ttesterTag\x1a8\n" +
+	"tester_tag\x18\x03 \x01(\tR\ttesterTag\x123\n" +
+	"\x15proportional_replicas\x18\x04 \x01(\bR\x14proportionalReplicas\x1a8\n" +
 	"\n" +
 	"StateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

@@ -302,6 +302,9 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 		return nil
 	}
 	if d.Traffic != nil && d.Traffic.Router != nil {
+		if len(d.Rollout.Waves) > 0 {
+			return errors.New("strategy: traffic con rollout.waves richiede un plugin che faccia da router: traffic.router sposta il traffico di tutto l'ambiente")
+		}
 		return checkSlotLabels(d.Deploy.Targets)
 	}
 	dep, _, err := t.Deploy.selectPlugin(pipeline.Input{Descriptor: d})
@@ -626,8 +629,11 @@ func trafficRequest(in pipeline.Input) *plugin.TrafficRequest {
 	}
 	tr := &plugin.TrafficRequest{}
 	_ = json.Unmarshal([]byte(prep[OutState]), &tr.State)
-	if r := in.Descriptor.Rollout; r.IsTraffic() && r.Traffic.Testers != nil {
-		tr.TesterHeader, tr.TesterTag = r.Traffic.Testers.Header, r.Traffic.Testers.Tag
+	if r := in.Descriptor.Rollout; r.IsTraffic() {
+		if r.Traffic.Testers != nil {
+			tr.TesterHeader, tr.TesterTag = r.Traffic.Testers.Header, r.Traffic.Testers.Tag
+		}
+		tr.ProportionalReplicas = r.Traffic.Replicas == descriptor.ReplicasProportional
 	}
 	return tr
 }

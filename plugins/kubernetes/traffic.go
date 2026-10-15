@@ -245,6 +245,10 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	if pr.objects, err = slotObjects(pr.objects, cand, router(req) != RouterIstio, req.Params[ParamTrafficRename] != "false"); err != nil {
 		return nil, err
 	}
+	stable, _, _ := slots(req, t)
+	if req.Traffic.ProportionalReplicas && stable != "" {
+		startSmall(pr.objects)
+	}
 	pr.refs = pr.refs[:0]
 	for _, o := range pr.objects {
 		pr.refs = append(pr.refs, refOf(o))
@@ -505,6 +509,70 @@ func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request,
 		}
 	}
 	return nil
+}
+
+// AnnotationReplicas conserva le repliche dei manifest di un workload avviato piccolo.
+const AnnotationReplicas = "manent.io/replicas"
+
+// startSmall avvia con una replica i workload della candidata che non sono gestiti da un HPA,
+// annotando le repliche dei manifest: ScaleCandidate le raggiunge in proporzione al traffico.
+func startSmall(objs []Object) {
+	scaled := map[string]bool{}
+	for _, o := range objs {
+		if o.Kind() == "HorizontalPodAutoscaler" {
+			scaled[o.str("spec", "scaleTargetRef", "kind")+"/"+o.str("spec", "scaleTargetRef", "name")] = true
+		}
+	}
+	for _, o := range objs {
+		if (o.Kind() != "Deployment" && o.Kind() != "StatefulSet") || scaled[o.Kind()+"/"+o.Name()] {
+			continue
+		}
+		want := 1
+		if spec, ok := o["spec"].(map[string]any); ok {
+			if _, set := spec["replicas"]; set {
+				want = num(o, "spec", "replicas")
+			}
+			spec["replicas"] = 1
+		}
+		o.setMap("annotations", AnnotationReplicas, strconv.Itoa(want))
+	}
+}
+
+// ScaleCandidate implementa plugin.SlotScaler: porta i workload della candidata avviati
+// piccoli a ceil(repliche × percent / 100) e ne attende la disponibilità.
+func (p *Plugin) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
+	for _, t := range req.Targets {
+		if err := p.scaleCandidate(ctx, t, req, percent); err != nil {
+			return fmt.Errorf("cluster %s: %w", t.Host, err)
+		}
+	}
+	return nil
+}
+
+func (p *Plugin) scaleCandidate(ctx context.Context, t plugin.Target, req *plugin.Request, percent int) error {
+	api, err := p.connect(ctx, t, req)
+	if err != nil {
+		return err
+	}
+	objs, err := loadObjects(ctx, api, namespace(req), historyNames(req), req.Artifact.Version)
+	if err != nil {
+		return err
+	}
+	var scaled []Object
+	for _, o := range objs {
+		raw := o.str("metadata", "annotations", AnnotationReplicas)
+		if raw == "" {
+			continue
+		}
+		full, _ := strconv.Atoi(raw)
+		n := max(1, int(math.Ceil(float64(full)*float64(percent)/100)))
+		if _, err := api.Patch(ctx, o.APIVersion(), o.Kind(), o.Namespace(), o.Name(), map[string]any{"spec": map[string]any{"replicas": n}}); err != nil {
+			return err
+		}
+		scaled = append(scaled, o)
+		p.logger.InfoContext(ctx, "candidata dimensionata", "deployment", req.DeploymentID, "cluster", t.Host, "object", o.Ref(), "replicas", n, "percent", percent)
+	}
+	return p.waitRollout(ctx, api, scaled, req, p.logger.With("deployment", req.DeploymentID, "cluster", t.Host))
 }
 
 func (p *Plugin) route(ctx context.Context, api API, req *plugin.Request) (Object, error) {

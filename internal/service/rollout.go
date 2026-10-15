@@ -40,6 +40,8 @@ type RolloutState struct {
 
 // TrafficState è lo stato di un rilascio per percentuale: gli stadi sono i gradini.
 type TrafficState struct {
+	// Pass è il passo in corso nei rilasci per percentuale a ondate.
+	Pass string `json:"pass,omitempty"`
 	// Router è il router (provider dell'ambiente o plugin di deploy).
 	Router string `json:"router,omitempty"`
 	// Stable e Candidate sono gli slot della versione stabile e della candidata, se noti.

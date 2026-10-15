@@ -371,7 +371,7 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		}
 		v.Rollout = newRolloutState(p, eff.Rollout)
 		if eff.Rollout.IsTraffic() {
-			v.Rollout = newTrafficState(&eff, nil)
+			v.Rollout = newTrafficState(&eff, p)
 		}
 		v.Rollout.Status = "planned"
 	}

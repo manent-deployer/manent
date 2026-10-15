@@ -107,7 +107,7 @@ func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOp
 				return rollout.Plan{}, err
 			}
 		}
-		return trafficPlan(d), nil
+		return trafficPlan(d)
 	}
 	p, err := rollout.Build(d.Deploy.Targets, d.Rollout)
 	if err != nil {

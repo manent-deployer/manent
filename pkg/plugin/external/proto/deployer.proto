@@ -97,6 +97,7 @@ message TrafficRequest {
   map<string, string> state = 1;
   string tester_header = 2;
   string tester_tag = 3;
+  bool proportional_replicas = 4;
 }
 
 message StateResponse {

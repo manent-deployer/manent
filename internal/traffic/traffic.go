@@ -124,8 +124,13 @@ func Default() *Providers {
 			"health-flag": {New: NewHealthFlagPool, Validate: validateHealthFlag},
 			"f5":          {New: NewF5Pool, Validate: validateF5},
 			"nginx-plus":  {New: NewNginxPlusPool, Validate: validateNginxPlus},
+			"nginx":       {New: NewNginxPool, Validate: validateNginx},
 		},
-		Routers: map[string]Provider[RouterFactory]{},
+		Routers: map[string]Provider[RouterFactory]{
+			"haproxy":    {New: NewHAProxyRouter, Validate: validateHAProxy},
+			"f5":         {New: NewF5Router, Validate: validateF5},
+			"nginx-plus": {New: NewNginxPlusRouter, Validate: validateNginxPlus},
+		},
 	}
 }
 
@@ -177,9 +182,10 @@ func (p *Providers) Router(ctx context.Context, c *descriptor.RouterConfig, env 
 		return nil, fmt.Errorf("traffic.router.provider %q sconosciuto", c.Provider)
 	}
 	env.Settings = c.Settings
-	if env.Member == nil {
-		env.Member = func(t descriptor.Target) string { return t.Host }
-	}
+	// Il nome del server di un target nei router dei load balancer (impostazione member,
+	// default "{host}").
+	tmpl := c.Settings["member"]
+	env.Member = func(t descriptor.Target) string { return descriptor.ExpandTarget(tmpl, t) }
 	return pr.New(ctx, env)
 }
 

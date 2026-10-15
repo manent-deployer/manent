@@ -51,6 +51,7 @@ In dry-run il pool non viene toccato.
 | `health-flag` | l'applicazione risponde 503 al proprio health check: chiamata HTTP o file flag via SSH | dopo `drain_delay` | flag tolto; sano se `health_url` risponde 200 |
 | `f5` | iControl REST sul membro del pool LTM: `session: user-disabled` (proseguono le connessioni esistenti e persistenti) | `serverside.curConns` a 0 | `session: user-enabled`, `state: user-up`; sano se il monitor lo vede `up` |
 | `nginx-plus` | API di NGINX Plus su ogni istanza: `drain: true` sul server dell'upstream | connessioni `active` a 0 su tutte le istanze | `drain: false`, `down: false`; sano se `up` per gli health check attivi |
+| `nginx` | NGINX open source via SSH: parametro `down` sul server in un file dedicato incluso nell'upstream, poi `nginx -t && nginx -s reload` su ogni istanza | dopo `drain_delay` | `down` tolto e ricarica; sano se presente e non `down` |
 
 ### haproxy
 
@@ -91,6 +92,18 @@ Permessi minimi: `elasticloadbalancing:DescribeTargetHealth`, `RegisterTargets`,
 | `api_version` | Versione dell'API (default `9`). |
 | `credentials_secret` | Facoltativo: segreto `utente:password` se l'API è protetta con basic auth. |
 
+### nginx
+
+NGINX open source non ha un'API a runtime: manent riscrive via SSH un file **dedicato** (`include` dentro il blocco `upstream`), con una copia temporanea e un rename, e ricarica NGINX su ogni istanza. Non conosce le connessioni né la salute dei server.
+
+| Impostazione | Descrizione |
+|---|---|
+| `lb_hosts` | Host delle istanze di NGINX, separati da virgola (`ssh_port`, default 22). |
+| `upstream_file` | Percorso assoluto del file con le righe `server indirizzo:porta …;` gestite da manent; il membro è l'indirizzo (`member: "{host}:{port}"`). |
+| `ssh_user`, `ssh_key_secret` o `ssh_password_secret`, `known_hosts` | Accesso SSH alle istanze, con un utente che può scrivere il file e ricaricare NGINX. |
+| `reload_command` | Verifica e ricarica (default `nginx -t && nginx -s reload`). |
+| `drain_delay` | Attesa dopo la ricarica (default 30s). |
+
 ### health-flag
 
 Funziona con qualunque load balancer, ma non conosce gli altri membri del pool: il controllo di capacità non è disponibile e l'attesa è un tempo fisso.
@@ -108,7 +121,7 @@ Funziona con qualunque load balancer, ma non conosce gli altri membri del pool: 
 
 | `traffic.pool` | Default | Descrizione |
 |---|---|---|
-| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`. |
+| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`, `nginx`. |
 | `member` | `{host}` | Nome del membro di un target: `{host}`, `{port}`, `{label.<nome>}`. |
 | `drain_timeout` | `5m` | Attesa massima della capacità e delle connessioni residue. |
 | `restore_timeout` | `5m` | Attesa massima del rientro in salute. |

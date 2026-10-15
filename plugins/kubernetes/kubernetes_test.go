@@ -79,6 +79,13 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			mergePatch(prev, patch)
+			if prev.Kind() == "Deployment" {
+				// Il finto controller porta subito le repliche al valore richiesto.
+				gen := num(prev, "metadata", "generation") + 1
+				n := float64(num(prev, "spec", "replicas"))
+				prev.metadata()["generation"] = float64(gen)
+				prev["status"] = map[string]any{"observedGeneration": float64(gen), "replicas": n, "updatedReplicas": n, "availableReplicas": n}
+			}
 			c.rv++
 			prev.metadata()["resourceVersion"] = strconv.Itoa(c.rv)
 			_ = json.NewEncoder(w).Encode(prev)

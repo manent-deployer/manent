@@ -119,19 +119,22 @@ func (f *fakeNginxPlus) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == base+"/servers":
 		var list []any
 		for _, p := range f.peers {
-			list = append(list, map[string]any{"id": p["id"], "server": p["server"]})
+			list = append(list, map[string]any{"id": p["id"], "server": p["server"], "weight": p["weight"], "drain": p["state"] == "draining"})
 		}
 		_ = json.NewEncoder(w).Encode(list)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, base+"/servers/"):
 		id, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, base+"/servers/"))
-		var in map[string]bool
+		var in map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		for _, p := range f.peers {
 			if int(p["id"].(float64)) == id {
-				if in["drain"] {
+				if in["drain"] == true {
 					p["state"] = "draining"
 				} else {
 					p["state"] = "up"
+				}
+				if w, ok := in["weight"]; ok {
+					p["weight"] = w
 				}
 			}
 		}

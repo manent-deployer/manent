@@ -281,3 +281,35 @@ spec: {selector: {matchLabels: {app: web}}, template: {metadata: {labels: {app: 
 		t.Errorf("oggetto: %v", objs[0])
 	}
 }
+
+func TestRepliceProporzionali(t *testing.T) {
+	ctx := context.Background()
+	p, fc, server := setup(t)
+	seedRoute(fc)
+	r1 := prepare(t, p, server, "1.0.0")
+	if err := p.PromoteCandidate(ctx, r1); err != nil {
+		t.Fatal(err)
+	}
+	req := trafficRequest(server, "2.0.0", t)
+	req.Params["var.REPLICAS"] = "10"
+	state, err := p.PrepareSlots(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Traffic.State, req.Traffic.ProportionalReplicas = state, true
+	if _, err := p.DeployCandidate(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	const cand = "/apis/apps/v1/namespaces/shop/deployments/shop-b"
+	if d := fc.get(cand); num(d, "spec", "replicas") != 1 || d.str("metadata", "annotations", AnnotationReplicas) != "10" {
+		t.Fatalf("candidata avviata piccola: %v", d)
+	}
+	for pct, want := range map[int]int{25: 3, 100: 10} {
+		if err := p.ScaleCandidate(ctx, req, pct); err != nil {
+			t.Fatal(err)
+		}
+		if n := num(fc.get(cand), "spec", "replicas"); n != want {
+			t.Errorf("al %d%%: %d repliche, attese %d", pct, n, want)
+		}
+	}
+}

@@ -17,6 +17,9 @@ type TrafficRequest struct {
 	TesterHeader string `json:"tester_header,omitempty"`
 	// TesterTag è l'etichetta della candidata per i router che danno un URL ai tester.
 	TesterTag string `json:"tester_tag,omitempty"`
+	// ProportionalReplicas chiede una candidata piccola, dimensionata da ScaleCandidate in
+	// proporzione alla quota di traffico (rollout.traffic.replicas: proportional).
+	ProportionalReplicas bool `json:"proportional_replicas,omitempty"`
 }
 
 // StateHasStable è la chiave di TrafficRequest.State che PrepareSlots imposta a "true" se esiste
