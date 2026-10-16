@@ -510,6 +510,8 @@ func Default() *Config {
 			"ecs":         {Allowed: true},
 			"lambda":      {Allowed: true},
 			"cloudrun":    {Allowed: true},
+			"war":         {Allowed: true},
+			"ear":         {Allowed: true},
 			"migration":   {Allowed: false},
 		}},
 		Pipeline: Pipeline{Steps: []Step{

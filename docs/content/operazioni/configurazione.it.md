@@ -167,7 +167,7 @@ plugins:
     artifact_types: [container]
 ```
 
-Plugin compilati in manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md). Vedi anche [Plugin esterni](../plugins/esterni.md).
+Plugin compilati in manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md). Vedi anche [Plugin esterni](../plugins/esterni.md).
 
 ### `rollout`
 

@@ -123,6 +123,14 @@ rollback:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
+    war:                   # applicazioni su JBoss/WildFly: riattiva il deployment precedente
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    ear:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
     cloudrun:              # servizi Cloud Run: traffico sulla revisione precedente
       allowed: true
       enabled: false
@@ -241,6 +249,7 @@ governance:
 #     ecs: [wait_timeout]                                         # servizio, role_arn e credenziali solo dall'envconfig
 #     lambda: [wait_timeout]
 #     cloudrun: [wait_timeout]
+#     jboss: [suspend, suspend_timeout, reload, restart, wait_timeout]   # utente, segreti e server group solo dall'envconfig
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
 
@@ -340,6 +349,13 @@ plugins:
     artifact_types: [lambda]
   cloudrun:                # immagini su servizi Google Cloud Run (parametro project)
     artifact_types: [cloudrun]
+  # Applicazioni war/ear su JBoss EAP e WildFly con l'API HTTP di management (standalone o
+  # domain controller; target: host e porta di management, default 9993 in https).
+  jboss:
+    artifact_types: [war, ear]
+    # ca_file: /etc/manent/jboss-ca.pem
+    # insecure_skip_tls_verify: false
+    # request_timeout: 10m   # durata massima di una chiamata, compreso il caricamento
   # Plugin esterno: binario separato avviato da manent al primo deploy (make plugins).
   # Le altre chiavi, oltre a external, sono la configurazione passata al plugin.
   # remote-copy-ext:

@@ -52,6 +52,7 @@ import (
 	"github.com/joeg-ita/manent/plugins/cloudrun"
 	"github.com/joeg-ita/manent/plugins/container"
 	"github.com/joeg-ita/manent/plugins/ecs"
+	"github.com/joeg-ita/manent/plugins/jboss"
 	"github.com/joeg-ita/manent/plugins/kubernetes"
 	"github.com/joeg-ita/manent/plugins/lambda"
 	"github.com/joeg-ita/manent/plugins/remotecopy"
@@ -137,6 +138,7 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 		ecs.Name:        ecs.Factory,
 		lambda.Name:     lambda.Factory,
 		cloudrun.Name:   cloudrun.Factory,
+		jboss.Name:      jboss.Factory,
 	} {
 		if err := reg.Register(name, f); err != nil {
 			return nil, err

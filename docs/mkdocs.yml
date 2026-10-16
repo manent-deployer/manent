@@ -199,6 +199,7 @@ nav:
       - ecs: plugins/ecs.md
       - lambda: plugins/lambda.md
       - cloudrun: plugins/cloudrun.md
+      - jboss: plugins/jboss.md
       - External plugins: plugins/esterni.md
   - Use cases: casi-uso.md
   - Development: sviluppo.md

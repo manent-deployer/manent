@@ -14,6 +14,10 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Plugin `jboss`: rilascia `war` ed `ear` su JBoss EAP e WildFly (standalone o domain) con
+  l'API HTTP di management, un deployment per versione e cambio atomico; sospensione, reload e
+  restart del server con i parametri booleani `suspend`, `reload` e `restart`; rollback alla
+  versione conservata nel repository dei contenuti.
 - Interfaccia web servita da `manent-server` su `/` (`web/`, React + TypeScript, incorporata con
   `go:embed` da `internal/webui`): deploy con filtri e paginazione, dettaglio con ondate, step e log
   in tempo reale, approvazioni, inventario con promozione e rollback dopo un dry-run, freeze,
