@@ -400,7 +400,9 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		t.Testers = true
 		w.publishRollout(ctx, rs)
 	}
-	if slices.Contains(d.Rollout.ApprovalsBetween, descriptor.StageZero) {
+	// On the first release the intermediate steps, and their approvals, are skipped: with the
+	// governance approvals moved into the rollout they are asked before any traffic.
+	if slices.Contains(d.Rollout.ApprovalsBetween, descriptor.StageZero) || (!hasStable && req.Approval.InRollout() && !d.DryRun) {
 		if err := w.waitRolloutApproval(ctx, id, req, "i test a peso 0", service.RolloutPausedApproval, rs); err != nil {
 			return err
 		}

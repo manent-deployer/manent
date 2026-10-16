@@ -44,7 +44,8 @@ func (w *Worker) notifyChat(ctx dbos.Context, id string, routes []string, msg ch
 				return before, nil
 			}
 			return w.chat.Send(c, route, msg, before)
-		}, dbos.WithStepName("notify:"+route+":"+msg.Event), dbos.WithStepMaxRetries(w.callbackRetries))
+		}, dbos.WithStepName("notify:"+route+":"+msg.Event), dbos.WithStepMaxRetries(w.callbackRetries),
+			dbos.WithStepRetryPredicate(pipeline.Retryable))
 		if err != nil {
 			w.logger.Warn("notifica in chat non inviata", "deployment", id, "route", route, "event", msg.Event, "error", err)
 			ref = before

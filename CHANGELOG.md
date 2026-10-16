@@ -14,6 +14,11 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Casi d'uso UC10–UC14: svuotamento e router su un HAProxy vero con la Data Plane API, rilascio
+  per percentuale di un chart Helm su k3s con la Gateway API, step personalizzati (SSH e HTTP),
+  integrazioni Slack, Teams e ServiceNow (servizio finto `test/usecases/fakes`) e JBoss su un
+  WildFly vero. I casi sono eseguiti in ordine numerico.
+
 - Plugin `jboss`: rilascia `war` ed `ear` su JBoss EAP e WildFly (standalone o domain) con
   l'API HTTP di management, un deployment per versione e cambio atomico; sospensione, reload e
   restart del server con i parametri booleani `suspend`, `reload` e `restart`; rollback alla
@@ -93,6 +98,13 @@ ne usa il contenuto come note.
 - I test dell'engine si eseguono anche su Postgres (`MANENT_TEST_DATABASE_URL`, `make test-postgres`).
 
 ### Corretto
+
+- Plugin `jboss`: il cambio di versione usa `replace-deployment`; con `undeploy` e `deploy` nella
+  stessa composite WildFly non avviava il nuovo deployment con lo stesso runtime-name.
+- `approvals.when: rollout`: il primo rilascio per percentuale, che salta i gradini intermedi,
+  chiede l'approvazione prima del traffico; un punto di approvazione dopo l'ultima ondata non
+  conta più come punto valido.
+- Un webhook di chat non https è un errore permanente, senza tentativi ripetuti.
 
 - L'API (`api`, `serve --no-worker`) e `admin` su un database nuovo creano lo schema DBOS invece
   di fallire se partono prima dei worker.

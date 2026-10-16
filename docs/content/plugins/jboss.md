@@ -11,7 +11,7 @@ Every version becomes a separate deployment, `<application>-<version>.<ext>` (fo
 1. it reads the deployments; if the requested version is already active with the same content it touches nothing, so retries and recoveries do not restart the application;
 2. it uploads the archive (`/management/add-content`) and adds the deployment, **disabled**;
 3. with `suspend: true` it suspends the server: new requests get `503`, and requests in progress have `suspend_timeout` to finish;
-4. it switches versions in a single **composite** operation (undeploy of the active version, deploy of the new one): if the new version fails to start the server rolls back the whole operation and the previous version stays active;
+4. it switches versions with `replace-deployment` (in domain mode for every server group) in a single **composite** operation: if the new version fails to start the server rolls back the whole operation and the previous version stays active;
 5. with `restart: true` it restarts the JVM, with `reload: true` it reloads the server, and in both cases it waits until it is `running` again. Otherwise, if it had suspended it, it resumes the server;
 6. it removes the oldest versions beyond `keep_releases`, never the active one nor the previous one.
 

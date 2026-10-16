@@ -223,3 +223,75 @@ k8s_image() { kube -n "$1" get deploy "$2" -o jsonpath='{.spec.template.spec.con
 
 # k8s_ready <namespace> <deployment>: ready replicas.
 k8s_ready() { kube -n "$1" get deploy "$2" -o jsonpath='{.status.readyReplicas}' 2>/dev/null; }
+
+# chart <app> <version> <digest>: packages the Helm chart <app> (Deployment and Service on port
+# 80, image uc/<app> pinned to the digest, readinessProbe on /healthz) as .work/artifacts/<app>-<version>.tgz,
+# like "helm package", and prints its sha256.
+chart() {
+  d=$(mktemp -d)
+  mkdir -p "$d/$1/templates"
+  printf 'apiVersion: v2\nname: %s\nversion: %s\nappVersion: "%s"\n' "$1" "$2" "$2" >"$d/$1/Chart.yaml"
+  printf 'image: registry:5000/uc/%s@sha256:%s\nreplicas: 2\n' "$1" "$3" >"$d/$1/values.yaml"
+  cat >"$d/$1/templates/web.yaml" <<'YAML'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels: {app: {{ .Chart.Name }}}
+spec:
+  replicas: {{ .Values.replicas }}
+  progressDeadlineSeconds: 25
+  selector:
+    matchLabels: {app: {{ .Chart.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Chart.Name }}}
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.image }}
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 2
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}
+spec:
+  selector: {app: {{ .Chart.Name }}}
+  ports: [{port: 80, targetPort: 8080}]
+YAML
+  COPYFILE_DISABLE=1 tar -czf "$WORK/artifacts/$1-$2.tgz" -C "$d" "$1"
+  rm -rf "$d"
+  sha "$WORK/artifacts/$1-$2.tgz"
+}
+
+# k3s_up: starts registry and k3s and copies the cluster CA where the workers read it.
+k3s_up() {
+  dcp up -d registry k3s >/dev/null 2>&1
+  wait_registry || return 1
+  t=0
+  until kube -n default get serviceaccount default >/dev/null 2>&1; do t=$((t + 1)); [ "$t" -gt 120 ] && return 1; sleep 1; done
+  dcp exec -T k3s cat /var/lib/rancher/k3s/server/tls/server-ca.crt >"$WORK/k3s/ca.crt" 2>/dev/null
+  [ -s "$WORK/k3s/ca.crt" ]
+}
+
+# war <app> <version> [broken|invalid]: creates .work/artifacts/<app>-<version>.war (static
+# files version and healthz) and prints its sha256. "broken" has no healthz (post-test red),
+# "invalid" has a malformed WEB-INF/web.xml (WildFly refuses to deploy it).
+war() {
+  python3 - "$WORK/artifacts/$1-$2.war" "$2" "${3:-}" <<'PY'
+import sys, zipfile
+path, version, kind = sys.argv[1:4]
+with zipfile.ZipFile(path, "w") as z:
+    z.writestr("version", version + "\n")
+    if kind != "broken":
+        z.writestr("healthz", "ok " + version + "\n")
+    if kind == "invalid":
+        z.writestr("WEB-INF/web.xml", "<web-app><servlet>")
+PY
+  sha "$WORK/artifacts/$1-$2.war"
+}

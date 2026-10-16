@@ -1,0 +1,20 @@
+# UC12: custom steps uc12-migrate (command over SSH on one target) and uc12-notify (HTTP with
+# polling), with their parameters and secrets.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  dest_dir: /home/deploy/apps/uc12-db
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+step_params:
+  uc12-migrate: {database: shop}
+  uc12-notify: {hook: release}
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+  - {name: db-pass, ref: file:/keys/db-pass}
+  - {name: hook-token, ref: file:/keys/hook-token}

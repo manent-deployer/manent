@@ -1,0 +1,36 @@
+# UC10: percentage rollout with two slots of targets (eu1-a slot a, eu1-b slot b) and the
+# HAProxy router: manent changes the weights of the uc10-blue servers with the Data Plane API.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a, slot: a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b, slot: b}}
+params:
+  dest_dir: /home/deploy/apps/uc10-blue
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  rollback_command: "true"
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+  - {name: dataplane, ref: file:/keys/dataplane}
+rollout:
+  strategy: traffic
+  traffic:
+    steps: [50, 100]
+    bake: 2s
+  approvalsBetween: ["50"]
+  onFailure: rollback-all
+  health:
+    interval: 1s
+    probes:
+      - {url: "http://{host}:8080/uc10-blue/current/healthz"}
+traffic:
+  router:
+    provider: haproxy
+    settings:
+      dataplane_urls: http://haproxy:5555
+      backend: uc10-blue
+      credentials_secret: dataplane
+      allow_http: "true"

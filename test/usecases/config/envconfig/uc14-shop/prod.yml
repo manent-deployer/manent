@@ -1,0 +1,18 @@
+# UC14: war on WildFly with the jboss plugin (HTTP management API, standalone): one deployment
+# per version with the same runtime-name, switched atomically after suspending the server.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: jboss
+targets:
+  - {host: wildfly, port: 9990, labels: {region: eu-1}}
+params:
+  username: manent
+  password_secret: jboss-pass
+  tls: "false"
+  suspend: "true"
+  suspend_timeout: 10s
+  keep_releases: "3"
+  wait_timeout: 3m
+secrets:
+  - {name: jboss-pass, ref: file:/keys/jboss-pass}
+rollback:
+  enabled: true

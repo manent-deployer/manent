@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
@@ -214,7 +215,8 @@ func (n *Notifier) postWebhook(ctx context.Context, ref string, body any) error 
 	}
 	u = strings.TrimSpace(u)
 	if !strings.HasPrefix(u, "https://") {
-		return errors.New("webhook: è ammesso solo https")
+		// A retry cannot fix the configured URL.
+		return pipeline.Permanent(errors.New("webhook: è ammesso solo https"))
 	}
 	_, err = postJSON(ctx, n.Client, u, nil, body, nil)
 	return err

@@ -18,13 +18,13 @@ for a in "$@"; do
     *) echo "argomento sconosciuto: $a" >&2; exit 2 ;;
   esac
 done
-[ -n "$cases" ] || cases=$(cd cases && ls uc*.sh | sed 's/\.sh$//' | tr '\n' ' ')
+[ -n "$cases" ] || cases=$(cd cases && ls uc*.sh | sort -t c -k2 -n | sed 's/\.sh$//' | tr '\n' ' ')
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -39,12 +39,24 @@ case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) 
   { echo "build dell'interfaccia web fallita (make web)" >&2; exit 1; }
 info "interfaccia web compilata"
 (cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server &&
-  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc)
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc &&
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-fakes" ./test/usecases/fakes)
 info "binari linux/$goarch compilati"
 
 # Lab SSH key: readable by the nonroot user of the manent containers.
 ssh-keygen -q -t ed25519 -N '' -C manent-uc -f "$WORK/keys/id"
 chmod 644 "$WORK/keys/id"
+# Test secrets read through file: references (UC10, UC12, UC13), before API and workers start.
+head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$WORK/keys/spec-key"
+printf 'admin:uc-dataplane' >"$WORK/keys/dataplane"
+printf 's3cret-uc12-db' >"$WORK/keys/db-pass"
+printf 'tok-uc12-hook' >"$WORK/keys/hook-token"
+printf 'xoxb-uc-test' >"$WORK/keys/slack-token"
+printf 'uc-slack-signing' >"$WORK/keys/slack-signing"
+printf 'http://fakes:9100/teams/cab' >"$WORK/keys/teams-webhook"
+printf 'uc-snow' >"$WORK/keys/snow-password"
+printf 'uc-jboss-1' >"$WORK/keys/jboss-pass"
+chmod 644 "$WORK"/keys/*
 
 # Configuration variants for the region workers (UC5).
 region_config() {
@@ -59,8 +71,8 @@ region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
-dc --profile regions --profile containers build -q
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile containers --profile lb --profile jboss build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0
 until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do

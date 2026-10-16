@@ -250,6 +250,9 @@ func (f *fakeServer) exec(o map[string]any, top bool) (any, error) {
 		for _, st := range o["steps"].([]any) {
 			sm := st.(map[string]any)
 			label := sm["operation"].(string) + " " + addr(sm)["deployment"]
+			if sm["operation"] == "replace-deployment" {
+				label = fmt.Sprintf("replace-deployment %s<-%s", sm["name"], sm["to-replace"])
+			}
 			if g := addr(sm)["server-group"]; g != "" {
 				label += " @" + g
 			}
@@ -259,6 +262,21 @@ func (f *fakeServer) exec(o map[string]any, top bool) (any, error) {
 				return nil, err
 			}
 		}
+		return nil, nil
+	case "replace-deployment":
+		// Disables to-replace and enables name, at the root or in a server group.
+		oldD, newD := f.deps[o["to-replace"].(string)], f.deps[o["name"].(string)]
+		if oldD == nil || newD == nil || oldD.runtime != newD.runtime {
+			return nil, fmt.Errorf("replace-deployment non valido: %v", o)
+		}
+		if g != "" {
+			if _, ok := newD.groups[g]; !ok {
+				return nil, fmt.Errorf("deployment %s non assegnato a %s", o["name"], g)
+			}
+			oldD.groups[g], newD.groups[g] = false, true
+			return nil, nil
+		}
+		oldD.enabled, newD.enabled = false, true
 		return nil, nil
 	case "suspend", "resume", "reload", "shutdown", "suspend-servers", "resume-servers", "reload-servers", "restart-servers":
 		return nil, nil
@@ -388,7 +406,7 @@ func TestStandaloneDeployRollbackEPulizia(t *testing.T) {
 	if _, err := p.Deploy(ctx, req2); err != nil {
 		t.Fatal(err)
 	}
-	eq(t, "operazioni 2.0", f.takeOps(), []string{"add-content", "add shop-2.0.war", "suspend", "composite", "  undeploy shop-1.0.war", "  deploy shop-2.0.war", "resume"})
+	eq(t, "operazioni 2.0", f.takeOps(), []string{"add-content", "add shop-2.0.war", "suspend", "composite", "  replace-deployment shop-2.0.war<-shop-1.0.war", "resume"})
 	eq(t, "stato 2.0", f.state(), map[string]string{"shop-1.0.war": "off", "shop-2.0.war": "on"})
 
 	rel, err := p.CurrentRelease(ctx, req2)
@@ -407,7 +425,7 @@ func TestStandaloneDeployRollbackEPulizia(t *testing.T) {
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "1.0", Details: map[string]string{DetailDeployment: "shop-1.0.war"}}); err != nil {
 		t.Fatal(err)
 	}
-	eq(t, "operazioni rollback", f.takeOps(), []string{"suspend", "composite", "  undeploy shop-2.0.war", "  deploy shop-1.0.war", "resume"})
+	eq(t, "operazioni rollback", f.takeOps(), []string{"suspend", "composite", "  replace-deployment shop-1.0.war<-shop-2.0.war", "resume"})
 	eq(t, "stato rollback", f.state(), map[string]string{"shop-1.0.war": "on", "shop-2.0.war": "off"})
 
 	// With keep_releases=2 the 3.0 release keeps only the previous one (1.0).
@@ -433,7 +451,7 @@ func TestCambioFallitoRiprendeIlServer(t *testing.T) {
 	}
 	f.takeOps()
 	f.mu.Lock()
-	f.failNext = "deploy"
+	f.failNext = "replace-deployment"
 	f.mu.Unlock()
 	res, err := p.Deploy(ctx, request(t, srv, "2.0", map[string]string{ParamSuspend: "true", ParamReload: "true"}))
 	if err == nil || !strings.Contains(err.Error(), "WFLYCTL0080") || res.Targets[0].Status != plugin.StatusFailed {
@@ -441,7 +459,7 @@ func TestCambioFallitoRiprendeIlServer(t *testing.T) {
 	}
 	// The server rolls the composite back, 1.0 stays active and the server goes back in service
 	// without reload.
-	eq(t, "operazioni", f.takeOps(), []string{"add-content", "add shop-2.0.war", "suspend", "composite", "  undeploy shop-1.0.war", "  deploy shop-2.0.war", "resume"})
+	eq(t, "operazioni", f.takeOps(), []string{"add-content", "add shop-2.0.war", "suspend", "composite", "  replace-deployment shop-2.0.war<-shop-1.0.war", "resume"})
 	eq(t, "stato", f.state(), map[string]string{"shop-1.0.war": "on", "shop-2.0.war": "off"})
 
 	// The retry reuses the already uploaded deployment.

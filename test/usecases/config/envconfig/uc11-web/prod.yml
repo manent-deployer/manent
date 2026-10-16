@@ -1,0 +1,28 @@
+# UC11: percentage rollout of a Helm chart on k3s with the kubernetes plugin: two slots
+# (<objects>-a and -b) and the weights of the uc11-web HTTPRoute of the Gateway API.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: kubernetes
+targets:
+  - {host: k3s, port: 6443, labels: {region: eu-1}}
+params:
+  namespace: uc11-prod
+  token_secret: kube-token
+  ca_secret: kube-ca
+  wait_timeout: 60s
+  keep_releases: "3"
+  require_image_digest: "true"
+  traffic_router: gateway-api
+  traffic_route: uc11-web
+  traffic_service: uc11-web
+secrets:
+  - {name: kube-token, ref: file:/k3s/token}
+  - {name: kube-ca, ref: file:/k3s/ca.crt}
+rollout:
+  strategy: traffic
+  traffic:
+    steps: [20, 100]
+    bake: 2s
+    testers: {header: "x-canary: always"}
+    scaleDownDelay: 5s
+  approvalsBetween: ["0"]
+  onFailure: rollback-all

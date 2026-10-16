@@ -3,8 +3,8 @@
 //
 // Every version becomes a separate deployment, "<application>-<version>.<ext>", with the same
 // runtime-name (default "<application>.<ext>"): switching from the version in service to the
-// new one is a composite operation (undeploy of the old, deploy of the new) that the server
-// applies atomically. Previous versions stay in the content repository, disabled, up to
+// new one is a replace-deployment inside a composite operation, which the server applies
+// atomically. Previous versions stay in the content repository, disabled, up to
 // keep_releases: the rollback reactivates the previous one without uploading anything.
 //
 // Suspend (graceful), reload and restart of the server are controlled with boolean parameters.
@@ -631,42 +631,49 @@ func (s *session) add(ctx context.Context, path, name, runtimeName string) error
 	return nil
 }
 
-// swap disables the deployments with the same runtime-name and enables target, in a single
-// composite operation: if a step fails the server rolls back the others too.
+// swap activates target in place of the active deployment with the same runtime-name, in a
+// single composite operation: if a step fails the server rolls back the others too. Where a
+// deployment is active the step is replace-deployment: WildFly does not start a deployment
+// enabled with "deploy" right after the "undeploy" of another one with the same runtime-name.
 func (s *session) swap(ctx context.Context, deps map[string]*deployment, runtimeName string, target *deployment) error {
+	// active returns the deployment with runtimeName active in group g ("" = standalone).
+	active := func(g string) string {
+		for _, name := range slices.Sorted(maps.Keys(deps)) {
+			d := deps[name]
+			if d == target || d.RuntimeName != runtimeName {
+				continue
+			}
+			if g == "" && d.Enabled || g != "" && d.Groups[g] {
+				return name
+			}
+		}
+		return ""
+	}
 	var steps []Operation
-	addrs := func(name string) []Address {
-		if !s.domain {
-			return []Address{{{"deployment", name}}}
-		}
-		out := make([]Address, len(s.groups))
-		for i, g := range s.groups {
-			out[i] = Address{{"server-group", g}, {"deployment", name}}
-		}
-		return out
-	}
-	for _, name := range slices.Sorted(maps.Keys(deps)) {
-		d := deps[name]
-		if d == target || d.RuntimeName != runtimeName {
-			continue
-		}
-		for i, a := range addrs(name) {
-			if !s.domain && d.Enabled || s.domain && d.Groups[s.groups[i]] {
-				steps = append(steps, op("undeploy", a))
-			}
+	if !s.domain {
+		if old := active(""); old != "" {
+			steps = append(steps, op("replace-deployment", nil, "name", target.Name, "to-replace", old))
+		} else {
+			steps = append(steps, op("deploy", Address{{"deployment", target.Name}}))
 		}
 	}
-	for i, a := range addrs(target.Name) {
-		if s.domain {
-			if _, ok := target.Groups[s.groups[i]]; !ok {
-				steps = append(steps, op("add", a, "enabled", true))
-				continue
-			}
-			if target.Groups[s.groups[i]] {
-				continue
-			}
+	for _, g := range s.groups {
+		on, assigned := target.Groups[g]
+		switch old := active(g); {
+		case on:
+		case old != "" && assigned:
+			steps = append(steps, op("replace-deployment", Address{{"server-group", g}}, "name", target.Name, "to-replace", old))
+		case old != "":
+			steps = append(steps, op("undeploy", Address{{"server-group", g}, {"deployment", old}}),
+				op("add", Address{{"server-group", g}, {"deployment", target.Name}}, "enabled", true))
+		case assigned:
+			steps = append(steps, op("deploy", Address{{"server-group", g}, {"deployment", target.Name}}))
+		default:
+			steps = append(steps, op("add", Address{{"server-group", g}, {"deployment", target.Name}}, "enabled", true))
 		}
-		steps = append(steps, op("deploy", a))
+	}
+	if len(steps) == 0 {
+		return nil
 	}
 	_, err := s.c.Execute(ctx, op("composite", nil, "steps", steps))
 	if err != nil {

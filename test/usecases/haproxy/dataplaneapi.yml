@@ -1,0 +1,31 @@
+# Data Plane API v3 of the lab HAProxy: a single user (test password), configuration
+# changes applied by reloading the master process (pid in /tmp/haproxy.pid).
+config_version: 2
+name: uc-haproxy
+dataplaneapi:
+  host: 0.0.0.0
+  port: 5555
+  user:
+    - name: admin
+      password: uc-dataplane
+      insecure: true
+  transaction:
+    transaction_dir: /tmp/dataplaneapi/transactions
+  resources:
+    maps_dir: /tmp/dataplaneapi/maps
+    ssl_certs_dir: /tmp/dataplaneapi/certs
+    general_storage_dir: /tmp/dataplaneapi/storage
+    spoe_dir: /tmp/dataplaneapi/spoe
+haproxy:
+  config_file: /usr/local/etc/haproxy/haproxy.cfg
+  haproxy_bin: /usr/local/sbin/haproxy
+  master_runtime: /var/run/haproxy/master.sock
+  reload:
+    reload_delay: 1
+    reload_strategy: custom
+    reload_cmd: sh -c 'kill -USR2 $(cat /tmp/haproxy.pid)'
+    restart_cmd: sh -c 'kill -USR2 $(cat /tmp/haproxy.pid)'
+log_targets:
+  - log_to: stdout
+    log_level: info
+    log_types: [app]

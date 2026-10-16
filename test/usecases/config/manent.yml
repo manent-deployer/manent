@@ -63,6 +63,10 @@ rollback:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
+    war:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
 
 # Test static tokens (uc-<name>-token): only the sha256 in the configuration.
 auth:
@@ -102,6 +106,18 @@ governance:
       applications: [uc8-web]
       environments: [prod]
       approvals: {required: 1, timeout: 1h}
+    # UC10: approvals moved into the percentage rollout (approvals.when: rollout): none before
+    # the deploy, one at the 50% step; the first release asks it before any traffic.
+    - name: uc10-blue-produzione
+      applications: [uc10-blue]
+      environments: [prod]
+      approvals: {required: 1, timeout: 1h, when: rollout}
+    # UC13: in production one approval (also from Slack) and the change approved in ServiceNow.
+    - name: uc13-produzione
+      applications: [uc13-api]
+      environments: [prod]
+      approvals: {required: 1, timeout: 1h}
+      change: {approval: true, timeout: 1h}
     # Approvals between waves (UC4, UC5) need no rule: without one, a single approval is enough
     # and they expire after 72 hours. A rule with approvals would also impose an approval before
     # the deploy, unless approvals.when: rollout.
@@ -121,13 +137,61 @@ governance:
       to: 2100-01-01T00:00:00Z
 
 pipeline:
+  # UC12: signed custom step specs; the lab endpoints are plain http.
+  custom:
+    spec_key_refs: ["file:/keys/spec-key"]
+    allow_http: true
+    insecure_ignore_host_key: true
   steps:
     - {name: secrets, mode: mandatory}
     - {name: artifacts, mode: mandatory, max_retries: 2}
     - {name: qa, mode: optional, enabled: true}
+    # UC12: migration on one target over SSH, before the deploy (turned on by the descriptor).
+    - name: uc12-migrate
+      mode: optional
+      enabled: false
+      type: command
+      max_retries: 1
+      timeout: 2m
+      secrets: [db-pass]
+      ssh: {key_secret: deploy-key}
+      params:
+        database: {pattern: "[a-z][a-z0-9_]{0,30}", required: true}
+      outputs:
+        applied: {pattern: "[0-9]{1,6}"}
+      run:
+        run_once: true
+        command: ["/home/deploy/bin/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+      dry_run:
+        run_once: true
+        command: ["/home/deploy/bin/migrate", "plan", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
     - {name: deploy, mode: mandatory, max_retries: 1}
     - {name: post-test, mode: optional, enabled: false, max_retries: 1}
     - {name: activation, mode: optional, enabled: true}
+    # UC12: notification to an external system that answers with a job to poll.
+    - name: uc12-notify
+      mode: optional
+      enabled: false
+      type: http
+      max_retries: 1
+      timeout: 1m
+      secrets: [hook-token]
+      params:
+        hook: {pattern: "[a-z][a-z0-9-]{0,30}", required: true}
+      outputs:
+        ticket: {pattern: "TCK-[0-9]+", path: "$.ticket"}
+      run:
+        method: POST
+        url: "http://fakes:9100/hooks/{{ .Params.hook }}"
+        auth: {type: bearer, secret: hook-token}
+        json:
+          application: "{{ .Application }}"
+          version: "{{ .Version }}"
+          applied: '{{ index .Outputs "uc12-migrate" "applied" }}'
+        poll:
+          url: "http://fakes:9100/hooks/{{ .Params.hook }}/jobs/{{ .Response.job }}"
+          interval: 1s
+          until: {path: "$.status", in: [done]}
 
 plugins:
   remote-copy:
@@ -138,3 +202,27 @@ plugins:
     artifact_types: [container]
   kubernetes:
     artifact_types: [kubernetes]     # cluster CA from ca_secret (envconfig)
+  jboss:
+    artifact_types: [war]
+
+# UC13: Slack, Teams and ServiceNow emulated by the fakes service (test/usecases/fakes).
+integrations:
+  public_url: http://127.0.0.1:18080
+  language: it
+  slack:
+    api_url: http://fakes:9100/slack/api
+    bot_token_ref: file:/keys/slack-token
+    signing_secret_ref: file:/keys/slack-signing
+    identities:
+      U0CAB: {subject: "oidc:carla", groups: [cab]}
+      U0CI: {subject: "token:ci", groups: [cab]}   # the requester: approver, but self-approval is refused
+  notifications:
+    - {name: uc13-slack, applications: [uc13-api], environments: ["*"], slack: {channel: C0UC13}}
+    - {name: uc13-teams, applications: [uc13-api], environments: [prod], events: [approval], teams: {webhook_ref: file:/keys/teams-webhook}}
+  change:
+    provider: servicenow
+    poll_interval: 2s
+    servicenow:
+      url: http://fakes:9100
+      username: manent
+      password_ref: file:/keys/snow-password

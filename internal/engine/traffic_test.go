@@ -14,6 +14,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/service"
@@ -257,7 +258,7 @@ type trafficEnv struct {
 	ch  *stageChecker
 }
 
-func newTrafficEngine(t *testing.T) trafficEnv {
+func newTrafficEngine(t *testing.T, gov ...Governance) trafficEnv {
 	t.Helper()
 	l := &waveLog{}
 	sl := slog.New(deploylog.NewHandler(slog.NewTextHandler(io.Discard, nil)))
@@ -267,8 +268,13 @@ func newTrafficEngine(t *testing.T) trafficEnv {
 	ch := &stageChecker{}
 	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Traffic, opts.Health = ops, ch
+	var g Governance
+	if len(gov) > 0 {
+		g = gov[0]
+		opts.Governance = g
+	}
 	w := startWorker(t, opts)
-	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: ch, Traffic: ops})
+	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: ch, Traffic: ops, Governance: g})
 	return trafficEnv{e: e, log: l, ops: ops, ch: ch}
 }
 
@@ -386,6 +392,37 @@ func TestPrimoRilascioPerPercentuale(t *testing.T) {
 	want := []string{"prepare", "deploy:w1:cluster-1", "weight:100", "promote", "activation:w1:cluster-1"}
 	if got := env.log.get(); !slices.Equal(got, want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
+	}
+}
+
+// With the governance approvals moved into the rollout, the first release, which skips the
+// intermediate steps and their approvals, asks them before any traffic.
+func TestPrimoRilascioPerPercentualeConApprovazioniNelRollout(t *testing.T) {
+	gov, err := governance.New([]governance.Rule{{Applications: []string{"*"}, Environments: []string{"*"},
+		Approvals: governance.Approvals{Required: 1, Timeout: time.Minute, When: governance.ApprovalsRollout}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := newTrafficEngine(t, gov)
+	env.ops.hasStable = false
+	d := trafficDescriptor("canary-primo-gov")
+	d.Rollout.ApprovalsBetween = []string{"50"}
+	sub, err := env.e.Submit(alice, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
+	if st.Rollout == nil || st.Rollout.Approval == nil || slices.Contains(env.log.get(), "weight:100") {
+		t.Fatalf("atteso l'arresto prima del traffico: %+v %v", st.Rollout, env.log.get())
+	}
+	if err := env.e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(context.Background(), sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := env.log.get(); !slices.Contains(got, "weight:100") {
+		t.Errorf("esecuzioni: %v", got)
 	}
 }
 

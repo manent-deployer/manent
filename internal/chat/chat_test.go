@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/joeg-ita/manent/internal/auth"
+	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/service"
 )
 
@@ -182,7 +183,8 @@ func TestErroriDiInvio(t *testing.T) {
 	if _, err := n.Send(context.Background(), "prod", message(EventStarted), nil); err == nil || !strings.Contains(err.Error(), "invalid_auth") {
 		t.Errorf("token rifiutato: %v", err)
 	}
-	if _, err := n.Send(context.Background(), "audit", message(EventStarted), nil); err == nil || !strings.Contains(err.Error(), "https") {
+	// A non-https webhook is a permanent error: a retry cannot fix the configured URL.
+	if _, err := n.Send(context.Background(), "audit", message(EventStarted), nil); err == nil || !strings.Contains(err.Error(), "https") || !errors.Is(err, pipeline.ErrPermanent) {
 		t.Errorf("webhook non https: %v", err)
 	}
 }

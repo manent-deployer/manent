@@ -456,12 +456,34 @@ func needsApproval(req Request) bool {
 }
 
 // checkRolloutApprovals checks that a deploy with approvals moved into the rollout has a
-// rollout with approval points: otherwise it would start without approvals.
+// rollout with approval points that are actually asked: otherwise it would start without
+// approvals.
 func checkRolloutApprovals(d *descriptor.Descriptor, a *governance.Approvals) error {
-	if !a.InRollout() || (d.Rollout != nil && len(d.Rollout.ApprovalsBetween) > 0) {
+	if !a.InRollout() || rolloutAsksApproval(d.Rollout) {
 		return nil
 	}
-	return errors.New("la regola di governance sposta le approvazioni nel rollout (approvals.when: rollout), ma il deploy non ha un rollout con approvalsBetween")
+	return errors.New("la regola di governance sposta le approvazioni nel rollout (approvals.when: rollout), ma il rollout non ha punti di approvazione in approvalsBetween (dopo un'ondata che non sia l'ultima, o un gradino del traffico)")
+}
+
+// rolloutAsksApproval reports whether the rollout pauses for an approval at least once. After
+// the last wave there is nothing left to approve, so that point does not count. With the
+// traffic strategy every point counts: on the first release, which skips the intermediate
+// steps, runTraffic asks the approval before shifting traffic.
+func rolloutAsksApproval(r *descriptor.Rollout) bool {
+	if r == nil {
+		return false
+	}
+	for _, a := range r.ApprovalsBetween {
+		if r.IsTraffic() {
+			return true
+		}
+		for _, w := range r.Waves[:max(len(r.Waves)-1, 0)] {
+			if w.Name == a {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // freezeMessage describes the freeze blocking a deploy.

@@ -599,9 +599,15 @@ func TestRolloutApprovazioniSpostateNelRollout(t *testing.T) {
 	}
 	env := newWaveEngine(t, "", gov)
 	ctx := context.Background()
-	// Without approval points in the rollout the deploy would start without approvals.
+	// Without approval points in the rollout the deploy would start without approvals; nor
+	// does a point after the last wave count, since it is never asked.
 	if _, err := env.e.Submit(alice, waveDescriptor("ondate-when-senza")); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("atteso ErrInvalidRequest, ottenuto %v", err)
+	}
+	last := waveDescriptor("ondate-when-ultima")
+	last.Rollout.ApprovalsBetween = []string{last.Rollout.Waves[len(last.Rollout.Waves)-1].Name}
+	if _, err := env.e.Submit(alice, last); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("approvazione dopo l'ultima ondata: atteso ErrInvalidRequest, ottenuto %v", err)
 	}
 	d := waveDescriptor("ondate-when")
 	d.Rollout.ApprovalsBetween = []string{"canary"}

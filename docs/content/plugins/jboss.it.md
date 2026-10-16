@@ -11,7 +11,7 @@ Ogni versione diventa un deployment distinto, `<applicazione>-<versione>.<ext>` 
 1. legge i deployment; se la versione richiesta è già attiva con lo stesso contenuto non tocca nulla, quindi retry e recovery non riavviano l'applicazione;
 2. carica l'archivio (`/management/add-content`) e aggiunge il deployment, **disattivato**;
 3. con `suspend: true` sospende il server: le nuove richieste ricevono `503` e quelle in corso hanno `suspend_timeout` per terminare;
-4. cambia versione con una sola operazione **composite** (undeploy della versione attiva, deploy della nuova): se la nuova versione non parte, il server annulla l'intera operazione e la versione precedente resta attiva;
+4. cambia versione con `replace-deployment` (in domain mode per ogni server group) dentro una sola operazione **composite**: se la nuova versione non parte, il server annulla l'intera operazione e la versione precedente resta attiva;
 5. con `restart: true` riavvia la JVM, con `reload: true` ricarica il server, e in entrambi i casi attende che torni `running`. Altrimenti, se l'aveva sospeso, lo rimette in servizio;
 6. rimuove le versioni più vecchie oltre `keep_releases`, mai quella attiva né la precedente.
 
