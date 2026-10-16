@@ -15,20 +15,20 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// ChatNotifier invia le notifiche in chat a una destinazione per nome (internal/chat).
+// ChatNotifier sends chat notifications to a destination by name (internal/chat).
 type ChatNotifier interface {
-	// Wants indica se la destinazione riceve l'evento.
+	// Wants reports whether the destination receives the event.
 	Wants(route, event string) bool
-	// Send invia il messaggio o, con prev, aggiorna quello già inviato.
+	// Send sends the message or, with prev, updates the one already sent.
 	Send(ctx context.Context, route string, msg chat.Message, prev *chat.Ref) (*chat.Ref, error)
 }
 
-// notifyChat invia il messaggio a ogni destinazione del deploy, ciascuna in uno step DBOS
-// (notify:<destinazione>:<evento>). Lo step c'è sempre, per ogni destinazione registrata
-// nella richiesta: se la destinazione non vuole l'evento, o non è più configurata, non invia
-// nulla. Così la sequenza degli step non dipende dalla configurazione letta durante una
-// recovery. prev sono i messaggi da aggiornare; restituisce i riferimenti dei messaggi inviati.
-// Un invio fallito viene registrato e non ferma il workflow.
+// notifyChat sends the message to every destination of the deploy, each in a DBOS step
+// (notify:<destination>:<event>). The step always exists for every destination recorded in
+// the request: if the destination does not want the event, or is no longer configured, it
+// sends nothing. So the step sequence does not depend on the configuration read during a
+// recovery. prev are the messages to update; it returns the references of the sent messages.
+// A failed send is logged and does not stop the workflow.
 func (w *Worker) notifyChat(ctx dbos.Context, id string, routes []string, msg chat.Message, prev map[string]*chat.Ref) map[string]*chat.Ref {
 	if len(routes) == 0 {
 		return nil
@@ -54,7 +54,7 @@ func (w *Worker) notifyChat(ctx dbos.Context, id string, routes []string, msg ch
 	return refs
 }
 
-// chatMessage prepara il messaggio di un deploy.
+// chatMessage prepares the message of a deploy.
 func (w *Worker) chatMessage(id string, req Request, event string) chat.Message {
 	d := req.Descriptor
 	return chat.Message{
@@ -71,7 +71,7 @@ func chatChange(t *ChangeTicket) *chat.Change {
 	return &chat.Change{Number: t.Number, URL: t.URL}
 }
 
-// changeRequest descrive il deploy al sistema di change management.
+// changeRequest describes the deploy to the change management system.
 func (w *Worker) changeRequest(id string, req Request) change.Request {
 	d := req.Descriptor
 	r := change.Request{
@@ -89,7 +89,7 @@ func ticketOf(t change.Ticket) *ChangeTicket {
 	return &ChangeTicket{ID: t.ID, Number: t.Number, URL: t.URL, Approval: t.Approval}
 }
 
-// changeErr rende permanenti gli errori del sistema ITSM che un nuovo tentativo non risolve.
+// changeErr makes permanent the ITSM errors a retry cannot fix.
 func changeErr(err error) error {
 	if errors.Is(err, change.ErrPermanent) {
 		return pipeline.Permanent(err)
@@ -97,12 +97,12 @@ func changeErr(err error) error {
 	return err
 }
 
-// errNoChange è l'errore di un deploy che richiede un change senza sistema configurato.
+// errNoChange is the error of a deploy requiring a change without a configured system.
 var errNoChange = pipeline.Permanent(errors.New("il deploy richiede un ticket di change ma integrations.change non è configurato su questo worker"))
 
-// openChange apre (o ritrova) il ticket di change del deploy e lo porta in implementazione,
-// nello step DBOS change:open. Il deploy non parte senza ticket. Il ticket è subito visibile
-// nello stato del deploy.
+// openChange opens (or finds) the deploy's change ticket and moves it to implementation, in
+// the change:open DBOS step. The deploy does not start without a ticket. The ticket is
+// immediately visible in the deploy state.
 func (w *Worker) openChange(ctx dbos.Context, id string, req Request) (*ChangeTicket, error) {
 	t, err := dbos.RunAsStep(ctx, func(c context.Context) (change.Ticket, error) {
 		if w.change == nil {
@@ -113,7 +113,7 @@ func (w *Worker) openChange(ctx dbos.Context, id string, req Request) (*ChangeTi
 			return t, changeErr(err)
 		}
 		if err := w.change.Start(c, t); err != nil {
-			// Il ticket esiste: un cambio di stato rifiutato non blocca il deploy.
+			// The ticket exists: a rejected state change does not block the deploy.
 			w.logger.WarnContext(c, "avvio del change non registrato", "deployment", id, "change", t.Number, "error", err)
 		}
 		w.logger.InfoContext(c, "change aperto", "deployment", id, "change", t.Number, "system", w.change.Name())
@@ -131,8 +131,8 @@ func (w *Worker) openChange(ctx dbos.Context, id string, req Request) (*ChangeTi
 	return ct, nil
 }
 
-// closeChange registra l'esito del deploy nel ticket e lo chiude, nello step change:close.
-// Un errore viene registrato: il deploy è già concluso.
+// closeChange records the deploy outcome in the ticket and closes it, in the change:close
+// step. An error is logged: the deploy has already ended.
 func (w *Worker) closeChange(ctx dbos.Context, id string, t *ChangeTicket, final callback.Event) {
 	_, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 		if w.change == nil {
@@ -146,7 +146,7 @@ func (w *Worker) closeChange(ctx dbos.Context, id string, t *ChangeTicket, final
 	}
 }
 
-// ticketFor ricostruisce il ticket del sistema ITSM dal ticket del deploy.
+// ticketFor rebuilds the ITSM ticket from the deploy's ticket.
 func (w *Worker) ticketFor(t *ChangeTicket) change.Ticket {
 	return change.Ticket{ID: t.ID, Number: t.Number, URL: t.URL, Approval: t.Approval}
 }

@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
-// I colori sono variabili CSS (src/index.css), con una palette scura (default, come il sito
-// della documentazione) e una chiara: i componenti usano solo questi nomi.
+// Colors are CSS variables (src/index.css), with a dark palette (default, like the
+// documentation site) and a light one: components use only these names.
 const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
 export default {

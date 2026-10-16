@@ -4,10 +4,10 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// Il contratto del servizio sta in internal/service, senza dipendenze da DBOS, così il client
-// non le eredita. Gli alias permettono al codice del server di continuare a usare i nomi di engine.
+// The service contract lives in internal/service, without DBOS dependencies, so the client
+// does not inherit them. The aliases let server code keep using the engine names.
 
-// Stati, tipi di deploy ed esiti delle approvazioni.
+// States, deploy kinds and approval outcomes.
 const (
 	StateScheduled         = service.StateScheduled
 	StateAwaitingApproval  = service.StateAwaitingApproval
@@ -26,7 +26,7 @@ const (
 	ApprovalExpired  = service.ApprovalExpired
 )
 
-// Stati dei workflow (gli stessi di DBOS).
+// Workflow states (the same as DBOS).
 const (
 	StatePending   = service.StatePending
 	StateEnqueued  = service.StateEnqueued
@@ -36,14 +36,14 @@ const (
 	StateCancelled = service.StateCancelled
 )
 
-// Errori del servizio.
+// Service errors.
 var (
 	ErrNotFound       = service.ErrNotFound
 	ErrInvalidRequest = service.ErrInvalidRequest
 	ErrForbidden      = service.ErrForbidden
 )
 
-// Terminal indica gli stati finali di un deploy.
+// Terminal reports the final states of a deploy.
 var Terminal = service.Terminal
 
 type (

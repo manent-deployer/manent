@@ -1,5 +1,5 @@
-// Package pluginutil raccoglie le funzioni comuni ai plugin dei servizi cloud gestiti: tipi di
-// artefatto dalla configurazione, durate e versioni.
+// Package pluginutil groups the functions shared by the managed cloud service plugins:
+// artifact types from the configuration, durations and versions.
 package pluginutil
 
 import (
@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// VersionRe sono le versioni ammesse: diventano etichette, tag e annotazioni.
+// VersionRe are the allowed versions: they become labels, tags and annotations.
 var VersionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$`)
 
-// ArtifactTypes legge artifact_types dalla configurazione del plugin, con il default indicato.
+// ArtifactTypes reads artifact_types from the plugin configuration, with the given default.
 func ArtifactTypes(cfg map[string]any, def ...string) ([]string, error) {
 	raw, ok := cfg["artifact_types"]
 	if !ok {
@@ -33,7 +33,7 @@ func ArtifactTypes(cfg map[string]any, def ...string) ([]string, error) {
 	return types, nil
 }
 
-// Duration legge il parametro key come durata positiva; def se assente.
+// Duration reads parameter key as a positive duration; def if absent.
 func Duration(params map[string]string, key string, def time.Duration) (time.Duration, error) {
 	raw := params[key]
 	if raw == "" {

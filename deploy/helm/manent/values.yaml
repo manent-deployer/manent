@@ -1,22 +1,22 @@
-# Valori di default del chart di manent. Vedi docs/content/operazioni/installazione.md.
+# Default values of the manent chart. See docs/content/operazioni/installazione.md.
 
 image:
-  # Immagine del server (manent-server, con anche il client manent).
+  # Server image (manent-server, also with the manent client).
   repository: ghcr.io/joeg-ita/manent-server
-  # Default: appVersion del chart.
+  # Default: the chart's appVersion.
   tag: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
-# Database di sistema DBOS (Postgres). L'URL, con la password, sta in un Secret esistente:
+# DBOS system database (Postgres). The URL, with the password, lives in an existing Secret:
 #   kubectl create secret generic manent-db --from-literal=url='postgres://manent:...@pg:5432/manent'
 database:
   existingSecret: manent-db
   key: url
 
-# Configurazione di manent (manent.yml), resa in una ConfigMap. dbos.database_url arriva dal
-# Secret tramite DBOS_SYSTEM_DATABASE_URL; executor_id dal nome del pod (DBOS__VMID).
-# observability.listen è fissato a :9090 dal chart, per le sonde e le metriche dei worker.
+# manent configuration (manent.yml), rendered into a ConfigMap. dbos.database_url comes from
+# the Secret through DBOS_SYSTEM_DATABASE_URL; executor_id from the pod name (DBOS__VMID).
+# observability.listen is fixed to :9090 by the chart, for the workers' probes and metrics.
 config:
   app:
     name: manent
@@ -32,11 +32,11 @@ config:
   recovery:
     heartbeat_interval: 15s
     stale_after: 1m
-    # Con worker in StatefulSet un pod rimosso (scale down) non torna: i suoi workflow in
-    # sospeso vengono ripresi da un altro worker dopo questo tempo.
+    # With workers in a StatefulSet a removed pod (scale down) does not come back: its pending
+    # workflows are resumed by another worker after this time.
     auto_recover_after: 10m
   retention:
-    max_age: 2160h   # 90 giorni
+    max_age: 2160h   # 90 days
     keep_releases: 10
   observability:
     metrics: true
@@ -44,7 +44,7 @@ config:
 api:
   enabled: true
   replicas: 2
-  # Argomenti di manent-server: solo API, l'esecuzione è dei worker.
+  # manent-server arguments: API only, execution belongs to the workers.
   args: ["api"]
   service:
     type: ClusterIP
@@ -56,16 +56,16 @@ api:
 
 worker:
   replicas: 2
-  # Il nome del pod (manent-worker-0, -1, ...) è l'executor_id: stabile tra i riavvii, così
-  # ogni worker riprende i propri deploy interrotti.
+  # The pod name (manent-worker-0, -1, ...) is the executor_id: stable across restarts, so
+  # every worker resumes its own interrupted deploys.
   podManagementPolicy: Parallel
-  # Deve superare dbos.drain_timeout: il worker smette di prelevare deploy e attende quelli in corso.
+  # Must exceed dbos.drain_timeout: the worker stops dequeuing deploys and waits for the running ones.
   terminationGracePeriodSeconds: 360
   resources: {}
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  # Directory di lavoro per gli artefatti scaricati (non serve che sia condivisa).
+  # Working directory for downloaded artifacts (it need not be shared).
   workdir:
     sizeLimit: 10Gi
 
@@ -78,8 +78,8 @@ serviceAccount:
   name: ""
   annotations: {}
 
-# Variabili, volumi e mount aggiuntivi per API e worker: segreti (token Vault, chiavi SSH,
-# token Consul, CA), file dei token dell'API, known_hosts.
+# Extra variables, volumes and mounts for API and workers: secrets (Vault token, SSH keys,
+# Consul token, CAs), API token files, known_hosts.
 extraEnv: []
 extraVolumes: []
 extraVolumeMounts: []
@@ -95,7 +95,7 @@ securityContext:
   capabilities:
     drop: ["ALL"]
 
-# ServiceMonitor del Prometheus Operator per API e worker.
+# Prometheus Operator ServiceMonitor for API and workers.
 serviceMonitor:
   enabled: false
   interval: 30s

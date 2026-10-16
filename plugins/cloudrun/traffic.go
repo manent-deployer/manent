@@ -13,22 +13,22 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Rilasci per percentuale: le revisioni sono gli slot. La candidata è una revisione con nome
-// fisso (derivato dal deploy) creata senza traffico; il traffico del servizio si divide tra la
-// revisione stabile e la candidata, e i tester la raggiungono con l'URL del suo tag.
+// Percentage rollouts: revisions are the slots. The candidate is a revision with a fixed name
+// (derived from the deploy) created without traffic; the service traffic is split between
+// the stable revision and the candidate, and testers reach it through its tag URL.
 
-// stateStable è la chiave dello stato con la revisione stabile di una region ("stable@<region>").
+// stateStable is the state key with the stable revision of a region ("stable@<region>").
 const stateStable = "stable"
 
 func stateKey(k string, t plugin.Target) string { return k + "@" + t.Host }
 
-// candidateRevision è il nome della revisione candidata: <servizio>-m<hash del deploy>.
+// candidateRevision is the name of the candidate revision: <service>-m<deploy hash>.
 func candidateRevision(req *plugin.Request) string {
 	sum := sha256.Sum256([]byte(req.DeploymentID))
 	return serviceName(req) + "-m" + hex.EncodeToString(sum[:])[:10]
 }
 
-// PrepareSlots implementa plugin.SlotDeployer: registra la revisione che riceve il traffico.
+// PrepareSlots implements plugin.SlotDeployer: it records the revision receiving traffic.
 func (p *Plugin) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	state := map[string]string{}
 	has := false
@@ -58,7 +58,7 @@ func stableOf(req *plugin.Request, t plugin.Target) string {
 	return req.Traffic.State[stateKey(stateStable, t)]
 }
 
-// split restituisce il traffico tra stabile e candidata, con il tag dei tester sulla candidata.
+// split returns the traffic between stable and candidate, with the testers' tag on the candidate.
 func split(req *plugin.Request, stable, cand string, percent int) []any {
 	c := Object{"type": trafficRevision, "revision": cand, "percent": percent}
 	if req.Traffic != nil && req.Traffic.TesterTag != "" {
@@ -71,8 +71,8 @@ func split(req *plugin.Request, stable, cand string, percent int) []any {
 	return []any{Object{"type": trafficRevision, "revision": stable, "percent": 100 - percent}, c}
 }
 
-// DeployCandidate implementa plugin.SlotDeployer: crea la revisione candidata con il traffico
-// fermo sulla revisione stabile.
+// DeployCandidate implements plugin.SlotDeployer: it creates the candidate revision with
+// traffic held on the stable revision.
 func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, err := plugin.ImageReference(req.Artifact)
 	if err != nil {
@@ -119,8 +119,8 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 			return details, err
 		}
 	}
-	// L'operazione conclusa senza errori garantisce una revisione pronta; si verifica solo
-	// che esista con il nome atteso.
+	// An operation ended without errors guarantees a ready revision; only check that it exists
+	// with the expected name.
 	if _, err := s.api.GetRevision(ctx, s.name+"/revisions/"+cand); err != nil {
 		return details, fmt.Errorf("lettura della revisione %s: %w", cand, err)
 	}
@@ -128,7 +128,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	return details, nil
 }
 
-// setTraffic aggiorna il traffico del servizio e attende l'operazione.
+// setTraffic updates the service traffic and waits for the operation.
 func (p *Plugin) setTraffic(ctx context.Context, s *state, req *plugin.Request, traffic []any) error {
 	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -141,7 +141,7 @@ func (p *Plugin) setTraffic(ctx context.Context, s *state, req *plugin.Request, 
 	return p.wait(ctx, s.api, op, timeout)
 }
 
-// SetCandidateWeight implementa plugin.TrafficRouter.
+// SetCandidateWeight implements plugin.TrafficRouter.
 func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
 	cand := candidateRevision(req)
 	for _, t := range req.Targets {
@@ -160,7 +160,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 	return nil
 }
 
-// revisionPercent legge dallo stato del servizio la quota di traffico di una revisione.
+// revisionPercent reads a revision's traffic share from the service status.
 func revisionPercent(svc Object, rev string) (int, bool) {
 	statuses, _ := svc["trafficStatuses"].([]any)
 	total, found := 0.0, false
@@ -180,7 +180,7 @@ func revisionPercent(svc Object, rev string) (int, bool) {
 	return int(math.Round(total)), found
 }
 
-// CandidateWeight implementa plugin.TrafficRouter.
+// CandidateWeight implements plugin.TrafficRouter.
 func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
 	cand := candidateRevision(req)
 	weight := -2
@@ -198,8 +198,8 @@ func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 	return max(weight, 0), nil
 }
 
-// RouteTesters implementa plugin.TesterRouter: restituisce l'URL del tag della candidata,
-// assegnato quando la revisione è stata creata.
+// RouteTesters implements plugin.TesterRouter: it returns the URL of the candidate's tag,
+// assigned when the revision was created.
 func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	if req.Traffic == nil || req.Traffic.TesterTag == "" {
 		return nil, errors.New("rollout.traffic.testers.tag obbligatorio con il plugin cloudrun")
@@ -226,8 +226,8 @@ func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[str
 	return out, nil
 }
 
-// PromoteCandidate implementa plugin.SlotDeployer: tutto il traffico all'ultima revisione,
-// come dopo un deploy normale (il tag dei tester viene tolto).
+// PromoteCandidate implements plugin.SlotDeployer: all traffic to the latest revision, as
+// after a normal deploy (the testers' tag is removed).
 func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
 	for _, t := range req.Targets {
 		s, err := p.read(ctx, t, req)
@@ -244,7 +244,7 @@ func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) erro
 	return nil
 }
 
-// RevertCandidate implementa plugin.SlotDeployer: tutto il traffico alla revisione stabile.
+// RevertCandidate implements plugin.SlotDeployer: all traffic to the stable revision.
 func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error {
 	var errs []error
 	for _, t := range req.Targets {
@@ -264,6 +264,6 @@ func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error
 	return errors.Join(errs...)
 }
 
-// RetirePrevious implementa plugin.SlotDeployer: le revisioni senza traffico scalano a zero da
-// sole, quindi non c'è nulla da fare.
+// RetirePrevious implements plugin.SlotDeployer: revisions without traffic scale to zero by
+// themselves, so there is nothing to do.
 func (p *Plugin) RetirePrevious(context.Context, *plugin.Request) error { return nil }

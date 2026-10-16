@@ -20,18 +20,18 @@ import (
 	"time"
 )
 
-// FileOptions configura il file di audit.
+// FileOptions configures the audit file.
 type FileOptions struct {
-	// MaxSize è la dimensione in byte oltre cui il file viene ruotato (0 = nessuna rotazione).
+	// MaxSize is the size in bytes beyond which the file is rotated (0 = no rotation).
 	MaxSize int64
-	// Key, se presente, rende la catena un HMAC: senza la chiave non può essere ricalcolata.
+	// Key, if set, makes the chain an HMAC: without the key it cannot be recomputed.
 	Key []byte
 }
 
-// FileRecorder aggiunge ogni voce come riga JSON a un file aperto in sola aggiunta. Le voci
-// formano una catena: ognuna riporta l'hash della precedente (prev_hash) e il proprio (hash),
-// calcolato sulla riga senza il campo hash. Una riga modificata, inserita o cancellata rompe la
-// catena e viene rilevata da Verify. La catena prosegue tra i file ruotati.
+// FileRecorder appends every entry as a JSON line to a file opened append-only. Entries form
+// a chain: each one carries the hash of the previous one (prev_hash) and its own (hash),
+// computed on the line without the hash field. A changed, inserted or deleted line breaks the
+// chain and is detected by Verify. The chain continues across rotated files.
 type FileRecorder struct {
 	mu   sync.Mutex
 	path string
@@ -41,8 +41,8 @@ type FileRecorder struct {
 	prev string
 }
 
-// NewFileRecorder apre (o crea con permessi 0600) il file di audit e riprende la catena
-// dall'ultima voce presente.
+// NewFileRecorder opens (or creates with 0600 permissions) the audit file and resumes the
+// chain from its last entry.
 func NewFileRecorder(path string, opts FileOptions) (*FileRecorder, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
@@ -61,7 +61,7 @@ func NewFileRecorder(path string, opts FileOptions) (*FileRecorder, error) {
 	return &FileRecorder{path: path, opts: opts, file: f, size: st.Size(), prev: prev}, nil
 }
 
-// lastHash legge l'hash dell'ultima voce del file ("" se il file è vuoto o senza catena).
+// lastHash reads the hash of the last entry of the file ("" if the file is empty or has no chain).
 func lastHash(f *os.File, size int64) (string, error) {
 	const tail = 64 << 10
 	off := max(size-tail, 0)
@@ -81,7 +81,7 @@ func lastHash(f *os.File, size int64) (string, error) {
 	return hash, nil
 }
 
-// Record completa la voce con la catena, la scrive e la sincronizza su disco.
+// Record completes the entry with the chain, writes it and syncs it to disk.
 func (r *FileRecorder) Record(_ context.Context, e Entry) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -109,10 +109,10 @@ func (r *FileRecorder) Record(_ context.Context, e Entry) error {
 	return nil
 }
 
-// rotateSuffix è il formato del suffisso dei file ruotati: l'ordine alfabetico è cronologico.
+// rotateSuffix is the suffix format of rotated files: alphabetical order is chronological.
 const rotateSuffix = "20060102T150405.000000000Z"
 
-// rotate rinomina il file corrente con il suffisso temporale e ne apre uno nuovo.
+// rotate renames the current file with the time suffix and opens a new one.
 func (r *FileRecorder) rotate() error {
 	if err := r.file.Close(); err != nil {
 		return err
@@ -128,14 +128,14 @@ func (r *FileRecorder) rotate() error {
 	return nil
 }
 
-// Close chiude il file.
+// Close closes the file.
 func (r *FileRecorder) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.file.Close()
 }
 
-// chainHash è lo sha256 (o l'HMAC-SHA256 con la chiave) della riga senza il campo hash.
+// chainHash is the sha256 (or HMAC-SHA256 with the key) of the line without the hash field.
 func chainHash(key, body []byte) string {
 	if len(key) > 0 {
 		m := hmac.New(sha256.New, key)
@@ -146,10 +146,10 @@ func chainHash(key, body []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// hashSuffix è il campo hash con cui termina ogni riga.
+// hashSuffix is the hash field every line ends with.
 var hashSuffix = regexp.MustCompile(`,"hash":"([0-9a-f]{64})"\}$`)
 
-// splitHash separa una riga nel corpo su cui è calcolato l'hash e nell'hash.
+// splitHash splits a line into the body the hash is computed on and the hash.
 func splitHash(line []byte) (body []byte, hash string, ok bool) {
 	m := hashSuffix.FindSubmatchIndex(line)
 	if m == nil {
@@ -159,18 +159,18 @@ func splitHash(line []byte) (body []byte, hash string, ok bool) {
 	return body, string(line[m[2]:m[3]]), true
 }
 
-// Report è l'esito di Verify.
+// Report is the result of Verify.
 type Report struct {
 	Files   []string `json:"files"`
 	Entries int      `json:"entries"`
-	// Anchor è il prev_hash della prima voce verificata: vuoto se la catena parte dall'inizio,
-	// altrimenti va confrontato con l'ultima voce del file precedente (es. archiviato).
+	// Anchor is the prev_hash of the first verified entry: empty if the chain starts from the
+	// beginning, otherwise it must match the last entry of the previous (e.g. archived) file.
 	Anchor string `json:"anchor,omitempty"`
-	// Last è l'hash dell'ultima voce, da confrontare con la copia nel SIEM o in un archivio.
+	// Last is the hash of the last entry, to compare with the copy in the SIEM or an archive.
 	Last string `json:"last,omitempty"`
 }
 
-// Files restituisce il file di audit preceduto dai suoi file ruotati, in ordine cronologico.
+// Files returns the audit file preceded by its rotated files, in chronological order.
 func Files(path string) ([]string, error) {
 	rotated, err := filepath.Glob(path + ".*")
 	if err != nil {
@@ -184,8 +184,8 @@ func Files(path string) ([]string, error) {
 	return append(rotated, path), nil
 }
 
-// Verify ricalcola la catena dei file indicati, in ordine cronologico, e restituisce il
-// primo punto in cui è rotta.
+// Verify recomputes the chain of the given files, in chronological order, and returns the
+// first point where it is broken.
 func Verify(paths []string, key []byte) (Report, error) {
 	rep := Report{Files: paths}
 	prev, first := "", true

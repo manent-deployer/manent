@@ -13,11 +13,11 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Jira crea un'issue per ogni deploy con l'API REST v2 (Jira Cloud e Data Center). L'issue
-// del deploy ha l'etichetta "manent-<id del deploy>"; l'approvazione si ricava dallo stato.
+// Jira creates an issue for every deploy with the REST API v2 (Jira Cloud and Data Center).
+// The deploy's issue has the label "manent-<deploy id>"; approval is derived from the status.
 type Jira struct {
 	URL string
-	// Username (con TokenRef): basic, per Jira Cloud. Senza: TokenRef è un PAT (bearer).
+	// Username (with TokenRef): basic, for Jira Cloud. Without it: TokenRef is a PAT (bearer).
 	Username         string
 	TokenRef         string
 	Project          string
@@ -25,18 +25,18 @@ type Jira struct {
 	Fields           map[string]any
 	ApprovedStatuses []string
 	RejectedStatuses []string
-	// Transitions per nome: start, success, failure.
+	// Transitions by name: start, success, failure.
 	Transitions map[string]string
 	Secrets     secrets.Provider
 	Client      HTTPDoer
 }
 
-// Name restituisce il nome del sistema.
+// Name returns the system name.
 func (j *Jira) Name() string { return "jira" }
 
 var labelRe = regexp.MustCompile(`[^A-Za-z0-9._-]`)
 
-// Label è l'etichetta che lega l'issue al deploy.
+// Label is the label that ties the issue to the deploy.
 func Label(deploymentID string) string {
 	return "manent-" + labelRe.ReplaceAllString(deploymentID, "-")
 }
@@ -80,7 +80,7 @@ func containsFold(list []string, s string) bool {
 	return slices.ContainsFunc(list, func(e string) bool { return strings.EqualFold(e, s) })
 }
 
-// search cerca l'issue del deploy. Jira Cloud espone /search/jql, Jira Data Center /search.
+// search looks for the deploy's issue. Jira Cloud exposes /search/jql, Jira Data Center /search.
 func (j *Jira) search(ctx context.Context, auth func(*http.Request), deploymentID string) (*jiraIssue, error) {
 	q := url.Values{
 		"jql":        {fmt.Sprintf(`project = "%s" AND labels = "%s" ORDER BY created DESC`, j.Project, Label(deploymentID))},
@@ -103,7 +103,7 @@ func (j *Jira) search(ctx context.Context, auth func(*http.Request), deploymentI
 	return &res.Issues[0], nil
 }
 
-// Open cerca l'issue del deploy e, se manca, la crea.
+// Open looks for the deploy's issue and creates it if missing.
 func (j *Jira) Open(ctx context.Context, r Request) (Ticket, error) {
 	auth, err := j.auth(ctx)
 	if err != nil {
@@ -133,7 +133,7 @@ func (j *Jira) Open(ctx context.Context, r Request) (Ticket, error) {
 	return j.Refresh(ctx, Ticket{ID: created.ID, Number: created.Key})
 }
 
-// Refresh rilegge lo stato dell'issue.
+// Refresh reads the issue status again.
 func (j *Jira) Refresh(ctx context.Context, t Ticket) (Ticket, error) {
 	auth, err := j.auth(ctx)
 	if err != nil {
@@ -146,8 +146,8 @@ func (j *Jira) Refresh(ctx context.Context, t Ticket) (Ticket, error) {
 	return j.ticket(i), nil
 }
 
-// transition esegue la transizione con il nome configurato per l'evento; nessuna se non
-// configurata o già eseguita (l'issue è già nello stato di destinazione).
+// transition runs the transition configured for the event; none if not configured or already
+// done (the issue is already in the target status).
 func (j *Jira) transition(ctx context.Context, t Ticket, event string) error {
 	name := j.Transitions[event]
 	if name == "" {
@@ -183,7 +183,7 @@ func (j *Jira) transition(ctx context.Context, t Ticket, event string) error {
 	return fmt.Errorf("%w: transizione %q non disponibile per %s nello stato %q", ErrPermanent, name, t.Number, cur.State)
 }
 
-// Start esegue la transizione di avvio.
+// Start runs the start transition.
 func (j *Jira) Start(ctx context.Context, t Ticket) error {
 	if err := j.transition(ctx, t, "start"); err != nil {
 		return fmt.Errorf("avvio dell'issue %s: %w", t.Number, err)
@@ -191,7 +191,7 @@ func (j *Jira) Start(ctx context.Context, t Ticket) error {
 	return nil
 }
 
-// Close aggiunge un commento con l'esito ed esegue la transizione di chiusura.
+// Close adds a comment with the outcome and runs the closing transition.
 func (j *Jira) Close(ctx context.Context, t Ticket, o Outcome) error {
 	auth, err := j.auth(ctx)
 	if err != nil {

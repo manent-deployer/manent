@@ -1,6 +1,6 @@
 import type { MessageKey } from "./en";
 
-// Testi dell'interfaccia in italiano.
+// Interface texts in Italian.
 export const it: Record<MessageKey, string> = {
   "app.skip": "Vai al contenuto",
   "app.loading": "Caricamento…",

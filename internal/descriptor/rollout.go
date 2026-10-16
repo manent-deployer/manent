@@ -12,119 +12,119 @@ import (
 	"github.com/joeg-ita/manent/internal/labels"
 )
 
-// Comportamenti di un rollout quando un passo fallisce.
+// Behaviors of a rollout when a pass fails.
 const (
-	// OnFailureStop ferma il rollout: i passi già superati restano sulla nuova versione.
+	// OnFailureStop stops the rollout: passes already done stay on the new version.
 	OnFailureStop = "stop"
-	// OnFailureRollbackWave riporta indietro solo il passo fallito.
+	// OnFailureRollbackWave rolls back only the failed pass.
 	OnFailureRollbackWave = "rollback-wave"
-	// OnFailureRollbackAll riporta indietro tutti i passi, in ordine inverso.
+	// OnFailureRollbackAll rolls back all passes, in reverse order.
 	OnFailureRollbackAll = "rollback-all"
 )
 
-// Divisioni di un'ondata in passi.
+// Ways to split a wave into passes.
 const (
 	ByNone   = ""
 	ByAZ     = "az"
 	ByRegion = "region"
 )
 
-// Rollout è la strategia di rilascio a ondate: i target sono divisi in ondate (selettori sulle
-// etichette), ogni ondata in passi per AZ o region, e tra un passo e l'altro c'è un tempo di
-// osservazione con un health gate.
+// Rollout is the wave release strategy: targets are split into waves (label selectors),
+// every wave into passes per AZ or region, and between passes there is an observation time
+// with a health gate.
 type Rollout struct {
-	// Strategy è waves (default: ondate di target) o traffic (versione affiancata e traffico
-	// spostato per percentuali).
+	// Strategy is waves (default: waves of targets) or traffic (side-by-side version and traffic
+	// shifted by percentages).
 	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
-	// Traffic sono i gradini della strategia traffic.
+	// Traffic are the steps of the traffic strategy.
 	Traffic *TrafficRollout `json:"traffic,omitempty" yaml:"traffic,omitempty"`
-	// Regions è l'ordine delle region; quelle non elencate seguono in ordine alfabetico.
+	// Regions is the region order; unlisted ones follow in alphabetical order.
 	Regions []string `json:"regions,omitempty" yaml:"regions,omitempty"`
 	Waves   []Wave   `json:"waves,omitempty" yaml:"waves,omitempty"`
-	// MaxUnavailable sono i target aggiornati insieme in un passo: un numero o una
-	// percentuale ("25%") dei target del passo. Default 1.
+	// MaxUnavailable are the targets updated together in a pass: a number or a percentage
+	// ("25%") of the pass targets. Default 1.
 	MaxUnavailable string `json:"maxUnavailable,omitempty" yaml:"maxUnavailable,omitempty"`
-	// OnFailure è stop (default), rollback-wave o rollback-all.
+	// OnFailure is stop (default), rollback-wave or rollback-all.
 	OnFailure string `json:"onFailure,omitempty" yaml:"onFailure,omitempty"`
-	// ApprovalsBetween elenca le ondate dopo le quali il rollout attende un'approvazione; con la
-	// strategia traffic, i gradini ("0" dopo i test a peso 0, "25" dopo il gradino del 25%).
+	// ApprovalsBetween lists the waves after which the rollout waits for an approval; with the
+	// traffic strategy, the steps ("0" after the tests at weight 0, "25" after the 25% step).
 	ApprovalsBetween []string `json:"approvalsBetween,omitempty" yaml:"approvalsBetween,omitempty"`
 	Health           *Health  `json:"health,omitempty" yaml:"health,omitempty"`
 }
 
-// Wave è un'ondata del rollout.
+// Wave is a rollout wave.
 type Wave struct {
 	Name string `json:"name" yaml:"name"`
-	// Select sceglie i target dell'ondata (es. "region=eu-1, az=eu-1a").
+	// Select chooses the wave targets (e.g. "region=eu-1, az=eu-1a").
 	Select string `json:"select" yaml:"select"`
-	// By divide l'ondata in passi: "az", "region" o nessuna divisione.
+	// By splits the wave into passes: "az", "region" or no split.
 	By string `json:"by,omitempty" yaml:"by,omitempty"`
-	// ParallelRegions sono le region aggiornate insieme nello stesso passo (default 1).
+	// ParallelRegions are the regions updated together in the same pass (default 1).
 	ParallelRegions int `json:"parallelRegions,omitempty" yaml:"parallelRegions,omitempty"`
-	// Bake è il tempo di osservazione dopo ogni passo (es. "10m").
+	// Bake is the observation time after every pass (e.g. "10m").
 	Bake string `json:"bake,omitempty" yaml:"bake,omitempty"`
 }
 
-// Health sono i controlli eseguiti durante e alla fine del tempo di osservazione.
+// Health are the checks run during and at the end of the observation time.
 type Health struct {
 	Probes  []Probe      `json:"probes,omitempty" yaml:"probes,omitempty"`
 	Metrics []MetricGate `json:"metrics,omitempty" yaml:"metrics,omitempty"`
 	Alerts  *AlertGate   `json:"alerts,omitempty" yaml:"alerts,omitempty"`
-	// Interval è la frequenza dei controlli durante il bake (default 30s).
+	// Interval is the frequency of the checks during the bake (default 30s).
 	Interval string `json:"interval,omitempty" yaml:"interval,omitempty"`
-	// FailuresToStop sono i controlli rossi consecutivi che fermano il passo (default 1).
+	// FailuresToStop are the consecutive red checks that stop the pass (default 1).
 	FailuresToStop int `json:"failuresToStop,omitempty" yaml:"failuresToStop,omitempty"`
 }
 
-// Probe è una sonda HTTP verso ogni target del passo. URL deve contenere {host}: le sonde
-// raggiungono solo i target, non indirizzi arbitrari.
+// Probe is an HTTP probe to every target of the pass. URL must contain {host}: probes reach
+// only the targets, not arbitrary addresses.
 type Probe struct {
 	URL          string `json:"url" yaml:"url"`
 	ExpectStatus int    `json:"expectStatus,omitempty" yaml:"expectStatus,omitempty"`
 }
 
-// MetricGate è una query PromQL valutata per ogni passo; {application}, {environment},
-// {region} e {az} vengono sostituiti, e con la strategia traffic {track} (slot) e {version}.
-// Il risultato deve stare tra Min e Max; con Compare "stable" la query è valutata per la
-// versione candidata e per quella stabile e si confrontano i due valori.
+// MetricGate is a PromQL query evaluated for every pass; {application}, {environment},
+// {region} and {az} are replaced, and with the traffic strategy {track} (slot) and {version}.
+// The result must lie between Min and Max; with Compare "stable" the query is evaluated for
+// the candidate and the stable version and the two values are compared.
 type MetricGate struct {
 	Name  string   `json:"name" yaml:"name"`
 	Query string   `json:"query" yaml:"query"`
 	Max   *float64 `json:"max,omitempty" yaml:"max,omitempty"`
 	Min   *float64 `json:"min,omitempty" yaml:"min,omitempty"`
-	// Compare è "stable" per confrontare la versione candidata con quella stabile.
+	// Compare is "stable" to compare the candidate version with the stable one.
 	Compare string `json:"compare,omitempty" yaml:"compare,omitempty"`
-	// MaxRatio è il rapporto massimo candidata/stabile (es. 1.5).
+	// MaxRatio is the maximum candidate/stable ratio (e.g. 1.5).
 	MaxRatio *float64 `json:"maxRatio,omitempty" yaml:"maxRatio,omitempty"`
-	// MaxDelta è la differenza massima candidata - stabile.
+	// MaxDelta is the maximum candidate - stable difference.
 	MaxDelta *float64 `json:"maxDelta,omitempty" yaml:"maxDelta,omitempty"`
-	// SamplesQuery conta le richieste osservate; sotto MinSamples il controllo non è verde.
+	// SamplesQuery counts the observed requests; below MinSamples the check is not green.
 	SamplesQuery string  `json:"samplesQuery,omitempty" yaml:"samplesQuery,omitempty"`
 	MinSamples   float64 `json:"minSamples,omitempty" yaml:"minSamples,omitempty"`
 }
 
-// CompareStable confronta la versione candidata con quella stabile.
+// CompareStable compares the candidate version with the stable one.
 const CompareStable = "stable"
 
-// AlertGate blocca il passo se in Alertmanager c'è un allarme attivo che soddisfa tutte le
-// condizioni di BlockOn (es. "severity=critical") e riguarda l'applicazione, la region o l'AZ.
+// AlertGate blocks the pass if Alertmanager has an active alert that meets all the BlockOn
+// conditions (e.g. "severity=critical") and concerns the application, the region or the AZ.
 type AlertGate struct {
 	BlockOn []string `json:"blockOn" yaml:"blockOn"`
 }
 
-// Durate di default.
+// Default durations.
 const (
 	DefaultHealthInterval = 30 * time.Second
 	maxBake               = 24 * time.Hour
 )
 
-// BakeDuration restituisce il tempo di osservazione dell'ondata.
+// BakeDuration returns the wave's observation time.
 func (w Wave) BakeDuration() time.Duration {
 	d, _ := time.ParseDuration(w.Bake)
 	return d
 }
 
-// IntervalDuration restituisce la frequenza dei controlli.
+// IntervalDuration returns the check frequency.
 func (h *Health) IntervalDuration() time.Duration {
 	if h == nil || h.Interval == "" {
 		return DefaultHealthInterval
@@ -133,7 +133,7 @@ func (h *Health) IntervalDuration() time.Duration {
 	return d
 }
 
-// MaxUnavailableFor restituisce i target aggiornati insieme su n target (almeno 1).
+// MaxUnavailableFor returns the targets updated together out of n targets (at least 1).
 func (r *Rollout) MaxUnavailableFor(n int) int {
 	v := strings.TrimSpace(r.MaxUnavailable)
 	if v == "" {
@@ -147,11 +147,11 @@ func (r *Rollout) MaxUnavailableFor(n int) int {
 	return max(1, k)
 }
 
-// OnFailureOrDefault restituisce il comportamento in caso di passo fallito.
+// OnFailureOrDefault returns the behavior on a failed pass.
 func (r *Rollout) OnFailureOrDefault() string {
 	if r.OnFailure == "" {
 		if r.IsTraffic() {
-			// Tornare alla versione stabile è uno spostamento di traffico: è il default.
+			// Going back to the stable version is a traffic shift: it is the default.
 			return OnFailureRollbackAll
 		}
 		return OnFailureStop
@@ -159,8 +159,8 @@ func (r *Rollout) OnFailureOrDefault() string {
 	return r.OnFailure
 }
 
-// Validate verifica la struttura del rollout. La corrispondenza con i target si verifica dopo
-// la fusione con la configurazione di ambiente (internal/rollout).
+// Validate checks the rollout structure. The match with the targets is checked after merging
+// with the environment configuration (internal/rollout).
 func (r *Rollout) Validate() error {
 	var errs []error
 	switch r.Strategy {

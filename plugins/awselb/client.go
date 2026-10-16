@@ -15,13 +15,13 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// SDKConnector apre l'accesso a Elastic Load Balancing e Auto Scaling con l'SDK AWS.
+// SDKConnector opens access to Elastic Load Balancing and Auto Scaling with the AWS SDK.
 type SDKConnector struct {
-	// Endpoint, se indicato, sostituisce quello dei servizi (es. LocalStack).
+	// Endpoint, if set, replaces the services' one (e.g. LocalStack).
 	Endpoint *string
 }
 
-// Connect implementa Connector.
+// Connect implements Connector.
 func (c SDKConnector) Connect(ctx context.Context, region string, req *plugin.Request) (API, AutoScaling, error) {
 	cfg, err := awsauth.Config(ctx, region, req)
 	if err != nil {
@@ -74,7 +74,7 @@ func (a sdkELB) DeregisterTargets(ctx context.Context, tg string, ts []Target) e
 	return err
 }
 
-// isRule distingue l'ARN di una regola da quello di un listener.
+// isRule tells a rule ARN apart from a listener ARN.
 func isRule(arn string) bool { return strings.Contains(arn, ":listener-rule/") }
 
 func (a sdkELB) actions(ctx context.Context, arn string) ([]types.Action, error) {

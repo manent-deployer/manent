@@ -1,5 +1,5 @@
-# UC5: rollout multi-region (eu-1, us-1) con i passi sui worker di region, onFailure rollback-wave.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC5: multi-region rollout (eu-1, us-1) with passes on the region workers, onFailure rollback-wave.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: remote-copy
 targets:
   - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
@@ -13,7 +13,7 @@ params:
   keep_releases: "3"
   ssh_key_secret: deploy-key
   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
-  # Guasti simulati dai casi d'uso: $HOME/fault/uc5-global.sleep (attesa) e .fail (errore).
+  # Faults simulated by the use cases: $HOME/fault/uc5-global.sleep (wait) and .fail (error).
   post_command: 'f=$HOME/fault/uc5-global; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
   rollback_command: "true"
 secrets:

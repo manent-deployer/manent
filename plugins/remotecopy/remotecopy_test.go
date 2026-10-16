@@ -11,14 +11,14 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeSession registra le operazioni eseguite e simula sha256sum.
+// fakeSession records the operations run and simulates sha256sum.
 type fakeSession struct {
 	uploads  []string
 	commands []string
 	checksum string
-	// current è il target del symlink current ("" = assente).
+	// current is the target of the current symlink ("" = none).
 	current string
-	// missing fa fallire "test -d" (release assente).
+	// missing makes "test -d" fail (release missing).
 	missing bool
 }
 
@@ -44,7 +44,7 @@ func (f *fakeSession) Close() error { return nil }
 
 type fakeDialer struct {
 	sess *fakeSession
-	// hosts, se valorizzato, assegna una sessione a ogni host.
+	// hosts, if set, assigns a session to every host.
 	hosts map[string]*fakeSession
 	auth  Auth
 }
@@ -155,7 +155,7 @@ func newReleasesRequest() *plugin.Request {
 	return req
 }
 
-// indexOf restituisce l'indice del primo comando che contiene sub, o -1.
+// indexOf returns the index of the first command containing sub, or -1.
 func indexOf(cmds []string, sub string) int {
 	for i, c := range cmds {
 		if strings.Contains(c, sub) {
@@ -187,7 +187,7 @@ func TestDeployReleases(t *testing.T) {
 	if c := sess.commands[post]; !strings.Contains(c, "MANENT_RELEASE_DIR='/opt/app/releases/1.2.0'") {
 		t.Errorf("post_command senza variabili della release: %q", c)
 	}
-	// La pulizia conserva la release attivata e la precedente, più una (keep_releases=3).
+	// Cleanup keeps the activated release and the previous one, plus one more (keep_releases=3).
 	if c := sess.commands[prune]; !strings.Contains(c, "-e '1.2.0' -e '1.1.0'") || !strings.Contains(c, "tail -n +2") {
 		t.Errorf("pulizia inattesa: %q", c)
 	}
@@ -217,7 +217,7 @@ func TestCurrentRelease(t *testing.T) {
 	d := &fakeDialer{hosts: map[string]*fakeSession{
 		"h1": {current: "releases/1.1.0"},
 		"h2": {current: "/opt/app/releases/1.1.0"},
-		"h3": {}, // target nuovo, senza release: ignorato
+		"h3": {}, // new target, without a release: ignored
 	}}
 	p := New(d, []string{"application"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	req := newReleasesRequest()
@@ -235,13 +235,13 @@ func TestCurrentRelease(t *testing.T) {
 		t.Errorf("atteso errore per release diverse, ricevuto %v", err)
 	}
 
-	// Nessun target con current: primo deploy.
+	// No target with current: first deploy.
 	req.Targets = req.Targets[2:]
 	if rel, err := p.CurrentRelease(context.Background(), req); err != nil || rel != nil {
 		t.Errorf("attesa nessuna release: %+v %v", rel, err)
 	}
 
-	// Il layout flat non ha una release corrente.
+	// The flat layout has no current release.
 	req.Params[ParamLayout] = LayoutFlat
 	if _, err := p.CurrentRelease(context.Background(), req); err == nil {
 		t.Error("atteso errore con layout flat")
@@ -257,7 +257,7 @@ func TestRollback(t *testing.T) {
 	req.Targets = []plugin.Target{{Host: "h1", User: "u"}, {Host: "h2", User: "u"}}
 
 	res, err := p.Rollback(context.Background(), req, plugin.Release{Version: "1.1.0"})
-	// h2 non ha la release: errore, ma h1 viene comunque ripristinato.
+	// h2 lacks the release: an error, but h1 is restored anyway.
 	if err == nil || !strings.Contains(err.Error(), "h2") {
 		t.Fatalf("atteso errore su h2, ricevuto %v", err)
 	}

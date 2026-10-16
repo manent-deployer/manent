@@ -22,12 +22,12 @@ function initialLang(): Lang {
     const saved = window.localStorage.getItem("manent.lang");
     if (saved === "en" || saved === "it") return saved;
   } catch {
-    // localStorage non disponibile: si usa la lingua del browser.
+    // localStorage unavailable: use the browser language.
   }
   return navigator.language.toLowerCase().startsWith("it") ? "it" : "en";
 }
 
-/** format sostituisce {nome} con i valori indicati. */
+/** format replaces {name} with the given values. */
 export function format(text: string, vars?: Record<string, string | number>): string {
   if (!vars) return text;
   return text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
@@ -43,7 +43,7 @@ export function I18nProvider({ children, lang: forced }: { children: ReactNode; 
     try {
       window.localStorage.setItem("manent.lang", l);
     } catch {
-      // preferenza non salvata
+      // preference not saved
     }
   }, []);
   const value = useMemo<I18nValue>(() => {

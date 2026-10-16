@@ -1,6 +1,6 @@
-// Package clientcli implementa la CLI client di manent (cmd/manent): legge descrittori YAML e
-// parla solo con l'API HTTP del server, quindi valgono sempre autenticazione, permessi e audit.
-// Non deve importare engine, DBOS, plugin o driver di database: lo verifica deps_test.go.
+// Package clientcli implements the manent client CLI (cmd/manent): it reads YAML descriptors and
+// talks only to the server's HTTP API, so authentication, permissions and audit always apply.
+// It must not import engine, DBOS, plugins or database drivers: deps_test.go checks it.
 package clientcli
 
 import (
@@ -21,13 +21,12 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// DefaultServer è il server usato se non ne è configurato nessuno: quello di "manent-server
-// serve" in locale.
+// DefaultServer is the server used when none is configured: the local "manent-server serve".
 const DefaultServer = "http://127.0.0.1:8080"
 
-// GlobalOptions sono le opzioni comuni a tutti i comandi. Hanno la precedenza sulle variabili
-// d'ambiente, che a loro volta l'hanno sul file di configurazione del client. Il token si legge
-// da MANENT_TOKEN o da un file, mai da un'opzione, che resterebbe nella cronologia della shell.
+// GlobalOptions are the options shared by all commands. They take precedence over environment
+// variables, which in turn take precedence over the client configuration file. The token is
+// read from MANENT_TOKEN or from a file, never from an option, which would stay in the shell history.
 type GlobalOptions struct {
 	Config    string `short:"c" long:"config" env:"MANENT_CLIENT_CONFIG" description:"file di configurazione del client (default ~/.config/manent/client.yml)"`
 	Server    string `long:"server" env:"MANENT_SERVER" description:"URL del server manent"`
@@ -35,7 +34,7 @@ type GlobalOptions struct {
 	CAFile    string `long:"ca-file" env:"MANENT_CA_FILE" description:"certificato della CA del server, se non è tra quelle di sistema"`
 }
 
-// ClientConfig è il file di configurazione del client.
+// ClientConfig is the client configuration file.
 type ClientConfig struct {
 	Server    string        `yaml:"server"`
 	TokenFile string        `yaml:"token_file"`
@@ -43,7 +42,7 @@ type ClientConfig struct {
 	Timeout   time.Duration `yaml:"timeout"`
 }
 
-// Run esegue la CLI con gli argomenti indicati.
+// Run runs the CLI with the given arguments.
 func Run(args []string) error {
 	var global GlobalOptions
 	p := flags.NewParser(&global, flags.Default)
@@ -97,8 +96,8 @@ func Run(args []string) error {
 	return cliutil.Parse(p, args)
 }
 
-// defaultConfigPath è il file di configurazione del client: $XDG_CONFIG_HOME/manent/client.yml
-// o ~/.config/manent/client.yml.
+// defaultConfigPath is the client configuration file: $XDG_CONFIG_HOME/manent/client.yml
+// or ~/.config/manent/client.yml.
 func defaultConfigPath() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
 		return filepath.Join(d, "manent", "client.yml")
@@ -109,8 +108,8 @@ func defaultConfigPath() string {
 	return ""
 }
 
-// loadConfig legge il file di configurazione del client: quello indicato, che deve esistere,
-// oppure quello di default, se esiste.
+// loadConfig reads the client configuration file: the given one, which must exist, or the
+// default one, if it exists.
 func loadConfig(path string) (ClientConfig, error) {
 	var cfg ClientConfig
 	explicit := path != ""
@@ -136,7 +135,7 @@ func loadConfig(path string) (ClientConfig, error) {
 	return cfg, nil
 }
 
-// expandHome sostituisce un "~/" iniziale con la home dell'utente.
+// expandHome replaces a leading "~/" with the user's home.
 func expandHome(p string) string {
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {
 		if h, err := os.UserHomeDir(); err == nil {
@@ -146,8 +145,8 @@ func expandHome(p string) string {
 	return p
 }
 
-// newClient crea il client dell'API: opzioni e variabili d'ambiente hanno la precedenza sul
-// file di configurazione. Il token viene da MANENT_TOKEN o dal file del token.
+// newClient creates the API client: options and environment variables take precedence over
+// the configuration file. The token comes from MANENT_TOKEN or the token file.
 func newClient(g *GlobalOptions) (*apiclient.Client, error) {
 	cfg, err := loadConfig(g.Config)
 	if err != nil {
@@ -176,7 +175,7 @@ func firstNonEmpty(vs ...string) string {
 	return ""
 }
 
-// withService esegue fn con il client dell'API.
+// withService runs fn with the API client.
 func withService(g *GlobalOptions, fn func(context.Context, service.Service) error) error {
 	c, err := newClient(g)
 	if err != nil {
@@ -185,8 +184,8 @@ func withService(g *GlobalOptions, fn func(context.Context, service.Service) err
 	return fn(context.Background(), c)
 }
 
-// follow mostra l'esito dell'accodamento e, se richiesto, attende la conclusione del deploy.
-// Non attende i deploy pianificati né quelli in attesa di approvazione.
+// follow shows the outcome of the submission and, if requested, waits for the deploy to end.
+// It does not wait for scheduled deploys nor for those awaiting approval.
 func follow(ctx context.Context, svc service.Service, sub *service.Submission, noWait bool, timeout time.Duration) error {
 	if sub.State == service.StateAwaitingApproval {
 		fmt.Fprintln(os.Stderr, "deploy in attesa di approvazione: manent approve", sub.ID)

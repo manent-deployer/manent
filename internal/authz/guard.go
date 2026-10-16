@@ -16,8 +16,8 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// Guard avvolge un engine.Service: verifica i permessi dell'identità nel context e registra
-// nell'audit le azioni che modificano lo stato e quelle negate. Un'azione negata restituisce
+// Guard wraps an engine.Service: it checks the permissions of the identity in the context and
+// records in the audit the state-changing actions and the denied ones. A denied action returns
 // engine.ErrForbidden.
 type Guard struct {
 	Next   engine.Service
@@ -28,15 +28,15 @@ type Guard struct {
 
 var _ engine.Service = (*Guard)(nil)
 
-// target identifica l'oggetto di un'azione, per permessi e audit.
+// target identifies the object of an action, for permissions and audit.
 type target struct {
 	application, environment, deployment, schedule string
 	dryRun                                         bool
-	// comment è il commento di un'approvazione o il motivo di una deroga al freeze.
+	// comment is the comment of an approval or the reason of a freeze override.
 	comment string
 }
 
-// check verifica il permesso; se negato registra la voce di audit e restituisce l'errore.
+// check verifies the permission; if denied it records the audit entry and returns the error.
 func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	p := auth.FromContext(ctx)
 	if g.Policy.Allowed(p, a, t.application, t.environment) {
@@ -47,7 +47,7 @@ func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	return err
 }
 
-// record registra una voce di audit; un errore di registrazione viene solo segnalato a log.
+// record records an audit entry; a recording error is only logged.
 func (g *Guard) record(ctx context.Context, a Action, t target, outcome string, err error) {
 	if g.Audit == nil {
 		return
@@ -65,7 +65,7 @@ func (g *Guard) record(ctx context.Context, a Action, t target, outcome string, 
 	}
 }
 
-// done registra l'esito di un'azione autorizzata.
+// done records the outcome of an authorized action.
 func (g *Guard) done(ctx context.Context, a Action, t target, err error) {
 	outcome := audit.OutcomeAllowed
 	if err != nil {
@@ -81,7 +81,7 @@ func actor(p *auth.Principal) string {
 	return p.String()
 }
 
-// Plan richiede deployment.read: rivela la pipeline configurata per l'applicazione/ambiente.
+// Plan requires deployment.read: it reveals the pipeline configured for the application/environment.
 func (g *Guard) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
 	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment}); err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (g *Guard) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Pl
 	return g.Next.Plan(ctx, d)
 }
 
-// submitAction è l'azione richiesta per un deploy reale (act) o per un dry-run.
+// submitAction is the action required for a real deploy (act) or for a dry-run.
 func submitAction(act Action, dryRun bool) Action {
 	if dryRun {
 		return DeploymentDryRun
@@ -97,7 +97,7 @@ func submitAction(act Action, dryRun bool) Action {
 	return act
 }
 
-// checkOverride verifica il permesso di deroga al freeze, se richiesta.
+// checkOverride checks the freeze override permission, if requested.
 func (g *Guard) checkOverride(ctx context.Context, override string, t target) error {
 	if override == "" {
 		return nil
@@ -105,10 +105,10 @@ func (g *Guard) checkOverride(ctx context.Context, override string, t target) er
 	return g.check(ctx, FreezeOverride, t)
 }
 
-// Submit richiede deployment.submit (deployment.dry-run per un dry-run) e, per una schedule
-// ricorrente, anche schedule.write. Una schedule esistente con lo stesso nome ma di un'altra
-// applicazione o ambiente richiede schedule.write anche su quella, perché verrebbe sovrascritta.
-// Una deroga al freeze richiede deployment.freeze-override.
+// Submit requires deployment.submit (deployment.dry-run for a dry-run) and, for a recurring
+// schedule, also schedule.write. An existing schedule with the same name but of another
+// application or environment also requires schedule.write on that one, since it would be
+// overwritten. A freeze override requires deployment.freeze-override.
 func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.Submission, error) {
 	t := target{application: d.Application, environment: d.Environment, dryRun: d.DryRun, comment: d.FreezeOverride}
 	act := submitAction(DeploymentSubmit, d.DryRun)
@@ -140,7 +140,7 @@ func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.S
 	return sub, err
 }
 
-// Status richiede deployment.read sull'applicazione/ambiente del deploy.
+// Status requires deployment.read on the deploy's application/environment.
 func (g *Guard) Status(ctx context.Context, id string) (*engine.Status, error) {
 	st, err := g.Next.Status(ctx, id)
 	if err != nil {
@@ -153,8 +153,8 @@ func (g *Guard) Status(ctx context.Context, id string) (*engine.Status, error) {
 	return st, nil
 }
 
-// List restituisce solo i deploy che l'identità può leggere. Il filtro è applicato
-// dall'engine durante la scansione, quindi l'elenco arriva comunque fino al limite richiesto.
+// List returns only the deploys the identity can read. The engine applies the filter while
+// scanning, so the list still reaches the requested limit.
 func (g *Guard) List(ctx context.Context, f engine.ListFilter) ([]engine.Status, error) {
 	p := auth.FromContext(ctx)
 	match := f.Match
@@ -165,7 +165,7 @@ func (g *Guard) List(ctx context.Context, f engine.ListFilter) ([]engine.Status,
 	if err != nil {
 		return nil, err
 	}
-	// Un servizio remoto ignora Match: il filtro viene riapplicato.
+	// A remote service ignores Match: the filter is applied again.
 	out := all[:0]
 	for _, st := range all {
 		if f.Match(st) {
@@ -175,7 +175,7 @@ func (g *Guard) List(ctx context.Context, f engine.ListFilter) ([]engine.Status,
 	return out, nil
 }
 
-// Wait richiede deployment.read.
+// Wait requires deployment.read.
 func (g *Guard) Wait(ctx context.Context, id string) (*engine.Result, error) {
 	if _, err := g.Status(ctx, id); err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (g *Guard) Wait(ctx context.Context, id string) (*engine.Result, error) {
 	return g.Next.Wait(ctx, id)
 }
 
-// Cancel richiede deployment.cancel.
+// Cancel requires deployment.cancel.
 func (g *Guard) Cancel(ctx context.Context, id string) error {
 	st, err := g.Next.Status(ctx, id)
 	if err != nil {
@@ -198,7 +198,7 @@ func (g *Guard) Cancel(ctx context.Context, id string) error {
 	return err
 }
 
-// ListSchedules restituisce solo le schedule che l'identità può leggere.
+// ListSchedules returns only the schedules the identity can read.
 func (g *Guard) ListSchedules(ctx context.Context) ([]engine.ScheduleInfo, error) {
 	all, err := g.Next.ListSchedules(ctx)
 	if err != nil {
@@ -214,7 +214,7 @@ func (g *Guard) ListSchedules(ctx context.Context) ([]engine.ScheduleInfo, error
 	return out, nil
 }
 
-// GetSchedule richiede schedule.read.
+// GetSchedule requires schedule.read.
 func (g *Guard) GetSchedule(ctx context.Context, name string) (*engine.ScheduleInfo, error) {
 	s, err := g.Next.GetSchedule(ctx, name)
 	if err != nil {
@@ -226,23 +226,23 @@ func (g *Guard) GetSchedule(ctx context.Context, name string) (*engine.ScheduleI
 	return s, nil
 }
 
-// PauseSchedule richiede schedule.write.
+// PauseSchedule requires schedule.write.
 func (g *Guard) PauseSchedule(ctx context.Context, name string) error {
 	return g.scheduleOp(ctx, name, "schedule.pause", g.Next.PauseSchedule)
 }
 
-// ResumeSchedule richiede schedule.write.
+// ResumeSchedule requires schedule.write.
 func (g *Guard) ResumeSchedule(ctx context.Context, name string) error {
 	return g.scheduleOp(ctx, name, "schedule.resume", g.Next.ResumeSchedule)
 }
 
-// DeleteSchedule richiede schedule.write.
+// DeleteSchedule requires schedule.write.
 func (g *Guard) DeleteSchedule(ctx context.Context, name string) error {
 	return g.scheduleOp(ctx, name, "schedule.delete", g.Next.DeleteSchedule)
 }
 
-// scheduleOp verifica schedule.write sulla schedule ed esegue l'operazione. Nell'audit
-// l'azione riporta l'operazione specifica (es. schedule.pause).
+// scheduleOp checks schedule.write on the schedule and runs the operation. In the audit the
+// action names the specific operation (e.g. schedule.pause).
 func (g *Guard) scheduleOp(ctx context.Context, name string, auditAction Action, op func(context.Context, string) error) error {
 	s, err := g.Next.GetSchedule(ctx, name)
 	if err != nil {
@@ -257,7 +257,7 @@ func (g *Guard) scheduleOp(ctx context.Context, name string, auditAction Action,
 	return err
 }
 
-// Inventory restituisce solo le applicazioni/ambienti che l'identità può leggere.
+// Inventory returns only the applications/environments the identity can read.
 func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engine.InventoryEntry, error) {
 	all, err := g.Next.Inventory(ctx, f)
 	if err != nil {
@@ -273,8 +273,8 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 	return out, nil
 }
 
-// Promote richiede deployment.read sull'ambiente di origine e deployment.submit (o
-// deployment.dry-run) su quello di destinazione.
+// Promote requires deployment.read on the source environment and deployment.submit (or
+// deployment.dry-run) on the destination one.
 func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.Submission, error) {
 	if err := g.check(ctx, DeploymentRead, target{application: r.Application, environment: r.From}); err != nil {
 		return nil, err
@@ -294,7 +294,7 @@ func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.S
 	return sub, err
 }
 
-// Rollback richiede deployment.rollback (o deployment.dry-run).
+// Rollback requires deployment.rollback (or deployment.dry-run).
 func (g *Guard) Rollback(ctx context.Context, r engine.RollbackRequest) (*engine.Submission, error) {
 	t := target{application: r.Application, environment: r.Environment, dryRun: r.DryRun, comment: r.FreezeOverride}
 	if err := g.check(ctx, submitAction(DeploymentRollback, r.DryRun), t); err != nil {
@@ -311,8 +311,8 @@ func (g *Guard) Rollback(ctx context.Context, r engine.RollbackRequest) (*engine
 	return sub, err
 }
 
-// Decide richiede deployment.approve sull'applicazione/ambiente del deploy. Chi ha richiesto
-// il deploy non può approvarlo, salvo regola con allow_self.
+// Decide requires deployment.approve on the deploy's application/environment. Whoever
+// requested the deploy cannot approve it, unless a rule has allow_self.
 func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest) error {
 	st, err := g.Next.Status(ctx, id)
 	if err != nil {
@@ -337,19 +337,19 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	return err
 }
 
-// Freezes richiede solo l'autenticazione: le finestre di freeze non sono riservate.
+// Freezes requires only authentication: freeze windows are not restricted.
 func (g *Guard) Freezes(ctx context.Context, application, environment string) ([]governance.WindowStatus, error) {
 	return g.Next.Freezes(ctx, application, environment)
 }
 
-// Azioni di audit specifiche, oltre a quelle soggette a permesso.
+// Specific audit actions, besides those subject to permissions.
 const (
 	ActionPromote Action = "deployment.promote"
 	ActionApprove Action = "deployment.approve"
 	ActionReject  Action = "deployment.reject"
 )
 
-// Steps richiede la lettura dell'applicazione/ambiente del deploy.
+// Steps requires read on the deploy's application/environment.
 func (g *Guard) Steps(ctx context.Context, id string) ([]engine.StepRecord, error) {
 	if _, err := g.Status(ctx, id); err != nil {
 		return nil, err
@@ -357,7 +357,7 @@ func (g *Guard) Steps(ctx context.Context, id string) ([]engine.StepRecord, erro
 	return g.Next.Steps(ctx, id)
 }
 
-// Logs richiede la lettura dell'applicazione/ambiente del deploy.
+// Logs requires read on the deploy's application/environment.
 func (g *Guard) Logs(ctx context.Context, id string, offset int) (*deploylog.Page, error) {
 	if t, ok := recall(ctx, id); ok {
 		if err := g.check(ctx, DeploymentRead, t); err != nil {
@@ -369,7 +369,7 @@ func (g *Guard) Logs(ctx context.Context, id string, offset int) (*deploylog.Pag
 	return g.Next.Logs(ctx, id, offset)
 }
 
-// DORA calcola le metriche solo sui deploy che l'identità può leggere.
+// DORA computes the metrics only on the deploys the identity can read.
 func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORAReport, error) {
 	p := auth.FromContext(ctx)
 	match := f.Match
@@ -380,7 +380,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	if err != nil {
 		return nil, err
 	}
-	// Un servizio remoto ignora Match: gli ambienti non leggibili vengono rimossi.
+	// A remote service ignores Match: unreadable environments are removed.
 	envs := rep.Environments[:0]
 	for _, m := range rep.Environments {
 		if g.Policy.Allowed(p, DeploymentRead, m.Application, m.Environment) {
@@ -391,8 +391,8 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	return rep, nil
 }
 
-// Validate richiede la lettura dell'applicazione e dell'ambiente: mostra la configurazione
-// effettiva, che può includere target e parametri dell'ambiente.
+// Validate requires read on the application and environment: it shows the effective
+// configuration, which may include the environment's targets and parameters.
 func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {
 	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment}); err != nil {
 		return nil, err
@@ -400,8 +400,8 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 	return g.Next.Validate(ctx, d)
 }
 
-// Me restituisce l'identità e i ruoli che le si applicano (binding che la riguardano), senza
-// verificare permessi: ognuno può leggere i propri.
+// Me returns the identity and the roles that apply to it (the bindings that concern it),
+// without checking permissions: everyone can read their own.
 func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {
 	id, err := g.Next.Me(ctx)
 	if err != nil {
@@ -429,8 +429,8 @@ func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {
 	return id, nil
 }
 
-// Approvals restituisce solo i deploy che l'identità può decidere: deployment.approve
-// sull'applicazione/ambiente e, salvo regola con allow_self, non richiesti da lei.
+// Approvals returns only the deploys the identity can decide: deployment.approve on the
+// application/environment and, unless a rule has allow_self, not requested by it.
 func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 	all, err := g.Next.Approvals(ctx)
 	if err != nil {
@@ -450,8 +450,8 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 	return out, nil
 }
 
-// Workers richiede platform.read. Dei workflow in esecuzione restano visibili solo quelli delle
-// applicazioni/ambienti leggibili: gli altri sono solo contati.
+// Workers requires platform.read. Only the running workflows of readable
+// applications/environments stay visible: the others are only counted.
 func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	p := auth.FromContext(ctx)
 	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
@@ -477,7 +477,7 @@ func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	return ws, nil
 }
 
-// Activity restituisce solo i deploy che l'identità può leggere.
+// Activity returns only the deploys the identity can read.
 func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.Activity, error) {
 	p := auth.FromContext(ctx)
 	match := f.Match
@@ -488,7 +488,7 @@ func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.
 	if err != nil {
 		return nil, err
 	}
-	// Un servizio remoto ignora Match: il filtro viene riapplicato.
+	// A remote service ignores Match: the filter is applied again.
 	keep := func(in []engine.Status) []engine.Status {
 		out := []engine.Status{}
 		for _, st := range in {
@@ -502,8 +502,8 @@ func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.
 	return a, nil
 }
 
-// checkDependencies verifica che l'identità possa leggere i deploy da cui un deploy dipende:
-// altrimenti dall'esito dell'attesa si dedurrebbe lo stato di applicazioni altrui.
+// checkDependencies checks that the identity can read the deploys a deploy depends on:
+// otherwise the outcome of the wait would reveal the state of other teams' applications.
 func (g *Guard) checkDependencies(ctx context.Context, ids []string) error {
 	for _, id := range ids {
 		if _, err := g.Status(ctx, id); err != nil && !errors.Is(err, engine.ErrNotFound) {
@@ -513,14 +513,14 @@ func (g *Guard) checkDependencies(ctx context.Context, ids []string) error {
 	return nil
 }
 
-// SubmitRelease richiede, per ogni deploy della release, gli stessi permessi di un deploy
-// singolo (deployment.submit, deroga al freeze, lettura delle dipendenze esterne) e, con
-// onFailure: rollback, deployment.rollback. Ogni deploy accodato è registrato nell'audit.
+// SubmitRelease requires, for every deploy of the release, the same permissions as a single
+// deploy (deployment.submit, freeze override, read of external dependencies) and, with
+// onFailure: rollback, deployment.rollback. Every enqueued deploy is recorded in the audit.
 func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engine.ReleaseStatus, error) {
 	for _, rd := range r.Deploys {
 		d := rd.Descriptor
 		if d == nil {
-			continue // rifiutato dalla validazione dell'engine
+			continue // rejected by the engine validation
 		}
 		t := target{application: d.Application, environment: d.Environment, comment: d.FreezeOverride}
 		if err := g.check(ctx, DeploymentSubmit, t); err != nil {
@@ -549,7 +549,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 	return rs, nil
 }
 
-// readableRelease indica se l'identità può leggere tutti i deploy della release.
+// readableRelease reports whether the identity can read all the deploys of the release.
 func (g *Guard) readableRelease(ctx context.Context, rs *engine.ReleaseStatus, a Action) error {
 	for _, d := range rs.Deploys {
 		if err := g.check(ctx, a, target{application: d.Application, environment: d.Environment, deployment: d.DeploymentID}); err != nil {
@@ -559,7 +559,7 @@ func (g *Guard) readableRelease(ctx context.Context, rs *engine.ReleaseStatus, a
 	return nil
 }
 
-// ReleaseStatus richiede deployment.read su tutti i deploy della release.
+// ReleaseStatus requires deployment.read on all the deploys of the release.
 func (g *Guard) ReleaseStatus(ctx context.Context, id string) (*engine.ReleaseStatus, error) {
 	rs, err := g.Next.ReleaseStatus(ctx, id)
 	if err != nil {
@@ -571,7 +571,7 @@ func (g *Guard) ReleaseStatus(ctx context.Context, id string) (*engine.ReleaseSt
 	return rs, nil
 }
 
-// ListReleases restituisce solo le release di cui l'identità può leggere tutti i deploy.
+// ListReleases returns only the releases whose deploys the identity can all read.
 func (g *Guard) ListReleases(ctx context.Context, limit int) ([]engine.ReleaseStatus, error) {
 	all, err := g.Next.ListReleases(ctx, limit)
 	if err != nil {
@@ -589,7 +589,7 @@ func (g *Guard) ListReleases(ctx context.Context, limit int) ([]engine.ReleaseSt
 	return out, nil
 }
 
-// CancelRelease richiede deployment.cancel su tutti i deploy della release.
+// CancelRelease requires deployment.cancel on all the deploys of the release.
 func (g *Guard) CancelRelease(ctx context.Context, id string) error {
 	rs, err := g.Next.ReleaseStatus(ctx, id)
 	if err != nil {

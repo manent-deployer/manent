@@ -12,9 +12,9 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// templateData sono i dati dei segnaposto. Valori come Version e Params arrivano da chi
-// rilascia o dalla configurazione di ambiente: non sono fidati e vengono controllati o
-// codificati in base al contesto in cui finiscono.
+// templateData is the placeholder data. Values like Version and Params come from whoever
+// releases or from the environment configuration: they are not trusted and are checked or
+// encoded according to the context they end up in.
 type templateData struct {
 	Application  string
 	Environment  string
@@ -25,11 +25,11 @@ type templateData struct {
 	DryRun       bool
 	Params       map[string]string
 	Outputs      map[string]pipeline.Output
-	// Response è la prima risposta JSON, solo per poll.url.
+	// Response is the first JSON response, for poll.url only.
 	Response any
 }
 
-// render esegue un template; una chiave mancante è un errore.
+// render runs a template; a missing key is an error.
 func render(name, text string, data any) (string, error) {
 	if !strings.Contains(text, "{{") {
 		return text, nil
@@ -45,8 +45,8 @@ func render(name, text string, data any) (string, error) {
 	return b.String(), nil
 }
 
-// renderArg produce un argomento del comando. Un valore sostituito non può renderlo vuoto,
-// introdurre caratteri di controllo o trasformarlo in un'opzione (argument injection).
+// renderArg produces a command argument. A substituted value cannot make it empty, add
+// control characters or turn it into an option (argument injection).
 func renderArg(i int, text string, data templateData) (string, error) {
 	if !strings.Contains(text, "{{") {
 		return text, nil
@@ -66,9 +66,9 @@ func renderArg(i int, text string, data templateData) (string, error) {
 	return out, nil
 }
 
-// renderURL produce un URL: ogni valore sostituito è codificato (solo i caratteri non
-// riservati restano in chiaro), quindi non può aggiungere segmenti, query o frammenti, e
-// schema e host restano quelli scritti nella specifica.
+// renderURL produces a URL: every substituted value is encoded (only unreserved characters
+// stay in clear), so it cannot add segments, query or fragments, and scheme and host stay
+// those written in the spec.
 func renderURL(name, text string, data templateData, allowHTTP bool) (*url.URL, error) {
 	origin, err := customspec.LiteralOrigin(text, allowHTTP)
 	if err != nil {
@@ -85,7 +85,7 @@ func renderURL(name, text string, data templateData, allowHTTP bool) (*url.URL, 
 	if u.Scheme+"://"+u.Host != origin || u.User != nil {
 		return nil, fmt.Errorf("%s: la destinazione non corrisponde a quella della specifica", name)
 	}
-	// Un valore "." o ".." risalirebbe il percorso (path traversal).
+	// A "." or ".." value would climb the path (path traversal).
 	for _, seg := range strings.Split(u.EscapedPath(), "/") {
 		if v, err := url.PathUnescape(seg); err != nil || v == "." || v == ".." {
 			return nil, fmt.Errorf("%s: segmento del percorso non ammesso", name)
@@ -94,7 +94,7 @@ func renderURL(name, text string, data templateData, allowHTTP bool) (*url.URL, 
 	return u, nil
 }
 
-// renderHeader produce il valore di un header, senza a capo.
+// renderHeader produces a header value, without newlines.
 func renderHeader(name, text string, data templateData) (string, error) {
 	out, err := render(name, text, data)
 	if err != nil {
@@ -106,8 +106,8 @@ func renderHeader(name, text string, data templateData) (string, error) {
 	return out, nil
 }
 
-// renderJSON sostituisce i segnaposto nei soli valori stringa della struttura: il corpo è
-// poi serializzato da manent, quindi un valore non può alterarne la struttura.
+// renderJSON replaces the placeholders only in the string values of the structure: the body
+// is then serialized by manent, so a value cannot alter its structure.
 func renderJSON(v any, path string, data templateData) (any, error) {
 	switch t := v.(type) {
 	case string:
@@ -136,7 +136,7 @@ func renderJSON(v any, path string, data templateData) (any, error) {
 	return v, nil
 }
 
-// escaped restituisce una copia dei dati con le stringhe codificate per un URL.
+// escaped returns a copy of the data with strings encoded for a URL.
 func (d templateData) escaped() templateData {
 	e := d
 	e.Application, e.Environment, e.Version = escape(d.Application), escape(d.Environment), escape(d.Version)
@@ -179,8 +179,8 @@ func escapeAny(v any) any {
 	return v
 }
 
-// escape codifica in percentuale tutto tranne i caratteri non riservati di RFC 3986: il
-// risultato è sicuro sia in un segmento del percorso sia nella query.
+// escape percent-encodes everything except the unreserved characters of RFC 3986: the
+// result is safe both in a path segment and in the query.
 func escape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {

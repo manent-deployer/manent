@@ -18,30 +18,30 @@ import (
 )
 
 const (
-	// approvalSuffix distingue l'ID del workflow di approvazione da quello del deploy.
+	// approvalSuffix tells the approval workflow ID apart from the deploy's.
 	approvalSuffix = ".approval"
-	// approvalTopic è l'argomento dei messaggi con le decisioni.
+	// approvalTopic is the topic of the decision messages.
 	approvalTopic = "approval"
-	// approvalEvent è la chiave dell'evento con lo stato dell'approvazione.
+	// approvalEvent is the key of the event with the approval state.
 	approvalEvent = "approval"
 )
 
-// approvalInput è l'input del workflow di approvazione.
+// approvalInput is the input of the approval workflow.
 type approvalInput struct {
 	DeploymentID string  `json:"deployment_id"`
 	Request      Request `json:"request"`
-	// QueueName è la coda dei deploy, su cui accodare il deploy approvato.
+	// QueueName is the deploy queue, where the approved deploy is enqueued.
 	QueueName string `json:"queue_name"`
 }
 
-// approvalQueue è la coda dei workflow di approvazione: separata da quella dei deploy, perché
-// un'attesa può durare giorni e non deve occupare uno slot di esecuzione né bloccare
-// l'ambiente. Non è partizionata e non ha limiti di concorrenza.
+// approvalQueue is the queue of approval workflows: separate from the deploy queue, because a
+// wait can last days and must neither take an execution slot nor block the environment. It is
+// not partitioned and has no concurrency limits.
 func approvalQueue(deployQueue string) string {
 	return deployQueue + "-approvals"
 }
 
-// enqueueApproval accoda il workflow di approvazione del deploy id.
+// enqueueApproval enqueues the approval workflow of deploy id.
 func enqueueApproval(client dbos.Client, deployQueue string, req Request, id string) error {
 	opts := []dbos.EnqueueOption{
 		dbos.WithEnqueueWorkflowID(id + approvalSuffix),
@@ -55,16 +55,16 @@ func enqueueApproval(client dbos.Client, deployQueue string, req Request, id str
 	return err
 }
 
-// approvalWorkflow attende le decisioni sul deploy fino al numero richiesto di approvazioni,
-// al primo rifiuto o alla scadenza. Con il change management che lo richiede, apre il ticket
-// di change e attende anche la sua approvazione nel sistema ITSM, leggendola a intervalli
-// crescenti (da integrations.change.poll_interval fino a 5 minuti).
-// Se approvato, accoda il deploy con l'ID già comunicato al richiedente. Lo stato corrente è
-// pubblicato come evento DBOS, letto da Status.
+// approvalWorkflow waits for decisions on the deploy until the required number of approvals,
+// the first rejection or the expiry. When change management requires it, it opens the change
+// ticket and also waits for its approval in the ITSM, reading it at growing intervals (from
+// integrations.change.poll_interval up to 5 minutes).
+// If approved, it enqueues the deploy with the ID already given to the requester. The current
+// state is published as a DBOS event, read by Status.
 func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalState, error) {
 	rule := in.Request.Approval
 	if rule.InRollout() {
-		// Le approvazioni di manent si chiedono nel rollout: qui resta solo il change.
+		// manent approvals are asked during the rollout: only the change is left here.
 		rule = nil
 	}
 	chg := in.Request.Change
@@ -129,8 +129,8 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 		case err != nil:
 			return st, err
 		}
-		// Il servizio verifica permessi e auto-approvazione prima di inviare la decisione:
-		// qui si scartano comunque quelle non valide.
+		// The service checks permissions and self-approval before sending the decision: invalid ones
+		// are discarded here anyway.
 		switch {
 		case dec.Approver == "":
 			continue
@@ -160,7 +160,7 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 			return st, err
 		}
 	} else {
-		// Il deploy non verrà eseguito: chi lo attende può concludersi subito.
+		// The deploy will not run: whoever waits for it can end at once.
 		w.notifyWaiters(ctx, in.DeploymentID)
 	}
 	log.Info("approvazione conclusa", "status", st.Status, "decisions", len(st.Decisions))
@@ -169,9 +169,9 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 	return st, nil
 }
 
-// approvalOutcome calcola lo stato dell'approvazione dalle decisioni e dal change: un rifiuto
-// la conclude subito; serve il numero richiesto di approvazioni e, se previsto, il change
-// approvato nel sistema ITSM.
+// approvalOutcome computes the approval state from decisions and change: a rejection ends it
+// at once; it needs the required number of approvals and, if configured, the change approved
+// in the ITSM.
 func approvalOutcome(st ApprovalState) string {
 	if slices.ContainsFunc(st.Decisions, func(d Decision) bool { return !d.Approve }) {
 		return ApprovalRejected
@@ -190,7 +190,7 @@ func approvalOutcome(st ApprovalState) string {
 	return ApprovalPending
 }
 
-// approvalChatEvent è l'evento delle notifiche per l'esito di un'approvazione.
+// approvalChatEvent is the notification event for the outcome of an approval.
 func approvalChatEvent(status string) string {
 	switch status {
 	case ApprovalApproved:
@@ -201,7 +201,7 @@ func approvalChatEvent(status string) string {
 	return chat.EventApprovalExpired
 }
 
-// approvalMessage prepara la notifica di un'approvazione.
+// approvalMessage prepares the notification of an approval.
 func (w *Worker) approvalMessage(in approvalInput, st ApprovalState, event string) chat.Message {
 	msg := w.chatMessage(in.DeploymentID, in.Request, event)
 	a := &chat.Approval{Required: st.Required, ExpiresAt: st.ExpiresAt, Change: st.Change != nil}
@@ -213,8 +213,8 @@ func (w *Worker) approvalMessage(in approvalInput, st ApprovalState, event strin
 	return msg
 }
 
-// openApprovalChange apre il ticket di change da approvare, nello step change:open, e lo
-// rende visibile nello stato dell'approvazione.
+// openApprovalChange opens the change ticket to approve, in the change:open step, and makes
+// it visible in the approval state.
 func (w *Worker) openApprovalChange(ctx dbos.Context, in approvalInput) (*ChangeTicket, error) {
 	t, err := dbos.RunAsStep(ctx, func(c context.Context) (change.Ticket, error) {
 		if w.change == nil {
@@ -238,9 +238,9 @@ func (w *Worker) openApprovalChange(ctx dbos.Context, in approvalInput) (*Change
 	return ct, nil
 }
 
-// refreshApprovalChange rilegge l'approvazione del change, nello step change:status. Un
-// errore di lettura viene registrato e la lettura ripetuta al giro successivo. Un change
-// respinto aggiunge una decisione negativa con il numero del ticket.
+// refreshApprovalChange reads the change approval again, in the change:status step. A read
+// error is logged and the read repeated at the next round. A rejected change adds a negative
+// decision with the ticket number.
 func (w *Worker) refreshApprovalChange(ctx dbos.Context, in approvalInput, st *ApprovalState) {
 	type read struct {
 		Ticket change.Ticket `json:"ticket"`
@@ -262,8 +262,8 @@ func (w *Worker) refreshApprovalChange(ctx dbos.Context, in approvalInput, st *A
 	st.Status = approvalOutcome(*st)
 }
 
-// changeDecision registra il rifiuto del change nel sistema ITSM come una decisione negativa,
-// con il numero del ticket come approvatore: così compare con le altre decisioni.
+// changeDecision records the change rejection in the ITSM as a negative decision, with the
+// ticket number as approver: so it shows up with the other decisions.
 func (w *Worker) changeDecision(st *ApprovalState, t *ChangeTicket, at time.Time) {
 	if t.Approval != change.ApprovalRejected {
 		return
@@ -277,8 +277,8 @@ func (w *Worker) changeDecision(st *ApprovalState, t *ChangeTicket, at time.Time
 	})
 }
 
-// enqueueApproved accoda il deploy approvato. Un deploy pianificato con schedule.at resta in
-// attesa fino all'orario, se non è già passato.
+// enqueueApproved enqueues the approved deploy. A deploy scheduled with schedule.at waits for
+// its time, if not already past.
 func (w *Worker) enqueueApproved(ctx dbos.Context, in approvalInput) error {
 	d := in.Request.Descriptor
 	delay, err := dbos.RunAsStep(ctx, func(context.Context) (time.Duration, error) {
@@ -298,7 +298,7 @@ func (w *Worker) enqueueApproved(ctx dbos.Context, in approvalInput) error {
 	return err
 }
 
-// recordApproval registra nell'audit l'esito dell'approvazione, in uno step DBOS.
+// recordApproval records the approval outcome in the audit, in a DBOS step.
 func (w *Worker) recordApproval(ctx dbos.Context, in approvalInput, st ApprovalState) {
 	if w.audit == nil {
 		return
@@ -316,10 +316,10 @@ func (w *Worker) recordApproval(ctx dbos.Context, in approvalInput, st ApprovalS
 	}
 }
 
-// ActionApprovalFinish è l'azione di audit con l'esito di un'approvazione.
+// ActionApprovalFinish is the audit action with the outcome of an approval.
 const ActionApprovalFinish = "approval.finish"
 
-// approvalWorkflowState è lo stato esposto per un deploy che non ha ancora un workflow.
+// approvalWorkflowState is the state shown for a deploy that has no workflow yet.
 func approvalWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 	switch st {
 	case dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed:
@@ -331,15 +331,15 @@ func approvalWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 		case ApprovalExpired:
 			return StateExpired
 		case ApprovalApproved:
-			// Il deploy sta per essere accodato.
+			// The deploy is about to be enqueued.
 			return string(dbos.WorkflowStatusEnqueued)
 		}
 	}
 	return string(st)
 }
 
-// approval legge lo stato dell'approvazione w (letta con l'output): il risultato se conclusa,
-// altrimenti l'ultimo evento pubblicato. Un'approvazione non ancora avviata non ha stato (nil).
+// approval reads the state of approval w (read with its output): the result if ended,
+// otherwise the last published event. An approval not yet started has no state (nil).
 func (e *Engine) approval(w dbos.WorkflowStatus) *ApprovalState {
 	if w.Status == dbos.WorkflowStatusSuccess {
 		var a ApprovalState
@@ -355,9 +355,9 @@ func (e *Engine) approval(w dbos.WorkflowStatus) *ApprovalState {
 	return &a
 }
 
-// Decide registra la decisione dell'identità nel context sul deploy in attesa di approvazione.
-// I permessi e il divieto di auto-approvazione sono verificati da authz.Guard; il workflow
-// scarta comunque le decisioni non valide.
+// Decide records the decision of the identity in the context on the deploy awaiting approval.
+// Permissions and the self-approval ban are checked by authz.Guard; the workflow discards
+// invalid decisions anyway.
 func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error {
 	st, err := e.Status(ctx, id)
 	if err != nil {
@@ -373,7 +373,7 @@ func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error
 	dec := Decision{Approver: approver, Approve: r.Approve, Comment: r.Comment, Time: e.now().UTC()}
 	target, topic := id+approvalSuffix, approvalTopic
 	if st.Rollout != nil && awaitsDecision(st.Rollout.Status) {
-		// Approvazione tra due ondate o gradini: la decisione va al workflow del deploy.
+		// Approval between two waves or steps: the decision goes to the deploy workflow.
 		target, topic = id, rolloutApprovalTopic
 	}
 	if err := dbos.Send(e.client, target, dec, topic); err != nil {

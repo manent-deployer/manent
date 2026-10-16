@@ -1,11 +1,11 @@
 package service
 
-// Stati di un rollout, di uno stadio e di un passo.
+// States of a rollout, a stage and a pass.
 const (
 	RolloutRunning        = "running"
 	RolloutPausedApproval = "paused-approval"
 	RolloutPausedFreeze   = "paused-freeze"
-	// RolloutPausedDrift indica pesi del router diversi da quelli impostati da manent.
+	// RolloutPausedDrift means router weights differ from those set by manent.
 	RolloutPausedDrift = "paused-drift"
 	RolloutSucceeded   = "succeeded"
 	RolloutFailed      = "failed"
@@ -18,66 +18,66 @@ const (
 	StageRolledBack = "rolled-back"
 )
 
-// RolloutState è lo stato di un rilascio a ondate, pubblicato dal workflow a ogni cambiamento.
+// RolloutState is the state of a wave rollout, published by the workflow at every change.
 type RolloutState struct {
-	// Strategy è waves (vuoto) o traffic.
+	// Strategy is waves (empty) or traffic.
 	Strategy string `json:"strategy,omitempty"`
 	Status   string `json:"status"`
-	// Stage è lo stadio corrente (o quello fallito).
+	// Stage is the current stage (or the failed one).
 	Stage string `json:"stage,omitempty"`
-	// Paused spiega la pausa: approvazione dopo un'ondata o freeze di una region.
+	// Paused explains the pause: approval after a wave or freeze of a region.
 	Paused string         `json:"paused,omitempty"`
 	Stages []RolloutStage `json:"stages"`
-	// Approval è l'approvazione richiesta tra due ondate, se in corso o conclusa.
+	// Approval is the approval requested between two waves, if running or ended.
 	Approval *ApprovalState `json:"approval,omitempty"`
-	// OnFailure è il comportamento previsto se un passo fallisce.
+	// OnFailure is the behavior configured for a failed pass.
 	OnFailure string `json:"on_failure"`
-	// Rollback è l'esito del rollback dei passi, se eseguito.
+	// Rollback is the outcome of the passes' rollback, if run.
 	Rollback string `json:"rollback,omitempty"`
-	// Traffic è lo stato del rilascio per percentuale (strategy: traffic).
+	// Traffic is the state of the percentage rollout (strategy: traffic).
 	Traffic *TrafficState `json:"traffic,omitempty"`
 }
 
-// TrafficState è lo stato di un rilascio per percentuale: gli stadi sono i gradini.
+// TrafficState is the state of a percentage rollout: stages are the steps.
 type TrafficState struct {
-	// Pass è il passo in corso nei rilasci per percentuale a ondate.
+	// Pass is the running pass in percentage rollouts in waves.
 	Pass string `json:"pass,omitempty"`
-	// Router è il router (provider dell'ambiente o plugin di deploy).
+	// Router is the router (environment provider or deploy plugin).
 	Router string `json:"router,omitempty"`
-	// Stable e Candidate sono gli slot della versione stabile e della candidata, se noti.
+	// Stable and Candidate are the slots of the stable and candidate versions, if known.
 	Stable    string `json:"stable,omitempty"`
 	Candidate string `json:"candidate,omitempty"`
-	// Weight è la quota di traffico corrente della candidata.
+	// Weight is the candidate's current traffic share.
 	Weight int   `json:"weight"`
 	Steps  []int `json:"steps"`
-	// Testers indica le richieste dei tester già instradate verso la candidata.
+	// Testers means the testers' requests are already routed to the candidate.
 	Testers bool `json:"testers,omitempty"`
-	// Promoted indica la candidata diventata la versione in esercizio.
+	// Promoted means the candidate has become the version in service.
 	Promoted bool `json:"promoted,omitempty"`
 }
 
-// RolloutStage è uno stadio: i passi eseguiti insieme, poi bake e health gate.
+// RolloutStage is a stage: the passes run together, then bake and health gate.
 type RolloutStage struct {
 	Name   string        `json:"name"`
 	Wave   string        `json:"wave"`
 	State  string        `json:"state"`
 	Passes []RolloutPass `json:"passes"`
-	// Gate descrive l'ultimo health gate rosso, o è vuoto.
+	// Gate describes the last red health gate, or is empty.
 	Gate  string `json:"gate,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
-// RolloutPass è il lavoro su una region (o un'AZ) dentro uno stadio.
+// RolloutPass is the work on a region (or an AZ) within a stage.
 type RolloutPass struct {
 	Name   string   `json:"name"`
 	Region string   `json:"region,omitempty"`
 	AZ     string   `json:"az,omitempty"`
 	Hosts  []string `json:"hosts"`
-	// Drained sono i membri del pool fuori dal load balancer in questo momento.
+	// Drained are the pool members out of the load balancer right now.
 	Drained []string `json:"drained,omitempty"`
 }
 
-// Completed restituisce gli stadi superati.
+// Completed returns the stages passed.
 func (r *RolloutState) Completed() []string {
 	var out []string
 	for _, s := range r.Stages {

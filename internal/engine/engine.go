@@ -1,4 +1,4 @@
-// Package engine orchestra la pipeline di deploy come workflow durevole DBOS.
+// Package engine orchestrates the deploy pipeline as a durable DBOS workflow.
 package engine
 
 import (
@@ -24,98 +24,98 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// Nomi stabili con cui i workflow sono registrati in DBOS.
-// Non vanno cambiati: i workflow in corso e le schedule li riferiscono per nome.
+// Stable names the workflows are registered with in DBOS.
+// They must not change: running workflows and schedules refer to them by name.
 const (
 	workflowName          = "manent.deploy"
 	scheduledWorkflowName = "manent.scheduled-deploy"
 	approvalWorkflowName  = "manent.approval"
 )
 
-// Request è l'input del workflow, persistito da DBOS.
+// Request is the workflow input, persisted by DBOS.
 type Request struct {
 	Descriptor descriptor.Descriptor `json:"descriptor"`
 	Plan       pipeline.Plan         `json:"plan"`
-	// RequestedBy è l'identità che ha richiesto il deploy (o creato la schedule), es. "oidc:alice".
+	// RequestedBy is the identity that requested the deploy (or created the schedule), e.g. "oidc:alice".
 	RequestedBy string `json:"requested_by,omitempty"`
-	// Kind è deploy, promotion o rollback (vuoto = deploy).
+	// Kind is deploy, promotion or rollback (empty = deploy).
 	Kind string `json:"kind,omitempty"`
-	// Source è il deploy da cui deriva una promozione o un rollback manuale.
+	// Source is the deploy a promotion or a manual rollback derives from.
 	Source string `json:"source,omitempty"`
-	// Release è la release composta a cui appartiene il deploy.
+	// Release is the composite release the deploy belongs to.
 	Release string `json:"release,omitempty"`
-	// Approval, se presente, sono le approvazioni richieste prima dell'esecuzione: la regola
-	// è quella valida al momento della richiesta (o della creazione della schedule).
+	// Approval, if set, are the approvals required before execution: the rule is the one valid
+	// at request time (or when the schedule was created).
 	Approval *governance.Approvals `json:"approval,omitempty"`
-	// Change, se presente, apre un ticket di change management per il deploy ed eventualmente
-	// ne attende l'approvazione. Come Approval, è la regola valida alla richiesta.
+	// Change, if set, opens a change management ticket for the deploy and possibly waits for its
+	// approval. Like Approval, it is the rule valid at request time.
 	Change *governance.Change `json:"change,omitempty"`
-	// Notify sono le destinazioni delle notifiche in chat (integrations.notifications), scelte
-	// alla richiesta: la sequenza degli step del workflow non dipende dalla configurazione
-	// letta durante una recovery.
+	// Notify are the chat notification destinations (integrations.notifications), chosen at
+	// request time: the workflow step sequence does not depend on the configuration read during
+	// a recovery.
 	Notify []string `json:"notify,omitempty"`
-	// TraceParent è la traccia (W3C traceparent) della richiesta: le span del worker ne
-	// diventano figlie. Vuoto per le esecuzioni delle schedule ricorrenti.
+	// TraceParent is the trace (W3C traceparent) of the request: the worker's spans become its
+	// children. Empty for recurring schedule runs.
 	TraceParent string `json:"trace_parent,omitempty"`
 }
 
-// ServiceOptions configura il servizio.
+// ServiceOptions configures the service.
 type ServiceOptions struct {
-	// Client è il client DBOS: il contesto di un Worker oppure un client standalone (dbos.NewClient).
+	// Client is the DBOS client: a Worker's context or a standalone client (dbos.NewClient).
 	Client    dbos.Client
 	QueueName string
 	Planner   pipeline.Planner
-	// CallbackPolicy è applicata agli URL dei callback già all'accodamento, per rifiutare subito
-	// un descrittore che il worker non potrebbe notificare.
+	// CallbackPolicy is applied to callback URLs already at submission, to reject at once a
+	// descriptor the worker could not notify.
 	CallbackPolicy callback.Policy
-	// Sources, se presente, rifiuta già all'accodamento una sorgente di artefatti non ammessa.
-	// Il worker la verifica di nuovo al download.
+	// Sources, if set, rejects already at submission an artifact source that is not allowed.
+	// The worker checks it again at download.
 	Sources SourceChecker
-	// Rollback, se presente, rifiuta già all'accodamento un rollback non ammesso dalla policy.
-	// La decisione definitiva è presa dal worker, dopo la fusione con la configurazione di ambiente.
-	// Decide anche se un artefatto ammette il rollback manuale.
+	// Rollback, if set, rejects already at submission a rollback the policy does not allow.
+	// The final decision is the worker's, after merging with the environment configuration.
+	// It also decides whether an artifact allows manual rollback.
 	Rollback RollbackPolicy
-	// Resolver, se presente, verifica già all'accodamento la policy sui descrittori e la
-	// compatibilità con la configurazione di ambiente. Il worker la verifica di nuovo.
+	// Resolver, if set, checks already at submission the descriptor policy and the compatibility
+	// with the environment configuration. The worker checks it again.
 	Resolver ConfigResolver
-	// Governance, se presente, applica promozione obbligatoria, approvazioni e freeze.
+	// Governance, if set, applies mandatory promotion, approvals and freezes.
 	Governance Governance
-	// Notifications, se presente, sceglie le destinazioni delle notifiche in chat.
+	// Notifications, if set, chooses the chat notification destinations.
 	Notifications NotificationRouter
-	// Health, se presente, verifica che i controlli di salute dei rollout siano eseguibili.
+	// Health, if set, checks that rollout health checks can run.
 	Health rollout.Checker
-	// Traffic, se presente, verifica la configurazione di load balancer e router.
+	// Traffic, if set, checks the load balancer and router configuration.
 	Traffic TrafficOps
-	// Executors, se presente, fornisce a Workers il registro dei worker; StaleAfter è il
-	// ritardo di heartbeat oltre il quale un worker è considerato perso.
+	// Executors, if set, provides Workers with the worker registry; StaleAfter is the heartbeat
+	// delay beyond which a worker is considered lost.
 	Executors  ExecutorLister
 	StaleAfter time.Duration
 	Logger     *slog.Logger
-	// Now restituisce l'ora corrente; sostituibile nei test.
+	// Now returns the current time; replaceable in tests.
 	Now func() time.Time
 }
 
-// NotificationRouter sceglie le destinazioni delle notifiche di un deploy.
+// NotificationRouter chooses the notification destinations of a deploy.
 type NotificationRouter interface {
 	Match(application, environment string, dryRun bool) []string
 }
 
-// SourceChecker verifica che la sorgente di un artefatto sia ammessa.
+// SourceChecker checks that an artifact source is allowed.
 type SourceChecker interface {
 	Check(source string) error
 }
 
-// Governance fornisce le regole di rilascio e le finestre di freeze.
+// Governance provides the release rules and the freeze windows.
 type Governance interface {
 	Rule(application, environment string) governance.Rule
 	Frozen(application, environment string, t time.Time) *governance.WindowStatus
-	// FrozenIn considera anche le finestre limitate a una region (passi di un rollout).
+	// FrozenIn also considers windows limited to a region (rollout passes).
 	FrozenIn(application, environment, region string, t time.Time) *governance.WindowStatus
 	Windows(application, environment string, t time.Time) []governance.WindowStatus
 }
 
-// Engine implementa Service usando solo le API client di DBOS:
-// accoda e interroga i workflow ma non li esegue (lo fanno i Worker).
+// Engine implements Service using only the DBOS client APIs: it enqueues and queries
+// workflows but does not run them (Workers do).
 type Engine struct {
 	client     dbos.Client
 	queueName  string
@@ -132,11 +132,11 @@ type Engine struct {
 	staleAfter time.Duration
 	logger     *slog.Logger
 	now        func() time.Time
-	// inv è l'inventario del processo, aggiornato in modo incrementale.
+	// inv is the process inventory, updated incrementally.
 	inv inventoryCache
 }
 
-// NewService crea il servizio sopra un client DBOS.
+// NewService creates the service on top of a DBOS client.
 func NewService(opts ServiceOptions) *Engine {
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -160,30 +160,30 @@ func NewService(opts ServiceOptions) *Engine {
 	}
 }
 
-// Plan delega al planner configurato.
-// Il piano restituito non contiene le specifiche degli step personalizzati (comandi e URL),
-// solo tipo e hash.
+// Plan delegates to the configured planner.
+// The returned plan does not contain the specs of custom steps (commands and URLs), only
+// type and hash.
 func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
 	plan, err := e.planner.Plan(d)
 	return plan.Public(), err
 }
 
-// submitMeta descrive l'origine di una richiesta di deploy.
+// submitMeta describes the origin of a deploy request.
 type submitMeta struct {
 	kind, source, release string
-	// prechecked salta la verifica di policy e configurazione di ambiente (check), già
-	// eseguita da chi ha accettato la richiesta (deploy di una release).
+	// prechecked skips the policy and environment configuration check (check), already done by
+	// whoever accepted the request (deploy of a release).
 	prechecked bool
 }
 
-// Submit calcola il piano e, in base a schedule nel descrittore:
-//   - nessuna schedule: accoda subito il deploy;
-//   - schedule.at: accoda il deploy in stato DELAYED fino all'orario indicato;
-//   - schedule.cron: crea o aggiorna la schedule ricorrente.
+// Submit computes the plan and, depending on schedule in the descriptor:
+//   - no schedule: enqueues the deploy at once;
+//   - schedule.at: enqueues the deploy in DELAYED state until the given time;
+//   - schedule.cron: creates or updates the recurring schedule.
 //
-// Se le regole di governance richiedono approvazioni, il deploy resta in attesa
-// (AWAITING_APPROVAL) e viene accodato solo dopo l'approvazione.
-// Se il descrittore ha un ID, questo è usato come ID del workflow e rende la richiesta idempotente.
+// If governance rules require approvals, the deploy waits (AWAITING_APPROVAL) and is enqueued
+// only after the approval.
+// If the descriptor has an ID, it is used as workflow ID and makes the request idempotent.
 func (e *Engine) Submit(ctx context.Context, d *descriptor.Descriptor) (*Submission, error) {
 	return e.submit(ctx, d, submitMeta{kind: KindDeploy})
 }
@@ -217,7 +217,7 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	if e.notify != nil {
 		req.Notify = e.notify.Match(d.Application, d.Environment, d.DryRun)
 	}
-	// Con dipendenze non ancora riuscite il deploy attende: poi approvazione e accodamento.
+	// With dependencies not yet successful the deploy waits: then approval and enqueuing.
 	wait := false
 	if len(d.After) > 0 {
 		done, err := e.checkAfter(ctx, d)
@@ -255,7 +255,7 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 		return sub, nil
 	}
 	if needsApproval(req) {
-		// Il deploy non esiste ancora: l'ID va scelto subito, perché è quello da approvare.
+		// The deploy does not exist yet: the ID must be chosen now, because it is the one to approve.
 		if id == "" {
 			id = uuid.NewString()
 		}
@@ -280,10 +280,10 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	return sub, nil
 }
 
-// alreadyScheduled rende idempotente il reinvio di un deploy con id e schedule.at dopo
-// l'orario indicato (es. una CI che riprova): se il deploy esiste già per la stessa
-// applicazione e lo stesso ambiente lo restituisce, invece di rifiutare l'orario come passato.
-// Prima dell'orario ci pensa l'accodamento con lo stesso ID del workflow.
+// alreadyScheduled makes idempotent the resubmission of a deploy with id and schedule.at after
+// the given time (e.g. a retrying CI): if the deploy already exists for the same application
+// and environment it returns it, instead of rejecting the time as past. Before the time,
+// enqueuing with the same workflow ID already takes care of it.
 func (e *Engine) alreadyScheduled(ctx context.Context, d *descriptor.Descriptor) (*Submission, bool) {
 	if d.ID == "" || d.DryRun || d.Schedule == nil || d.Schedule.At == nil || d.Schedule.At.After(e.now()) {
 		return nil, false
@@ -295,10 +295,10 @@ func (e *Engine) alreadyScheduled(ctx context.Context, d *descriptor.Descriptor)
 	return &Submission{ID: st.ID, State: st.State, ScheduledAt: d.Schedule.At}, true
 }
 
-// check rifiuta subito ciò che il worker non potrebbe eseguire: callback e sorgenti non
-// ammessi, descrittore in violazione della policy o incompatibile con la configurazione di
-// ambiente, rollback non ammesso. Se la configurazione di ambiente non è raggiungibile la
-// verifica è lasciata al worker. Restituisce il descrittore effettivo, o nil se non è noto.
+// check rejects at once what the worker could not run: callbacks and sources not allowed,
+// descriptor violating the policy or incompatible with the environment configuration,
+// rollback not allowed. If the environment configuration is unreachable the check is left to
+// the worker. It returns the effective descriptor, or nil if unknown.
 func (e *Engine) check(ctx context.Context, d *descriptor.Descriptor) (*descriptor.Descriptor, error) {
 	v, eff, err := e.inspect(ctx, d)
 	if err != nil {
@@ -310,9 +310,9 @@ func (e *Engine) check(ctx context.Context, d *descriptor.Descriptor) (*descript
 	return eff, nil
 }
 
-// Validate verifica il descrittore come all'accodamento, senza accodarlo, e restituisce il
-// piano e il deploy effettivo: configurazione di ambiente, rollback e regole di governance.
-// Il client lo usa per "manent validate", perché non ha accesso alla configurazione di ambiente.
+// Validate checks the descriptor as at submission, without enqueuing it, and returns the plan
+// and the effective deploy: environment configuration, rollback and governance rules.
+// The client uses it for "manent validate", since it has no access to the environment configuration.
 func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Validation, error) {
 	plan, err := e.planner.Plan(d)
 	if err != nil {
@@ -335,9 +335,9 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 	return v, nil
 }
 
-// inspect esegue le verifiche di check e descrive il deploy effettivo. Un errore permanente
-// rende la richiesta non valida; una configurazione di ambiente irraggiungibile produce solo
-// un avviso, e il descrittore effettivo restituito è nil.
+// inspect runs the check verifications and describes the effective deploy. A permanent error
+// makes the request invalid; an unreachable environment configuration only produces a
+// warning, and the returned effective descriptor is nil.
 func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Validation, *descriptor.Descriptor, error) {
 	for _, cb := range d.Callbacks {
 		if err := e.callbacks.Check(cb.URL); err != nil {
@@ -370,7 +370,7 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		eff = r
 	}
 	if eff.Rollout != nil && v.Config != nil {
-		// Con la configurazione di ambiente letta il piano a ondate è quello definitivo.
+		// With the environment configuration read, the wave plan is the final one.
 		p, err := checkRollout(eff, e.health, e.traffic)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: rollout: %w", ErrInvalidRequest, err)
@@ -381,8 +381,8 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		}
 		v.Rollout.Status = "planned"
 	}
-	// Senza configurazione di ambiente letta i parametri obbligatori e i segreti possono ancora
-	// arrivare da lì: si verificano solo i valori già presenti.
+	// Without the environment configuration, required parameters and secrets may still come from
+	// there: only the values already present are checked.
 	plan, err := e.planner.Plan(d)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -400,9 +400,9 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 	return v, nil, nil
 }
 
-// govern applica le regole di governance a un deploy reale: freeze, promozione obbligatoria e
-// approvazioni. Restituisce le approvazioni richieste, o nil. Il dry-run non è soggetto alle
-// regole perché non modifica gli ambienti.
+// govern applies the governance rules to a real deploy: freeze, mandatory promotion and
+// approvals. It returns the required approvals, or nil. Dry-runs are not subject to the rules
+// because they do not change the environments.
 func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governance.Approvals, *governance.Change, error) {
 	if e.governance == nil || d.DryRun {
 		return nil, nil, nil
@@ -439,7 +439,7 @@ func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governa
 	return approvals, change, nil
 }
 
-// changeTicket legge il ticket di change dagli attributi del workflow.
+// changeTicket reads the change ticket from the workflow attributes.
 func changeTicket(st dbos.WorkflowStatus) *ChangeTicket {
 	n := attr(st, attrChange)
 	if n == "" {
@@ -448,15 +448,15 @@ func changeTicket(st dbos.WorkflowStatus) *ChangeTicket {
 	return &ChangeTicket{Number: n, URL: attr(st, attrChangeURL)}
 }
 
-// needsApproval indica se il deploy attende un'approvazione prima dell'accodamento: di
-// identità di manent, del change nel sistema ITSM o di entrambi.
-// Le approvazioni spostate nel rollout (approvals.when: rollout) non contano.
+// needsApproval reports whether the deploy waits for an approval before enqueuing: by manent
+// identities, by the change in the ITSM or both.
+// Approvals moved into the rollout (approvals.when: rollout) do not count.
 func needsApproval(req Request) bool {
 	return (req.Approval != nil && !req.Approval.InRollout()) || (req.Change != nil && req.Change.Approval)
 }
 
-// checkRolloutApprovals verifica che un deploy con le approvazioni spostate nel rollout abbia
-// un rollout con punti di approvazione: altrimenti partirebbe senza approvazioni.
+// checkRolloutApprovals checks that a deploy with approvals moved into the rollout has a
+// rollout with approval points: otherwise it would start without approvals.
 func checkRolloutApprovals(d *descriptor.Descriptor, a *governance.Approvals) error {
 	if !a.InRollout() || (d.Rollout != nil && len(d.Rollout.ApprovalsBetween) > 0) {
 		return nil
@@ -464,7 +464,7 @@ func checkRolloutApprovals(d *descriptor.Descriptor, a *governance.Approvals) er
 	return errors.New("la regola di governance sposta le approvazioni nel rollout (approvals.when: rollout), ma il deploy non ha un rollout con approvalsBetween")
 }
 
-// freezeMessage descrive il freeze che blocca un deploy.
+// freezeMessage describes the freeze blocking a deploy.
 func freezeMessage(w *governance.WindowStatus) string {
 	msg := fmt.Sprintf("deploy bloccato dal freeze %q fino a %s", w.Name, w.End.Format(time.RFC3339))
 	if w.Reason != "" {
@@ -473,8 +473,8 @@ func freezeMessage(w *governance.WindowStatus) string {
 	return msg + "; per un'emergenza indicare freezeOverride con il motivo"
 }
 
-// sameArtifact indica se il deploy registrato ha rilasciato lo stesso artefatto del descrittore:
-// stesso nome e versione e, se entrambi noti, stesso sha256.
+// sameArtifact reports whether the recorded deploy released the same artifact as the
+// descriptor: same name and version and, if both known, same sha256.
 func sameArtifact(s Status, d *descriptor.Descriptor) bool {
 	if s.Artifact != d.Artifact.Name || s.Version != d.Artifact.Version {
 		return false
@@ -482,8 +482,8 @@ func sameArtifact(s Status, d *descriptor.Descriptor) bool {
 	return d.Artifact.SHA256 == "" || s.SHA256 == "" || strings.EqualFold(s.SHA256, d.Artifact.SHA256)
 }
 
-// deployOptions sono le opzioni di accodamento di un deploy: partizione della coda, utente,
-// attributi per elenchi e inventario e, se indicato, ID del workflow.
+// deployOptions are the enqueue options of a deploy: queue partition, user, attributes for
+// listings and inventory and, if given, workflow ID.
 func deployOptions(req Request, id string) []dbos.EnqueueOption {
 	opts := []dbos.EnqueueOption{
 		dbos.WithEnqueueQueuePartitionKey(partitionKey(&req.Descriptor)),
@@ -498,8 +498,8 @@ func deployOptions(req Request, id string) []dbos.EnqueueOption {
 	return opts
 }
 
-// Chiavi degli attributi dei workflow. Sono registrati alla creazione e aggiornati al termine
-// del deploy (esito, sha256, rollback): permettono elenchi e inventario senza caricare l'input.
+// Workflow attribute keys. They are recorded at creation and updated at the end of the
+// deploy (outcome, sha256, rollback): they enable listings and inventory without loading the input.
 const (
 	attrApplication = "application"
 	attrEnvironment = "environment"
@@ -512,14 +512,14 @@ const (
 	attrOutcome     = "outcome"
 	attrSHA256      = "sha256"
 	attrRollback    = "rollback"
-	// attrChange e attrChangeURL sono il numero e il link del ticket di change.
+	// attrChange and attrChangeURL are number and link of the change ticket.
 	attrChange    = "change"
 	attrChangeURL = "change_url"
-	// attrRolloutProgress riassume un rollout a ondate: "stadi superati/stadi totali".
+	// attrRolloutProgress summarizes a wave rollout: "stages passed/total stages".
 	attrRolloutProgress = "rollout_progress"
 )
 
-// attributes restituisce gli attributi iniziali di un workflow.
+// attributes returns the initial attributes of a workflow.
 func attributes(req Request) map[string]any {
 	d := req.Descriptor
 	a := map[string]any{
@@ -547,9 +547,9 @@ func attributes(req Request) map[string]any {
 	return a
 }
 
-// Status legge lo stato del deploy dal database di sistema DBOS: con una sola query il
-// workflow del deploy e quelli di approvazione e attesa delle dipendenze. Un deploy in attesa
-// non ha ancora un workflow: lo stato è quello dell'approvazione o dell'attesa.
+// Status reads the deploy state from the DBOS system database: with a single query the deploy
+// workflow and the approval and dependency wait ones. A waiting deploy has no workflow yet:
+// its state is the approval's or the wait's.
 func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
 		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(true))
@@ -579,13 +579,13 @@ func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 	return &s, nil
 }
 
-// deployWorkflows sono i workflow che rappresentano un deploy: il deploy stesso, l'approvazione
-// e l'attesa delle dipendenze, ognuno nil se non esiste.
+// deployWorkflows are the workflows that represent a deploy: the deploy itself, the approval
+// and the dependency wait, each nil if missing.
 type deployWorkflows struct {
 	deploy, approval, after *dbos.WorkflowStatus
 }
 
-// groupDeploy individua tra i workflow letti quelli del deploy id.
+// groupDeploy finds among the read workflows those of deploy id.
 func groupDeploy(id string, ws []dbos.WorkflowStatus) deployWorkflows {
 	var g deployWorkflows
 	for i := range ws {
@@ -602,7 +602,7 @@ func groupDeploy(id string, ws []dbos.WorkflowStatus) deployWorkflows {
 	return g
 }
 
-// readRollout aggiunge a s lo stato del rollout del deploy st, se va letto (readsRollout).
+// readRollout adds to s the rollout state of deploy st, if it must be read (readsRollout).
 func (e *Engine) readRollout(s *Status, st dbos.WorkflowStatus) {
 	if !readsRollout(st) {
 		return
@@ -610,15 +610,16 @@ func (e *Engine) readRollout(s *Status, st dbos.WorkflowStatus) {
 	if rs, err := dbos.GetEvent[RolloutState](e.client, st.ID, rolloutEvent, 0); err == nil && rs.Status != "" {
 		s.Rollout = &rs
 		if awaitsDecision(rs.Status) && st.Status == dbos.WorkflowStatusPending {
-			// Approvazione tra due ondate o gradini, o pesi cambiati da altri: il deploy è in
-			// corso ma attende una decisione.
+			// Approval between two waves or steps, or weights changed by others: the deploy is running
+			// but waits for a decision.
 			s.State, s.Approval = StateAwaitingApproval, rs.Approval
 		}
 	}
 }
 
-// readsRollout dice se lo stato del rollout va letto dall'evento: per i deploy in corso e per
-// quelli conclusi con un rollout (attributo registrato alla fine) o interrotti prima della fine.
+// readsRollout says whether the rollout state must be read from the event: for running
+// deploys and for those ended with a rollout (attribute recorded at the end) or interrupted
+// before the end.
 func readsRollout(st dbos.WorkflowStatus) bool {
 	switch st.Status {
 	case dbos.WorkflowStatusPending, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded:
@@ -627,12 +628,12 @@ func readsRollout(st dbos.WorkflowStatus) bool {
 	return attr(st, attrRolloutProgress) != ""
 }
 
-// maxListScan limita i deploy esaminati da un elenco filtrato o dall'inventario.
+// maxListScan limits the deploys examined by a filtered listing or by the inventory.
 const maxListScan = 10000
 
-// List elenca i deploy dal più recente, compresi quelli in attesa di approvazione o respinti.
-// Con f.Schedule restituisce solo le esecuzioni di quella schedule. I filtri sono applicati
-// pagina per pagina, finché non si raggiunge il limite.
+// List lists the deploys from the most recent, including those awaiting approval or rejected.
+// With f.Schedule it returns only the runs of that schedule. Filters are applied page by page,
+// until the limit is reached.
 func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 	if f.Limit <= 0 {
 		f.Limit = 50
@@ -642,8 +643,8 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 		prefix = []string{scheduledIDPrefix(f.Schedule)}
 	}
 	out := []Status{}
-	// Con un cursore l'elenco riparte dal deploy successivo a quello indicato: la scansione
-	// parte dalla sua data di creazione, poi salta i deploy fino al cursore compreso.
+	// With a cursor the listing restarts from the deploy after the given one: the scan starts
+	// from its creation time, then skips deploys up to and including the cursor.
 	var from time.Time
 	skipping := f.Cursor != ""
 	if skipping {
@@ -652,7 +653,7 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 			return nil, err
 		}
 		if at.IsZero() {
-			// Il deploy del cursore non esiste più (es. retention): l'elenco è concluso.
+			// The cursor's deploy no longer exists (e.g. retention): the listing is over.
 			return out, nil
 		}
 		from = at
@@ -670,8 +671,8 @@ func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
 	return out, err
 }
 
-// createdAt restituisce la data di creazione più recente tra i workflow del deploy id (deploy,
-// approvazione, attesa), o zero se non ne esiste nessuno.
+// createdAt returns the most recent creation time among the workflows of deploy id (deploy,
+// approval, wait), or zero if none exists.
 func (e *Engine) createdAt(id string) (time.Time, error) {
 	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
 		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
@@ -687,41 +688,41 @@ func (e *Engine) createdAt(id string) (time.Time, error) {
 	return at, nil
 }
 
-// scan scorre deploy e approvazioni dal più recente, a pagine, finché fn restituisce true.
+// scan goes through deploys and approvals from the most recent, in pages, while fn returns true.
 func (e *Engine) scan(prefix []string, fn func(Status) bool) error {
 	return e.scanFrom(prefix, time.Time{}, fn)
 }
 
-// scanFrom è scan a partire dai workflow creati fino a from compreso (zero: dal più recente).
-// Le approvazioni concluse con un deploy e le attese soddisfatte non sono riportate: le
-// rappresenta ciò che hanno accodato.
+// scanFrom is scan starting from the workflows created up to and including from (zero: from
+// the most recent). Approvals ended with a deploy and satisfied waits are not reported: what
+// they enqueued represents them.
 func (e *Engine) scanFrom(prefix []string, from time.Time, fn func(Status) bool) error {
 	return e.scanRawFrom(prefix, from, func(w dbos.WorkflowStatus) bool {
 		return superseded(w) || fn(toStatus(w))
 	})
 }
 
-// superseded dice se il workflow è un'approvazione concluso con un deploy o un'attesa
-// soddisfatta: il deploy che hanno accodato li rappresenta.
+// superseded says whether the workflow is an approval ended with a deploy or a satisfied
+// wait: the deploy they enqueued represents them.
 func superseded(w dbos.WorkflowStatus) bool {
 	return (w.Name == approvalWorkflowName && attr(w, attrOutcome) == ApprovalApproved) ||
 		(w.Name == afterWorkflowName && attr(w, attrOutcome) == service.AfterSatisfied)
 }
 
-// scanRaw scorre deploy, approvazioni e attese dal più recente, senza filtri, finché fn
-// restituisce true.
+// scanRaw goes through deploys, approvals and waits from the most recent, unfiltered, while
+// fn returns true.
 func (e *Engine) scanRaw(prefix []string, fn func(dbos.WorkflowStatus) bool) error {
 	return e.scanRawFrom(prefix, time.Time{}, fn)
 }
 
-// scanRawFrom è scanRaw a partire dai workflow creati fino a from compreso. Le pagine sono per
-// chiave (data di creazione), non per offset: ogni pagina costa una query sull'indice di
-// created_at, qualunque sia la sua posizione nello storico.
+// scanRawFrom is scanRaw starting from the workflows created up to and including from. Pages
+// are by key (creation time), not by offset: every page costs one query on the created_at
+// index, wherever it is in the history.
 //
-// L'ordine è deterministico, per data di creazione e poi per ID (decrescenti): DBOS ordina solo
-// per data, e i workflow creati nello stesso millisecondo possono tornare in ordine diverso da
-// una query all'altra. Per questo un gruppo con la stessa data viene restituito solo quando è
-// stato letto per intero: l'ultimo gruppo di una pagina piena viene riletto con la pagina dopo.
+// The order is deterministic, by creation time and then by ID (descending): DBOS orders only
+// by time, and workflows created in the same millisecond can come back in a different order
+// from one query to the next. So a group with the same time is returned only once read
+// entirely: the last group of a full page is read again with the next page.
 func (e *Engine) scanRawFrom(prefix []string, from time.Time, fn func(dbos.WorkflowStatus) bool) error {
 	const page = 200
 	list := func(opts ...dbos.ListWorkflowsOption) ([]dbos.WorkflowStatus, error) {
@@ -749,13 +750,13 @@ func (e *Engine) scanRawFrom(prefix []string, from time.Time, fn func(dbos.Workf
 		if last {
 			boundary := wfs[len(wfs)-1].CreatedAt
 			if wfs[0].CreatedAt.Equal(boundary) {
-				// Una pagina intera nello stesso millisecondo: si legge tutto il gruppo.
+				// A whole page in the same millisecond: read the whole group.
 				if wfs, err = list(dbos.WithFilterCreatedAfter(boundary), dbos.WithFilterCreatedBefore(boundary)); err != nil {
 					return err
 				}
 				from = boundary.Add(-time.Millisecond)
 			} else {
-				// L'ultimo gruppo può essere incompleto: viene riletto con la pagina successiva.
+				// The last group may be incomplete: it is read again with the next page.
 				wfs = slices.DeleteFunc(wfs, func(w dbos.WorkflowStatus) bool { return w.CreatedAt.Equal(boundary) })
 				from = boundary
 			}
@@ -776,16 +777,16 @@ func (e *Engine) scanRawFrom(prefix []string, from time.Time, fn func(dbos.Workf
 	return nil
 }
 
-// Wait blocca fino alla conclusione del workflow, o fino alla scadenza di ctx se ne ha una.
-// Il deploy viene eseguito da un Worker: senza worker attivi resta in coda. Per un deploy in
-// attesa di approvazione attende prima la decisione.
+// Wait blocks until the workflow ends, or until ctx expires if it has a deadline.
+// The deploy runs on a Worker: without live workers it stays queued. For a deploy awaiting
+// approval it first waits for the decision.
 func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 	var opts []dbos.GetResultOption
 	if deadline, ok := ctx.Deadline(); ok {
 		opts = append(opts, dbos.WithHandleTimeout(time.Until(deadline)))
 	}
-	// Prima dell'esecuzione il deploy può attendere le dipendenze, poi l'approvazione: ognuna,
-	// se va a buon fine, accoda la successiva prima di concludersi.
+	// Before execution the deploy may wait for dependencies, then for approval: each one, if
+	// successful, enqueues the next before ending.
 	for range 3 {
 		if h, err := dbos.RetrieveWorkflow[Result](e.client, id); err == nil {
 			res, err := h.GetResult(opts...)
@@ -819,8 +820,8 @@ func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 	return nil, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 }
 
-// Cancel annulla il deploy: se è in attesa viene rimosso dalla coda, se è in esecuzione si
-// interrompe all'inizio dello step successivo, se attende un'approvazione non verrà eseguito.
+// Cancel cancels the deploy: if waiting it is removed from the queue, if running it stops at
+// the start of the next step, if awaiting approval it will not run.
 func (e *Engine) Cancel(ctx context.Context, id string) error {
 	st, err := e.Status(ctx, id)
 	if err != nil {
@@ -843,9 +844,9 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// toStatus converte lo stato DBOS nel formato esposto da manent.
-// Gli attributi permettono di applicare i permessi e di costruire l'inventario senza caricare
-// l'input del workflow.
+// toStatus converts the DBOS state to the format exposed by manent.
+// Attributes allow applying permissions and building the inventory without loading the
+// workflow input.
 func toStatus(st dbos.WorkflowStatus) Status {
 	s := Status{
 		ID: st.ID, State: string(st.Status), CreatedAt: st.CreatedAt, UpdatedAt: st.UpdatedAt, RequestedBy: st.AuthenticatedUser,
@@ -855,7 +856,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
 	}
 	if s.Application == "" {
-		// Deploy accodati prima degli attributi: la chiave di partizione è "<application>/<environment>".
+		// Deploys enqueued before attributes existed: the partition key is "<application>/<environment>".
 		s.Application, s.Environment, _ = strings.Cut(st.QueuePartitionKey, "/")
 	}
 	s.Release = attr(st, attrRelease)
@@ -875,7 +876,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		at := st.DelayUntil
 		s.ScheduledAt = &at
 	}
-	// Un deploy in coda non ha ancora un worker: l'executor registrato è quello che l'ha accodato.
+	// A queued deploy has no worker yet: the recorded executor is the one that enqueued it.
 	if st.Status != dbos.WorkflowStatusEnqueued && st.Status != dbos.WorkflowStatusDelayed && !st.StartedAt.IsZero() {
 		at := st.StartedAt.UTC()
 		s.StartedAt, s.Executor = &at, st.ExecutorID
@@ -887,17 +888,17 @@ func toStatus(st dbos.WorkflowStatus) Status {
 	return s
 }
 
-// attr restituisce un attributo stringa del workflow.
+// attr returns a string attribute of the workflow.
 func attr(st dbos.WorkflowStatus, key string) string {
 	v, _ := st.Attributes[key].(string)
 	return v
 }
 
-// dryRunSuffix distingue l'ID del workflow di un dry-run da quello del deploy reale.
+// dryRunSuffix tells a dry-run's workflow ID apart from the real deploy's.
 const dryRunSuffix = ".dry-run"
 
-// workflowID restituisce l'ID del workflow per un descrittore con ID. Un dry-run usa un ID
-// distinto: altrimenti, per l'idempotenza, il deploy reale con lo stesso ID non verrebbe mai eseguito.
+// workflowID returns the workflow ID for a descriptor with an ID. A dry-run uses a separate
+// ID: otherwise, because of idempotency, the real deploy with the same ID would never run.
 func workflowID(d *descriptor.Descriptor) string {
 	if d.DryRun {
 		return d.ID + dryRunSuffix
@@ -905,8 +906,8 @@ func workflowID(d *descriptor.Descriptor) string {
 	return d.ID
 }
 
-// partitionKey è la chiave di partizione della coda: i deploy della stessa
-// application/environment rispettano il limite environment_concurrency su tutti i worker.
+// partitionKey is the queue partition key: deploys of the same application/environment obey
+// the environment_concurrency limit across all workers.
 func partitionKey(d *descriptor.Descriptor) string {
 	return d.Application + "/" + d.Environment
 }

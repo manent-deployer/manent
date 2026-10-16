@@ -11,7 +11,7 @@ import (
 
 const routePath = "/apis/gateway.networking.k8s.io/v1/namespaces/shop/httproutes/shop"
 
-// seedRoute crea la HTTPRoute dell'infrastruttura: una regola per i tester e una divisa tra gli slot.
+// seedRoute creates the infrastructure HTTPRoute: one rule for testers and one split between the slots.
 func seedRoute(fc *fakeCluster) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
@@ -27,7 +27,7 @@ func seedRoute(fc *fakeCluster) {
 	}
 }
 
-// routeState riassume la route: backend dei tester e pesi della regola principale.
+// routeState summarizes the route: testers' backend and weights of the main rule.
 func routeState(fc *fakeCluster) string {
 	r := fc.get(routePath)
 	rules := rulesOf(r, "rules")
@@ -47,7 +47,7 @@ func trafficRequest(server, version string, t *testing.T) *plugin.Request {
 	return req
 }
 
-// prepare prepara gli slot e rilascia la candidata; restituisce la richiesta con lo stato.
+// prepare prepares the slots and releases the candidate; it returns the request with the state.
 func prepare(t *testing.T, p *Plugin, server, version string) *plugin.Request {
 	t.Helper()
 	ctx := context.Background()
@@ -71,7 +71,7 @@ func TestSlotEGatewayAPI(t *testing.T) {
 	p, fc, server := setup(t)
 	seedRoute(fc)
 
-	// Primo rilascio: nessuna versione stabile, la candidata va nello slot a e riceve tutto.
+	// First release: no stable version, the candidate goes to slot a and gets everything.
 	r1 := prepare(t, p, server, "1.0.0")
 	if r1.Traffic.State[plugin.StateHasStable] != "false" || r1.Traffic.State["candidate"] != "a" {
 		t.Fatalf("stato: %v", r1.Traffic.State)
@@ -96,7 +96,7 @@ func TestSlotEGatewayAPI(t *testing.T) {
 		t.Fatalf("slot in esercizio: %q", got)
 	}
 
-	// Secondo rilascio: stabile a, candidata b, tester e gradini.
+	// Second release: stable a, candidate b, testers and steps.
 	r2 := prepare(t, p, server, "2.0.0")
 	if r2.Traffic.State["stable"] != "a" || r2.Traffic.State["candidate"] != "b" || r2.Traffic.State[plugin.StateHasStable] != "true" {
 		t.Fatalf("stato: %v", r2.Traffic.State)
@@ -116,7 +116,7 @@ func TestSlotEGatewayAPI(t *testing.T) {
 	if w, err := p.CandidateWeight(ctx, r2); err != nil || w != 25 {
 		t.Errorf("peso letto: %d %v", w, err)
 	}
-	// Una patch con un resourceVersion superato è rifiutata invece di sovrascrivere.
+	// A patch with an outdated resourceVersion is rejected instead of overwriting.
 	api, err := p.connect(ctx, r2.Targets[0], r2)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestSlotEGatewayAPI(t *testing.T) {
 		t.Errorf("slot in esercizio toccato: %d repliche", n)
 	}
 
-	// Terzo rilascio, fallito: traffico e tester tornano allo slot b, la candidata va a zero.
+	// Third release, failed: traffic and testers go back to slot b, the candidate goes to zero.
 	r3 := prepare(t, p, server, "3.0.0")
 	if _, err := p.RouteTesters(ctx, r3); err != nil {
 		t.Fatal(err)
@@ -164,7 +164,7 @@ func TestSlotEGatewayAPI(t *testing.T) {
 	if fc.get(pointerPath).str("data", dataVersion) != "2.0.0" {
 		t.Error("release in esercizio cambiata dal ritorno")
 	}
-	// Il ridimensionamento ritardato di un rilascio sostituito nel frattempo non tocca nulla.
+	// The delayed scale-down of a release replaced meanwhile touches nothing.
 	if err := p.RetirePrevious(ctx, r3); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestSlotEIstio(t *testing.T) {
 	if _, err := p.DeployCandidate(ctx, req); err != nil {
 		t.Fatal(err)
 	}
-	// Con Istio il Service resta comune ai due slot; i pod portano l'etichetta dello slot.
+	// With Istio the Service stays shared by both slots; pods carry the slot label.
 	if svc := fc.get(servicePath); svc == nil || svc.str("spec", "selector", LabelTrack) != "" {
 		t.Errorf("service comune: %v", svc)
 	}
@@ -275,7 +275,7 @@ spec: {selector: {matchLabels: {app: web}}, template: {metadata: {labels: {app: 
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Con traffic_rename: "false" il chart dà già i nomi per slot: manent aggiunge solo le etichette.
+	// With traffic_rename: "false" the chart already names objects per slot: manent only adds labels.
 	objs, _ = slotObjects(objs, "b", true, false)
 	if objs[0].Name() != "shop-b-web" || objs[0].str("spec", "selector", "matchLabels", LabelTrack) != "b" {
 		t.Errorf("oggetto: %v", objs[0])

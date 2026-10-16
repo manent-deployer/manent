@@ -1,6 +1,6 @@
-// Package auth identifica chi usa manent: utenti OIDC e token statici sull'API, utente del
-// sistema operativo sulla CLI. L'identità viaggia nel context fino al servizio, che applica
-// i permessi (internal/authz) e la registra nel deploy e nell'audit.
+// Package auth identifies who uses manent: OIDC users and static tokens on the API, the
+// operating system user on the CLI. The identity travels in the context down to the service,
+// which applies the permissions (internal/authz) and records it in the deploy and the audit.
 package auth
 
 import (
@@ -17,25 +17,25 @@ import (
 	"time"
 )
 
-// Metodi con cui un'identità è stata autenticata.
+// Methods an identity was authenticated with.
 const (
 	MethodOIDC  = "oidc"
 	MethodToken = "token"
 	MethodCLI   = "cli"
-	// MethodNone indica l'autenticazione disattivata (auth.mode: none).
+	// MethodNone means authentication is disabled (auth.mode: none).
 	MethodNone = "none"
 )
 
-// Principal è un'identità autenticata.
+// Principal is an authenticated identity.
 type Principal struct {
-	// Subject è il nome dell'utente (claim OIDC), del token o dell'utente del sistema operativo.
+	// Subject is the name of the user (OIDC claim), of the token or of the operating system user.
 	Subject string   `json:"subject"`
 	Groups  []string `json:"groups,omitempty"`
 	Method  string   `json:"method"`
 }
 
-// String restituisce l'identificativo "<metodo>:<subject>" (es. "oidc:alice", "token:ci"),
-// usato nelle regole RBAC, nell'audit e come utente del workflow DBOS.
+// String returns the identifier "<method>:<subject>" (e.g. "oidc:alice", "token:ci"),
+// used in RBAC rules, in the audit and as the DBOS workflow user.
 func (p *Principal) String() string {
 	if p == nil {
 		return ""
@@ -43,23 +43,23 @@ func (p *Principal) String() string {
 	return p.Method + ":" + p.Subject
 }
 
-// Anonymous è l'identità usata quando l'autenticazione è disattivata.
+// Anonymous is the identity used when authentication is disabled.
 var Anonymous = &Principal{Subject: "anonymous", Method: MethodNone}
 
 type ctxKey struct{}
 
-// WithPrincipal restituisce un context con l'identità indicata.
+// WithPrincipal returns a context with the given identity.
 func WithPrincipal(ctx context.Context, p *Principal) context.Context {
 	return context.WithValue(ctx, ctxKey{}, p)
 }
 
-// FromContext restituisce l'identità del context, o nil se assente.
+// FromContext returns the identity of the context, or nil if absent.
 func FromContext(ctx context.Context) *Principal {
 	p, _ := ctx.Value(ctxKey{}).(*Principal)
 	return p
 }
 
-// CLIPrincipal restituisce l'identità dell'utente del sistema operativo che esegue la CLI.
+// CLIPrincipal returns the identity of the operating system user running the CLI.
 func CLIPrincipal() *Principal {
 	name := "unknown"
 	if u, err := user.Current(); err == nil && u.Username != "" {
@@ -68,15 +68,15 @@ func CLIPrincipal() *Principal {
 	return &Principal{Subject: name, Method: MethodCLI}
 }
 
-// ErrUnauthenticated indica credenziali mancanti o non valide.
+// ErrUnauthenticated means missing or invalid credentials.
 var ErrUnauthenticated = errors.New("autenticazione richiesta")
 
-// Authenticator verifica il token bearer di una richiesta.
+// Authenticator verifies the bearer token of a request.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (*Principal, error)
 }
 
-// BearerToken estrae il token dall'header Authorization ("Bearer <token>").
+// BearerToken extracts the token from the Authorization header ("Bearer <token>").
 func BearerToken(r *http.Request) (string, bool) {
 	h := r.Header.Get("Authorization")
 	scheme, token, ok := strings.Cut(h, " ")
@@ -86,22 +86,22 @@ func BearerToken(r *http.Request) (string, bool) {
 	return strings.TrimSpace(token), true
 }
 
-// StaticToken è un token per sistemi automatici (es. pipeline CI). In configurazione c'è solo
-// lo sha256 del token, mai il valore.
+// StaticToken is a token for automated systems (e.g. CI pipelines). The configuration holds
+// only the token's sha256, never its value.
 type StaticToken struct {
 	Name   string
 	SHA256 string
 	Groups []string
-	// ExpiresAt, se non zero, è la scadenza del token.
+	// ExpiresAt, if not zero, is the token expiry.
 	ExpiresAt time.Time
 }
 
-// Tokens autentica i token statici confrontandone lo sha256.
+// Tokens authenticates static tokens by comparing their sha256.
 type Tokens []StaticToken
 
-// Authenticate restituisce il token corrispondente, o ErrUnauthenticated.
-// Il confronto è a tempo costante e scorre sempre tutti i token.
-// Un token scaduto non è valido.
+// Authenticate returns the matching token, or ErrUnauthenticated.
+// The comparison is constant-time and always scans all tokens.
+// An expired token is not valid.
 func (ts Tokens) Authenticate(_ context.Context, token string) (*Principal, error) {
 	sum := sha256.Sum256([]byte(token))
 	got := []byte(hex.EncodeToString(sum[:]))
@@ -117,10 +117,10 @@ func (ts Tokens) Authenticate(_ context.Context, token string) (*Principal, erro
 	return &Principal{Subject: found.Name, Groups: slices.Clone(found.Groups), Method: MethodToken}, nil
 }
 
-// Chain prova gli authenticator in ordine e restituisce la prima identità valida.
+// Chain tries the authenticators in order and returns the first valid identity.
 type Chain []Authenticator
 
-// Authenticate implementa Authenticator.
+// Authenticate implements Authenticator.
 func (c Chain) Authenticate(ctx context.Context, token string) (*Principal, error) {
 	var errs []error
 	for _, a := range c {

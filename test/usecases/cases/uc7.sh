@@ -1,7 +1,7 @@
-# UC7: manifest su un cluster Kubernetes (k3s) con il plugin kubernetes. L'artefatto è il file
-# dei manifest, verificato con lo sha256 e promosso così com'è tra gli ambienti: namespace e
-# repliche arrivano dalla configurazione di ambiente (uc7-test con 1 replica, uc7-prod con 2).
-# Le immagini sono fissate al digest (require_image_digest).
+# UC7: manifests on a Kubernetes cluster (k3s) with the kubernetes plugin. The artifact is the
+# manifest file, verified by sha256 and promoted as is across environments: namespace and
+# replicas come from the environment configuration (uc7-test with 1 replica, uc7-prod with 2).
+# Images are pinned to the digest (require_image_digest).
 APP=uc7-api
 log "UC7 · manifest su Kubernetes (plugin kubernetes)"
 

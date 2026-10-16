@@ -9,14 +9,14 @@ interface ThemeValue {
 
 const ThemeContext = createContext<ThemeValue | null>(null);
 
-// Tema scuro di default, come il sito della documentazione; si segue la preferenza del sistema
-// se l'utente non ne ha scelto uno.
+// Dark theme by default, like the documentation site; the system preference is followed if the
+// user has not chosen one.
 function initialTheme(): Theme {
   try {
     const saved = window.localStorage.getItem("manent.theme");
     if (saved === "dark" || saved === "light") return saved;
   } catch {
-    // nessuna preferenza salvata
+    // no saved preference
   }
   return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
@@ -32,7 +32,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       try {
         window.localStorage.setItem("manent.theme", next);
       } catch {
-        // preferenza non salvata
+        // preference not saved
       }
       return next;
     });

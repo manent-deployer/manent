@@ -16,21 +16,21 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Impostazioni del provider nginx (NGINX open source via SSH).
+// Settings of the nginx provider (open source NGINX over SSH).
 const (
-	settingLBHosts       = "lb_hosts"       // host delle istanze di NGINX, separati da virgola
-	settingUpstreamFile  = "upstream_file"  // file incluso nell'upstream, dedicato ai server gestiti da manent
-	settingReloadCommand = "reload_command" // comando di verifica e ricarica (default "nginx -t && nginx -s reload")
-	settingSSHPort       = "ssh_port"       // porta SSH delle istanze (default 22)
+	settingLBHosts       = "lb_hosts"       // hosts of the NGINX instances, comma separated
+	settingUpstreamFile  = "upstream_file"  // file included in the upstream, dedicated to the servers managed by manent
+	settingReloadCommand = "reload_command" // check and reload command (default "nginx -t && nginx -s reload")
+	settingSSHPort       = "ssh_port"       // SSH port of the instances (default 22)
 	defaultReloadCommand = "nginx -t && nginx -s reload"
 )
 
-// serverLineRe riconosce una direttiva server: indirizzo e parametri.
+// serverLineRe matches a server directive: address and parameters.
 var serverLineRe = regexp.MustCompile(`^(\s*server\s+)(\S+)([^;]*);(.*)$`)
 
-// nginxPool svuota i server di un upstream di NGINX open source, che non ha un'API a runtime:
-// manent riscrive via SSH un file dedicato incluso nell'upstream (parametro down) e ricarica
-// NGINX su ogni istanza. Le connessioni non sono note: si attende drain_delay.
+// nginxPool drains the servers of an open source NGINX upstream, which has no runtime API:
+// manent rewrites over SSH a dedicated file included in the upstream (down parameter) and
+// reloads NGINX on every instance. Connections are unknown: it waits drain_delay.
 type nginxPool struct {
 	s       map[string]string
 	hosts   []string
@@ -66,7 +66,7 @@ func validateNginx(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewNginxPool costruisce il pool nginx.
+// NewNginxPool builds the nginx pool.
 func NewNginxPool(_ context.Context, env Env) (Pool, error) {
 	if err := validateNginx(env.Settings); err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func NewNginxPool(_ context.Context, env Env) (Pool, error) {
 	return p, nil
 }
 
-// DrainDelay implementa DrainDelayer.
+// DrainDelay implements DrainDelayer.
 func (p *nginxPool) DrainDelay() time.Duration { return p.delay }
 
 func (p *nginxPool) conn(ctx context.Context, host string) (customstep.Conn, error) {
@@ -120,7 +120,7 @@ func run(ctx context.Context, c customstep.Conn, cmd string, stdin io.Reader) (s
 	return out.String(), nil
 }
 
-// nginxServer è una direttiva server del file.
+// nginxLine is a server directive of the file.
 type nginxLine struct {
 	addr string
 	down bool
@@ -147,8 +147,8 @@ func hasParam(params, name string) bool {
 	return false
 }
 
-// setDown aggiunge o toglie il parametro down ai server indicati; restituisce il nuovo
-// contenuto e i membri non trovati.
+// setDown adds or removes the down parameter on the given servers; it returns the new content
+// and the members not found.
 func setDown(content string, members []string, down bool) (string, []string) {
 	found := map[string]bool{}
 	lines := strings.Split(content, "\n")
@@ -195,8 +195,8 @@ func (p *nginxPool) read(ctx context.Context, c customstep.Conn) (string, error)
 	return run(ctx, c, "cat '"+p.file+"'", nil)
 }
 
-// edit riscrive il file su ogni istanza (prima una copia, poi un rename) e ricarica NGINX. Se
-// il file è già nello stato voluto non ricarica.
+// edit rewrites the file on every instance (a copy first, then a rename) and reloads NGINX.
+// If the file is already in the wanted state it does not reload.
 func (p *nginxPool) edit(ctx context.Context, members []string, down bool) error {
 	for _, h := range p.hosts {
 		if err := p.editHost(ctx, h, members, down); err != nil {
@@ -230,8 +230,8 @@ func (p *nginxPool) editHost(ctx context.Context, host string, members []string,
 	return nil
 }
 
-// Members implementa Pool: i server del file della prima istanza; un server down è fuori
-// servizio. NGINX open source non espone la salute dei server.
+// Members implements Pool: the servers in the first instance's file; a down server is out of
+// service. Open source NGINX does not expose server health.
 func (p *nginxPool) Members(ctx context.Context) ([]Member, error) {
 	c, err := p.conn(ctx, p.hosts[0])
 	if err != nil {
@@ -253,17 +253,17 @@ func (p *nginxPool) Members(ctx context.Context) ([]Member, error) {
 	return out, nil
 }
 
-// Drain implementa Pool.
+// Drain implements Pool.
 func (p *nginxPool) Drain(ctx context.Context, members []string) error {
 	return p.edit(ctx, members, true)
 }
 
-// Restore implementa Pool.
+// Restore implements Pool.
 func (p *nginxPool) Restore(ctx context.Context, members []string) error {
 	return p.edit(ctx, members, false)
 }
 
-// Connections implementa Pool: non note, l'attesa è drain_delay.
+// Connections implements Pool: unknown, the wait is drain_delay.
 func (p *nginxPool) Connections(_ context.Context, members []string) (map[string]int, error) {
 	out := map[string]int{}
 	for _, m := range members {
@@ -272,7 +272,7 @@ func (p *nginxPool) Connections(_ context.Context, members []string) (map[string
 	return out, nil
 }
 
-// Healthy implementa Pool: un server presente e non down su ogni istanza.
+// Healthy implements Pool: a server present and not down on every instance.
 func (p *nginxPool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, m := range members {

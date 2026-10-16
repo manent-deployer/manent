@@ -1,55 +1,55 @@
-# Configurazione applicativa di manent (manent -c configs/manent.yml ...)
+# manent application configuration (manent -c configs/manent.yml ...)
 app:
   name: manent
-  # Versione dei workflow DBOS (non del binario): un worker riprende solo i workflow della
-  # propria versione. Va cambiata solo quando le note di rilascio lo indicano.
+  # DBOS workflow version (not the binary's): a worker resumes only the workflows of its own
+  # version. Change it only when the release notes say so.
   version: 0.1.0
 
 dbos:
-  # Sovrascrivibile con DBOS_SYSTEM_DATABASE_URL. Con più nodi serve Postgres: postgres://user:pass@host:5432/manent
+  # Overridable with DBOS_SYSTEM_DATABASE_URL. Several nodes need Postgres: postgres://user:pass@host:5432/manent
   database_url: sqlite:manent.db
-  # ID del worker: univoco tra i nodi e stabile tra i riavvii (es. nome del pod di uno StatefulSet).
-  # Al riavvio un worker riprende solo i deploy interrotti con il proprio ID. Default: hostname; DBOS__VMID ha la precedenza.
+  # Worker ID: unique across nodes and stable across restarts (e.g. the pod name of a StatefulSet).
+  # On restart a worker resumes only the interrupted deploys with its own ID. Default: hostname; DBOS__VMID takes precedence.
   # executor_id: manent-0
   queue: deployments
-  concurrency: 4                # deploy in esecuzione su ogni worker
-  global_concurrency: 0         # deploy in esecuzione su tutti i worker (0 = nessun limite)
-  environment_concurrency: 1    # deploy contemporanei della stessa application/environment su tutti i worker
-  schedule_poll_interval: 30s   # ogni quanto le modifiche alle schedule ricorrenti vengono rilette
-  # All'arresto il worker smette di prelevare deploy e attende quelli in corso fino a questo tempo.
+  concurrency: 4                # deploys running on each worker
+  global_concurrency: 0         # deploys running on all workers (0 = no limit)
+  environment_concurrency: 1    # concurrent deploys of the same application/environment on all workers
+  schedule_poll_interval: 30s   # how often recurring schedule changes are read again
+  # On shutdown the worker stops dequeuing deploys and waits for the running ones up to this time.
   drain_timeout: 2m
-  # Rilasci a ondate su più region (docs: Rilasci a ondate): ogni worker dichiara la sua region
-  # ed esegue solo i passi sui target di quella region.
+  # Wave rollouts across several regions (docs: Wave rollouts): every worker declares its region
+  # and runs only the passes on that region's targets.
   # region: eu-1
   # region_routing: true
 
-# Health gate dei rilasci a ondate.
+# Health gate of wave rollouts.
 rollout:
   # prometheus_url: http://prometheus:9090
   # alertmanager_url: http://alertmanager:9093
   check_timeout: 30s
 
-# Dipendenze tra deploy (after) e release composte (docs: Catene di deploy).
+# Dependencies between deploys (after) and composite releases (docs: Deploy chains).
 chains:
   poll_interval: 5s
 
-# Registro dei worker e recovery dei workflow di un worker perso (docs: Recovery, arresto e retention).
+# Worker registry and recovery of a lost worker's workflows (docs: Recovery, shutdown and retention).
 recovery:
   heartbeat_interval: 15s
   stale_after: 1m
-  # Con un valore > 0 i workflow in sospeso di un worker della stessa versione arrestato o senza
-  # heartbeat da questo tempo vengono ripresi da un altro worker. 0 = solo manent-server admin recover.
+  # With a value > 0 the pending workflows of a same-version worker stopped or without heartbeat
+  # for this long are resumed by another worker. 0 = only manent-server admin recover.
   auto_recover_after: 0s
 
-# Pulizia dello storico dei workflow: 0 = mai. Le ultime keep_releases release di ogni ambiente restano.
+# Workflow history cleanup: 0 = never. The last keep_releases releases of every environment stay.
 retention:
-  max_age: 0s         # es. 2160h (90 giorni)
+  max_age: 0s         # e.g. 2160h (90 days)
   keep_releases: 10
   interval: 1h
 
-# Metriche, sonde e tracing (docs: Osservabilità).
+# Metrics, probes and tracing (docs: Observability).
 observability:
-  # listen: ":9090"   # /metrics, /healthz, /readyz su una porta dedicata (necessaria ai worker)
+  # listen: ":9090"   # /metrics, /healthz, /readyz on a dedicated port (needed by workers)
   metrics: true
   tracing:
     enabled: false
@@ -69,61 +69,61 @@ siem:
   network: udp            # udp | tcp
   address: siem.example.com:514
 
-# Directory locale dove vengono scaricati gli artefatti (condivisa se più executor)
+# Local directory where artifacts are downloaded (shared if several executors)
 workdir: ./work
 
-# Configurazione di deploy di ogni ambiente (plugin, target, parametri, riferimenti ai segreti),
-# letta all'inizio di ogni deploy e fusa con il descrittore: il descrittore può solo aggiungere
-# ciò che non è definito qui, i valori in conflitto fanno fallire il deploy.
+# Deploy configuration of every environment (plugin, targets, parameters, secret references),
+# read at the start of every deploy and merged with the descriptor: the descriptor can only add
+# what is not defined here, conflicting values fail the deploy.
 envconfig:
   provider: none          # none | consul | file
-  required: false         # true: fallisce se per l'ambiente non esiste configurazione
+  required: false         # true: fails if the environment has no configuration
   max_retries: 3
   consul:
     address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
     datacenter: ""
     key: "manent/{application}/{environment}"
-    # token: da CONSUL_HTTP_TOKEN oppure da file
+    # token: from CONSUL_HTTP_TOKEN or from a file
     # token_file: /run/secrets/consul-token
   file:
     path: "./examples/envconfig/{application}/{environment}.yml"
 
-# Callback HTTP indicati nei descrittori (sezione callbacks): ricevono l'esito degli step e del deploy.
+# HTTP callbacks named in descriptors (callbacks section): they receive the outcome of steps and deploy.
 callbacks:
   timeout: 10s
-  max_retries: 3          # tentativi aggiuntivi; un callback non consegnato non fa fallire il deploy
-  allow_http: false       # di default solo https
-  allowed_hosts: []       # host ammessi, anche "*.example.com"; vuoto = tutti
+  max_retries: 3          # extra attempts; an undelivered callback does not fail the deploy
+  allow_http: false       # https only by default
+  allowed_hosts: []       # allowed hosts, also "*.example.com"; empty = all
 
-# Rollback automatico: se un deploy fallisce, gli step già eseguiti vengono annullati
-# riportando l'ambiente alla release precedente. La policy è per tipo di artefatto:
-# allowed indica se il rollback è possibile, enabled è il default (descrittore e
-# configurazione di ambiente possono cambiarlo, nei limiti di allowed).
-# I tipi non elencati non ammettono rollback.
+# Automatic rollback: if a deploy fails, the steps already run are undone, bringing the
+# environment back to the previous release. The policy is per artifact type:
+# allowed says whether rollback is possible, enabled is the default (descriptor and
+# environment configuration can change it, within allowed).
+# Unlisted types do not allow rollback.
 rollback:
-  locator: plugin          # come individuare la release precedente: plugin = letta dai target
+  locator: plugin          # how to find the previous release: plugin = read from the targets
   artifact_types:
     application:
       allowed: true
-      enabled: false       # true per attivarlo di default (remote-copy richiede layout: releases)
-      on: [deploy, post-test, activation]   # step il cui fallimento avvia il rollback
-    container:             # immagini rilasciate con il plugin container (Docker/Podman su VM)
+      enabled: false       # true to enable it by default (remote-copy requires layout: releases)
+      on: [deploy, post-test, activation]   # steps whose failure starts the rollback
+    container:             # images released with the container plugin (Docker/Podman on VMs)
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
-    kubernetes:            # manifest rilasciati con il plugin kubernetes
+    kubernetes:            # manifests released with the kubernetes plugin
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
-    ecs:                   # servizi ECS: torna alla task definition precedente
+    ecs:                   # ECS services: back to the previous task definition
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
-    lambda:                # funzioni Lambda: riporta l'alias alla versione precedente
+    lambda:                # Lambda functions: moves the alias back to the previous version
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
-    war:                   # applicazioni su JBoss/WildFly: riattiva il deployment precedente
+    war:                   # applications on JBoss/WildFly: reactivates the previous deployment
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
@@ -131,21 +131,21 @@ rollback:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
-    cloudrun:              # servizi Cloud Run: traffico sulla revisione precedente
+    cloudrun:              # Cloud Run services: traffic on the previous revision
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
     migration:
-      allowed: false       # le migration di database di norma non sono reversibili
+      allowed: false       # database migrations are usually not reversible
 
-# Integrazioni: notifiche in Slack e Teams, approvazioni da Slack e ticket di change
-# (docs/content/guida/integrazioni.md). I riferimenti *_ref puntano al gestore dei segreti.
+# Integrations: Slack and Teams notifications, approvals from Slack and change tickets
+# (docs/content/guida/integrazioni.md). The *_ref references point to the secret manager.
 # integrations:
 #   public_url: https://manent.example.com
 #   language: it
 #   slack:
 #     bot_token_ref: "vault:secret/data/manent/slack#bot_token"
-#     signing_secret_ref: "vault:secret/data/manent/slack#signing_secret"   # pulsanti di approvazione
+#     signing_secret_ref: "vault:secret/data/manent/slack#signing_secret"   # approval buttons
 #     identities:
 #       U024BE7LH: {subject: "oidc:alice", groups: [cab]}
 #     # email_identity: "oidc:{email}"
@@ -153,7 +153,7 @@ rollback:
 #     - {name: prod, applications: ["*"], environments: [prod], slack: {channel: C0123456789}}
 #     - {name: cab, applications: ["*"], environments: ["prod*"], events: [approval], teams: {webhook_ref: "vault:secret/data/manent/teams#webhook"}}
 #   change:
-#     provider: servicenow              # o jira
+#     provider: servicenow              # or jira
 #     servicenow:
 #       url: https://acme.service-now.com
 #       username: manent
@@ -168,30 +168,30 @@ rollback:
 #     #   approved_statuses: [Approved]
 #     #   rejected_statuses: [Declined]
 #     #   transitions: {start: Implement, success: Done, failure: Failed}
-# Con il change management, nelle regole di governance:
+# With change management, in the governance rules:
 #   governance: {rules: [{name: prod, applications: ["*"], environments: [prod], change: {approval: true, timeout: 72h}}]}
 
-# Autenticazione dell'API. none = nessuna autenticazione né permessi: solo sviluppo.
-# In produzione: mode enabled con OIDC (utenti) e/o token statici (CI).
+# API authentication. none = no authentication nor permissions: development only.
+# In production: mode enabled with OIDC (users) and/or static tokens (CI).
 auth:
   mode: none
   # oidc:
   #   issuer: https://sso.example.com/realms/corp
-  #   audience: manent                  # client ID atteso nel claim aud
+  #   audience: manent                  # client ID expected in the aud claim
   #   username_claim: preferred_username
   #   groups_claim: groups
-  # tokens:                             # solo lo sha256 del token: printf '%s' "$TOKEN" | sha256sum
+  # tokens:                             # only the token's sha256: printf '%s' "$TOKEN" | sha256sum
   #   - name: ci-pipeline
-  #     sha256: "<sha256 esadecimale>"
+  #     sha256: "<hex sha256>"
   #     groups: [ci]
-  #     expires_at: 2027-06-30T00:00:00Z  # opzionale
-  # tokens_file: /etc/manent/tokens.yml   # stesso formato (chiave tokens), riletto quando cambia: revoca senza riavvio
+  #     expires_at: 2027-06-30T00:00:00Z  # optional
+  # tokens_file: /etc/manent/tokens.yml   # same format (tokens key), reloaded on change: revocation without restart
 
-# Permessi per applicazione e ambiente (con auth.mode enabled).
-# Ruoli predefiniti: viewer, tester (+ dry-run), approver (viewer + approvazioni),
-# deployer (+ deploy, cancel e rollback manuale), operator (+ schedule), admin (tutto, anche le deroghe al freeze).
+# Permissions per application and environment (with auth.mode enabled).
+# Predefined roles: viewer, tester (+ dry-run), approver (viewer + approvals),
+# deployer (+ deploy, cancel and manual rollback), operator (+ schedules), admin (everything, freeze overrides too).
 rbac:
-  roles: {}                             # ruoli aggiuntivi: nome -> [azioni]
+  roles: {}                             # extra roles: name -> [actions]
   bindings: []
   # - groups: [team-a]
   #   role: deployer
@@ -201,7 +201,7 @@ rbac:
   #   role: operator
   #   applications: ["*"]
   #   environments: [prod]
-  # - groups: [cab]                     # change advisory board: approva i deploy in produzione
+  # - groups: [cab]                     # change advisory board: approves production deploys
   #   role: approver
   #   applications: ["*"]
   #   environments: [prod]
@@ -210,24 +210,24 @@ rbac:
   #   applications: ["*"]
   #   environments: [test]
 
-# Audit: oltre al log e al SIEM, opzionalmente un file JSON Lines in sola aggiunta, con una
-# catena di hash verificabile con "manent-server audit verify".
+# Audit: besides the log and the SIEM, optionally an append-only JSON Lines file, with a hash
+# chain verifiable with "manent-server audit verify".
 audit:
   file: ""
-  # max_size_mb: 100                    # rotazione (0 = nessuna)
-  # hmac_key_ref: "vault:secret/data/manent/audit#key"   # catena non ricalcolabile senza la chiave
+  # max_size_mb: 100                    # rotation (0 = none)
+  # hmac_key_ref: "vault:secret/data/manent/audit#key"   # chain not recomputable without the key
 
-# Regole di rilascio: promozione obbligatoria, approvazioni e finestre di freeze.
+# Release rules: mandatory promotion, approvals and freeze windows.
 governance:
-  rules: []                             # vale la prima regola che corrisponde
-  # - name: produzione
+  rules: []                             # the first matching rule wins
+  # - name: production
   #   applications: ["*"]
   #   environments: [prod]
-  #   requires: [preprod]               # lo stesso artefatto deve essere già stato rilasciato in preprod
-  #   approvals: {required: 1, timeout: 72h}   # allow_self: false, when: before (default; rollout = nei punti approvalsBetween)
+  #   requires: [preprod]               # the same artifact must already have been released to preprod
+  #   approvals: {required: 1, timeout: 72h}   # allow_self: false, when: before (default; rollout = at the approvalsBetween points)
   freezes: []
-  # - name: fine-anno
-  #   reason: chiusura contabile
+  # - name: year-end
+  #   reason: accounting close
   #   applications: ["*"]
   #   environments: [prod]
   #   from: 2026-12-20T00:00:00+01:00
@@ -235,47 +235,47 @@ governance:
   # - name: weekend
   #   applications: ["*"]
   #   environments: [prod]
-  #   cron: "0 18 * * FRI"              # inizio di ogni occorrenza (5 campi)
+  #   cron: "0 18 * * FRI"              # start of every occurrence (5 fields)
   #   duration: 62h
   #   timezone: Europe/Rome
 
-# Cosa può aggiungere un descrittore alla configurazione di ambiente.
-# Se la sezione manca non ci sono limiti (solo sviluppo). Esempio per la produzione:
+# What a descriptor can add to the environment configuration.
+# Without this section there are no limits (development only). Example for production:
 # descriptor_policy:
 #   params:
-#     remote-copy: [dest_dir, verify_checksum, keep_releases]   # mai i comandi (post_command, ...)
-#     container: [container_name, wait_timeout]                 # mai run_args e command
-#     kubernetes: [wait_timeout, "var.*", "helm_value.*"]        # namespace e credenziali solo dall'envconfig
-#     ecs: [wait_timeout]                                         # servizio, role_arn e credenziali solo dall'envconfig
+#     remote-copy: [dest_dir, verify_checksum, keep_releases]   # never the commands (post_command, ...)
+#     container: [container_name, wait_timeout]                 # never run_args and command
+#     kubernetes: [wait_timeout, "var.*", "helm_value.*"]        # namespace and credentials only from the envconfig
+#     ecs: [wait_timeout]                                         # service, role_arn and credentials only from the envconfig
 #     lambda: [wait_timeout]
 #     cloudrun: [wait_timeout]
-#     jboss: [suspend, suspend_timeout, reload, restart, wait_timeout]   # utente, segreti e server group solo dall'envconfig
+#     jboss: [suspend, suspend_timeout, reload, restart, wait_timeout]   # user, secrets and server groups only from the envconfig
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
 
-# Provider di segreti aggiuntivi a env: e file:.
+# Secret providers besides env: and file:.
 secrets:
   vault:
     enabled: false
     # address: https://vault.example.com:8200   # default VAULT_ADDR
-    # auth: approle                            # token (VAULT_TOKEN o token_file) | approle | kubernetes
+    # auth: approle                            # token (VAULT_TOKEN or token_file) | approle | kubernetes
     # approle: {role_id: manent, secret_id_file: /etc/manent/vault-secret-id}
     # kubernetes: {role: manent}
 
-# Download degli artefatti: sorgenti ammesse e relative credenziali.
+# Artifact downloads: allowed sources and their credentials.
 artifacts:
   timeout: 30m
-  allow_unlisted: true                  # false in produzione: solo le sorgenti elencate
+  allow_unlisted: true                  # false in production: only the listed sources
   sources: []
   # - prefix: https://nexus.example.com/repository/releases/
   #   auth: {type: basic, username: manent, secret_ref: "vault:secret/data/manent/nexus#password"}
   #   ca_file: /etc/ssl/certs/corp-ca.pem
   # - prefix: file:///srv/artifacts/
-  # - prefix: oci://registry.example.com/team/   # immagini dei container (digest = sha256)
+  # - prefix: oci://registry.example.com/team/   # container images (digest = sha256)
   #   auth: {type: basic, username: manent, secret_ref: "vault:secret/data/manent/registry#password"}
 
-# Step disponibili, nell'ordine di esecuzione.
-# mode: mandatory (sempre eseguito) | optional (enabled = default, sovrascrivibile dal descrittore)
+# Available steps, in execution order.
+# mode: mandatory (always run) | optional (enabled = default, which the descriptor can override)
 pipeline:
   steps:
     - name: secrets
@@ -296,8 +296,8 @@ pipeline:
     - name: activation
       mode: optional
       enabled: true
-    # Step personalizzati: comandi sui target via SSH o richieste HTTP, definiti solo qui.
-    # Vedi docs/content/guida/step-personalizzati.md.
+    # Custom steps: commands on the targets over SSH or HTTP requests, defined only here.
+    # See docs/content/guida/step-personalizzati.md.
     # - name: db-migrate
     #   mode: optional
     #   type: command
@@ -314,55 +314,55 @@ pipeline:
     #     command: ["/opt/tools/migrate", "plan", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
     #     secrets: [db-readonly]
   # custom:
-  #   spec_key_refs: ["vault:secret/data/manent/pipeline#spec_key"]   # firma delle specifiche nei piani
-  #   revoked_specs: []                                              # sha256 delle specifiche revocate
+  #   spec_key_refs: ["vault:secret/data/manent/pipeline#spec_key"]   # signature of the specs in plans
+  #   revoked_specs: []                                              # sha256 of the revoked specs
   #   known_hosts: ~/.ssh/known_hosts
   #   secrets_dir: /dev/shm/manent
 
-# Plugin attivi e relativa configurazione
+# Active plugins and their configuration
 plugins:
   remote-copy:
     known_hosts: ~/.ssh/known_hosts
     insecure_ignore_host_key: false
     artifact_types: [application]
-  # Immagini di container su server e VM via SSH, con Docker o Podman (artefatti oci://).
+  # Container images on servers and VMs over SSH, with Docker or Podman (oci:// artifacts).
   container:
     known_hosts: ~/.ssh/known_hosts
     insecure_ignore_host_key: false
     artifact_types: [container]
-  # Manifest su cluster Kubernetes con server-side apply (un target per cluster).
+  # Manifests on Kubernetes clusters with server-side apply (one target per cluster).
   kubernetes:
-    # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent nel cluster
+    # ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt   # manent in the cluster
     insecure_skip_tls_verify: false
     artifact_types: [kubernetes]
-    # helm:                # chart Helm (.tgz di helm package), renderizzati con helm template
-    #   command: helm      # incluso nell'immagine di manent-server
-    #   sha256: ""         # verifica del binario a ogni rendering
+    # helm:                # Helm charts (.tgz from helm package), rendered with helm template
+    #   command: helm      # included in the manent-server image
+    #   sha256: ""         # verification of the binary at every rendering
     #   timeout: 2m
-  # Servizi cloud gestiti: un target per region. Credenziali AWS dalla catena standard
-  # dell'SDK (IRSA, ruolo del task o dell'istanza) o dai parametri *_secret e role_arn;
-  # Google dalle Application Default Credentials o da credentials_secret.
-  ecs:                     # immagini su servizi Amazon ECS (target: region o region/cluster)
+  # Managed cloud services: one target per region. AWS credentials from the SDK default chain
+  # (IRSA, task or instance role) or from the *_secret and role_arn parameters;
+  # Google from the Application Default Credentials or from credentials_secret.
+  ecs:                     # images on Amazon ECS services (target: region or region/cluster)
     artifact_types: [ecs]
     # endpoint: http://localhost:4566   # LocalStack
-  lambda:                  # codice di funzioni AWS Lambda (immagine ECR o .zip), con alias
+  lambda:                  # AWS Lambda function code (ECR image or .zip), with alias
     artifact_types: [lambda]
-  cloudrun:                # immagini su servizi Google Cloud Run (parametro project)
+  cloudrun:                # images on Google Cloud Run services (project parameter)
     artifact_types: [cloudrun]
-  # Applicazioni war/ear su JBoss EAP e WildFly con l'API HTTP di management (standalone o
-  # domain controller; target: host e porta di management, default 9993 in https).
+  # war/ear applications on JBoss EAP and WildFly through the HTTP management API (standalone or
+  # domain controller; target: management host and port, default 9993 with https).
   jboss:
     artifact_types: [war, ear]
     # ca_file: /etc/manent/jboss-ca.pem
     # insecure_skip_tls_verify: false
-    # request_timeout: 10m   # durata massima di una chiamata, compreso il caricamento
-  # Plugin esterno: binario separato avviato da manent al primo deploy (make plugins).
-  # Le altre chiavi, oltre a external, sono la configurazione passata al plugin.
+    # request_timeout: 10m   # maximum duration of a call, upload included
+  # External plugin: separate binary started by manent at the first deploy (make plugins).
+  # The other keys, besides external, are the configuration passed to the plugin.
   # remote-copy-ext:
   #   external:
   #     command: bin/manent-plugin-remote-copy
-  #     sha256: "<sha256 del binario>"     # verificato all'attivazione e a ogni avvio
-  #     env: {}                           # il plugin non eredita l'ambiente del worker
+  #     sha256: "<sha256 of the binary>"   # verified at activation and at every start
+  #     env: {}                           # the plugin does not inherit the worker environment
   #     start_timeout: 1m
   #   known_hosts: ~/.ssh/known_hosts
   #   artifact_types: [application]

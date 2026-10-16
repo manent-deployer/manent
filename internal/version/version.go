@@ -1,19 +1,19 @@
-// Package version identifica il binario di manent. I valori sono impostati in fase di build
-// con -ldflags "-X github.com/joeg-ita/manent/internal/version.Version=..." (Makefile, GoReleaser).
+// Package version identifies the manent binary. Values are set at build time with
+// -ldflags "-X github.com/joeg-ita/manent/internal/version.Version=..." (Makefile, GoReleaser).
 package version
 
 import "runtime/debug"
 
 var (
-	// Version è la versione rilasciata (tag SemVer), "dev" per una build locale.
+	// Version is the released version (SemVer tag), "dev" for a local build.
 	Version = "dev"
-	// Commit è l'hash del commit da cui è stato costruito il binario.
+	// Commit is the hash of the commit the binary was built from.
 	Commit = ""
-	// Date è la data di build in formato RFC 3339.
+	// Date is the build date in RFC 3339 format.
 	Date = ""
 )
 
-// Info descrive il binario.
+// Info describes the binary.
 type Info struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit,omitempty"`
@@ -21,7 +21,7 @@ type Info struct {
 	GoVersion string `json:"go_version"`
 }
 
-// Get restituisce le informazioni sul binario; senza ldflags usa quelle registrate da Go.
+// Get returns the binary information; without ldflags it uses the data recorded by Go.
 func Get() Info {
 	i := Info{Version: Version, Commit: Commit, Date: Date}
 	if bi, ok := debug.ReadBuildInfo(); ok {

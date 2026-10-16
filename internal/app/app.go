@@ -1,5 +1,5 @@
-// Package app compone tutti i componenti di manent a partire dalla configurazione.
-// È l'unico punto in cui le implementazioni concrete vengono collegate alle interfacce.
+// Package app wires all manent components from the configuration.
+// It is the only place where concrete implementations are bound to interfaces.
 package app
 
 import (
@@ -58,30 +58,30 @@ import (
 	"github.com/joeg-ita/manent/plugins/remotecopy"
 )
 
-// App contiene i componenti condivisi da CLI e API.
+// App holds the components shared by CLI and API.
 type App struct {
 	Config *config.Config
 	Logger *slog.Logger
-	// Service applica i permessi dell'identità nel context (internal/authz).
+	// Service applies the permissions of the identity in the context (internal/authz).
 	Service engine.Service
 	plugins *plugin.Registry
 	closers []io.Closer
-	worker  *engine.Worker // valorizzato in modalità worker
-	client  dbos.Client    // valorizzato in modalità client
+	worker  *engine.Worker // set in worker mode
+	client  dbos.Client    // set in client mode
 	siem    logging.SIEMSender
 	audit   audit.Recorder
-	// metrics è nil con observability.metrics false.
+	// metrics is nil when observability.metrics is false.
 	metrics  *telemetry.Metrics
 	registry cluster.Registry
-	// admin è creato al primo uso: nei comandi CLI che non lo usano non serve il registro.
-	// slack riceve i pulsanti di approvazione dei messaggi Slack (nil se non configurato).
+	// admin is created on first use: CLI commands that do not use it need no registry.
+	// slack receives the approval buttons of Slack messages (nil if not configured).
 	slack     http.Handler
 	adminOnce sync.Once
 	admin     *engine.Admin
 	draining  atomic.Bool
 }
 
-// NewLogger crea il logger applicativo con l'eventuale inoltro al SIEM.
+// NewLogger creates the application logger, with forwarding to the SIEM if configured.
 func NewLogger(cfg *config.Config) (*slog.Logger, logging.SIEMSender, error) {
 	var sender logging.SIEMSender = logging.NoopSender{}
 	if targets := cfg.SIEM.Targets(); len(targets) > 0 {
@@ -104,12 +104,12 @@ func NewLogger(cfg *config.Config) (*slog.Logger, logging.SIEMSender, error) {
 		Format:  cfg.Logging.Format,
 		SIEM:    sender,
 	})
-	// I log emessi durante uno step finiscono anche nel log del deploy (stream DBOS).
+	// Logs emitted during a step also go to the deploy log (DBOS stream).
 	return slog.New(deploylog.NewHandler(log.Handler())), sender, nil
 }
 
-// SetupTracing configura il tracing OpenTelemetry dei processi di lunga durata (serve, worker).
-// instance identifica il processo nelle tracce (es. executor_id).
+// SetupTracing configures OpenTelemetry tracing for long-running processes (serve, worker).
+// instance identifies the process in traces (e.g. executor_id).
 func SetupTracing(ctx context.Context, cfg *config.Config, instance string) (func(context.Context) error, error) {
 	t := cfg.Observability.Tracing
 	return telemetry.SetupTracing(ctx, telemetry.TracingConfig{
@@ -118,7 +118,7 @@ func SetupTracing(ctx context.Context, cfg *config.Config, instance string) (fun
 	})
 }
 
-// recorder restituisce il Recorder delle metriche, o uno che le scarta.
+// recorder returns the metrics Recorder, or one that discards them.
 func recorder(m *telemetry.Metrics) telemetry.Recorder {
 	if m == nil {
 		return telemetry.Noop{}
@@ -126,9 +126,9 @@ func recorder(m *telemetry.Metrics) telemetry.Recorder {
 	return m
 }
 
-// NewPlugins registra i plugin disponibili e attiva quelli presenti in configurazione.
-// I plugin compilati dentro manent vanno aggiunti qui con Register; i plugin esterni
-// (chiave "external" in configurazione) sono registrati automaticamente con il loro nome.
+// NewPlugins registers the available plugins and activates the configured ones.
+// Plugins compiled into manent are added here with Register; external plugins
+// ("external" key in the configuration) are registered automatically with their name.
 func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) {
 	reg := plugin.NewRegistry()
 	for name, f := range map[string]plugin.Factory{
@@ -159,24 +159,24 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 	return reg, nil
 }
 
-// NewLocators restituisce le strategie con cui individuare la release a cui tornare in caso
-// di rollback, per nome (rollback.locator). Un locator che interroga un sistema aziendale dei
-// rilasci in esercizio va aggiunto qui, implementando plugin.ReleaseLocator.
+// NewLocators returns the strategies that find the release to go back to on rollback, by
+// name (rollback.locator). A locator that queries a company system of releases in service is
+// added here, implementing plugin.ReleaseLocator.
 func NewLocators(cfg *config.Config, log *slog.Logger) map[string]plugin.ReleaseLocator {
 	return map[string]plugin.ReleaseLocator{
 		plugin.PluginLocatorName: plugin.PluginLocator{},
 	}
 }
 
-// NewRollbackPolicy crea la policy di rollback dalla configurazione e dai locator registrati.
+// NewRollbackPolicy creates the rollback policy from the configuration and the registered locators.
 func NewRollbackPolicy(cfg *config.Config, locators map[string]plugin.ReleaseLocator) rollback.Policy {
 	return rollback.NewPolicy(cfg, slices.Sorted(maps.Keys(locators)))
 }
 
-// NewSteps crea il registry degli step standard. Lo store degli artefatti è condiviso
-// tra lo step artifacts, lo step deploy (che lo riscarica se manca) e la pulizia finale.
-// Restituisce anche le operazioni su load balancer e router usate dal motore (svuotamento dei
-// lotti e rilasci per percentuale), che condividono il plugin di deploy e i segreti.
+// NewSteps creates the registry of the standard steps. The artifact store is shared by the
+// artifacts step, the deploy step (which downloads again a missing file) and the final cleanup.
+// It also returns the load balancer and router operations used by the engine (batch draining
+// and percentage rollouts), which share the deploy plugin and the secrets.
 func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provider, locators map[string]plugin.ReleaseLocator, log *slog.Logger) (*pipeline.Registry, *steps.Traffic, error) {
 	stepLog := log.With("component", "step")
 	deploy := steps.Deploy{
@@ -204,8 +204,8 @@ func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provid
 	return reg, &steps.Traffic{Deploy: deploy, Pool: pool, Providers: providers, Logger: log.With("component", "traffic")}, nil
 }
 
-// NewTrafficProviders restituisce i provider di load balancer e router: quelli HTTP e SSH di
-// internal/traffic e quelli basati sugli SDK dei cloud.
+// NewTrafficProviders returns the load balancer and router providers: the HTTP and SSH ones
+// of internal/traffic and those based on cloud SDKs.
 func NewTrafficProviders() *traffic.Providers {
 	p := traffic.Default()
 	p.Pools["aws-elb"] = traffic.Provider[traffic.PoolFactory]{New: awselb.NewPool(awselb.SDKConnector{}), Validate: awselb.ValidatePool}
@@ -213,7 +213,7 @@ func NewTrafficProviders() *traffic.Providers {
 	return p
 }
 
-// NewSecretProvider crea il secret provider con gli schemi env:, file: e, se abilitato, vault:.
+// NewSecretProvider creates the secret provider with the env:, file: and, if enabled, vault: schemes.
 func NewSecretProvider(cfg *config.Config) (*secrets.SchemeProvider, error) {
 	sp := secrets.NewDefaultProvider()
 	if v := cfg.Secrets.Vault; v.Enabled {
@@ -231,7 +231,7 @@ func NewSecretProvider(cfg *config.Config) (*secrets.SchemeProvider, error) {
 	return sp, nil
 }
 
-// NewArtifactSources crea le sorgenti di artefatti configurate, con le relative credenziali.
+// NewArtifactSources creates the configured artifact sources, with their credentials.
 func NewArtifactSources(cfg *config.Config, sp secrets.Provider) (*artifact.Sources, error) {
 	list := make([]artifact.Source, len(cfg.Artifacts.Sources))
 	for i, s := range cfg.Artifacts.Sources {
@@ -244,8 +244,8 @@ func NewArtifactSources(cfg *config.Config, sp secrets.Provider) (*artifact.Sour
 	return artifact.NewSources(list, allow, sp, &http.Client{Timeout: cfg.Artifacts.Timeout})
 }
 
-// NewAuthenticator crea l'autenticazione dell'API: token statici e, se configurato, OIDC
-// (con la discovery dell'issuer). Restituisce nil con auth.mode none.
+// NewAuthenticator creates the API authentication: static tokens and, if configured, OIDC
+// (with issuer discovery). It returns nil with auth.mode none.
 func NewAuthenticator(ctx context.Context, cfg *config.Config, log *slog.Logger) (auth.Authenticator, error) {
 	if cfg.Auth.Mode == config.AuthModeNone {
 		return nil, nil
@@ -277,7 +277,7 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config, log *slog.Logger)
 	return chain, nil
 }
 
-// NewAuthzPolicy crea la policy RBAC; con auth.mode none concede tutto.
+// NewAuthzPolicy creates the RBAC policy; with auth.mode none it allows everything.
 func NewAuthzPolicy(cfg *config.Config) (authz.Policy, error) {
 	if cfg.Auth.Mode == config.AuthModeNone {
 		return authz.Policy{Disabled: true}, nil
@@ -295,8 +295,8 @@ func NewAuthzPolicy(cfg *config.Config) (authz.Policy, error) {
 	return authz.NewPolicy(roles, bindings)
 }
 
-// NewAuditRecorder crea il registro di audit: log applicativo (e SIEM) e, se configurato, file
-// con catena di hash (HMAC se è indicata la chiave).
+// NewAuditRecorder creates the audit recorder: application log (and SIEM) and, if configured,
+// a hash-chained file (HMAC if a key is set).
 func NewAuditRecorder(cfg *config.Config, sp secrets.Provider, log *slog.Logger) (audit.Multi, io.Closer, error) {
 	rec := audit.Multi{audit.LogRecorder{Logger: log.With("component", "audit")}}
 	if cfg.Audit.File == "" {
@@ -313,7 +313,7 @@ func NewAuditRecorder(cfg *config.Config, sp secrets.Provider, log *slog.Logger)
 	return append(rec, f), f, nil
 }
 
-// AuditKey legge la chiave HMAC della catena di audit, se configurata.
+// AuditKey reads the HMAC key of the audit chain, if configured.
 func AuditKey(cfg *config.Config, sp secrets.Provider) ([]byte, error) {
 	if cfg.Audit.HMACKeyRef == "" {
 		return nil, nil
@@ -328,7 +328,7 @@ func AuditKey(cfg *config.Config, sp secrets.Provider) ([]byte, error) {
 	return []byte(v), nil
 }
 
-// NewGovernance crea le regole di rilascio e le finestre di freeze dalla configurazione.
+// NewGovernance creates the release rules and the freeze windows from the configuration.
 func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
 	g := cfg.Governance
 	rules := make([]governance.Rule, len(g.Rules))
@@ -351,8 +351,8 @@ func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
 	return governance.New(rules, windows)
 }
 
-// NewHealthChecker crea l'health gate dei rollout a ondate: sonde HTTP, Prometheus e
-// Alertmanager. Un sistema di metriche diverso si aggiunge qui, implementando rollout.Checker.
+// NewHealthChecker creates the health gate of wave rollouts: HTTP probes, Prometheus and
+// Alertmanager. Another metrics system is added here, implementing rollout.Checker.
 func NewHealthChecker(cfg *config.Config) rollout.Checker {
 	return &rollout.HTTPChecker{
 		Client:          &http.Client{Timeout: cfg.Rollout.CheckTimeout},
@@ -361,13 +361,13 @@ func NewHealthChecker(cfg *config.Config) rollout.Checker {
 	}
 }
 
-// NewDescriptorPolicy restituisce la policy sui descrittori della configurazione.
+// NewDescriptorPolicy returns the descriptor policy of the configuration.
 func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 	dp := cfg.DescriptorPolicy
 	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams}
 }
 
-// NewResolver crea il resolver della configurazione di ambiente in base al provider configurato.
+// NewResolver creates the environment configuration resolver for the configured provider.
 func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 	ec := cfg.EnvConfig
 	r := envconfig.Resolver{Required: ec.Required, Policy: NewDescriptorPolicy(cfg)}
@@ -401,12 +401,12 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 	return r, nil
 }
 
-// NewCallbackPolicy restituisce i limiti sugli URL dei callback definiti in configurazione.
+// NewCallbackPolicy returns the limits on callback URLs set in the configuration.
 func NewCallbackPolicy(cfg *config.Config) callback.Policy {
 	return callback.Policy{AllowHTTP: cfg.Callbacks.AllowHTTP, AllowedHosts: cfg.Callbacks.AllowedHosts}
 }
 
-// components contiene i componenti comuni a worker e client.
+// components holds the components shared by worker and client.
 type components struct {
 	log        *slog.Logger
 	plugins    *plugin.Registry
@@ -432,14 +432,14 @@ type components struct {
 	closers    []io.Closer
 }
 
-// service costruisce il servizio esposto a CLI e API: l'Engine avvolto dai permessi.
-// executors fornisce l'elenco dei worker (Admin, aperto al primo uso in modalità client).
+// service builds the service exposed to CLI and API: the Engine wrapped by permissions.
+// executors provides the worker list (Admin, opened on first use in client mode).
 func (c *components) service(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) engine.Service {
 	return c.guard(c.engine(cfg, client, executors))
 }
 
-// engine costruisce l'Engine senza permessi: il worker lo usa per i rollback delle release,
-// già autorizzati all'invio.
+// engine builds the Engine without permissions: the worker uses it for release rollbacks,
+// already authorized at submission.
 func (c *components) engine(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) *engine.Engine {
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
@@ -453,7 +453,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 	return engine.NewService(opts)
 }
 
-// chatNotifier restituisce il notificatore come interfaccia, nil senza destinazioni.
+// chatNotifier returns the notifier as an interface, nil without destinations.
 func (c *components) chatNotifier() engine.ChatNotifier {
 	if c.chat == nil {
 		return nil
@@ -461,7 +461,7 @@ func (c *components) chatNotifier() engine.ChatNotifier {
 	return c.chat
 }
 
-// guard avvolge l'Engine con i permessi.
+// guard wraps the Engine with permissions.
 func (c *components) guard(eng *engine.Engine) engine.Service {
 	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Logger: c.log.With("component", "authz")}
 }
@@ -546,8 +546,8 @@ func newComponents(cfg *config.Config) (*components, error) {
 	}, nil
 }
 
-// NewWorker avvia un worker DBOS che esegue i deploy, con il servizio costruito sul suo contesto.
-// Usato da "serve" e "worker".
+// NewWorker starts a DBOS worker that runs deploys, with the service built on its context.
+// Used by "serve" and "worker".
 func NewWorker(cfg *config.Config) (*App, error) {
 	c, err := newComponents(cfg)
 	if err != nil {
@@ -637,8 +637,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	}, nil
 }
 
-// NewClient crea un'applicazione che accoda e interroga i deploy senza eseguirli né
-// recuperarli: usata dai comandi CLI e da "serve --no-worker". I deploy richiedono almeno un worker attivo.
+// NewClient creates an application that enqueues and queries deploys without running or
+// recovering them: used by CLI commands and by "serve --no-worker". Deploys need at least one running worker.
 func NewClient(cfg *config.Config) (*App, error) {
 	c, err := newComponents(cfg)
 	if err != nil {
@@ -648,9 +648,9 @@ func NewClient(cfg *config.Config) (*App, error) {
 	clientCfg := dbos.ClientConfig{DatabaseURL: cfg.DBOS.DatabaseURL, AppName: cfg.App.Name, Logger: dbosLog}
 	client, err := dbos.NewClient(context.Background(), clientCfg)
 	if err != nil {
-		// Il client verifica lo schema DBOS ma non lo crea: su un database nuovo, se l'API parte
-		// prima dei worker, lo crea come farebbe un worker e riprova. Con lo schema già presente
-		// non serve: un ruolo senza permessi DDL non arriva mai qui.
+		// The client verifies the DBOS schema but does not create it: on a new database, if the API
+		// starts before the workers, it creates it as a worker would and retries. With the schema
+		// already there this is not needed: a role without DDL permissions never gets here.
 		if merr := engine.Migrate(cfg.DBOS.DatabaseURL, dbosLog); merr != nil {
 			return nil, fmt.Errorf("connessione al database DBOS: %w (creazione dello schema: %v)", err, merr)
 		}
@@ -673,14 +673,14 @@ func NewClient(cfg *config.Config) (*App, error) {
 	return a, nil
 }
 
-// lazyAdmin apre il registro dei worker solo quando serve l'elenco dei worker.
+// lazyAdmin opens the worker registry only when the worker list is needed.
 type lazyAdmin struct{ a *App }
 
 func (l lazyAdmin) Executors(ctx context.Context, staleAfter time.Duration) ([]engine.ExecutorStatus, error) {
 	return l.a.Admin().Executors(ctx, staleAfter)
 }
 
-// dbosClient restituisce il client DBOS dell'applicazione (contesto del worker o client).
+// dbosClient returns the DBOS client of the application (worker context or client).
 func (a *App) dbosClient() dbos.Client {
 	if a.worker != nil {
 		return a.worker.Client()
@@ -688,9 +688,8 @@ func (a *App) dbosClient() dbos.Client {
 	return a.client
 }
 
-// Admin restituisce le operazioni di piattaforma (executor, recovery, retention). In modalità
-// client apre il registro dei worker al primo uso; se non è disponibile, la recovery richiede
-// --force.
+// Admin returns the platform operations (executors, recovery, retention). In client mode it
+// opens the worker registry on first use; if it is unavailable, recovery requires --force.
 func (a *App) Admin() *engine.Admin {
 	a.adminOnce.Do(func() {
 		if a.worker != nil {
@@ -710,11 +709,11 @@ func (a *App) Admin() *engine.Admin {
 	return a.admin
 }
 
-// Metrics restituisce le metriche Prometheus, o nil se disattivate.
+// Metrics returns the Prometheus metrics, or nil if disabled.
 func (a *App) Metrics() *telemetry.Metrics { return a.metrics }
 
-// EnableStateMetrics aggiunge alle metriche lo stato condiviso letto dal database: workflow
-// per stato e coda, executor e heartbeat. Va chiamato dai processi che espongono /metrics.
+// EnableStateMetrics adds to the metrics the shared state read from the database: workflows
+// per state and queue, executors and heartbeats. Processes that expose /metrics call it.
 func (a *App) EnableStateMetrics() error {
 	if a.metrics == nil {
 		return nil
@@ -722,7 +721,7 @@ func (a *App) EnableStateMetrics() error {
 	return a.metrics.Register(&telemetry.StateCollector{Source: a.Admin(), StaleAfter: a.Config.Recovery.StaleAfter})
 }
 
-// Ready verifica che il processo possa servire: non è in arresto e raggiunge il database.
+// Ready checks that the process can serve: it is not stopping and it reaches the database.
 func (a *App) Ready(context.Context) error {
 	if a.draining.Load() {
 		return errors.New("in arresto")
@@ -731,8 +730,8 @@ func (a *App) Ready(context.Context) error {
 	return err
 }
 
-// OpsHandler serve /healthz, /readyz e, se abilitate, /metrics: è il server di
-// observability.listen, usato soprattutto dai worker che non espongono l'API.
+// OpsHandler serves /healthz, /readyz and, if enabled, /metrics: it is the
+// observability.listen server, used mostly by workers that do not expose the API.
 func (a *App) OpsHandler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -743,8 +742,8 @@ func (a *App) OpsHandler() http.Handler {
 	return r
 }
 
-// APIOptions sono le opzioni del router dell'API: metriche, /metrics, /readyz e, se attiva,
-// l'interfaccia web con la sua configurazione.
+// APIOptions are the options of the API router: metrics, /metrics, /readyz and, if enabled,
+// the web interface with its configuration.
 func (a *App) APIOptions() api.Options {
 	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready, SlackInteractions: a.slack}
 	if a.metrics != nil {
@@ -766,8 +765,8 @@ func (a *App) APIOptions() api.Options {
 	return o
 }
 
-// NewUIConfig ricava la configurazione pubblica dell'interfaccia web: modalità di login e
-// client OIDC della UI.
+// NewUIConfig derives the public configuration of the web interface: login mode and the UI
+// OIDC client.
 func NewUIConfig(cfg *config.Config) api.UIConfig {
 	ui := api.UIConfig{AuthMode: api.UIAuthNone, Version: version.Get().Version}
 	if cfg.Auth.Mode == config.AuthModeNone {
@@ -787,16 +786,16 @@ func NewUIConfig(cfg *config.Config) api.UIConfig {
 	return ui
 }
 
-// WarnInsecure registra a log le impostazioni adatte solo allo sviluppo. Va chiamato dai
-// processi di lunga durata (serve, worker), non da ogni comando CLI.
+// WarnInsecure logs the settings fit only for development. Long-running processes (serve,
+// worker) call it, not every CLI command.
 func (a *App) WarnInsecure() {
 	for _, w := range a.Config.SecurityWarnings() {
 		a.Logger.Warn("configurazione non adatta alla produzione", "detail", w)
 	}
 }
 
-// Close arresta il worker (o il client) DBOS e chiude la connessione al SIEM. Un worker prima
-// smette di prelevare deploy e attende quelli in corso fino a dbos.drain_timeout.
+// Close stops the DBOS worker (or client) and closes the SIEM connection. A worker first
+// stops dequeuing deploys and waits for the running ones up to dbos.drain_timeout.
 func (a *App) Close() {
 	var err error
 	a.draining.Store(true)
@@ -809,7 +808,7 @@ func (a *App) Close() {
 	if err != nil {
 		a.Logger.Error("shutdown DBOS", "error", err)
 	}
-	// I plugin si arrestano dopo DBOS, quando nessun deploy li sta più usando.
+	// Plugins stop after DBOS, when no deploy is using them any more.
 	if err := a.plugins.Close(); err != nil {
 		a.Logger.Error("arresto plugin", "error", err)
 	}

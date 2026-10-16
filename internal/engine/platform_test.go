@@ -25,7 +25,7 @@ func TestWorkerEAttivita(t *testing.T) {
 	ctx := context.Background()
 	defer close(block.release)
 
-	// d1 resta in esecuzione nello step bloccato, d2 attende lo slot dell'ambiente, d3 è pianificato.
+	// d1 keeps running in the blocked step, d2 waits for the environment slot, d3 is scheduled.
 	if _, err := e.Submit(ctx, testDescriptor("d1")); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestWorkerEAttivita(t *testing.T) {
 	if _, err := e.Submit(ctx, d3); err != nil {
 		t.Fatal(err)
 	}
-	// Un deploy di un'altra applicazione, escluso dal filtro.
+	// A deploy of another application, excluded by the filter.
 	other := testDescriptor("x1")
 	other.Application, other.Schedule = "altra", &descriptor.Schedule{At: &at}
 	if _, err := e.Submit(ctx, other); err != nil {
@@ -85,13 +85,12 @@ func TestToTaskPassiEGate(t *testing.T) {
 	}
 }
 
-// I conteggi dei workflow conclusi sono letti al più ogni finishedCountsTTL, quelli dei non
-// conclusi a ogni lettura.
+// Finished workflow counts are read at most every finishedCountsTTL, unfinished ones at every read.
 func TestWorkflowCounts(t *testing.T) {
 	reg, planner := testRegistry(t, artifactStep{})
 	w := startWorker(t, workerOpts(testdb.URL(t), "w1", reg))
 	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
-	// Un Admin proprio: quello del worker è usato anche dalla manutenzione.
+	// A separate Admin: the worker's is also used by maintenance.
 	a := NewAdmin(AdminOptions{Client: w.Client(), Logger: discard})
 	now := time.Now()
 	a.now = func() time.Time { return now }
@@ -132,7 +131,7 @@ func TestWorkflowCounts(t *testing.T) {
 	if n := count(StateSuccess); n != 2 {
 		t.Errorf("riusciti dopo la scadenza: %d", n)
 	}
-	// Un deploy pianificato (DELAYED) si vede subito.
+	// A scheduled (DELAYED) deploy shows up at once.
 	d := appVersion("app", "test", "2.0.0", "c3")
 	at := time.Now().Add(time.Hour)
 	d.Schedule = &descriptor.Schedule{At: &at}

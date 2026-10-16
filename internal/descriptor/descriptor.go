@@ -1,4 +1,4 @@
-// Package descriptor definisce il descrittore di deploy e il parsing da YAML (CLI) e JSON (API).
+// Package descriptor defines the deploy descriptor and its parsing from YAML (CLI) and JSON (API).
 package descriptor
 
 import (
@@ -20,74 +20,74 @@ import (
 	"github.com/joeg-ita/manent/internal/labels"
 )
 
-// APIVersion è la versione del formato di descrittore supportata.
+// APIVersion is the supported descriptor format version.
 const APIVersion = "manent/v1"
 
-// Descriptor rappresenta una richiesta di deploy.
+// Descriptor is a deploy request.
 type Descriptor struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
-	// ID opzionale: se valorizzato è usato come chiave di idempotenza del workflow.
+	// ID is optional: if set it is the idempotency key of the workflow.
 	ID          string      `json:"id,omitempty" yaml:"id,omitempty"`
 	Application string      `json:"application" yaml:"application"`
 	Environment string      `json:"environment" yaml:"environment"`
 	Artifact    Artifact    `json:"artifact" yaml:"artifact"`
 	Secrets     []SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	Deploy      Deploy      `json:"deploy" yaml:"deploy"`
-	// Steps attiva o disattiva gli step opzionali per nome.
+	// Steps enables or disables optional steps by name.
 	Steps map[string]bool `json:"steps,omitempty" yaml:"steps,omitempty"`
-	// StepParams sono i parametri degli step personalizzati, per step. Di norma arrivano dalla
-	// configurazione di ambiente: il descrittore può impostare solo quelli ammessi da
+	// StepParams are the parameters of custom steps, per step. They normally come from the
+	// environment configuration: the descriptor can set only those allowed by
 	// descriptor_policy.step_params.
 	StepParams map[string]map[string]string `json:"stepParams,omitempty" yaml:"stepParams,omitempty"`
 	PostTest   PostTest                     `json:"postTest,omitempty" yaml:"postTest,omitempty"`
-	// Schedule, se presente, pianifica il deploy invece di eseguirlo subito.
+	// Schedule, if set, schedules the deploy instead of running it at once.
 	Schedule *Schedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
-	// DryRun esegue la pipeline in simulazione: gli step senza effetti sugli ambienti vengono
-	// eseguiti, il plugin si limita alle verifiche e gli altri step vengono saltati.
+	// DryRun runs the pipeline as a simulation: steps without effects on the environments run,
+	// the plugin only performs checks and the other steps are skipped.
 	DryRun bool `json:"dryRun,omitempty" yaml:"dryRun,omitempty"`
-	// Callbacks sono gli endpoint HTTP a cui notificare l'esito degli step e del deploy.
+	// Callbacks are the HTTP endpoints to notify of the outcome of steps and deploy.
 	Callbacks []Callback `json:"callbacks,omitempty" yaml:"callbacks,omitempty"`
-	// Rollback richiede o esclude il rollback automatico in caso di fallimento.
-	// Se è ammesso lo decide la policy del tipo di artefatto.
+	// Rollback requests or excludes automatic rollback on failure.
+	// Whether it is allowed is decided by the artifact type policy.
 	Rollback *Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
-	// FreezeOverride è il motivo (es. il numero dell'incidente) con cui il deploy deroga a una
-	// finestra di freeze. Richiede un permesso specifico ed è registrato nell'audit.
+	// FreezeOverride is the reason (e.g. the incident number) for which the deploy overrides a
+	// freeze window. It requires a specific permission and is recorded in the audit.
 	FreezeOverride string `json:"freezeOverride,omitempty" yaml:"freezeOverride,omitempty"`
-	// Rollout, se presente, rilascia a ondate (region, AZ) con health gate tra un passo e
-	// l'altro. Di norma sta nella configurazione di ambiente, autorevole.
+	// Rollout, if set, releases in waves (regions, AZs) with a health gate between passes. It
+	// normally lives in the environment configuration, which is authoritative.
 	Rollout *Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
-	// After elenca gli ID dei deploy che devono concludersi con successo prima che questo parta.
-	// Fino ad allora il deploy attende senza occupare la coda dell'ambiente.
+	// After lists the IDs of the deploys that must end successfully before this one starts.
+	// Until then the deploy waits without taking the environment queue.
 	After []string `json:"after,omitempty" yaml:"after,omitempty"`
-	// AfterTimeout è il tempo massimo di attesa delle dipendenze (es. "2h", default 24h).
+	// AfterTimeout is the maximum wait for the dependencies (e.g. "2h", default 24h).
 	AfterTimeout string `json:"afterTimeout,omitempty" yaml:"afterTimeout,omitempty"`
-	// Traffic è l'integrazione con load balancer e router dell'ambiente. Arriva solo dalla
-	// configurazione di ambiente (envconfig.Merge rifiuta un descrittore che la definisce).
+	// Traffic is the integration with the environment's load balancers and routers. It comes
+	// only from the environment configuration (envconfig.Merge rejects a descriptor defining it).
 	Traffic *TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
 }
 
-// Rollback configura il rollback automatico. Nel descrittore effettivo (dopo lo step config)
-// è sempre valorizzato con la decisione finale, già verificata con la policy.
+// Rollback configures the automatic rollback. In the effective descriptor (after the config
+// step) it is always set with the final decision, already checked against the policy.
 type Rollback struct {
-	// Enabled attiva o disattiva il rollback; se assente vale il default della policy.
+	// Enabled enables or disables rollback; if absent the policy default applies.
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	// On elenca gli step il cui fallimento avvia il rollback.
+	// On lists the steps whose failure starts the rollback.
 	On []string `json:"on,omitempty" yaml:"on,omitempty"`
-	// Locator è la strategia con cui individuare la release a cui tornare (default "plugin").
+	// Locator is the strategy to find the release to go back to (default "plugin").
 	Locator string `json:"locator,omitempty" yaml:"locator,omitempty"`
 }
 
-// IsEnabled indica se il rollback è attivo.
+// IsEnabled reports whether rollback is enabled.
 func (r *Rollback) IsEnabled() bool {
 	return r != nil && r.Enabled != nil && *r.Enabled
 }
 
-// Triggers indica se il fallimento dello step indicato avvia il rollback.
+// Triggers reports whether the failure of the given step starts the rollback.
 func (r *Rollback) Triggers(step string) bool {
 	return r.IsEnabled() && slices.Contains(r.On, step)
 }
 
-// validate controlla i nomi degli step e del locator.
+// validate checks the step and locator names.
 func (r *Rollback) validate() error {
 	var errs []error
 	seen := map[string]bool{}
@@ -103,47 +103,48 @@ func (r *Rollback) validate() error {
 	return errors.Join(errs...)
 }
 
-// Tipi di evento notificati ai callback.
+// Event types notified to callbacks.
 const (
-	// CallbackEventStep è l'esito di un singolo step (anche config).
+	// CallbackEventStep is the outcome of a single step (config included).
 	CallbackEventStep = "step"
-	// CallbackEventDeployment è l'avvio e l'esito finale del deploy.
+	// CallbackEventDeployment is the start and final outcome of the deploy.
 	CallbackEventDeployment = "deployment"
 )
 
-// Tipi di autenticazione dei callback.
+// Callback authentication types.
 const (
-	CallbackAuthBearer = "bearer" // Authorization: Bearer <segreto>
-	CallbackAuthBasic  = "basic"  // Authorization: Basic <username>:<segreto>
-	CallbackAuthHeader = "header" // <header>: <segreto>
-	CallbackAuthHMAC   = "hmac"   // firma HMAC-SHA256 del body con il segreto
+	CallbackAuthBearer = "bearer" // Authorization: Bearer <secret>
+	CallbackAuthBasic  = "basic"  // Authorization: Basic <username>:<secret>
+	CallbackAuthHeader = "header" // <header>: <secret>
+	CallbackAuthHMAC   = "hmac"   // HMAC-SHA256 signature of the body with the secret
 )
 
-// Callback è un endpoint HTTP che riceve in POST gli eventi del deploy.
+// Callback is an HTTP endpoint that receives the deploy events via POST.
 type Callback struct {
 	URL string `json:"url" yaml:"url"`
-	// Events filtra gli eventi inviati ("step", "deployment"); vuoto = tutti.
+	// Events filters the events sent ("step", "deployment"); empty = all.
 	Events []string      `json:"events,omitempty" yaml:"events,omitempty"`
 	Auth   *CallbackAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
-// CallbackAuth descrive l'autenticazione verso il callback. Il descrittore è persistito da DBOS:
-// contiene solo il nome logico del segreto (sezione secrets), risolto al momento dell'invio.
+// CallbackAuth describes the authentication towards the callback. DBOS persists the
+// descriptor: it holds only the logical name of the secret (secrets section), resolved at
+// sending time.
 type CallbackAuth struct {
 	Type   string `json:"type" yaml:"type"`
 	Secret string `json:"secret" yaml:"secret"`
-	// Username per il tipo basic.
+	// Username for the basic type.
 	Username string `json:"username,omitempty" yaml:"username,omitempty"`
-	// Header è il nome dell'header per il tipo header (es. X-Api-Key).
+	// Header is the header name for the header type (e.g. X-Api-Key).
 	Header string `json:"header,omitempty" yaml:"header,omitempty"`
 }
 
-// Wants indica se il callback deve ricevere gli eventi del tipo indicato.
+// Wants reports whether the callback must receive events of the given type.
 func (c Callback) Wants(event string) bool {
 	return len(c.Events) == 0 || slices.Contains(c.Events, event)
 }
 
-// validate controlla URL, eventi e autenticazione del callback.
+// validate checks URL, events and authentication of the callback.
 func (c Callback) validate(i int) error {
 	var errs []error
 	u, err := url.Parse(c.URL)
@@ -151,7 +152,7 @@ func (c Callback) validate(i int) error {
 	case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
 		errs = append(errs, fmt.Errorf("callbacks[%d].url deve essere un URL http(s) assoluto", i))
 	case u.User != nil:
-		// Le credenziali nell'URL verrebbero persistite: vanno passate con auth.
+		// Credentials in the URL would be persisted: pass them with auth.
 		errs = append(errs, fmt.Errorf("callbacks[%d].url non deve contenere credenziali, usare auth", i))
 	}
 	for _, e := range c.Events {
@@ -180,39 +181,39 @@ func (c Callback) validate(i int) error {
 	return errors.Join(errs...)
 }
 
-// Schedule pianifica il deploy: At per un'esecuzione singola, Cron per esecuzioni ricorrenti.
+// Schedule schedules the deploy: At for a single run, Cron for recurring runs.
 type Schedule struct {
-	// At è l'orario di un deploy singolo (RFC 3339).
+	// At is the time of a single deploy (RFC 3339).
 	At *time.Time `json:"at,omitempty" yaml:"at,omitempty"`
-	// Cron è l'espressione per i deploy ricorrenti, a 5 campi o a 6 campi con i secondi.
+	// Cron is the expression for recurring deploys, with 5 fields or 6 fields with seconds.
 	Cron string `json:"cron,omitempty" yaml:"cron,omitempty"`
-	// Timezone IANA con cui interpretare Cron (default: fuso dell'executor).
+	// Timezone is the IANA zone to interpret Cron in (default: the executor's zone).
 	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
-	// Name identifica la schedule ricorrente; default "<application>-<environment>".
+	// Name identifies the recurring schedule; default "<application>-<environment>".
 	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 }
 
-// Artifact descrive l'artefatto da rilasciare.
+// Artifact describes the artifact to release.
 type Artifact struct {
 	Type    string `json:"type" yaml:"type"`
 	Name    string `json:"name" yaml:"name"`
 	Version string `json:"version" yaml:"version"`
-	// Source indica dove recuperare l'artefatto (percorso locale, file://, http(s)://) o
-	// l'immagine di un registry (oci://registry/repository:tag, oci+http:// per un registry in chiaro).
+	// Source says where to fetch the artifact (local path, file://, http(s)://) or a registry
+	// image (oci://registry/repository:tag, oci+http:// for a plain-text registry).
 	Source string `json:"source" yaml:"source"`
-	// SHA256 atteso, verificato dallo step di QA se presente.
+	// SHA256 expected, verified by the QA step if present.
 	SHA256 string `json:"sha256,omitempty" yaml:"sha256,omitempty"`
 }
 
-// SecretRef associa un nome logico a un riferimento del secret provider (es. "env:VAR").
+// SecretRef maps a logical name to a secret provider reference (e.g. "env:VAR").
 type SecretRef struct {
 	Name string `json:"name" yaml:"name"`
 	Ref  string `json:"ref" yaml:"ref"`
 }
 
-// Deploy contiene la policy, l'eventuale plugin esplicito, i target e i parametri del plugin.
-// Tutti i campi possono arrivare dalla configurazione di ambiente (internal/envconfig):
-// il descrittore può solo aggiungere ciò che lì non è definito.
+// Deploy holds the policy, the explicit plugin if any, the targets and the plugin parameters.
+// All fields can come from the environment configuration (internal/envconfig): the
+// descriptor can only add what is not defined there.
 type Deploy struct {
 	Policy  string            `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Plugin  string            `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -220,32 +221,32 @@ type Deploy struct {
 	Params  map[string]string `json:"params,omitempty" yaml:"params,omitempty"`
 }
 
-// Target è una destinazione del deploy.
+// Target is a deploy destination.
 type Target struct {
 	Host string `json:"host" yaml:"host"`
 	Port int    `json:"port,omitempty" yaml:"port,omitempty"`
 	User string `json:"user,omitempty" yaml:"user,omitempty"`
-	// Labels classificano il target; region e az sono riservate e usate dal rollout a ondate.
+	// Labels classify the target; region and az are reserved and used by wave rollouts.
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 }
 
-// Equal confronta due target, etichette comprese.
+// Equal compares two targets, labels included.
 func (t Target) Equal(o Target) bool {
 	return t.Host == o.Host && t.Port == o.Port && t.User == o.User && maps.Equal(t.Labels, o.Labels)
 }
 
-// PostTest raccoglie i controlli da eseguire dopo il deploy.
+// PostTest collects the checks to run after the deploy.
 type PostTest struct {
 	HTTP []HTTPCheck `json:"http,omitempty" yaml:"http,omitempty"`
 }
 
-// HTTPCheck verifica che un endpoint risponda con lo status atteso.
+// HTTPCheck checks that an endpoint answers with the expected status.
 type HTTPCheck struct {
 	URL          string `json:"url" yaml:"url"`
 	ExpectStatus int    `json:"expectStatus,omitempty" yaml:"expectStatus,omitempty"`
 }
 
-// ParseYAML legge un descrittore YAML, rifiutando campi sconosciuti.
+// ParseYAML reads a YAML descriptor, rejecting unknown fields.
 func ParseYAML(data []byte) (*Descriptor, error) {
 	var d Descriptor
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -256,7 +257,7 @@ func ParseYAML(data []byte) (*Descriptor, error) {
 	return &d, d.Validate()
 }
 
-// ParseJSON legge un descrittore JSON, rifiutando campi sconosciuti.
+// ParseJSON reads a JSON descriptor, rejecting unknown fields.
 func ParseJSON(data []byte) (*Descriptor, error) {
 	var d Descriptor
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -267,7 +268,7 @@ func ParseJSON(data []byte) (*Descriptor, error) {
 	return &d, d.Validate()
 }
 
-// LoadYAMLFile legge e valida un descrittore YAML da file.
+// LoadYAMLFile reads and validates a YAML descriptor from a file.
 func LoadYAMLFile(path string) (*Descriptor, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -276,7 +277,7 @@ func LoadYAMLFile(path string) (*Descriptor, error) {
 	return ParseYAML(data)
 }
 
-// Validate controlla i campi obbligatori del descrittore.
+// Validate checks the mandatory fields of the descriptor.
 func (d *Descriptor) Validate() error {
 	var errs []error
 	if d.APIVersion != APIVersion {
@@ -353,15 +354,15 @@ func (d *Descriptor) Validate() error {
 	return errors.Join(errs...)
 }
 
-// Limiti delle dipendenze tra deploy.
+// Limits of dependencies between deploys.
 const (
 	maxAfter            = 20
 	DefaultAfterTimeout = 24 * time.Hour
 	maxAfterTimeout     = 30 * 24 * time.Hour
 )
 
-// validateAfter controlla le dipendenze: ID validi e distinti, mai il deploy stesso, non con
-// dry-run né con schedule.cron (ogni scatto dipenderebbe sempre dagli stessi deploy).
+// validateAfter checks the dependencies: valid and distinct IDs, never the deploy itself, not
+// with dry-run nor with schedule.cron (every tick would always depend on the same deploys).
 func (d *Descriptor) validateAfter() error {
 	if len(d.After) == 0 {
 		if d.AfterTimeout != "" {
@@ -397,7 +398,7 @@ func (d *Descriptor) validateAfter() error {
 	return errors.Join(errs...)
 }
 
-// AfterWait restituisce il tempo massimo di attesa delle dipendenze.
+// AfterWait returns the maximum wait for the dependencies.
 func (d *Descriptor) AfterWait() (time.Duration, error) {
 	if d.AfterTimeout == "" {
 		return DefaultAfterTimeout, nil
@@ -409,23 +410,23 @@ func (d *Descriptor) AfterWait() (time.Duration, error) {
 	return t, nil
 }
 
-// maxOverride limita la lunghezza del motivo di una deroga al freeze.
+// maxOverride limits the length of a freeze override reason.
 const maxOverride = 500
 
-// maxStepParam limita la lunghezza dei parametri degli step personalizzati.
+// maxStepParam limits the length of custom step parameters.
 const maxStepParam = 1024
 
-// maxCallbacks limita i callback di un deploy: ogni evento genera una chiamata per callback.
+// maxCallbacks limits the callbacks of a deploy: every event makes one call per callback.
 const maxCallbacks = 5
 
-// nameRe limita ID e nomi di schedule, usati anche come nomi di directory sul worker.
+// nameRe limits IDs and schedule names, also used as directory names on the worker.
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
 const nameRule = "ammessi lettere, cifre, '.', '_', ':', '-' (max 128, iniziale alfanumerica)"
 
 func validName(s string) bool { return nameRe.MatchString(s) }
 
-// validate controlla che sia indicato esattamente uno tra At e Cron e che il cron sia valido.
+// validate checks that exactly one of At and Cron is set and that the cron is valid.
 func (s *Schedule) validate(id string) error {
 	switch {
 	case s.At == nil && s.Cron == "":
@@ -448,11 +449,11 @@ func (s *Schedule) validate(id string) error {
 	return nil
 }
 
-// cronParser accetta lo stesso formato di DBOS (6 campi, con secondi).
+// cronParser accepts the same format as DBOS (6 fields, with seconds).
 var cronParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
-// CronExpr restituisce l'espressione nel formato a 6 campi richiesto da DBOS,
-// aggiungendo "0" come campo dei secondi alle espressioni classiche a 5 campi.
+// CronExpr returns the expression in the 6-field format DBOS requires, adding "0" as the
+// seconds field to classic 5-field expressions.
 func (s *Schedule) CronExpr() string {
 	expr := strings.TrimSpace(s.Cron)
 	if len(strings.Fields(expr)) == 5 {
@@ -461,7 +462,7 @@ func (s *Schedule) CronExpr() string {
 	return expr
 }
 
-// ScheduleName restituisce il nome della schedule ricorrente.
+// ScheduleName returns the name of the recurring schedule.
 func (d *Descriptor) ScheduleName() string {
 	if d.Schedule != nil && d.Schedule.Name != "" {
 		return d.Schedule.Name
@@ -469,7 +470,7 @@ func (d *Descriptor) ScheduleName() string {
 	return d.Application + "-" + d.Environment
 }
 
-// SecretRefByName restituisce il riferimento associato a un nome logico.
+// SecretRefByName returns the reference mapped to a logical name.
 func (d *Descriptor) SecretRefByName(name string) (string, bool) {
 	for _, s := range d.Secrets {
 		if s.Name == name {

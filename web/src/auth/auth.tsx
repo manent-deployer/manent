@@ -4,19 +4,19 @@ import { useNavigate } from "react-router-dom";
 
 import type { UIConfig } from "@/lib/config";
 
-// Stato del login. Con auth_mode "none" non c'è login; "unavailable" è un server con
-// autenticazione attiva ma senza client OIDC per la UI.
+// Login state. With auth_mode "none" there is no login; "unavailable" is a server with
+// authentication enabled but no OIDC client for the UI.
 export type AuthStatus = "loading" | "anonymous" | "authenticated" | "redirecting" | "unavailable" | "insecure" | "error";
 
 interface AuthContextValue {
   status: AuthStatus;
   error?: string;
-  /** Token da mandare all'API; undefined senza autenticazione. */
+  /** Token to send to the API; undefined without authentication. */
   token: () => string | undefined;
-  /** Porta all'identity provider e torna sulla pagina corrente. */
+  /** Goes to the identity provider and comes back to the current page. */
   login: () => void;
   logout: () => void;
-  /** Chiamato dal client API su un 401: il token non è più valido. */
+  /** Called by the API client on a 401: the token is no longer valid. */
   expired: () => void;
   name?: string;
 }
@@ -36,9 +36,8 @@ function userManager(cfg: UIConfig): UserManager {
     post_logout_redirect_uri: origin + "/",
     response_type: "code",
     scope: (cfg.scopes ?? ["openid", "profile"]).join(" "),
-    // I token restano solo in memoria: niente localStorage né cookie, quindi niente CSRF e
-    // nessun token leggibile da altre schede. Lo stato del redirect (PKCE) sta in
-    // sessionStorage per la durata del solo login.
+    // Tokens stay only in memory: no localStorage or cookies, so no CSRF and no token readable by
+    // other tabs. The redirect state (PKCE) lives in sessionStorage for the login only.
     userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
     stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
     automaticSilentRenew: true,
@@ -54,7 +53,7 @@ export function AuthProvider({ config, children }: { config: UIConfig; children:
   const [status, setStatus] = useState<AuthStatus>(() => {
     if (config.auth_mode === "none") return "anonymous";
     if (config.auth_mode === "unavailable") return "unavailable";
-    // PKCE usa crypto.subtle, disponibile solo in un contesto sicuro (HTTPS o localhost).
+    // PKCE uses crypto.subtle, available only in a secure context (HTTPS or localhost).
     if (!window.isSecureContext) return "insecure";
     return "loading";
   });
@@ -71,8 +70,8 @@ export function AuthProvider({ config, children }: { config: UIConfig; children:
     });
   }, [mgr]);
 
-  // L'avvio del login (callback o redirect) va eseguito una sola volta: l'effetto può ripartire
-  // quando cambia il percorso (navigate) o, in sviluppo, per StrictMode.
+  // Starting the login (callback or redirect) must run only once: the effect can restart when
+  // the path changes (navigate) or, in development, because of StrictMode.
   const started = useRef(false);
   useEffect(() => {
     if (!mgr || !window.isSecureContext || started.current) return;
@@ -91,13 +90,13 @@ export function AuthProvider({ config, children }: { config: UIConfig; children:
         set(u);
         const st = u.state as ReturnState | undefined;
         const to = st?.returnTo && st.returnTo.startsWith("/") && !st.returnTo.startsWith("//") ? st.returnTo : "/";
-        // Il router deve sapere del cambio di percorso: history.replaceState non lo avvisa.
+        // The router must know about the path change: history.replaceState does not notify it.
         navigate(to, { replace: true });
         setStatus("authenticated");
         return;
       }
-      // Dopo un ricaricamento il token in memoria non c'è più: con una sessione attiva
-      // sull'identity provider il ritorno è immediato.
+      // After a reload the in-memory token is gone: with an active session on the identity
+      // provider the return is immediate.
       login();
     })().catch((e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));

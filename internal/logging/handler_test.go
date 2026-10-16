@@ -8,7 +8,7 @@ import (
 	"github.com/crewjam/rfc5424"
 )
 
-// fakeSender memorizza i messaggi ricevuti per le verifiche.
+// fakeSender stores the received messages for checks.
 type fakeSender struct{ msgs []rfc5424.Message }
 
 func (f *fakeSender) Send(m rfc5424.Message) error { f.msgs = append(f.msgs, m); return nil }
@@ -44,7 +44,7 @@ func TestLoggerScriveSuAppESIEM(t *testing.T) {
 	}
 }
 
-// Un messaggio troppo grande per un datagramma viene accorciato, non scartato.
+// A message too large for a datagram is shortened, not dropped.
 func TestMessaggioDatagrammaAccorciato(t *testing.T) {
 	msg := rfc5424.Message{
 		Priority: facilityLocal0 | rfc5424.Info, Hostname: "h", AppName: "manent", ProcessID: "1", MessageID: "-",
@@ -68,7 +68,7 @@ func TestMessaggioDatagrammaAccorciato(t *testing.T) {
 	if params[0].Value != "d1" || len(params[1].Value) > maxDatagramParam+4 || !strings.HasSuffix(string(got.Message), "[troncato]") {
 		t.Errorf("accorciamento inatteso: %d %q", len(params[1].Value), got.Message[len(got.Message)-20:])
 	}
-	// Un messaggio piccolo resta identico.
+	// A small message stays identical.
 	small := msg
 	small.Message, small.StructuredData = []byte("ok"), nil
 	if b, _ := marshalDatagram(small, maxDatagram); !strings.HasSuffix(string(b), " ok") {

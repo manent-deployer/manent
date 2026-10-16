@@ -13,7 +13,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// fakeResolver simula una configurazione di ambiente modificabile durante il test.
+// fakeResolver simulates an environment configuration that can change during the test.
 type fakeResolver struct {
 	version atomic.Value // string
 	fail    atomic.Bool
@@ -34,7 +34,7 @@ func (r *fakeResolver) Resolve(_ context.Context, d descriptor.Descriptor) (desc
 	return d, map[string]string{"source": "fake", "revision": v}, nil
 }
 
-// paramStep registra la versione di configurazione vista dagli step.
+// paramStep records the configuration version seen by the steps.
 type paramStep struct {
 	mu   sync.Mutex
 	seen []string
@@ -64,7 +64,7 @@ func TestConfigLettaAlMomentoDellEsecuzione(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// La configurazione cambia dopo l'invio ma prima dell'esecuzione.
+	// The configuration changes after submission but before execution.
 	resolver.version.Store("v2")
 	res, err := svc.Wait(ctx, sub.ID)
 	if err != nil {
@@ -104,7 +104,7 @@ func TestConfigStabileDopoRecovery(t *testing.T) {
 	<-block.started
 	_ = w1.Shutdown(100 * time.Millisecond)
 
-	// La configurazione cambia mentre il deploy è interrotto: alla ripresa deve restare v1.
+	// The configuration changes while the deploy is interrupted: on resume it must stay v1.
 	resolver.version.Store("v2")
 	w := startWorker(t, opts)
 	svc = NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})

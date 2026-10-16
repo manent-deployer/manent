@@ -12,13 +12,13 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// SDKConnector apre l'accesso a Lambda con l'SDK AWS.
+// SDKConnector opens access to Lambda with the AWS SDK.
 type SDKConnector struct {
-	// Endpoint, se indicato, sostituisce quello di Lambda (es. LocalStack).
+	// Endpoint, if set, replaces the Lambda one (e.g. LocalStack).
 	Endpoint *string
 }
 
-// Connect costruisce il client Lambda per la region con le credenziali della richiesta.
+// Connect builds the Lambda client for the region with the request's credentials.
 func (c SDKConnector) Connect(ctx context.Context, region string, req *plugin.Request) (API, error) {
 	cfg, err := awsauth.Config(ctx, region, req)
 	if err != nil {
@@ -29,7 +29,7 @@ func (c SDKConnector) Connect(ctx context.Context, region string, req *plugin.Re
 
 type sdkAPI struct{ c *lambda.Client }
 
-// notFound traduce l'errore di risorsa inesistente in ErrNotFound.
+// notFound maps the resource-not-found error to ErrNotFound.
 func notFound(err error) error {
 	var nf *types.ResourceNotFoundException
 	if errors.As(err, &nf) {
@@ -114,7 +114,7 @@ func (a sdkAPI) PutAlias(ctx context.Context, name, alias, version, description 
 		if err == nil || !errors.As(err, &exists) {
 			return err
 		}
-		// Creato nel frattempo (es. da un tentativo precedente): si aggiorna.
+		// Created meanwhile (e.g. by a previous attempt): update it.
 	}
 	_, err := a.c.UpdateAlias(ctx, &lambda.UpdateAliasInput{
 		FunctionName: aws.String(name), Name: aws.String(alias), FunctionVersion: aws.String(version), Description: aws.String(description),

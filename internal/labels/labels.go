@@ -1,6 +1,6 @@
-// Package labels interpreta i selettori sulle etichette dei target, ad esempio
-// "region=eu-1, az in (eu-1a, eu-1b), canary!=true". Le condizioni separate da virgole
-// devono valere tutte. Non dipende da altri package: lo usano descrittore e rollout.
+// Package labels parses the selectors on target labels, for example
+// "region=eu-1, az in (eu-1a, eu-1b), canary!=true". Comma-separated conditions must all
+// hold. It depends on no other package: descriptor and rollout use it.
 package labels
 
 import (
@@ -11,13 +11,13 @@ import (
 	"strings"
 )
 
-// Etichette riservate dei target.
+// Reserved target labels.
 const (
 	Region = "region"
 	AZ     = "az"
 )
 
-// Operatori di una condizione.
+// Operators of a condition.
 const (
 	opEq    = "="
 	opNe    = "!="
@@ -25,20 +25,20 @@ const (
 	opNotIn = "notin"
 )
 
-// requirement è una condizione su un'etichetta.
+// requirement is a condition on a label.
 type requirement struct {
 	key    string
 	op     string
 	values []string
 }
 
-// Selector è un insieme di condizioni, tutte necessarie.
+// Selector is a set of conditions, all required.
 type Selector struct {
 	reqs []requirement
 	text string
 }
 
-// String restituisce il selettore come è stato scritto.
+// String returns the selector as written.
 func (s Selector) String() string { return s.text }
 
 var (
@@ -46,7 +46,7 @@ var (
 	valueRe = regexp.MustCompile(`^[A-Za-z0-9._-]{0,63}$`)
 )
 
-// Parse interpreta un selettore. Un selettore vuoto non è ammesso: selezionerebbe tutto.
+// Parse parses a selector. An empty selector is not allowed: it would select everything.
 func Parse(text string) (Selector, error) {
 	s := Selector{text: strings.TrimSpace(text)}
 	if s.text == "" {
@@ -62,7 +62,7 @@ func Parse(text string) (Selector, error) {
 	return s, nil
 }
 
-// splitTop divide sulle virgole fuori dalle parentesi.
+// splitTop splits on commas outside parentheses.
 func splitTop(s string) []string {
 	var parts []string
 	depth, start := 0, 0
@@ -136,7 +136,7 @@ func (r requirement) check() error {
 	return nil
 }
 
-// Matches indica se le etichette soddisfano tutte le condizioni. Un'etichetta assente vale "".
+// Matches reports whether the labels satisfy all conditions. A missing label counts as "".
 func (s Selector) Matches(l map[string]string) bool {
 	for _, r := range s.reqs {
 		v := l[r.key]
@@ -162,7 +162,7 @@ func (s Selector) Matches(l map[string]string) bool {
 	return true
 }
 
-// ValidLabels verifica chiavi e valori delle etichette di un target.
+// ValidLabels checks keys and values of a target's labels.
 func ValidLabels(l map[string]string) error {
 	for k, v := range l {
 		if !keyRe.MatchString(k) || !valueRe.MatchString(v) {

@@ -1,6 +1,6 @@
-// Inoltro TCP usato dai test end-to-end: espone l'API del laboratorio (MANENT_API_TARGET,
-// default api:8080) su localhost, l'unica origine HTTP che il browser tratta come contesto
-// sicuro, necessario al login con PKCE (Web Crypto).
+// TCP forwarding used by the end-to-end tests: it exposes the lab API (MANENT_API_TARGET,
+// default api:8080) on localhost, the only HTTP origin the browser treats as a secure
+// context, needed for the PKCE login (Web Crypto).
 import net from "node:net";
 
 const [host, port] = (process.env.MANENT_API_TARGET ?? "api:8080").split(":");

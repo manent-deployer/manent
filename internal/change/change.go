@@ -1,9 +1,9 @@
-// Package change apre e chiude i ticket di change management dei deploy in un sistema ITSM
-// (ServiceNow, Jira) e ne legge lo stato di approvazione.
+// Package change opens and closes the change management tickets of deploys in an ITSM
+// (ServiceNow, Jira) and reads their approval state.
 //
-// Le operazioni sono eseguite come step DBOS dai workflow: devono essere idempotenti. Il
-// ticket di un deploy è riconosciuto dall'ID del deploy (correlation_id in ServiceNow,
-// un'etichetta in Jira), quindi Open lo crea una volta sola anche se viene ripetuto.
+// Operations run as DBOS steps of the workflows: they must be idempotent. A deploy's ticket is
+// recognized by the deploy ID (correlation_id in ServiceNow, a label in Jira), so Open creates
+// it only once even when repeated.
 package change
 
 import (
@@ -19,71 +19,71 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Stati di approvazione di un ticket.
+// Approval states of a ticket.
 const (
 	ApprovalPending  = "pending"
 	ApprovalApproved = "approved"
 	ApprovalRejected = "rejected"
 )
 
-// Ticket è un ticket di change. Viene persistito da DBOS: non contiene segreti.
+// Ticket is a change ticket. DBOS persists it: it holds no secrets.
 type Ticket struct {
-	// ID è l'identificativo tecnico (sys_id in ServiceNow, id in Jira).
+	// ID is the technical identifier (sys_id in ServiceNow, id in Jira).
 	ID string `json:"id"`
-	// Number è il riferimento leggibile (CHG0031337, CHG-42).
+	// Number is the human-readable reference (CHG0031337, CHG-42).
 	Number string `json:"number"`
 	URL    string `json:"url,omitempty"`
-	// State è lo stato nel sistema ITSM, come lo riporta.
+	// State is the state in the ITSM, as reported by it.
 	State string `json:"state,omitempty"`
-	// Approval è lo stato di approvazione normalizzato (pending, approved, rejected).
+	// Approval is the normalized approval state (pending, approved, rejected).
 	Approval string `json:"approval,omitempty"`
 }
 
-// Request descrive il deploy per cui aprire il change.
+// Request describes the deploy to open the change for.
 type Request struct {
 	DeploymentID string
 	Application  string
 	Environment  string
 	Artifact     string
 	Version      string
-	// Kind è deploy, promotion o rollback.
+	// Kind is deploy, promotion or rollback.
 	Kind        string
 	RequestedBy string
-	// URL è il link al deploy nell'interfaccia web, se configurata.
+	// URL is the link to the deploy in the web interface, if configured.
 	URL string
-	// Approval indica che il deploy attende l'approvazione del change.
+	// Approval means the deploy waits for the change approval.
 	Approval bool
 }
 
-// Outcome è l'esito del deploy con cui chiudere il change.
+// Outcome is the deploy outcome to close the change with.
 type Outcome struct {
 	Success bool
-	// Message descrive l'esito (es. l'errore del deploy).
+	// Message describes the outcome (e.g. the deploy error).
 	Message string
-	// Rollback è l'esito del rollback automatico, se previsto.
+	// Rollback is the outcome of the automatic rollback, if any.
 	Rollback string
 }
 
-// Provider è un sistema di change management.
+// Provider is a change management system.
 type Provider interface {
-	// Name è il nome del sistema (servicenow, jira).
+	// Name is the system name (servicenow, jira).
 	Name() string
-	// Open trova il ticket del deploy o lo crea.
+	// Open finds the deploy's ticket or creates it.
 	Open(ctx context.Context, r Request) (Ticket, error)
-	// Refresh rilegge stato e approvazione del ticket.
+	// Refresh reads the ticket's state and approval again.
 	Refresh(ctx context.Context, t Ticket) (Ticket, error)
-	// Start segnala l'avvio del deploy (es. stato Implement).
+	// Start reports the deploy start (e.g. Implement state).
 	Start(ctx context.Context, t Ticket) error
-	// Close registra l'esito e chiude il ticket.
+	// Close records the outcome and closes the ticket.
 	Close(ctx context.Context, t Ticket, o Outcome) error
 }
 
-// HTTPDoer astrae il client HTTP per i test.
+// HTTPDoer abstracts the HTTP client for tests.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// expand sostituisce i segnaposto nei valori configurati dei campi.
+// expand replaces the placeholders in the configured field values.
 func expand(s string, r Request) string {
 	return strings.NewReplacer(
 		"{application}", r.Application, "{environment}", r.Environment, "{version}", r.Version,
@@ -91,7 +91,7 @@ func expand(s string, r Request) string {
 	).Replace(s)
 }
 
-// expandAny applica expand alle stringhe di un valore JSON.
+// expandAny applies expand to the strings of a JSON value.
 func expandAny(v any, r Request) any {
 	switch x := v.(type) {
 	case string:
@@ -112,7 +112,7 @@ func expandAny(v any, r Request) any {
 	return v
 }
 
-// summary è il titolo del ticket.
+// summary is the ticket title.
 func summary(r Request) string {
 	kind := "Deploy"
 	switch r.Kind {
@@ -124,7 +124,7 @@ func summary(r Request) string {
 	return fmt.Sprintf("%s %s %s to %s (manent)", kind, r.Artifact, r.Version, r.Environment)
 }
 
-// description è la descrizione del ticket.
+// description is the ticket description.
 func description(r Request) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Application: %s\nEnvironment: %s\nArtifact: %s %s\nRequested by: %s\nDeployment: %s\n",
@@ -136,7 +136,7 @@ func description(r Request) string {
 	return b.String()
 }
 
-// closeNotes descrive l'esito.
+// closeNotes describes the outcome.
 func closeNotes(o Outcome) string {
 	msg := "Deployment completed successfully."
 	if !o.Success {
@@ -148,7 +148,7 @@ func closeNotes(o Outcome) string {
 	return msg
 }
 
-// credentials legge un segreto al momento dell'uso.
+// credentials reads a secret at use time.
 type credentials struct {
 	Secrets secrets.Provider
 }
@@ -164,11 +164,11 @@ func (c credentials) resolve(ctx context.Context, ref string) (string, error) {
 	return strings.TrimSpace(v), nil
 }
 
-// ErrPermanent marca gli errori che un nuovo tentativo non risolve (es. 400, 401, 403).
+// ErrPermanent marks the errors a retry cannot fix (e.g. 400, 401, 403).
 var ErrPermanent = errors.New("errore permanente del sistema ITSM")
 
-// doJSON esegue una richiesta JSON e decodifica la risposta in out. Gli stati 4xx (salvo 408
-// e 429) sono errori permanenti.
+// doJSON runs a JSON request and decodes the response into out. 4xx statuses (except 408
+// and 429) are permanent errors.
 func doJSON(ctx context.Context, client HTTPDoer, method, url string, auth func(*http.Request), body, out any) (int, error) {
 	var rd io.Reader
 	if body != nil {
@@ -214,8 +214,8 @@ func doJSON(ctx context.Context, client HTTPDoer, method, url string, auth func(
 	return resp.StatusCode, json.Unmarshal(data, out)
 }
 
-// NewHTTPClient crea il client per gli ITSM; non segue i redirect, che porterebbero le
-// credenziali verso un altro host.
+// NewHTTPClient creates the ITSM client; it does not follow redirects, which would carry the
+// credentials to another host.
 func NewHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,

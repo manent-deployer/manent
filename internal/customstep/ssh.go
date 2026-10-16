@@ -17,13 +17,13 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// SSHDialer apre connessioni SSH reali, con verifica della host key.
+// SSHDialer opens real SSH connections, with host key verification.
 type SSHDialer struct {
 	KnownHostsPath        string
 	InsecureIgnoreHostKey bool
 }
 
-// Dial si connette al target con chiave privata e/o password.
+// Dial connects to the target with a private key and/or password.
 func (d *SSHDialer) Dial(ctx context.Context, t descriptor.Target, user string, auth SSHAuth) (Conn, error) {
 	hostKey, err := d.hostKeyCallback()
 	if err != nil {
@@ -79,8 +79,8 @@ func (d *SSHDialer) hostKeyCallback() (ssh.HostKeyCallback, error) {
 
 type sshConn struct{ client *ssh.Client }
 
-// Exec esegue il comando in una nuova sessione. Allo scadere del contesto invia SIGKILL e
-// chiude la sessione; molti server ignorano i segnali, per questo lo script usa timeout(1).
+// Exec runs the command in a new session. When the context expires it sends SIGKILL and
+// closes the session; many servers ignore signals, which is why the script uses timeout(1).
 func (c *sshConn) Exec(ctx context.Context, cmd string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	sess, err := c.client.NewSession()
 	if err != nil {

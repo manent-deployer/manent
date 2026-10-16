@@ -10,34 +10,34 @@ import (
 	"github.com/joeg-ita/manent/internal/audit"
 )
 
-// RetentionOptions configura la pulizia dello storico.
+// RetentionOptions configures the history cleanup.
 type RetentionOptions struct {
-	// MaxAge: i workflow conclusi da più di MaxAge vengono eliminati (0 = mai).
+	// MaxAge: workflows ended more than MaxAge ago are deleted (0 = never).
 	MaxAge time.Duration `json:"max_age"`
-	// KeepReleases sono i deploy riusciti conservati comunque per ogni applicazione e
-	// ambiente (almeno 1): l'inventario, le promozioni e il rollback manuale li usano.
+	// KeepReleases are the successful deploys always kept per application and environment (at
+	// least 1): inventory, promotions and manual rollback use them.
 	KeepReleases int  `json:"keep_releases"`
 	DryRun       bool `json:"dry_run,omitempty"`
-	// By è chi esegue la pulizia, registrato nell'audit.
+	// By is who runs the cleanup, recorded in the audit.
 	By string `json:"-"`
 }
 
-// PruneReport è l'esito di una pulizia.
+// PruneReport is the outcome of a cleanup.
 type PruneReport struct {
 	Cutoff  time.Time `json:"cutoff"`
 	DryRun  bool      `json:"dry_run,omitempty"`
 	Deleted int       `json:"deleted"`
-	// Kept sono i workflow oltre il limite di età conservati come release.
+	// Kept are the workflows beyond the age limit kept as releases.
 	Kept int `json:"kept"`
 }
 
-// pruneBatch è il numero di workflow esaminati ed eliminati per volta.
+// pruneBatch is the number of workflows examined and deleted at a time.
 const pruneBatch = 200
 
-// Prune elimina dal database di sistema i workflow di manent (deploy, approvazioni, tick delle
-// schedule) conclusi da più di MaxAge, con step, eventi e log. Per ogni applicazione e
-// ambiente conserva gli ultimi KeepReleases deploy riusciti e le loro approvazioni. Non tocca
-// i workflow in corso, in coda o pianificati, né il file di audit.
+// Prune deletes from the system database the manent workflows (deploys, approvals, schedule
+// ticks) ended more than MaxAge ago, with steps, events and logs. For every application and
+// environment it keeps the last KeepReleases successful deploys and their approvals. It does
+// not touch running, queued or scheduled workflows, nor the audit file.
 func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, error) {
 	if o.MaxAge <= 0 {
 		return nil, fmt.Errorf("%w: max_age deve essere > 0", ErrInvalidRequest)
@@ -73,7 +73,7 @@ func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, er
 		}
 		rep.Kept += kept
 		if len(ids) > 0 && !o.DryRun {
-			// Senza WithDeleteChildren: i deploy figli dei tick delle schedule hanno la loro retention.
+			// Without WithDeleteChildren: the deploys that are children of schedule ticks have their own retention.
 			if err := dbos.DeleteWorkflows(a.client, ids); err != nil {
 				return rep, err
 			}
@@ -82,7 +82,7 @@ func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, er
 		if len(wfs) < pruneBatch {
 			break
 		}
-		// I workflow eliminati spariscono dall'elenco: la pagina successiva parte dopo quelli conservati.
+		// Deleted workflows disappear from the listing: the next page starts after the kept ones.
 		if o.DryRun {
 			offset += len(wfs)
 		} else {
@@ -99,12 +99,12 @@ func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, er
 	return rep, nil
 }
 
-// ActionAdminPrune è l'azione di audit della retention.
+// ActionAdminPrune is the audit action of the retention.
 const ActionAdminPrune = "admin.prune"
 
-// releasesToKeep restituisce gli ID dei deploy riusciti da conservare (gli ultimi keep per
-// applicazione e ambiente, dry-run esclusi) e delle loro approvazioni. Scorre tutto lo storico
-// dei deploy riusciti, senza il limite degli elenchi.
+// releasesToKeep returns the IDs of the successful deploys to keep (the last keep per
+// application and environment, dry-runs excluded) and of their approvals. It scans the whole
+// history of successful deploys, without the listing limit.
 func (a *Admin) releasesToKeep(keep int) (map[string]bool, error) {
 	ids := map[string]bool{}
 	perEnv := map[string]int{}

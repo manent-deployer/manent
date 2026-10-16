@@ -89,7 +89,7 @@ function Facts({ d }: { d: Status }) {
   );
 }
 
-/** DependenciesPanel mostra i deploy da cui questo dipende (after) con il loro stato. */
+/** DependenciesPanel shows the deploys this one depends on (after) with their state. */
 function DependenciesPanel({ d }: { d: Status }) {
   const { t, locale } = useI18n();
   const a = d.after;
@@ -210,7 +210,7 @@ export function DeploymentDetailPage() {
   const { status, steps, lines, mode } = useDeployment(id);
   const d = status.data;
 
-  // Annuncia agli screen reader i cambi di stato del deploy (non il primo caricamento).
+  // Announces the deploy state changes to screen readers (not the first load).
   const [announce, setAnnounce] = useState("");
   const prev = useRef<string>();
   useEffect(() => {

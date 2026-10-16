@@ -12,7 +12,7 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// ReleaseSubmitCmd accoda una release composta e, di default, ne segue l'avanzamento.
+// ReleaseSubmitCmd enqueues a composite release and, by default, follows its progress.
 type ReleaseSubmitCmd struct {
 	global   *GlobalOptions
 	File     string        `short:"f" long:"file" required:"true" description:"release YAML (kind: Release); i file dei deploy sono relativi a questo"`
@@ -21,7 +21,7 @@ type ReleaseSubmitCmd struct {
 	Interval time.Duration `long:"interval" default:"3s" description:"intervallo di lettura dello stato"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ReleaseSubmitCmd) Execute([]string) error {
 	r, err := descriptor.LoadReleaseYAMLFile(c.File)
 	if err != nil {
@@ -55,8 +55,8 @@ func (c *ReleaseSubmitCmd) Execute([]string) error {
 	})
 }
 
-// followRelease legge lo stato della release fino alla conclusione, scrivendo su out ogni
-// cambio di stato di un deploy o del suo rollback.
+// followRelease reads the release state until it ends, writing to out every state change of a
+// deploy or of its rollback.
 func followRelease(ctx context.Context, svc service.Service, rs *service.ReleaseStatus, every time.Duration, out io.Writer) (*service.ReleaseStatus, error) {
 	seen := map[string]string{}
 	t := time.NewTicker(every)
@@ -88,13 +88,13 @@ func followRelease(ctx context.Context, svc service.Service, rs *service.Release
 	}
 }
 
-// ReleaseStatusCmd mostra lo stato di una release.
+// ReleaseStatusCmd shows the state of a release.
 type ReleaseStatusCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ReleaseStatusCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		rs, err := svc.ReleaseStatus(ctx, c.Args.ID)
@@ -105,13 +105,13 @@ func (c *ReleaseStatusCmd) Execute([]string) error {
 	})
 }
 
-// ReleaseListCmd elenca le release più recenti.
+// ReleaseListCmd lists the most recent releases.
 type ReleaseListCmd struct {
 	global *GlobalOptions
 	Limit  int `short:"n" long:"limit" default:"20" description:"numero massimo di release"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ReleaseListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		rs, err := svc.ListReleases(ctx, c.Limit)
@@ -122,13 +122,13 @@ func (c *ReleaseListCmd) Execute([]string) error {
 	})
 }
 
-// ReleaseCancelCmd annulla una release.
+// ReleaseCancelCmd cancels a release.
 type ReleaseCancelCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ReleaseCancelCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		if err := svc.CancelRelease(ctx, c.Args.ID); err != nil {

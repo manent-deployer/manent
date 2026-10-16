@@ -18,30 +18,30 @@ import (
 )
 
 const (
-	// releaseWorkflowName segue una release composta. Il nome non va cambiato: DBOS lo usa
-	// per il recovery.
+	// releaseWorkflowName follows a composite release. The name must not change: DBOS uses it
+	// for recovery.
 	releaseWorkflowName = "manent.release"
-	// releaseEvent è la chiave dell'evento con lo stato della release.
+	// releaseEvent is the key of the event with the release state.
 	releaseEvent = "release"
-	// releaseRollbackInfix compone l'ID dei rollback di una release: "<release>.rollback.<nome>".
+	// releaseRollbackInfix builds the ID of a release's rollbacks: "<release>.rollback.<name>".
 	releaseRollbackInfix = ".rollback."
 )
 
-// releaseInput è l'input del workflow della release: lo stato iniziale, con i deploy in
-// ordine topologico.
+// releaseInput is the input of the release workflow: the initial state, with the deploys in
+// topological order.
 type releaseInput struct {
 	Release ReleaseStatus `json:"release"`
-	// Descriptors sono i descrittori dei deploy, nell'ordine di Release.Deploys, con ID e
-	// dipendenze (after) già assegnati: il workflow li accoda nel primo step. Le release
-	// accodate dalle versioni precedenti non li hanno, perché i deploy erano già accodati.
+	// Descriptors are the deploy descriptors, in the order of Release.Deploys, with IDs and
+	// dependencies (after) already assigned: the workflow enqueues them in its first step.
+	// Releases enqueued by earlier versions lack them, because their deploys were already enqueued.
 	Descriptors []descriptor.Descriptor `json:"descriptors,omitempty"`
 }
 
-// SubmitRelease implementa ReleaseService. Verifica piano, policy, governance e dipendenze
-// esterne di tutti i deploy, poi accoda il workflow della release, che a sua volta accoda i
-// deploy in ordine topologico, ognuno con le dipendenze (after) dai propri predecessori.
-// Così una caduta del processo dopo l'accodamento non lascia deploy senza la release che li
-// segue. Con lo stesso ID restituisce la release esistente.
+// SubmitRelease implements ReleaseService. It checks plan, policy, governance and external
+// dependencies of all deploys, then enqueues the release workflow, which in turn enqueues the
+// deploys in topological order, each with dependencies (after) on its predecessors. So a
+// process crash after enqueuing leaves no deploy without the release following it. With the
+// same ID it returns the existing release.
 func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*ReleaseStatus, error) {
 	if err := r.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -81,11 +81,11 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		if _, err := e.check(ctx, &d); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
-		// Freeze e regole di governance rifiutano la release subito, non dopo l'accodamento.
+		// Freezes and governance rules reject the release at once, not after enqueuing.
 		if _, _, err := e.govern(ctx, &d); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
-		// Le dipendenze interne non esistono ancora: si verificano solo quelle esterne.
+		// Internal dependencies do not exist yet: only external ones are checked.
 		if len(external) > 0 {
 			ext := d
 			ext.After = external
@@ -117,11 +117,11 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 	return rs, nil
 }
 
-// submitDeploys accoda i deploy della release, in ordine, con l'identità di chi l'ha
-// richiesta. È uno step: dopo una caduta viene ripetuto, e gli ID fissi rendono idempotenti gli
-// accodamenti già avvenuti. Se un deploy viene rifiutato (es. un freeze iniziato dopo
-// l'invio) o la release viene annullata, annulla quelli già accodati: il rifiutato risulta
-// ERROR, quelli non accodati CANCELLED.
+// submitDeploys enqueues the release deploys, in order, with the identity of whoever requested
+// it. It is a step: after a crash it is repeated, and the fixed IDs make the enqueues already
+// done idempotent. If a deploy is rejected (e.g. a freeze started after submission) or the
+// release is cancelled, it cancels those already enqueued: the rejected one ends ERROR, those
+// not enqueued CANCELLED.
 func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []descriptor.Descriptor) []ReleaseDeployState {
 	out := slices.Clone(rs.Deploys)
 	eng, ok := w.service.(*Engine)
@@ -158,17 +158,17 @@ func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []de
 	return out
 }
 
-// releaseCheck è una lettura dello stato dei deploy della release, persistita come step.
+// releaseCheck is a read of the state of the release deploys, persisted as a step.
 type releaseCheck struct {
 	Deploys []ReleaseDeployState `json:"deploys"`
-	// Pending sono i deploy non ancora partiti, che stop e rollback annullano.
+	// Pending are the deploys not yet started, which stop and rollback cancel.
 	Pending []string `json:"pending,omitempty"`
 }
 
-// releaseWorkflow segue i deploy della release fino alla loro conclusione. I deploy partono
-// da soli (ognuno attende i propri predecessori); il workflow applica onFailure: con stop e
-// rollback annulla quelli non ancora partiti, con rollback riporta poi i deploy riusciti alla
-// versione precedente, dal più dipendente al meno dipendente.
+// releaseWorkflow follows the release deploys until they end. Deploys start by themselves
+// (each waits for its predecessors); the workflow applies onFailure: with stop and rollback
+// it cancels those not yet started, with rollback it then brings the successful deploys back
+// to the previous version, from the most dependent to the least.
 func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStatus, error) {
 	rs := in.Release
 	log := w.logger.With("release", rs.ID)
@@ -242,9 +242,9 @@ func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStat
 	return rs, nil
 }
 
-// readRelease legge lo stato dei deploy della release, con una sola query. Un errore di
-// lettura lascia i deploy nello stato precedente. L'errore di un deploy non riuscito si legge
-// dallo stato completo, una volta sola.
+// readRelease reads the state of the release deploys with a single query. A read error leaves
+// the deploys in their previous state. The error of a failed deploy is read from the full
+// state, only once.
 func (w *Worker) readRelease(ctx context.Context, deploys []ReleaseDeployState) releaseCheck {
 	c := releaseCheck{Deploys: slices.Clone(deploys)}
 	states, err := w.reader.states(releaseIDs(deploys))
@@ -276,13 +276,13 @@ func (w *Worker) readRelease(ctx context.Context, deploys []ReleaseDeployState) 
 	return c
 }
 
-// cancelled dice se il workflow id è stato annullato (es. CancelRelease durante l'accodamento).
+// cancelled says whether workflow id was cancelled (e.g. CancelRelease while enqueuing).
 func (w *Worker) cancelled(id string) bool {
 	ws, err := dbos.ListWorkflows(w.dbos, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	return err == nil && len(ws) == 1 && ws[0].Status == dbos.WorkflowStatusCancelled
 }
 
-// releaseIDs restituisce gli ID dei deploy della release.
+// releaseIDs returns the IDs of the release deploys.
 func releaseIDs(deploys []ReleaseDeployState) []string {
 	ids := make([]string, len(deploys))
 	for i, d := range deploys {
@@ -291,7 +291,7 @@ func releaseIDs(deploys []ReleaseDeployState) []string {
 	return ids
 }
 
-// notStarted indica un deploy che non ha ancora iniziato a modificare i target.
+// notStarted reports a deploy that has not started changing the targets yet.
 func notStarted(st *Status) bool {
 	switch st.State {
 	case StateWaitingDependency, StateEnqueued, StateDelayed:
@@ -310,7 +310,7 @@ func sameDeployState(a, b ReleaseDeployState) bool {
 	return a.DeploymentID == b.DeploymentID && a.State == b.State && a.RollbackState == b.RollbackState
 }
 
-// releaseError riassume i deploy non riusciti.
+// releaseError summarizes the failed deploys.
 func releaseError(ds []ReleaseDeployState) string {
 	var parts []string
 	for _, d := range ds {
@@ -321,10 +321,10 @@ func releaseError(ds []ReleaseDeployState) string {
 	return "deploy non riusciti: " + strings.Join(parts, ", ")
 }
 
-// rollbackRelease riporta i deploy riusciti alla versione precedente, in ordine inverso a
-// quello topologico (prima chi dipende dagli altri). Ogni rollback è un rollback manuale con
-// ID "<release>.rollback.<nome>", eseguito con l'identità di chi ha richiesto la release; ci
-// si ferma al primo che non riesce, come per le compensazioni degli step.
+// rollbackRelease brings the successful deploys back to the previous version, in reverse
+// topological order (dependents first). Every rollback is a manual rollback with ID
+// "<release>.rollback.<name>", run with the identity of whoever requested the release; it
+// stops at the first failure, as for step compensations.
 func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 	log := w.logger.With("release", rs.ID)
 	method, subject, _ := strings.Cut(rs.RequestedBy, ":")
@@ -377,7 +377,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 	return nil
 }
 
-// recordRelease registra nell'audit l'esito della release, in uno step DBOS.
+// recordRelease records the release outcome in the audit, in a DBOS step.
 func (w *Worker) recordRelease(ctx dbos.Context, rs ReleaseStatus) {
 	if w.audit == nil {
 		return
@@ -391,11 +391,11 @@ func (w *Worker) recordRelease(ctx dbos.Context, rs ReleaseStatus) {
 	}
 }
 
-// ActionReleaseFinish è l'azione di audit con l'esito di una release.
+// ActionReleaseFinish is the audit action with the outcome of a release.
 const ActionReleaseFinish = "release.finish"
 
-// ReleaseStatus implementa ReleaseService: il risultato se la release è conclusa, altrimenti
-// l'ultimo stato pubblicato o, prima della prima lettura, quello iniziale.
+// ReleaseStatus implements ReleaseService: the result if the release has ended, otherwise the
+// last published state or, before the first read, the initial one.
 func (e *Engine) ReleaseStatus(_ context.Context, id string) (*ReleaseStatus, error) {
 	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterName(releaseWorkflowName),
 		dbos.WithFilterLoadInput(true), dbos.WithFilterLoadOutput(false))
@@ -420,7 +420,7 @@ func (e *Engine) releaseStatus(w dbos.WorkflowStatus) (*ReleaseStatus, error) {
 	rs.CreatedAt, rs.UpdatedAt = w.CreatedAt, w.UpdatedAt
 	switch w.Status {
 	case dbos.WorkflowStatusSuccess:
-		// Lo stato finale (SUCCESS o ERROR) è nell'ultimo evento.
+		// The final state (SUCCESS or ERROR) is in the last event.
 	case dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued:
 		rs.State = string(dbos.WorkflowStatusPending)
 	default:
@@ -432,10 +432,10 @@ func (e *Engine) releaseStatus(w dbos.WorkflowStatus) (*ReleaseStatus, error) {
 	return &rs, nil
 }
 
-// maxReleases limita le release restituite da ListReleases.
+// maxReleases limits the releases returned by ListReleases.
 const maxReleases = 100
 
-// ListReleases implementa ReleaseService.
+// ListReleases implements ReleaseService.
 func (e *Engine) ListReleases(_ context.Context, limit int) ([]ReleaseStatus, error) {
 	if limit <= 0 || limit > maxReleases {
 		limit = 20
@@ -457,15 +457,15 @@ func (e *Engine) ListReleases(_ context.Context, limit int) ([]ReleaseStatus, er
 	return out, nil
 }
 
-// CancelRelease implementa ReleaseService: annulla i deploy non conclusi (quelli in corso si
-// fermano all'inizio dello step successivo) e il workflow della release.
+// CancelRelease implements ReleaseService: it cancels the unfinished deploys (running ones
+// stop at the start of the next step) and the release workflow.
 func (e *Engine) CancelRelease(ctx context.Context, id string) error {
 	rs, err := e.ReleaseStatus(ctx, id)
 	if err != nil {
 		return err
 	}
-	// Prima il workflow: se sta ancora accodando i deploy si ferma (submitDeploys), poi
-	// vengono annullati quelli già accodati.
+	// The workflow first: if it is still enqueuing the deploys it stops (submitDeploys), then
+	// the already enqueued ones are cancelled.
 	if err := dbos.CancelWorkflow(e.client, id); err != nil {
 		return err
 	}
@@ -484,8 +484,8 @@ func (e *Engine) CancelRelease(ctx context.Context, id string) error {
 	return nil
 }
 
-// decodeInput decodifica l'input di un workflow letto con ListWorkflows: con un client DBOS
-// è la stringa JSON serializzata, nel processo che lo esegue può essere già decodificato.
+// decodeInput decodes the input of a workflow read with ListWorkflows: with a DBOS client it
+// is the serialized JSON string, in the process running it it may already be decoded.
 func decodeInput(input any, v any) error {
 	data, ok := input.(string)
 	if !ok {

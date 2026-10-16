@@ -11,7 +11,7 @@ import type { MessageKey } from "@/i18n/en";
 import { formatDateTime, formatRelative, shortId } from "@/lib/format";
 import { canSomewhere } from "@/lib/permissions";
 
-// L'attività cambia di continuo: aggiornamento più frequente delle altre pagine.
+// Activity changes all the time: refreshed more often than the other pages.
 const REFRESH = 5_000;
 
 const th = "px-4 py-3 font-medium";
@@ -43,7 +43,7 @@ function When({ iso }: { iso?: string }) {
   );
 }
 
-/** Group è una tabella dei deploy attivi in uno stato; non viene mostrata se è vuota. */
+/** Group is a table of the active deploys in one state; it is not shown if empty. */
 function Group({ title, items, columns, row }: { title: string; items: Status[]; columns: string[]; row: (d: Status) => ReactNode }) {
   if (items.length === 0) return null;
   return (

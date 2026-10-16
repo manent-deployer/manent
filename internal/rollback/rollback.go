@@ -1,4 +1,4 @@
-// Package rollback applica le policy di rollback automatico al descrittore di deploy.
+// Package rollback applies the automatic rollback policies to the deploy descriptor.
 package rollback
 
 import (
@@ -10,18 +10,18 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Policy decide, per tipo di artefatto, se il rollback è ammesso e con quali default.
+// Policy decides, per artifact type, whether rollback is allowed and with which defaults.
 type Policy struct {
-	// Locator è il locator di default.
+	// Locator is the default locator.
 	Locator string
 	Types   map[string]config.RollbackType
-	// Steps sono gli step della pipeline, per validare rollback.on.
+	// Steps are the pipeline steps, to validate rollback.on.
 	Steps []string
-	// Locators sono i nomi dei locator registrati.
+	// Locators are the names of the registered locators.
 	Locators []string
 }
 
-// NewPolicy costruisce la policy dalla configurazione e dai locator registrati.
+// NewPolicy builds the policy from the configuration and the registered locators.
 func NewPolicy(cfg *config.Config, locators []string) Policy {
 	p := Policy{Locator: cfg.Rollback.Locator, Types: cfg.Rollback.ArtifactTypes, Locators: locators}
 	for _, s := range cfg.Pipeline.Steps {
@@ -30,8 +30,8 @@ func NewPolicy(cfg *config.Config, locators []string) Policy {
 	return p
 }
 
-// Allowed indica se il tipo di artefatto ammette il rollback. Vale anche per il rollback
-// manuale: tornare a una versione precedente di una migration non annulla la migration.
+// Allowed reports whether the artifact type allows rollback. It also applies to manual
+// rollback: going back to an earlier version of a migration does not undo the migration.
 func (p Policy) Allowed(artifactType string) error {
 	tp, known := p.Types[artifactType]
 	switch {
@@ -43,10 +43,9 @@ func (p Policy) Allowed(artifactType string) error {
 	return nil
 }
 
-// Apply restituisce il descrittore con la decisione di rollback finale in d.Rollback:
-// il default del tipo di artefatto, sovrascritto da quanto indicato nel descrittore (già fuso
-// con la configurazione di ambiente). È un errore chiedere il rollback per un tipo che non
-// lo ammette.
+// Apply returns the descriptor with the final rollback decision in d.Rollback: the artifact
+// type default, overridden by what the descriptor says (already merged with the environment
+// configuration). Requesting rollback for a type that does not allow it is an error.
 func (p Policy) Apply(d descriptor.Descriptor) (descriptor.Descriptor, error) {
 	tp := p.Types[d.Artifact.Type]
 	req := descriptor.Rollback{}

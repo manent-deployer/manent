@@ -1,5 +1,5 @@
-# UC6: container su una VM (vm-a), ambiente di test.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC6: containers on one VM (vm-a), test environment.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: container
 targets:
   - {host: vm-a, user: deploy, labels: {region: eu-1, az: eu-1a}}

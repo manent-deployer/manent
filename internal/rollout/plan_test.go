@@ -9,7 +9,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// topology crea 3 region × 3 AZ con 2 nodi per AZ; il primo nodo di eu-1a è la canary.
+// topology creates 3 regions × 3 AZs with 2 nodes per AZ; the first eu-1a node is the canary.
 func topology() []descriptor.Target {
 	var ts []descriptor.Target
 	for _, reg := range []string{"us-1", "eu-1", "eu-2"} {
@@ -58,7 +58,7 @@ func TestPianoDelDesign(t *testing.T) {
 	if c.Bake != 15*time.Minute || len(c.Passes[0].Targets) != 1 || c.Passes[0].Region != "eu-1" || c.Passes[0].AZ != "eu-1a" || !c.LastOfWave {
 		t.Errorf("canary inattesa: %+v", c)
 	}
-	// eu-1a senza la canary: 1 nodo; eu-1b: 2 nodi in lotti da 1 (50%).
+	// eu-1a without the canary: 1 node; eu-1b: 2 nodes in batches of 1 (50%).
 	if n := len(p.Stages[1].Passes[0].Targets); n != 1 {
 		t.Errorf("eu-1a: %d target", n)
 	}
@@ -74,12 +74,12 @@ func TestPianoDelDesign(t *testing.T) {
 func TestPianoNonValido(t *testing.T) {
 	ts := topology()
 	r := designRollout()
-	r.Waves = r.Waves[:2] // eu-2 e us-1 senza ondata
+	r.Waves = r.Waves[:2] // eu-2 and us-1 without a wave
 	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "non appartiene ad alcuna ondata") {
 		t.Errorf("target scoperti: %v", err)
 	}
 	r = designRollout()
-	r.Waves[1].Select = "region=eu-1" // la canary sta in due ondate
+	r.Waves[1].Select = "region=eu-1" // the canary is in two waves
 	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "sia da") {
 		t.Errorf("sovrapposizione: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestPianoNonValido(t *testing.T) {
 	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "non seleziona") {
 		t.Errorf("ondata vuota: %v", err)
 	}
-	ts[3].Labels = map[string]string{"region": "us-1"} // senza az
+	ts[3].Labels = map[string]string{"region": "us-1"} // without az
 	if _, err := Build(ts, designRollout()); err == nil || !strings.Contains(err.Error(), "etichette") {
 		t.Errorf("etichette mancanti: %v", err)
 	}

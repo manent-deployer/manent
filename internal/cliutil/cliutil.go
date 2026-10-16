@@ -1,5 +1,5 @@
-// Package cliutil contiene gli aiuti comuni alle CLI di client e server. Non deve importare
-// package pesanti: è linkato anche nel client.
+// Package cliutil holds helpers shared by the client and server CLIs. It must not import
+// heavy packages: it is linked into the client too.
 package cliutil
 
 import (
@@ -15,25 +15,25 @@ import (
 	"github.com/joeg-ita/manent/internal/version"
 )
 
-// PrintJSON stampa v su stdout in JSON indentato.
+// PrintJSON prints v to stdout as indented JSON.
 func PrintJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
 
-// SignalContext è cancellato alla ricezione di SIGINT o SIGTERM.
+// SignalContext is cancelled on SIGINT or SIGTERM.
 func SignalContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
-// VersionCmd mostra la versione del binario.
+// VersionCmd shows the binary version.
 type VersionCmd struct{}
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *VersionCmd) Execute([]string) error { return PrintJSON(version.Get()) }
 
-// Parse esegue il parser; la richiesta di aiuto non è un errore.
+// Parse runs the parser; a help request is not an error.
 func Parse(p *flags.Parser, args []string) error {
 	_, err := p.ParseArgs(args)
 	var ferr *flags.Error
@@ -43,13 +43,13 @@ func Parse(p *flags.Parser, args []string) error {
 	return err
 }
 
-// Command descrive un sottocomando da registrare.
+// Command describes a subcommand to register.
 type Command struct {
 	Name, Short string
 	Cmd         any
 }
 
-// AddGroup registra un comando con sottocomandi obbligatori.
+// AddGroup registers a command with mandatory subcommands.
 func AddGroup(p *flags.Parser, name, short, long string, cmds []Command) error {
 	g, err := p.AddCommand(name, short, long, &struct{}{})
 	if err != nil {

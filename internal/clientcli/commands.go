@@ -19,8 +19,8 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// DeployCmd accoda un deploy e, di default, ne attende la conclusione.
-// I deploy pianificati (schedule nel descrittore) non vengono attesi.
+// DeployCmd enqueues a deploy and, by default, waits for it to end.
+// Scheduled deploys (schedule in the descriptor) are not waited for.
 type DeployCmd struct {
 	global  *GlobalOptions
 	File    string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
@@ -30,7 +30,7 @@ type DeployCmd struct {
 	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *DeployCmd) Execute([]string) error {
 	d, err := descriptor.LoadYAMLFile(c.File)
 	if err != nil {
@@ -52,15 +52,15 @@ func (c *DeployCmd) Execute([]string) error {
 	})
 }
 
-// ValidateCmd verifica il descrittore sul server, come all'accodamento ma senza avviare il
-// deploy, e mostra piano, deploy effettivo (fuso con la configurazione di ambiente), rollback
-// e regole di governance. A differenza di "deploy --dry-run" non contatta segreti, artefatto e target.
+// ValidateCmd checks the descriptor on the server, as at submission but without starting the
+// deploy, and shows plan, effective deploy (merged with the environment configuration),
+// rollback and governance rules. Unlike "deploy --dry-run" it touches no secrets, artifact or targets.
 type ValidateCmd struct {
 	global *GlobalOptions
 	File   string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ValidateCmd) Execute([]string) error {
 	d, err := descriptor.LoadYAMLFile(c.File)
 	if err != nil {
@@ -78,18 +78,18 @@ func (c *ValidateCmd) Execute([]string) error {
 	})
 }
 
-// idArgs è l'argomento posizionale con l'ID di un deploy.
+// idArgs is the positional argument with a deploy ID.
 type idArgs struct {
 	ID string `positional-arg-name:"id" required:"true"`
 }
 
-// StatusCmd mostra lo stato di un deploy.
+// StatusCmd shows the status of a deploy.
 type StatusCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *StatusCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		st, err := svc.Status(ctx, c.Args.ID)
@@ -100,7 +100,7 @@ func (c *StatusCmd) Execute([]string) error {
 	})
 }
 
-// ListCmd elenca i deploy, con filtri per schedule, applicazione, ambiente e stato.
+// ListCmd lists deploys, with filters on schedule, application, environment and state.
 type ListCmd struct {
 	global      *GlobalOptions
 	Schedule    string `short:"s" long:"schedule" description:"solo i deploy generati da questa schedule"`
@@ -110,7 +110,7 @@ type ListCmd struct {
 	Limit       int    `short:"n" long:"limit" default:"20" description:"numero massimo di deploy"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, State: c.State, Limit: c.Limit})
@@ -121,13 +121,13 @@ func (c *ListCmd) Execute([]string) error {
 	})
 }
 
-// CancelCmd annulla un deploy.
+// CancelCmd cancels a deploy.
 type CancelCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *CancelCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		if err := svc.Cancel(ctx, c.Args.ID); err != nil {
@@ -138,12 +138,12 @@ func (c *CancelCmd) Execute([]string) error {
 	})
 }
 
-// ScheduleListCmd elenca le schedule ricorrenti.
+// ScheduleListCmd lists the recurring schedules.
 type ScheduleListCmd struct {
 	global *GlobalOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ScheduleListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		ss, err := svc.ListSchedules(ctx)
@@ -154,7 +154,7 @@ func (c *ScheduleListCmd) Execute([]string) error {
 	})
 }
 
-// Operazioni disponibili su una singola schedule.
+// Operations available on a single schedule.
 const (
 	opShow = iota
 	opPause
@@ -162,7 +162,7 @@ const (
 	opDelete
 )
 
-// ScheduleCmd esegue un'operazione su una schedule indicata per nome.
+// ScheduleCmd runs an operation on a schedule given by name.
 type ScheduleCmd struct {
 	global *GlobalOptions
 	op     int
@@ -171,7 +171,7 @@ type ScheduleCmd struct {
 	} `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ScheduleCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		name := c.Args.Name
@@ -192,7 +192,7 @@ func (c *ScheduleCmd) Execute([]string) error {
 	})
 }
 
-// DecideCmd approva o respinge un deploy in attesa di approvazione.
+// DecideCmd approves or rejects a deploy awaiting approval.
 type DecideCmd struct {
 	global  *GlobalOptions
 	approve bool
@@ -200,7 +200,7 @@ type DecideCmd struct {
 	Args    idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *DecideCmd) Execute([]string) error {
 	if !c.approve && c.Comment == "" {
 		return errors.New("indicare il motivo del rifiuto con --comment")
@@ -209,7 +209,7 @@ func (c *DecideCmd) Execute([]string) error {
 		if err := svc.Decide(ctx, c.Args.ID, service.DecisionRequest{Approve: c.approve, Comment: c.Comment}); err != nil {
 			return err
 		}
-		// La decisione è elaborata dal workflow di approvazione: lo stato si aggiorna subito dopo.
+		// The decision is processed by the approval workflow: the status updates right after.
 		msg := "approvazione registrata:"
 		if !c.approve {
 			msg = "rifiuto registrato:"
@@ -219,7 +219,7 @@ func (c *DecideCmd) Execute([]string) error {
 	})
 }
 
-// redeployOptions sono le opzioni comuni a promote e rollback.
+// redeployOptions are the options shared by promote and rollback.
 type redeployOptions struct {
 	ID             string        `long:"id" description:"ID del nuovo deploy (chiave di idempotenza)"`
 	DryRun         bool          `long:"dry-run" description:"simula il deploy"`
@@ -232,7 +232,7 @@ func (o redeployOptions) redeploy() service.Redeploy {
 	return service.Redeploy{ID: o.ID, DryRun: o.DryRun, FreezeOverride: o.FreezeOverride}
 }
 
-// PromoteCmd rilascia in un ambiente l'artefatto già rilasciato in un altro.
+// PromoteCmd releases to an environment the artifact already released to another one.
 type PromoteCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
@@ -243,7 +243,7 @@ type PromoteCmd struct {
 	redeployOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *PromoteCmd) Execute([]string) error {
 	r := service.PromoteRequest{Application: c.Application, From: c.From, To: c.To, Version: c.Version, Redeploy: c.redeploy()}
 	if c.DeployFile != "" {
@@ -268,7 +268,7 @@ func (c *PromoteCmd) Execute([]string) error {
 	})
 }
 
-// RollbackCmd torna a una versione rilasciata in precedenza nell'ambiente.
+// RollbackCmd goes back to a version previously released in the environment.
 type RollbackCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
@@ -277,7 +277,7 @@ type RollbackCmd struct {
 	redeployOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *RollbackCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Environment: c.Environment, Version: c.Version, Redeploy: c.redeploy()})
@@ -288,14 +288,14 @@ func (c *RollbackCmd) Execute([]string) error {
 	})
 }
 
-// InventoryCmd mostra la release in esercizio per applicazione e ambiente.
+// InventoryCmd shows the release in service per application and environment.
 type InventoryCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *InventoryCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment})
@@ -306,14 +306,14 @@ func (c *InventoryCmd) Execute([]string) error {
 	})
 }
 
-// FreezesCmd elenca le finestre di freeze attive e future.
+// FreezesCmd lists the active and future freeze windows.
 type FreezesCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" description:"solo le finestre di questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo le finestre di questo ambiente"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *FreezesCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		ws, err := svc.Freezes(ctx, c.Application, c.Environment)
@@ -324,12 +324,12 @@ func (c *FreezesCmd) Execute([]string) error {
 	})
 }
 
-// WhoamiCmd mostra l'identità con cui il client parla al server e i suoi permessi.
+// WhoamiCmd shows the identity the client uses with the server and its permissions.
 type WhoamiCmd struct {
 	global *GlobalOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *WhoamiCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		id, err := svc.Me(ctx)
@@ -340,12 +340,12 @@ func (c *WhoamiCmd) Execute([]string) error {
 	})
 }
 
-// ApprovalsCmd elenca i deploy in attesa che l'utente può approvare.
+// ApprovalsCmd lists the waiting deploys the user can approve.
 type ApprovalsCmd struct {
 	global *GlobalOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ApprovalsCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		deps, err := svc.Approvals(ctx)
@@ -356,13 +356,13 @@ func (c *ApprovalsCmd) Execute([]string) error {
 	})
 }
 
-// StepsCmd mostra la timeline degli step di un deploy.
+// StepsCmd shows the step timeline of a deploy.
 type StepsCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *StepsCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		steps, err := svc.Steps(ctx, c.Args.ID)
@@ -373,7 +373,7 @@ func (c *StepsCmd) Execute([]string) error {
 	})
 }
 
-// LogsCmd mostra il log di un deploy e, con --follow, attende le righe nuove fino alla fine.
+// LogsCmd shows the log of a deploy and, with --follow, waits for new lines until the end.
 type LogsCmd struct {
 	global   *GlobalOptions
 	Follow   bool          `short:"f" long:"follow" description:"attende le righe nuove fino alla conclusione del deploy"`
@@ -382,7 +382,7 @@ type LogsCmd struct {
 	Args     idArgs        `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *LogsCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		ctx, stop := cliutil.SignalContext()
@@ -427,7 +427,7 @@ func (c *LogsCmd) print(l service.LogLine) {
 	fmt.Println(b.String())
 }
 
-// DORACmd mostra le metriche DORA.
+// DORACmd shows the DORA metrics.
 type DORACmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
@@ -435,7 +435,7 @@ type DORACmd struct {
 	Since       string `long:"since" default:"30d" description:"inizio del periodo: giorni (30d), durata (720h) o data RFC 3339"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *DORACmd) Execute([]string) error {
 	since, err := service.ParseSince(c.Since, time.Now())
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
-	// Driver SQLite per DBOS, usato con database_url "sqlite:...".
+	// SQLite driver for DBOS, used with database_url "sqlite:...".
 	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -32,103 +32,103 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// QueueOptions configura la coda partizionata dei deploy.
+// QueueOptions configures the partitioned deploy queue.
 type QueueOptions struct {
 	Name string
-	// WorkerConcurrency limita i deploy in esecuzione su questo worker.
+	// WorkerConcurrency limits the deploys running on this worker.
 	WorkerConcurrency int
-	// GlobalConcurrency limita i deploy in esecuzione su tutti i worker (0 = nessun limite).
+	// GlobalConcurrency limits the deploys running on all workers (0 = no limit).
 	GlobalConcurrency int
-	// PartitionConcurrency limita i deploy contemporanei della stessa application/environment su tutti i worker.
+	// PartitionConcurrency limits the concurrent deploys of the same application/environment on all workers.
 	PartitionConcurrency int
 }
 
-// WorkerOptions configura un worker.
+// WorkerOptions configures a worker.
 type WorkerOptions struct {
 	AppName     string
 	AppVersion  string
 	DatabaseURL string
-	// ExecutorID deve essere univoco tra i worker e stabile tra i riavvii:
-	// all'avvio il worker recupera solo i workflow rimasti in sospeso con questo ID.
+	// ExecutorID must be unique across workers and stable across restarts: at startup the
+	// worker recovers only the pending workflows with this ID.
 	ExecutorID string
 	Queue      QueueOptions
 	Steps      *pipeline.Registry
-	// Custom costruisce gli step personalizzati del piano.
+	// Custom builds the custom steps of the plan.
 	Custom CustomSteps
-	// Resolver, se presente, produce il descrittore effettivo dalla configurazione di ambiente.
+	// Resolver, if set, produces the effective descriptor from the environment configuration.
 	Resolver ConfigResolver
-	// ResolverRetries sono i tentativi aggiuntivi dello step config (es. Consul non raggiungibile).
+	// ResolverRetries are the extra attempts of the config step (e.g. Consul unreachable).
 	ResolverRetries int
-	// Cleaner, se presente, libera le risorse locali al termine di ogni deploy.
+	// Cleaner, if set, frees local resources at the end of every deploy.
 	Cleaner pipeline.Cleaner
-	// Notifier, se presente, invia gli eventi ai callback del descrittore.
+	// Notifier, if set, sends the events to the descriptor's callbacks.
 	Notifier callback.Notifier
-	// CallbackRetries sono i tentativi aggiuntivi di ogni invio a un callback.
+	// CallbackRetries are the extra attempts of every callback send.
 	CallbackRetries int
-	// Chat, se presente, invia le notifiche in chat (destinazioni scelte all'accodamento).
+	// Chat, if set, sends chat notifications (destinations chosen at submission).
 	Chat ChatNotifier
-	// Change, se presente, è il sistema di change management dei deploy che lo richiedono.
+	// Change, if set, is the change management system of the deploys that require it.
 	Change change.Provider
-	// ChangePoll è l'intervallo iniziale di lettura dell'approvazione del change (default 1m).
+	// ChangePoll is the initial interval for reading the change approval (default 1m).
 	ChangePoll time.Duration
-	// PublicURL è l'indirizzo dell'interfaccia web, per i link nei ticket.
+	// PublicURL is the web interface address, for links in tickets.
 	PublicURL string
-	// Rollback, se presente, applica la policy di rollback al descrittore effettivo.
+	// Rollback, if set, applies the rollback policy to the effective descriptor.
 	Rollback RollbackPolicy
-	// Audit, se presente, registra l'esito finale di ogni deploy.
+	// Audit, if set, records the final outcome of every deploy.
 	Audit audit.Recorder
-	// Governance, se presente, blocca all'avvio i deploy durante una finestra di freeze.
+	// Governance, if set, blocks at startup the deploys during a freeze window.
 	Governance Governance
 	Logger     *slog.Logger
-	// SchedulePollInterval è ogni quanto DBOS ricarica le schedule dal database (default 30s).
+	// SchedulePollInterval is how often DBOS reloads schedules from the database (default 30s).
 	SchedulePollInterval time.Duration
-	// Metrics, se presente, registra durata ed esito di deploy e step.
+	// Metrics, if set, records duration and outcome of deploys and steps.
 	Metrics telemetry.Recorder
-	// Registry, se presente, registra il worker (heartbeat) e abilita la recovery automatica
-	// dei nodi persi e la retention dello storico.
+	// Registry, if set, registers the worker (heartbeats) and enables automatic recovery of lost
+	// nodes and history retention.
 	Registry cluster.Registry
-	// Build è la versione del binario, registrata con il worker.
+	// Build is the binary version, registered with the worker.
 	Build string
-	// Hostname è registrato con il worker.
+	// Hostname is registered with the worker.
 	Hostname    string
 	Maintenance MaintenanceOptions
-	// Health esegue l'health gate dei rollout a ondate.
+	// Health runs the health gate of wave rollouts.
 	Health rollout.Checker
-	// Traffic, se presente, integra load balancer e router: svuotamento dei lotti
-	// (traffic.pool) e rilasci per percentuale (strategy: traffic).
+	// Traffic, if set, integrates load balancers and routers: batch draining (traffic.pool) and
+	// percentage rollouts (strategy: traffic).
 	Traffic TrafficOps
-	// HealthTimeout limita ogni lettura dell'health gate (default 30s).
+	// HealthTimeout limits every health gate read (default 30s).
 	HealthTimeout time.Duration
-	// Region è la region del worker: con RegionRouting esegue i passi dei rollout di quella
-	// region (coda <coda>.<region>) oltre ai deploy.
+	// Region is the worker's region: with RegionRouting it runs that region's rollout passes
+	// (queue <queue>.<region>) besides deploys.
 	Region string
-	// RegionRouting esegue i passi dei rollout sui worker della region dei target.
+	// RegionRouting runs rollout passes on the workers of the targets' region.
 	RegionRouting bool
-	// ChainPollInterval è il primo intervallo di lettura dello stato delle dipendenze e dei
-	// deploy di una release (default 5s); raddoppia a ogni lettura fino a 1 minuto.
+	// ChainPollInterval is the first interval for reading the state of dependencies and of a
+	// release's deploys (default 5s); it doubles at every read up to 1 minute.
 	ChainPollInterval time.Duration
 }
 
-// ConfigResolver recupera la configurazione di ambiente e la fonde con il descrittore.
+// ConfigResolver fetches the environment configuration and merges it with the descriptor.
 type ConfigResolver interface {
 	Resolve(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)
 }
 
-// RollbackPolicy decide il rollback automatico di un deploy, scrivendo la decisione in d.Rollback.
+// RollbackPolicy decides a deploy's automatic rollback, writing the decision to d.Rollback.
 type RollbackPolicy interface {
 	Apply(d descriptor.Descriptor) (descriptor.Descriptor, error)
-	// Allowed indica se il tipo di artefatto ammette il rollback (automatico o manuale).
+	// Allowed reports whether the artifact type allows rollback (automatic or manual).
 	Allowed(artifactType string) error
 }
 
-// resolvedConfig è l'output persistito dello step config.
+// resolvedConfig is the persisted output of the config step.
 type resolvedConfig struct {
 	Descriptor descriptor.Descriptor `json:"descriptor"`
 	Meta       pipeline.Output       `json:"meta"`
 }
 
-// Worker esegue i workflow di deploy prelevandoli dalla coda condivisa.
-// Più worker possono condividere lo stesso database di sistema (Postgres) per scalare orizzontalmente.
+// Worker runs the deploy workflows, dequeuing them from the shared queue.
+// Several workers can share the same system database (Postgres) to scale horizontally.
 type Worker struct {
 	dbos            dbos.Context
 	queue           dbos.Queue
@@ -164,14 +164,14 @@ type Worker struct {
 	wg              sync.WaitGroup
 	logger          *slog.Logger
 	id              string
-	// reader legge lo stato dei deploy (dipendenze, release) sul contesto del worker.
+	// reader reads the state of deploys (dependencies, releases) on the worker's context.
 	reader    *Engine
 	chainPoll time.Duration
-	// service è il servizio completo usato dalle release per i rollback (SetService).
+	// service is the full service used by releases for rollbacks (SetService).
 	service Service
 }
 
-// NewWorker crea il contesto DBOS, registra i workflow e la coda. Va chiamato Launch prima dell'uso.
+// NewWorker creates the DBOS context and registers workflows and queue. Call Launch before use.
 func NewWorker(opts WorkerOptions) (*Worker, error) {
 	if opts.ExecutorID == "" {
 		return nil, fmt.Errorf("ExecutorID obbligatorio")
@@ -249,7 +249,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		return nil, fmt.Errorf("registrazione coda %q: %w", approvalQueue(q.Name), err)
 	}
 	if w.region != "" {
-		// Passi dei rollout della region: uno alla volta per applicazione/ambiente/region.
+		// The region's rollout passes: one at a time per application/environment/region.
 		rq := regionQueue(q.Name, w.region)
 		if _, err = dbos.RegisterQueue(ctx, rq, dbos.WithWorkerConcurrency(q.WorkerConcurrency),
 			dbos.WithPartitionConcurrency(1)); err != nil {
@@ -259,12 +259,12 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	return w, nil
 }
 
-// initBackoff sono le attese tra i tentativi di inizializzazione di DBOS.
+// initBackoff are the waits between DBOS initialization attempts.
 var initBackoff = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second}
 
-// newContextWithRetry crea il contesto DBOS riprovando in caso di errore: su un database
-// vuoto più worker avviati insieme eseguono la migrazione dello schema in concorrenza
-// e tutti tranne uno falliscono con "duplicate key" su CREATE SCHEMA.
+// newContextWithRetry creates the DBOS context, retrying on error: on an empty database
+// several workers started together run the schema migration concurrently and all but one
+// fail with "duplicate key" on CREATE SCHEMA.
 func newContextWithRetry(cfg dbos.Config, log *slog.Logger) (dbos.Context, error) {
 	for attempt := 0; ; attempt++ {
 		ctx, err := dbos.NewContext(context.Background(), cfg)
@@ -276,9 +276,9 @@ func newContextWithRetry(cfg dbos.Config, log *slog.Logger) (dbos.Context, error
 	}
 }
 
-// Migrate crea o aggiorna lo schema DBOS del database, con gli stessi tentativi di
-// newContextWithRetry: serve ai processi che usano solo un client DBOS (API, admin), che
-// verificano lo schema ma non lo creano, quando partono prima dei worker su un database nuovo.
+// Migrate creates or upgrades the DBOS schema of the database, with the same attempts as
+// newContextWithRetry: it is for processes that use only a DBOS client (API, admin), which
+// verify the schema but do not create it, when they start before the workers on a new database.
 func Migrate(databaseURL string, log *slog.Logger) error {
 	for attempt := 0; ; attempt++ {
 		err := dbos.Migrate(context.Background(), databaseURL, dbos.WithMigrateLogger(log))
@@ -290,26 +290,26 @@ func Migrate(databaseURL string, log *slog.Logger) error {
 	}
 }
 
-// Client restituisce il contesto DBOS del worker, utilizzabile come client per un Engine.
+// Client returns the worker's DBOS context, usable as client for an Engine.
 func (w *Worker) Client() dbos.Client { return w.dbos }
 
-// ExecutorID restituisce l'ID effettivo del worker (DBOS__VMID ha la precedenza sulla configurazione).
+// ExecutorID returns the worker's actual ID (DBOS__VMID takes precedence over the configuration).
 func (w *Worker) ExecutorID() string { return w.id }
 
-// Version restituisce la versione dei workflow eseguiti dal worker.
+// Version returns the version of the workflows run by the worker.
 func (w *Worker) Version() string { return w.version }
 
-// SetService imposta il servizio completo (con planner e policy) usato dalle release per i
-// rollback dei deploy riusciti. Va chiamato prima di Launch.
+// SetService sets the full service (with planner and policies) used by releases to roll back
+// successful deploys. Call it before Launch.
 func (w *Worker) SetService(s Service) { w.service = s }
 
-// Admin restituisce le operazioni di piattaforma sul database del worker.
+// Admin returns the platform operations on the worker's database.
 func (w *Worker) Admin() *Admin { return w.admin }
 
-// Launch registra il worker e avvia DBOS: recupera i workflow in sospeso di questo executor e
-// inizia a prelevare dalla coda. La registrazione precede la recovery di DBOS: se un altro
-// worker sta recuperando i workflow di questo executor (perso in precedenza), attende che
-// abbia finito, così nessun workflow viene ripreso due volte.
+// Launch registers the worker and starts DBOS: it recovers this executor's pending workflows
+// and starts dequeuing. Registration precedes DBOS recovery: if another worker is recovering
+// this executor's workflows (lost earlier), it waits until it is done, so no workflow is
+// resumed twice.
 func (w *Worker) Launch() error {
 	if w.registry != nil {
 		if err := w.register(); err != nil {
@@ -321,10 +321,10 @@ func (w *Worker) Launch() error {
 	}
 	switch {
 	case w.region != "":
-		// Il worker di una region esegue deploy, approvazioni e solo i passi della sua region.
+		// A region worker runs deploys, approvals and only its region's passes.
 		dbos.ListenQueues(w.dbos, w.queueName, approvalQueue(w.queueName), regionQueue(w.queueName, w.region))
 	case w.regionRouting:
-		// Senza region, con l'instradamento attivo: solo orchestrazione, nessun passo.
+		// Without a region, with routing enabled: orchestration only, no passes.
 		dbos.ListenQueues(w.dbos, w.queueName, approvalQueue(w.queueName))
 	}
 	if w.registry != nil {
@@ -335,10 +335,10 @@ func (w *Worker) Launch() error {
 	return nil
 }
 
-// register registra l'avvio del worker, attendendo la fine di un'eventuale recovery in corso
-// dei suoi workflow (al più cluster.ClaimTimeout). Se lo stesso executor_id risulta in uso da
-// un altro processo attivo, attende che risulti perso (StaleAfter: il caso di un riavvio dopo un
-// crash) e poi rinuncia: due processi con lo stesso ID riprenderebbero l'uno i deploy dell'altro.
+// register records the worker's startup, waiting for a running recovery of its workflows to
+// end (at most cluster.ClaimTimeout). If the same executor_id is in use by another live
+// process, it waits for it to be declared lost (StaleAfter: the case of a restart after a
+// crash) and then gives up: two processes with the same ID would resume each other's deploys.
 func (w *Worker) register() error {
 	w.startedAt = time.Now().UTC()
 	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, Region: w.region, StartedAt: w.startedAt}
@@ -371,12 +371,12 @@ func (w *Worker) register() error {
 	}
 }
 
-// drainQueue è una coda inesistente: ascoltarla equivale a non prelevare più deploy.
+// drainQueue is a nonexistent queue: listening to it means dequeuing no more deploys.
 const drainQueue = "manent-draining"
 
-// Drain smette di prelevare deploy dalla coda e attende, fino a timeout, che quelli in
-// esecuzione su questo worker si concludano. Le approvazioni in attesa non vengono attese:
-// riprendono al riavvio, o su un altro worker con la recovery.
+// Drain stops dequeuing deploys and waits, up to timeout, for those running on this worker to
+// end. Waiting approvals are not waited for: they resume on restart, or on another worker
+// through recovery.
 func (w *Worker) Drain(timeout time.Duration) {
 	if timeout <= 0 {
 		return
@@ -402,9 +402,9 @@ func (w *Worker) Drain(timeout time.Duration) {
 	}
 }
 
-// Shutdown arresta la manutenzione e DBOS, attendendo i workflow in corso fino al timeout, e
-// registra l'arresto. I workflow interrotti restano in sospeso e vengono ripresi al riavvio di
-// un worker con lo stesso ExecutorID o, con la recovery, da un altro worker.
+// Shutdown stops maintenance and DBOS, waiting for running workflows up to the timeout, and
+// records the shutdown. Interrupted workflows stay pending and are resumed when a worker with
+// the same ExecutorID restarts or, through recovery, by another worker.
 func (w *Worker) Shutdown(timeout time.Duration) error {
 	w.stopOnce.Do(func() { close(w.stop) })
 	w.wg.Wait()
@@ -419,10 +419,10 @@ func (w *Worker) Shutdown(timeout time.Duration) error {
 	return err
 }
 
-// deployWorkflow risolve la configurazione di ambiente, esegue gli step del piano in ordine
-// (ciascuno come step DBOS) e al termine, con successo o errore, libera le risorse locali
-// e notifica l'esito ai callback.
-// Deve restare deterministico: tutta la logica con effetti esterni è dentro gli step.
+// deployWorkflow resolves the environment configuration, runs the plan steps in order (each
+// as a DBOS step) and at the end, on success or error, frees local resources and notifies
+// the outcome to the callbacks.
+// It must stay deterministic: all logic with external effects is inside steps.
 func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	id, err := dbos.GetWorkflowID(ctx)
 	if err != nil {
@@ -477,12 +477,12 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	return res, runErr
 }
 
-// recordMetrics registra esito e durata del deploy. La durata parte dall'avvio sul worker
-// (registrato da DBOS), quindi esclude l'attesa in coda e le approvazioni. Non è uno step: le
-// metriche sono del processo e non vanno ripetute né conservate.
+// recordMetrics records outcome and duration of the deploy. Duration starts from the start
+// on the worker (recorded by DBOS), so it excludes queueing and approvals. It is not a step:
+// metrics belong to the process and must be neither repeated nor persisted.
 func (w *Worker) recordMetrics(id string, req Request, final callback.Event) {
 	var dur time.Duration
-	// Il context radice, non quello del workflow: la lettura non diventa uno step.
+	// The root context, not the workflow's: the read does not become a step.
 	if wfs, err := dbos.ListWorkflows(w.dbos, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false)); err == nil && len(wfs) == 1 && !wfs[0].StartedAt.IsZero() {
 		dur = time.Since(wfs[0].StartedAt)
 	}
@@ -490,8 +490,8 @@ func (w *Worker) recordMetrics(id string, req Request, final callback.Event) {
 	w.metrics.DeploymentFinished(d.Application, d.Environment, cmp.Or(req.Kind, KindDeploy), final.Status, d.DryRun, dur)
 }
 
-// recordAttributes aggiunge agli attributi del workflow l'esito, lo sha256 dell'artefatto
-// rilasciato e l'esito dell'eventuale rollback, usati da inventario e promozioni.
+// recordAttributes adds to the workflow attributes the outcome, the sha256 of the released
+// artifact and the outcome of a possible rollback, used by inventory and promotions.
 func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res Result, final callback.Event) {
 	attrs := attributes(req)
 	attrs[attrOutcome] = final.Status
@@ -514,14 +514,14 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 	}
 }
 
-// Step e output da cui si legge lo sha256 dell'artefatto rilasciato (internal/steps).
+// Step and output the released artifact's sha256 is read from (internal/steps).
 const (
 	stepArtifacts = "artifacts"
 	outSHA256     = "sha256"
 )
 
-// recordOutcome registra nell'audit l'esito finale del deploy, in uno step DBOS: dopo una
-// recovery la voce non viene ripetuta.
+// recordOutcome records the final deploy outcome in the audit, in a DBOS step: after a
+// recovery the entry is not repeated.
 func (w *Worker) recordOutcome(ctx dbos.Context, id, requestedBy string, d *descriptor.Descriptor, final callback.Event) {
 	if w.audit == nil {
 		return
@@ -542,26 +542,26 @@ func (w *Worker) recordOutcome(ctx dbos.Context, id, requestedBy string, d *desc
 	}
 }
 
-// ActionDeploymentFinish è l'azione di audit con l'esito finale di un deploy.
+// ActionDeploymentFinish is the audit action with the final outcome of a deploy.
 const ActionDeploymentFinish = "deployment.finish"
 
-// events invia gli eventi di un deploy ai callback del descrittore, ciascuno come step DBOS:
-// dopo una recovery gli invii già completati non vengono ripetuti. La numerazione dipende solo
-// dall'input del workflow, quindi resta deterministica.
+// events sends a deploy's events to the descriptor's callbacks, each as a DBOS step: after a
+// recovery the sends already completed are not repeated. Numbering depends only on the
+// workflow input, so it stays deterministic.
 type events struct {
 	w           *Worker
 	ctx         dbos.Context
 	id          string
 	requestedBy string
 	seq         int
-	// span è la span del deploy, genitore di quelle degli step.
+	// span is the deploy span, parent of the step spans.
 	span trace.SpanContext
-	// silent disattiva l'invio: nei workflow dei passi gli eventi li invia l'orchestratore.
+	// silent disables sending: in pass workflows the orchestrator sends the events.
 	silent bool
 }
 
-// send notifica l'evento ai callback interessati. Un invio fallito dopo i retry viene
-// registrato ma non fa fallire il deploy.
+// send notifies the event to the interested callbacks. A send failed after the retries is
+// logged but does not fail the deploy.
 func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 	if e.silent || e.w.notifier == nil || len(d.Callbacks) == 0 {
 		return
@@ -586,7 +586,7 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 	}
 }
 
-// stepEvent costruisce l'evento con l'esito di uno step.
+// stepEvent builds the event with the outcome of a step.
 func stepEvent(name string, out pipeline.Output, err error) callback.Event {
 	ev := callback.Event{Type: descriptor.CallbackEventStep, Step: name, Status: callback.StatusSucceeded, Output: out}
 	if err != nil {
@@ -595,16 +595,16 @@ func stepEvent(name string, out pipeline.Output, err error) callback.Event {
 	return ev
 }
 
-// run esegue lo step config e poi gli step del piano, fermandosi al primo errore.
-// La configurazione di ambiente è letta in uno step DBOS: è quella valida al momento
-// dell'esecuzione (anche per i deploy pianificati) e, una volta registrata, resta la stessa
-// anche se il deploy viene ripreso dopo un crash. Nello stesso step viene applicata la policy
-// di rollback, così anche la decisione di rollback resta quella registrata.
-// In dry-run ogni step esegue DryRun, se lo implementa; altrimenti viene saltato, così uno step
-// nuovo non produce mai effetti per errore.
-// Con il rollback attivo, prima di ogni pipeline.Compensator viene eseguito il suo checkpoint
-// e, se uno step indicato in rollback.on fallisce, gli step già avviati vengono compensati.
-// Restituisce anche il descrittore effettivo, usato per l'evento finale.
+// run runs the config step and then the plan steps, stopping at the first error.
+// The environment configuration is read in a DBOS step: it is the one valid at execution time
+// (scheduled deploys included) and, once recorded, stays the same even if the deploy is
+// resumed after a crash. The same step applies the rollback policy, so the rollback decision
+// also stays the recorded one.
+// In dry-run every step runs DryRun, if it implements it; otherwise it is skipped, so a new
+// step never has effects by mistake.
+// With rollback enabled, before every pipeline.Compensator its checkpoint runs and, if a step
+// listed in rollback.on fails, the steps already started are compensated.
+// It also returns the effective descriptor, used for the final event.
 func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Result, *descriptor.Descriptor, error) {
 	dryRun := req.Descriptor.DryRun
 	res := Result{DeploymentID: id, DryRun: dryRun}
@@ -649,12 +649,12 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 	return res, d, nil
 }
 
-// execStep esegue uno step del piano come step DBOS e, se il rollback è attivo e lo step è
-// compensabile, prima il suo checkpoint. label è il nome dello step DBOS: nel rollout
-// distingue le esecuzioni dello stesso step in passi e lotti diversi ("deploy@eu-1/eu-1a#0");
-// targets, se non nil, sostituisce i target del descrittore. Restituisce lo step avviato da
-// compensare in caso di rollback (anche se è fallito: può aver modificato una parte dei
-// target); skipped indica uno step saltato in dry-run.
+// execStep runs a plan step as a DBOS step and, if rollback is enabled and the step is
+// compensable, its checkpoint first. label is the DBOS step name: in a rollout it tells apart
+// the runs of the same step in different passes and batches ("deploy@eu-1/eu-1a#0");
+// targets, if not nil, replaces the descriptor targets. It returns the started step to
+// compensate on rollback (even if it failed: it may have changed part of the targets);
+// skipped means a step skipped in dry-run.
 func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, ps pipeline.PlannedStep, label string,
 	targets []descriptor.Target, outputs map[string]pipeline.Output, res *Result) (out pipeline.Output, started *startedStep, skipped bool, err error) {
 	step, err := w.stepFor(ps, ev.requestedBy)
@@ -689,7 +689,7 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 		)
 		ev.send(d, stepEvent(name, cp, err))
 		if err != nil {
-			// Lo step non è partito: non c'è nulla da compensare.
+			// The step did not start: there is nothing to compensate.
 			return nil, nil, false, fmt.Errorf("step %q: %w", name, err)
 		}
 		rec.Checkpoint = cp
@@ -703,8 +703,8 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 		dbos.WithStepMaxRetries(ps.MaxRetries),
 		dbos.WithStepRetryPredicate(pipeline.Retryable),
 	)
-	// Gli output degli step personalizzati non vanno ai callback, definiti dal descrittore:
-	// restano nello stato del deploy, visibile con i permessi di lettura.
+	// Custom step outputs do not go to the callbacks, defined by the descriptor: they stay in the
+	// deploy state, visible with read permissions.
 	if ps.IsCustom() {
 		ev.send(d, stepEvent(label, nil, err))
 	} else {
@@ -720,10 +720,10 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 	return out, started, false, nil
 }
 
-// instrument esegue fn come corpo di uno step DBOS: i log emessi con il context dello step
-// finiscono nel log del deploy (internal/deploylog) e ogni tentativo è registrato nelle
-// metriche e in una span figlia di quella del deploy. Gli step già conclusi, riletti dopo una
-// recovery, non vengono rieseguiti e quindi non sono ripetuti.
+// instrument runs fn as the body of a DBOS step: logs emitted with the step context go to
+// the deploy log (internal/deploylog) and every attempt is recorded in the metrics and in a
+// span child of the deploy's. Steps already ended, read again after a recovery, do not run
+// again and so are not repeated.
 func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn func(context.Context) (R, error)) (R, error) {
 	c = deploylog.WithStep(c, name)
 	c, span := telemetry.Tracer().Start(trace.ContextWithSpanContext(c, ev.span), "step "+name,
@@ -740,9 +740,9 @@ func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn
 	return out, err
 }
 
-// resolveConfig produce il descrittore effettivo: configurazione di ambiente e policy di rollback.
-// Un deploy reale che parte durante una finestra di freeze fallisce, salvo deroga; così uno
-// con le approvazioni spostate nel rollout, se il rollout effettivo non ne prevede.
+// resolveConfig produces the effective descriptor: environment configuration and rollback
+// policy. A real deploy that starts during a freeze window fails, unless overridden; so does
+// one with approvals moved into the rollout, if the effective rollout has none.
 func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, approvals *governance.Approvals) (resolvedConfig, error) {
 	meta := map[string]string{}
 	if w.governance != nil && !d.DryRun {
@@ -794,24 +794,24 @@ func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, app
 	return resolvedConfig{Descriptor: d, Meta: meta}, nil
 }
 
-// Prefissi dei nomi degli step DBOS di checkpoint e di compensazione.
+// Prefixes of the DBOS step names of checkpoints and compensations.
 const (
 	checkpointPrefix = "checkpoint:"
 	rollbackPrefix   = "rollback:"
 )
 
-// startedStep è uno step avviato che può essere compensato. È serializzabile perché nel
-// rollout multi-region viaggia tra l'orchestratore e i workflow dei passi.
+// startedStep is a started step that can be compensated. It is serializable because in the
+// multi-region rollout it travels between the orchestrator and the pass workflows.
 type startedStep struct {
 	Step  pipeline.PlannedStep `json:"step"`
 	Label string               `json:"label"`
-	// Targets, se valorizzato, sono i target del passo o del lotto.
+	// Targets, if set, are the targets of the pass or batch.
 	Targets    []descriptor.Target        `json:"targets,omitempty"`
 	Outputs    map[string]pipeline.Output `json:"outputs,omitempty"`
 	Checkpoint pipeline.Output            `json:"checkpoint,omitempty"`
 }
 
-// input ricostruisce l'input dello step.
+// input rebuilds the step input.
 func (s startedStep) input(id string, d *descriptor.Descriptor) pipeline.Input {
 	dd := d
 	if s.Targets != nil {
@@ -822,20 +822,20 @@ func (s startedStep) input(id string, d *descriptor.Descriptor) pipeline.Input {
 	return pipeline.Input{DeploymentID: id, Descriptor: dd, Outputs: s.Outputs}
 }
 
-// Esiti del rollback riportati in RollbackError e nell'evento finale dei callback.
+// Rollback outcomes reported in RollbackError and in the final callback event.
 const (
 	RollbackCompleted = "completed"
 	RollbackSkipped   = "skipped"
 	RollbackFailed    = "failed"
 )
 
-// RollbackError è l'errore di un deploy fallito per cui è stato eseguito il rollback.
+// RollbackError is the error of a failed deploy for which the rollback was run.
 type RollbackError struct {
-	// Err è l'errore dello step che ha avviato il rollback.
+	// Err is the error of the step that started the rollback.
 	Err error
-	// Status è l'esito del rollback.
+	// Status is the rollback outcome.
 	Status string
-	// Cause è l'errore della compensazione fallita, se Status è RollbackFailed.
+	// Cause is the error of the failed compensation, if Status is RollbackFailed.
 	Cause error
 }
 
@@ -849,7 +849,7 @@ func (e *RollbackError) Error() string {
 	return fmt.Sprintf("%v; rollback completato", e.Err)
 }
 
-// Unwrap espone sia l'errore dello step sia quello del rollback.
+// Unwrap exposes both the step error and the rollback error.
 func (e *RollbackError) Unwrap() []error {
 	if e.Cause != nil {
 		return []error{e.Err, e.Cause}
@@ -857,10 +857,10 @@ func (e *RollbackError) Unwrap() []error {
 	return []error{e.Err}
 }
 
-// compensate esegue il rollback dopo il fallimento dello step failed, se la policy lo prevede:
-// compensa gli step avviati in ordine inverso, ciascuno come step DBOS. Si ferma alla prima
-// compensazione fallita, così lo stato resta noto per l'intervento manuale.
-// Restituisce l'errore del deploy, arricchito con l'esito del rollback.
+// compensate runs the rollback after step failed fails, if the policy provides for it: it
+// compensates the started steps in reverse order, each as a DBOS step. It stops at the first
+// failed compensation, so the state stays known for manual intervention.
+// It returns the deploy error, enriched with the rollback outcome.
 func (w *Worker) compensate(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, res *Result, started []startedStep, failed string, stepErr error) error {
 	if d.DryRun || !d.Rollback.Triggers(failed) {
 		return stepErr
@@ -868,12 +868,12 @@ func (w *Worker) compensate(ctx dbos.Context, id string, ev *events, d *descript
 	return w.undo(ctx, id, ev, d, res, started, stepErr)
 }
 
-// undo compensa gli step avviati in ordine inverso, ciascuno come step DBOS, fermandosi alla
-// prima compensazione fallita. Restituisce l'errore del deploy arricchito con l'esito.
+// undo compensates the started steps in reverse order, each as a DBOS step, stopping at the
+// first failed compensation. It returns the deploy error enriched with the outcome.
 func (w *Worker) undo(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, res *Result, started []startedStep, stepErr error) error {
 	log := w.logger.With("deployment", id)
 	if ctx.Err() != nil {
-		// Deploy annullato o worker in arresto: le compensazioni non possono essere eseguite.
+		// Deploy cancelled or worker stopping: compensations cannot run.
 		log.Error("rollback non eseguito: deploy interrotto", "error", ctx.Err())
 		return stepErr
 	}

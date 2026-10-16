@@ -1,5 +1,5 @@
-// Package governance applica le regole di rilascio per applicazione e ambiente: promozione
-// obbligatoria da altri ambienti, approvazioni e finestre di freeze.
+// Package governance applies the release rules per application and environment: mandatory
+// promotion from other environments, approvals and freeze windows.
 package governance
 
 import (
@@ -12,32 +12,32 @@ import (
 	"github.com/joeg-ita/manent/internal/glob"
 )
 
-// DefaultApprovalTimeout è la durata di default di una richiesta di approvazione.
+// DefaultApprovalTimeout is the default duration of an approval request.
 const DefaultApprovalTimeout = 72 * time.Hour
 
-// Approvals stabilisce le approvazioni richieste prima di un deploy.
+// Approvals sets the approvals required before a deploy.
 type Approvals struct {
-	// Required è il numero di approvazioni di identità distinte (0 = nessuna approvazione).
+	// Required is the number of approvals by distinct identities (0 = no approval).
 	Required int `json:"required"`
-	// AllowSelf ammette l'approvazione di chi ha richiesto il deploy.
+	// AllowSelf allows approval by whoever requested the deploy.
 	AllowSelf bool `json:"allow_self,omitempty"`
-	// Timeout dopo cui la richiesta scade e il deploy non viene eseguito.
+	// Timeout after which the request expires and the deploy does not run.
 	Timeout time.Duration `json:"timeout"`
-	// When è il momento delle approvazioni: before (default) prima del deploy; rollout le
-	// sposta sui punti di approvazione del rollout (approvalsBetween), se ce ne sono.
+	// When is the moment of the approvals: before (default) before the deploy; rollout moves them
+	// to the rollout's approval points (approvalsBetween), if any.
 	When string `json:"when,omitempty"`
 }
 
-// Momenti delle approvazioni (Approvals.When).
+// Moments of the approvals (Approvals.When).
 const (
 	ApprovalsBefore  = "before"
 	ApprovalsRollout = "rollout"
 )
 
-// InRollout indica se le approvazioni vanno chieste nei punti di approvazione del rollout.
+// InRollout reports whether approvals must be asked at the rollout's approval points.
 func (a *Approvals) InRollout() bool { return a != nil && a.When == ApprovalsRollout }
 
-// RequiredOrZero restituisce il numero di approvazioni richieste (0 senza regola).
+// RequiredOrZero returns the number of required approvals (0 without a rule).
 func (a *Approvals) RequiredOrZero() int {
 	if a == nil {
 		return 0
@@ -45,38 +45,38 @@ func (a *Approvals) RequiredOrZero() int {
 	return a.Required
 }
 
-// Rule sono le regole di rilascio di un insieme di applicazioni e ambienti (pattern con "*").
+// Rule are the release rules of a set of applications and environments ("*" patterns).
 type Rule struct {
 	Name         string
 	Applications []string
 	Environments []string
-	// Requires elenca gli ambienti in cui lo stesso artefatto (nome, versione e sha256) deve
-	// essere già stato rilasciato con successo.
+	// Requires lists the environments where the same artifact (name, version and sha256) must
+	// already have been released successfully.
 	Requires  []string
 	Approvals Approvals
-	// Change, se presente, apre un ticket di change management per ogni deploy.
+	// Change, if set, opens a change management ticket for every deploy.
 	Change *Change
 }
 
-// Change è la regola di change management di un deploy, fissata all'accodamento.
+// Change is the change management rule of a deploy, fixed at submission.
 type Change struct {
-	// Approval: il deploy attende l'approvazione del change nel sistema ITSM.
+	// Approval: the deploy waits for the change approval in the ITSM.
 	Approval bool `json:"approval,omitempty"`
-	// Timeout dell'attesa dell'approvazione.
+	// Timeout of the approval wait.
 	Timeout time.Duration `json:"timeout,omitempty"`
 }
 
-// Window è una finestra di freeze: assoluta (From-To) o ricorrente (Cron per Duration).
+// Window is a freeze window: absolute (From-To) or recurring (Cron for Duration).
 type Window struct {
 	Name         string
 	Reason       string
 	Applications []string
 	Environments []string
-	// Regions, se presente, limita la finestra ad alcune region: vale per i passi di un
-	// rollout su quelle region, non per l'accodamento del deploy.
+	// Regions, if set, limits the window to some regions: it applies to the rollout passes on
+	// those regions, not to the deploy submission.
 	Regions  []string
 	From, To time.Time
-	// Cron è l'inizio di ogni occorrenza (5 campi), interpretato in Timezone.
+	// Cron is the start of every occurrence (5 fields), interpreted in Timezone.
 	Cron     string
 	Duration time.Duration
 	Timezone string
@@ -84,7 +84,7 @@ type Window struct {
 	schedule cron.Schedule
 }
 
-// WindowStatus descrive una finestra di freeze rispetto a un istante.
+// WindowStatus describes a freeze window relative to an instant.
 type WindowStatus struct {
 	Name         string    `json:"name"`
 	Reason       string    `json:"reason,omitempty"`
@@ -97,13 +97,13 @@ type WindowStatus struct {
 	Recurring    bool      `json:"recurring,omitempty"`
 }
 
-// Policy contiene regole e finestre di freeze.
+// Policy holds rules and freeze windows.
 type Policy struct {
 	Rules   []Rule
 	Freezes []Window
 }
 
-// New verifica regole e finestre e prepara le espressioni cron.
+// New checks rules and windows and prepares the cron expressions.
 func New(rules []Rule, windows []Window) (*Policy, error) {
 	var errs []error
 	for i, r := range rules {
@@ -151,8 +151,8 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 	return &Policy{Rules: rules, Freezes: windows}, nil
 }
 
-// Rule restituisce la prima regola che corrisponde all'applicazione e all'ambiente, o una
-// regola vuota (nessun vincolo).
+// Rule returns the first rule matching the application and environment, or an empty rule
+// (no constraint).
 func (p *Policy) Rule(application, environment string) Rule {
 	if p == nil {
 		return Rule{}
@@ -165,14 +165,14 @@ func (p *Policy) Rule(application, environment string) Rule {
 	return Rule{}
 }
 
-// Frozen restituisce la prima finestra di freeze attiva all'istante t, o nil.
+// Frozen returns the first freeze window active at instant t, or nil.
 func (p *Policy) Frozen(application, environment string, t time.Time) *WindowStatus {
 	return p.FrozenIn(application, environment, "", t)
 }
 
-// FrozenIn restituisce il freeze attivo per l'applicazione e l'ambiente in una region: le
-// finestre senza region valgono ovunque, quelle con region solo lì. Con region "" valgono
-// solo le finestre senza region.
+// FrozenIn returns the freeze active for the application and environment in a region:
+// windows without regions apply everywhere, those with regions only there. With region ""
+// only windows without regions apply.
 func (p *Policy) FrozenIn(application, environment, region string, t time.Time) *WindowStatus {
 	if p == nil {
 		return nil
@@ -191,8 +191,8 @@ func (p *Policy) FrozenIn(application, environment, region string, t time.Time) 
 	return nil
 }
 
-// Windows restituisce lo stato delle finestre che riguardano l'applicazione e l'ambiente
-// (tutte se vuoti): quelle attive e quelle future, con la prossima occorrenza.
+// Windows returns the state of the windows concerning the application and environment (all
+// if empty): active and future ones, with the next occurrence.
 func (p *Policy) Windows(application, environment string, t time.Time) []WindowStatus {
 	if p == nil {
 		return nil
@@ -210,14 +210,14 @@ func (p *Policy) Windows(application, environment string, t time.Time) []WindowS
 	return out
 }
 
-// applies indica se la finestra riguarda l'applicazione e l'ambiente. Un valore vuoto
-// corrisponde a qualsiasi pattern, per gli elenchi filtrati solo per uno dei due.
+// applies reports whether the window concerns the application and environment. An empty
+// value matches any pattern, for listings filtered on only one of the two.
 func (w Window) applies(application, environment string) bool {
 	return (application == "" || glob.Any(w.Applications, application)) &&
 		(environment == "" || glob.Any(w.Environments, environment))
 }
 
-// status calcola l'occorrenza attiva all'istante t o, se nessuna, la successiva.
+// status computes the occurrence active at instant t or, if none, the next one.
 func (w Window) status(t time.Time) WindowStatus {
 	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions}
 	if w.schedule == nil {
@@ -226,8 +226,8 @@ func (w Window) status(t time.Time) WindowStatus {
 		return st
 	}
 	st.Recurring = true
-	// L'occorrenza attiva è quella iniziata nell'ultima Duration: Next restituisce il primo
-	// inizio strettamente successivo all'istante indicato.
+	// The active occurrence is the one started within the last Duration: Next returns the first
+	// start strictly after the given instant.
 	start := w.schedule.Next(t.Add(-w.Duration))
 	if !start.After(t) {
 		st.Active, st.Start, st.End = true, start, start.Add(w.Duration)

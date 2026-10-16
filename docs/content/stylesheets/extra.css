@@ -1,5 +1,5 @@
-/* Tema "tecno" del sito di manent, sopra Material for MkDocs.
-   Scuro di default (slate), accenti ciano/viola, griglia di sfondo, titoli in Space Grotesk. */
+/* "Tech" theme of the manent site, on top of Material for MkDocs.
+   Dark by default (slate), cyan/violet accents, background grid, headings in Space Grotesk. */
 
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap");
 
@@ -11,7 +11,7 @@
   --md-heading-font: "Space Grotesk", var(--md-text-font, sans-serif);
 }
 
-/* ---------- Palette scura ---------- */
+/* ---------- Dark palette ---------- */
 [data-md-color-scheme="slate"] {
   --md-hue: 225;
   --md-default-bg-color: #0a0e17;
@@ -43,7 +43,7 @@
   --mn-grid: rgba(148, 163, 184, 0.045);
 }
 
-/* ---------- Palette chiara ---------- */
+/* ---------- Light palette ---------- */
 [data-md-color-scheme="default"] {
   --md-primary-fg-color: #0d1322;
   --md-primary-fg-color--light: #1e293b;
@@ -58,7 +58,7 @@
   --mn-grid: rgba(15, 23, 42, 0.04);
 }
 
-/* ---------- Sfondo: griglia e bagliore ---------- */
+/* ---------- Background: grid and glow ---------- */
 body {
   background-color: var(--md-default-bg-color);
   background-image:
@@ -71,7 +71,7 @@ body {
 }
 .md-main, .md-container { background: transparent; }
 
-/* ---------- Header e tab ---------- */
+/* ---------- Header and tabs ---------- */
 .md-header {
   background: color-mix(in srgb, var(--md-primary-fg-color) 82%, transparent);
   backdrop-filter: saturate(160%) blur(12px);
@@ -103,7 +103,7 @@ body {
 .md-header__title { font-family: var(--md-heading-font); font-weight: 600; letter-spacing: 0.02em; }
 .md-header__button.md-logo img { height: 1.6rem; filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45)); }
 
-/* ---------- Titoli ---------- */
+/* ---------- Headings ---------- */
 .md-typeset h1, .md-typeset h2, .md-typeset h3, .md-typeset h4 {
   font-family: var(--md-heading-font);
   letter-spacing: -0.01em;
@@ -129,7 +129,7 @@ body {
 }
 .md-typeset h3 { font-weight: 600; }
 
-/* ---------- Navigazione laterale e indice ---------- */
+/* ---------- Side navigation and table of contents ---------- */
 .md-nav__title { font-family: var(--md-code-font-family); text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.12em; }
 .md-nav__item--section > .md-nav__link {
   font-family: var(--md-code-font-family);
@@ -141,7 +141,7 @@ body {
 .md-nav__link--active { color: var(--mn-cyan) !important; }
 .md-nav--secondary .md-nav__link--active { border-left: 2px solid var(--mn-cyan); padding-left: 0.4rem; margin-left: -0.5rem; }
 
-/* ---------- Codice ---------- */
+/* ---------- Code ---------- */
 .md-typeset pre > code {
   border: 1px solid var(--mn-border);
   border-radius: 0.5rem;
@@ -165,7 +165,7 @@ body {
   border-radius: 0.5rem 0.5rem 0 0;
 }
 
-/* ---------- Tabelle ---------- */
+/* ---------- Tables ---------- */
 .md-typeset table:not([class]) {
   border: 1px solid var(--mn-border);
   border-radius: 0.5rem;
@@ -250,7 +250,7 @@ body {
   color: #0a0e17;
   font-weight: 700;
 }
-/* Material colora lo sfondo in hover con l'accento: il testo deve restare leggibile. */
+/* Material colors the hover background with the accent: the text must stay readable. */
 .md-typeset .mn-hero .md-button:not(.md-button--primary):hover,
 .md-typeset .mn-hero .md-button:not(.md-button--primary):focus {
   background-color: var(--md-accent-fg-color--transparent);
@@ -259,7 +259,7 @@ body {
 }
 .md-typeset .mn-hero .md-button--primary:hover { color: #0a0e17; filter: brightness(1.1); box-shadow: 0 0 24px -4px rgba(34, 211, 238, 0.6); }
 
-/* Finestra di terminale */
+/* Terminal window */
 .mn-terminal {
   border: 1px solid var(--mn-border);
   border-radius: 0.75rem;
@@ -287,7 +287,7 @@ body {
 .mn-terminal .dim { color: #64748b; }
 .mn-terminal .v { color: var(--mn-violet); }
 
-/* Striscia di numeri */
+/* Numbers strip */
 .mn-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -304,28 +304,28 @@ body {
 .mn-stat b { display: block; font-family: var(--md-heading-font); font-size: 1.05rem; color: var(--md-default-fg-color); }
 .mn-stat span { font-family: var(--md-code-font-family); font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--md-default-fg-color--light); }
 
-/* La home non mostra il titolo h1 generato sopra l'hero. */
+/* The home page does not show the generated h1 title above the hero. */
 .mn-home .md-content__button { display: none; }
 
 /* ---------- Footer ---------- */
 .md-footer { border-top: 1px solid var(--mn-border); }
 .md-footer-meta { background: transparent; }
 
-/* ---------- Selezione e scrollbar ---------- */
+/* ---------- Selection and scrollbar ---------- */
 ::selection { background: rgba(34, 211, 238, 0.3); }
 [data-md-color-scheme="slate"] ::-webkit-scrollbar-thumb { background: #1e293b; }
 
-/* ---------- Ritocchi ---------- */
-/* Il gradiente del titolo renderebbe visibile il permalink anche senza hover. */
+/* ---------- Tweaks ---------- */
+/* The heading gradient would make the permalink visible even without hover. */
 .md-typeset h1 .headerlink { display: none; }
-/* Codice nelle tabelle: niente a capo a metà parola (le tabelle larghe scorrono). */
+/* Code in tables: no line breaks mid-word (wide tables scroll). */
 .md-typeset table:not([class]) code { word-break: keep-all; overflow-wrap: normal; white-space: nowrap; }
-/* Titoli della navigazione senza riquadro. */
+/* Navigation titles without a box. */
 .md-nav__title { background: transparent !important; box-shadow: none !important; }
-/* Il terminale della home è un'illustrazione: niente pulsante di copia. */
+/* The home terminal is an illustration: no copy button. */
 .mn-terminal .md-clipboard { display: none; }
 
-/* Permalink dei titoli: "#" discreto, visibile solo passando sul titolo o con il focus. */
+/* Heading permalinks: a discreet "#", visible only when hovering the heading or with focus. */
 .md-typeset .headerlink { color: var(--md-default-fg-color--lighter); opacity: 0; }
 .md-typeset :is(h2, h3, h4, h5, h6):hover .headerlink,
 .md-typeset .headerlink:focus { opacity: 1; }

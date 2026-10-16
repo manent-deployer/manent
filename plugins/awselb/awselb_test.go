@@ -12,11 +12,11 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeAWS emula target group, regole e Auto Scaling group.
+// fakeAWS emulates target groups, rules and Auto Scaling groups.
 type fakeAWS struct {
 	mu      sync.Mutex
-	health  map[string]string // ID → stato nel target group
-	asg     map[string]string // ID → stato nell'Auto Scaling group
+	health  map[string]string // ID → state in the target group
+	asg     map[string]string // ID → state in the Auto Scaling group
 	weights map[string]map[string]int32
 	calls   []string
 }
@@ -152,7 +152,7 @@ func TestPoolAutoScaling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Ripetuti, svuotamento e rientro non chiamano due volte l'Auto Scaling group.
+	// Repeated, draining and restoring do not call the Auto Scaling group twice.
 	for range 2 {
 		if err := p.Drain(ctx, []string{"i-1"}); err != nil {
 			t.Fatal(err)

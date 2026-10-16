@@ -121,13 +121,13 @@ export function Layout({ children }: { children: ReactNode }) {
   const previous = useRef<string>();
   const callback = config.redirect_path ?? "/auth/callback";
 
-  // Dopo un cambio di pagina il focus va al titolo, così gli screen reader annunciano la nuova
-  // vista. Non al primo caricamento né al ritorno dal login, che sono caricamenti di pagina.
+  // After a page change focus goes to the title, so screen readers announce the new view. Not
+  // on first load nor on return from login, which are page loads.
   useEffect(() => {
     const from = previous.current;
     previous.current = location.pathname;
     if (from === undefined || from === callback) return;
-    // Le pagine caricate in differita (Metriche) mostrano il titolo un po' dopo: lo si attende.
+    // Lazily loaded pages (Metrics) show the title a bit later: wait for it.
     const focus = () => {
       const h = document.getElementById("page-title");
       h?.focus();

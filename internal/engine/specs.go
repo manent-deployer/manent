@@ -12,50 +12,50 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// SpecsOptions seleziona le specifiche degli step personalizzati da cercare.
+// SpecsOptions selects the custom step specs to look for.
 type SpecsOptions struct {
-	// Hashes sono gli sha256 cercati (di solito pipeline.custom.revoked_specs).
+	// Hashes are the sha256 looked for (usually pipeline.custom.revoked_specs).
 	Hashes []string
-	// All elenca tutte le specifiche fotografate, non solo quelle in Hashes.
+	// All lists all captured specs, not only those in Hashes.
 	All bool
 }
 
-// SpecUse è uno step personalizzato fotografato nel piano di un workflow non concluso o di
-// una schedule ricorrente.
+// SpecUse is a custom step captured in the plan of an unfinished workflow or of a recurring
+// schedule.
 type SpecUse struct {
-	// Kind è workflow o schedule.
+	// Kind is workflow or schedule.
 	Kind string `json:"kind"`
-	// ID è l'ID del workflow o il nome della schedule.
+	// ID is the workflow ID or the schedule name.
 	ID string `json:"id"`
-	// Workflow è il nome del workflow DBOS (manent.deploy, manent.approval, ...).
+	// Workflow is the DBOS workflow name (manent.deploy, manent.approval, ...).
 	Workflow    string `json:"workflow,omitempty"`
 	Status      string `json:"status"`
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
 	Step        string `json:"step"`
 	SpecHash    string `json:"spec_hash"`
-	// Mismatch indica che lo spec_hash registrato non corrisponde alla specifica: il piano è
-	// stato alterato, e il worker lo rifiuterà se le specifiche sono firmate.
+	// Mismatch means the recorded spec_hash does not match the spec: the plan was tampered with,
+	// and the worker will reject it if specs are signed.
 	Mismatch bool `json:"mismatch,omitempty"`
 }
 
-// SpecsReport è il risultato di Specs.
+// SpecsReport is the result of Specs.
 type SpecsReport struct {
 	Hashes []string  `json:"hashes,omitempty"`
 	Uses   []SpecUse `json:"uses"`
-	// Unreadable sono i workflow e le schedule il cui input non è leggibile.
+	// Unreadable are the workflows and schedules whose input cannot be read.
 	Unreadable []string `json:"unreadable,omitempty"`
 }
 
-// specWorkflows sono i workflow il cui input contiene un piano: deploy e figli dei passi, e le
-// attese (approvazione, dipendenze) che accoderanno un deploy con il piano registrato. Le
-// release non c'entrano: accodano i deploy nel primo step, con il piano calcolato allora.
+// specWorkflows are the workflows whose input contains a plan: deploys and pass children, and
+// the waits (approval, dependencies) that will enqueue a deploy with the recorded plan.
+// Releases are not involved: they enqueue deploys in their first step, with the plan computed then.
 var specWorkflows = []string{workflowName, approvalWorkflowName, afterWorkflowName, passWorkflowName}
 
-// Specs elenca i workflow non conclusi e le schedule che contengono le specifiche cercate.
-// Una specifica revocata con pipeline.custom.revoked_specs non viene più eseguita, ma resta
-// nei piani già registrati: questo elenco dice quali deploy falliranno allo step e quali
-// schedule vanno riapplicate con la configurazione corretta.
+// Specs lists the unfinished workflows and schedules containing the specs looked for.
+// A spec revoked with pipeline.custom.revoked_specs no longer runs, but stays in the plans
+// already recorded: this listing says which deploys will fail at the step and which schedules
+// must be applied again with the corrected configuration.
 func (a *Admin) Specs(_ context.Context, o SpecsOptions) (*SpecsReport, error) {
 	rep := &SpecsReport{Hashes: o.Hashes, Uses: []SpecUse{}}
 	wanted := func(h string) bool { return o.All || slices.Contains(o.Hashes, h) }
@@ -105,7 +105,7 @@ func (a *Admin) Specs(_ context.Context, o SpecsOptions) (*SpecsReport, error) {
 	return rep, nil
 }
 
-// planOf legge applicazione, ambiente e piano dall'input di un workflow.
+// planOf reads application, environment and plan from a workflow input.
 func planOf(w dbos.WorkflowStatus) (string, string, pipeline.Plan, error) {
 	if w.Name == passWorkflowName {
 		var in passInput
@@ -120,7 +120,7 @@ func planOf(w dbos.WorkflowStatus) (string, string, pipeline.Plan, error) {
 			return "", "", nil, err
 		}
 	} else {
-		// Approvazioni e attese hanno la stessa forma: ID del deploy e richiesta.
+		// Approvals and waits have the same shape: deploy ID and request.
 		var in approvalInput
 		if err := decodeInput(w.Input, &in); err != nil {
 			return "", "", nil, err
@@ -130,8 +130,8 @@ func planOf(w dbos.WorkflowStatus) (string, string, pipeline.Plan, error) {
 	return req.Descriptor.Application, req.Descriptor.Environment, req.Plan, nil
 }
 
-// specUses restituisce gli step personalizzati del piano con una specifica cercata. L'hash è
-// ricalcolato dalla specifica, non preso da quello registrato.
+// specUses returns the custom steps of the plan with a spec looked for. The hash is
+// recomputed from the spec, not taken from the recorded one.
 func specUses(plan pipeline.Plan, wanted func(string) bool) []SpecUse {
 	var out []SpecUse
 	for _, ps := range plan {

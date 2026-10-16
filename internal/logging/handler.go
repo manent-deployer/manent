@@ -12,14 +12,14 @@ import (
 	"github.com/crewjam/rfc5424"
 )
 
-// sdID è l'identificativo dello structured data RFC 5424 usato per gli attributi slog.
+// sdID is the RFC 5424 structured data ID used for slog attributes.
 const sdID = "manent@32473"
 
-// facilityLocal0 è la facility local0 (16) di RFC 5424. rfc5424.Local0 vale 12, perché la
-// libreria omette le facility da 12 a 15 (ntp, security, console, solaris-cron).
+// facilityLocal0 is the RFC 5424 local0 facility (16). rfc5424.Local0 is 12, because the
+// library omits facilities 12 to 15 (ntp, security, console, solaris-cron).
 const facilityLocal0 rfc5424.Priority = 16 << 3
 
-// Options configura la costruzione del logger.
+// Options configures how the logger is built.
 type Options struct {
 	AppName string
 	Level   string
@@ -28,7 +28,8 @@ type Options struct {
 	SIEM    SIEMSender
 }
 
-// New crea un *slog.Logger che scrive sul log applicativo e inoltra ogni record al SIEM.
+// New creates a *slog.Logger that writes to the application log and forwards every record to
+// the SIEM.
 func New(opts Options) *slog.Logger {
 	if opts.Output == nil {
 		opts.Output = os.Stderr
@@ -63,7 +64,7 @@ func parseLevel(s string) slog.Level {
 	return l
 }
 
-// fanoutHandler inoltra ogni record a tutti gli handler abilitati.
+// fanoutHandler forwards every record to all enabled handlers.
 type fanoutHandler struct {
 	handlers []slog.Handler
 }
@@ -105,7 +106,7 @@ func (f *fanoutHandler) WithGroup(name string) slog.Handler {
 	return &fanoutHandler{handlers: hs}
 }
 
-// siemHandler converte i record slog in rfc5424.Message e li invia al SIEM.
+// siemHandler converts slog records into rfc5424.Message and sends them to the SIEM.
 type siemHandler struct {
 	sender  SIEMSender
 	level   slog.Leveler
@@ -139,7 +140,7 @@ func (h *siemHandler) Handle(_ context.Context, r slog.Record) error {
 	if len(params) > 0 {
 		msg.StructuredData = []rfc5424.StructuredData{{ID: sdID, Parameters: params}}
 	}
-	// Un SIEM irraggiungibile non deve bloccare l'applicazione: l'errore viene solo segnalato.
+	// An unreachable SIEM must not block the application: the error is only reported.
 	if err := h.sender.Send(msg); err != nil {
 		fmt.Fprintf(h.errOut, "invio al SIEM fallito: %v\n", err)
 	}
@@ -161,7 +162,7 @@ func (h *siemHandler) WithGroup(name string) slog.Handler {
 	return &c
 }
 
-// appendAttr appiattisce gli attributi (anche di gruppo) in parametri SD.
+// appendAttr flattens attributes (group ones too) into SD parameters.
 func appendAttr(params []rfc5424.SDParam, prefix string, a slog.Attr) []rfc5424.SDParam {
 	a.Value = a.Value.Resolve()
 	if a.Value.Kind() == slog.KindGroup {
@@ -180,7 +181,7 @@ func appendAttr(params []rfc5424.SDParam, prefix string, a slog.Attr) []rfc5424.
 	return append(params, rfc5424.SDParam{Name: sdName(prefix + a.Key), Value: a.Value.String()})
 }
 
-// sdName rende il nome conforme a RFC 5424 (ASCII stampabile, niente '=', ' ', ']', '"', max 32).
+// sdName makes the name RFC 5424 compliant (printable ASCII, no '=', ' ', ']', '"', max 32).
 func sdName(s string) string {
 	s = strings.Map(func(r rune) rune {
 		if r <= 32 || r >= 127 || r == '=' || r == ']' || r == '"' {

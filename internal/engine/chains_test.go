@@ -19,8 +19,8 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// gatedStep blocca i deploy con versione "slow*" finché il test non li libera e fa fallire
-// quelli con versione "*bad".
+// gatedStep blocks deploys with version "slow*" until the test releases them and fails those
+// with version "*bad".
 type gatedStep struct {
 	mu      sync.Mutex
 	release map[string]chan struct{}
@@ -52,13 +52,12 @@ func (s *gatedStep) Run(ctx context.Context, in pipeline.Input) (pipeline.Output
 	return pipeline.Output{"version": v}, nil
 }
 
-// chainEngine avvia un worker con letture rapide delle dipendenze e il servizio completo per
-// i rollback delle release.
+// chainEngine starts a worker with fast dependency reads and the full service for release rollbacks.
 func chainEngine(t *testing.T) (*Engine, *gatedStep) {
 	return chainEngineEvery(t, 50*time.Millisecond)
 }
 
-// chainEngineEvery è chainEngine con l'intervallo di lettura indicato.
+// chainEngineEvery is chainEngine with the given read interval.
 func chainEngineEvery(t *testing.T, poll time.Duration) (*Engine, *gatedStep) {
 	t.Helper()
 	step := &gatedStep{release: map[string]chan struct{}{}}
@@ -96,7 +95,7 @@ func TestDipendenze(t *testing.T) {
 		return sub
 	}
 
-	// B attende A, che resta in esecuzione finché non viene liberato.
+	// B waits for A, which keeps running until released.
 	submit(appVersion("db", "test", "slow-1", "a"))
 	b := appVersion("api", "test", "1.0.0", "b")
 	b.After = []string{"a"}
@@ -122,21 +121,21 @@ func TestDipendenze(t *testing.T) {
 	if st, _ := e.Status(ctx, "b"); st.State != StateSuccess || st.After == nil || st.After.Status != service.AfterSatisfied {
 		t.Errorf("B concluso: %+v", st)
 	}
-	// Se le dipendenze sono già riuscite non si attende.
+	// If the dependencies already succeeded there is no wait.
 	c := appVersion("web", "test", "1.0.0", "c")
 	c.After = []string{"a", "b"}
 	if sub := submit(c); sub.State != StateEnqueued {
 		t.Errorf("C doveva partire subito: %+v", sub)
 	}
 
-	// Dipendenze non valide all'accodamento.
+	// Invalid dependencies at submission.
 	bad := appVersion("api", "qa", "1.0.0", "x")
 	bad.After = []string{"inesistente"}
 	if _, err := e.Submit(ctx, bad); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("dipendenza inesistente: %v", err)
 	}
 
-	// Una dipendenza che fallisce: il deploy non viene eseguito.
+	// A dependency that fails: the deploy does not run.
 	submit(appVersion("db", "qa", "slow-bad", "d"))
 	f := appVersion("api", "qa", "1.0.0", "f")
 	f.After = []string{"d"}
@@ -151,7 +150,7 @@ func TestDipendenze(t *testing.T) {
 		t.Errorf("motivo: %+v", st)
 	}
 
-	// Un deploy in attesa si annulla.
+	// A waiting deploy can be cancelled.
 	submit(appVersion("db", "prod", "slow-2", "g"))
 	h := appVersion("api", "prod", "1.0.0", "h")
 	h.After = []string{"g"}
@@ -201,7 +200,7 @@ func TestRelease(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 
-	// Prima release: db, poi api e worker in parallelo, web dopo api.
+	// First release: db, then api and worker in parallel, web after api.
 	r1 := rel("r1", "", item("web", "web", "1.0.0", "api"), item("api", "api", "1.0.0", "db"),
 		item("db", "db", "1.0.0"), item("worker", "worker", "1.0.0", "db"))
 	rs, err := e.SubmitRelease(ctx, r1)
@@ -221,7 +220,7 @@ func TestRelease(t *testing.T) {
 		t.Errorf("deploy della release: %+v", st)
 	}
 
-	// Seconda release: api fallisce dopo db; web (dopo api) non parte, db torna alla 1.0.0.
+	// Second release: api fails after db; web (after api) does not start, db goes back to 1.0.0.
 	step.gate("r2.db")
 	r2 := rel("r2", descriptor.ReleaseOnFailureRollback, item("db", "db", "slow-2.0.0"),
 		item("api", "api", "2.0.0-bad", "db"), item("web", "web", "2.0.0", "api"))
@@ -233,7 +232,7 @@ func TestRelease(t *testing.T) {
 	}
 	close(step.gate("r2.db"))
 	rs = finish("r2")
-	want := "db=SUCCESS/rollback=SUCCESS api=ERROR web=" // web: annullato o non eseguito
+	want := "db=SUCCESS/rollback=SUCCESS api=ERROR web=" // web: cancelled or not run
 	if rs.State != StateError || !strings.HasPrefix(states(rs), want) || !strings.Contains(rs.Error, "api: ERROR") {
 		t.Fatalf("r2: %s %s (%s)", rs.State, states(rs), rs.Error)
 	}
@@ -244,7 +243,7 @@ func TestRelease(t *testing.T) {
 		t.Errorf("rollback di db: %+v", st)
 	}
 
-	// Release non valide.
+	// Invalid releases.
 	cyc := rel("r3", "", item("a", "a", "1", "b"), item("b", "b", "1", "a"))
 	if _, err := e.SubmitRelease(ctx, cyc); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("ciclo: %v", err)
@@ -267,8 +266,8 @@ func TestDipendenzeEApprovazione(t *testing.T) {
 	w := startWorker(t, opts)
 	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Governance: gov})
 
-	// La dipendenza è in test, il deploy in prod richiede un'approvazione: la si chiede solo
-	// dopo che la dipendenza è riuscita.
+	// The dependency is in test, the prod deploy requires an approval: it is asked for only after
+	// the dependency succeeded.
 	if _, err := e.Submit(alice, appVersion("db", "test", "slow-1", "dep")); err != nil {
 		t.Fatal(err)
 	}
@@ -295,8 +294,8 @@ func TestDipendenzeEApprovazione(t *testing.T) {
 	}
 }
 
-// Con un intervallo di lettura di un'ora, attese e release procedono solo grazie ai messaggi
-// di chi si conclude: deploy riuscito, deploy annullato, deploy della release.
+// With a one-hour read interval, waits and releases progress only thanks to the messages of
+// whoever ends: successful deploy, cancelled deploy, release deploy.
 func TestCateneSvegliateDaiMessaggi(t *testing.T) {
 	e, step := chainEngineEvery(t, time.Hour)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -311,7 +310,7 @@ func TestCateneSvegliateDaiMessaggi(t *testing.T) {
 
 	submit(appVersion("db", "test", "slow-1", "a"))
 	submit(appVersion("api", "test", "1.0.0", "b"), "a")
-	// La dipendenza può risultare ancora in coda: il suo avvio non sveglia l'attesa.
+	// The dependency may still be queued: its start does not wake the wait.
 	waitState(t, e, "b", StateWaitingDependency, func(s *Status) bool {
 		return s.After != nil && len(s.After.Dependencies) == 1
 	})
@@ -322,7 +321,7 @@ func TestCateneSvegliateDaiMessaggi(t *testing.T) {
 
 	submit(appVersion("db", "test", "slow-2", "c"))
 	submit(appVersion("api", "test", "2.0.0", "d"), "c")
-	// La dipendenza può risultare ancora in coda: il suo avvio non sveglia l'attesa.
+	// The dependency may still be queued: its start does not wake the wait.
 	waitState(t, e, "d", StateWaitingDependency, func(s *Status) bool {
 		return s.After != nil && len(s.After.Dependencies) == 1
 	})
@@ -355,7 +354,7 @@ func TestCateneSvegliateDaiMessaggi(t *testing.T) {
 	}
 }
 
-// Una release annullata mentre un deploy è in corso annulla anche i deploy non conclusi.
+// A release cancelled while a deploy is running also cancels the unfinished deploys.
 func TestReleaseAnnullata(t *testing.T) {
 	e, _ := chainEngine(t)
 	ctx := context.Background()
@@ -377,8 +376,8 @@ func TestReleaseAnnullata(t *testing.T) {
 	}
 }
 
-// L'inventario letto più volte dallo stesso engine segue i deploy conclusi dopo la prima
-// lettura (lettura incrementale), compresi quelli in corso al momento della lettura.
+// The inventory read several times by the same engine follows the deploys ended after the
+// first read (incremental read), including those running at read time.
 func TestInventarioIncrementale(t *testing.T) {
 	e, step := chainEngine(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -416,7 +415,7 @@ func TestInventarioIncrementale(t *testing.T) {
 	if cur, fail := current(); cur != "1.0.0" || fail != "" {
 		t.Errorf("dopo i1: %q %q", cur, fail)
 	}
-	// i2 è in corso alla lettura e si conclude dopo.
+	// i2 is running at read time and ends afterwards.
 	if _, err := e.Submit(ctx, appVersion("db", "test", "slow-2.0.0", "i2")); err != nil {
 		t.Fatal(err)
 	}
@@ -439,14 +438,14 @@ func TestInventarioIncrementale(t *testing.T) {
 	}
 }
 
-// Elenco e cursore scorrono più pagine della scansione (200 workflow) senza perdere né
-// ripetere deploy, anche con molti workflow creati nello stesso millisecondo.
+// List and cursor go through several scan pages (200 workflows) without losing or repeating
+// deploys, even with many workflows created in the same millisecond.
 func TestElencoPerChiave(t *testing.T) {
 	e, _ := chainEngine(t)
 	const n = 450
 	for i := range n {
 		req := Request{Descriptor: *appVersion("app", "test", "1.0.0", "")}
-		// Una coda senza worker: i deploy restano in coda.
+		// A queue without workers: deploys stay queued.
 		if _, err := dbos.Enqueue[Result](e.client, "ferma", workflowName, req, dbos.WithEnqueueWorkflowID(fmt.Sprintf("k%03d", i)),
 			dbos.WithEnqueueAttributes(attributes(req)), dbos.WithEnqueueQueuePartitionKey("app/test")); err != nil {
 			t.Fatal(err)
@@ -482,8 +481,8 @@ func TestElencoPerChiave(t *testing.T) {
 		}
 		cursor = page[len(page)-1].ID
 	}
-	// L'ordine è deterministico (data di creazione, poi ID) anche tra deploy creati nello
-	// stesso millisecondo: le pagine riproducono l'elenco completo.
+	// The order is deterministic (creation time, then ID) even between deploys created in the
+	// same millisecond: the pages reproduce the full list.
 	if len(paged) != n {
 		t.Fatalf("pagine: %d deploy", len(paged))
 	}
@@ -497,8 +496,8 @@ func TestElencoPerChiave(t *testing.T) {
 	}
 }
 
-// Un gruppo di workflow con la stessa data di creazione più grande di una pagina della
-// scansione viene letto per intero, in ordine di ID.
+// A group of workflows with the same creation time larger than a scan page is read entirely,
+// in ID order.
 func TestElencoGruppoStessaData(t *testing.T) {
 	url := testdb.URL(t)
 	reg, _ := testRegistry(t, artifactStep{})
@@ -515,7 +514,7 @@ func TestElencoGruppoStessaData(t *testing.T) {
 	for i := range 250 {
 		enqueue(fmt.Sprintf("g%03d", i))
 	}
-	// Gli stessi 250 workflow creati nello stesso millisecondo.
+	// The same 250 workflows created in the same millisecond.
 	driver, dsn, table := "sqlite", strings.TrimPrefix(url, "sqlite:"), "workflow_status"
 	if testdb.Postgres() {
 		driver, dsn, table = "pgx", url, "dbos.workflow_status"

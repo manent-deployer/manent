@@ -19,20 +19,20 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Schemi delle immagini dei container: oci:// usa HTTPS, oci+http:// un registry in chiaro
-// (solo sviluppo e laboratori).
+// Container image schemes: oci:// uses HTTPS, oci+http:// a plain-text registry
+// (development and labs only).
 const (
 	SchemeOCI     = "oci://"
 	SchemeOCIHTTP = "oci+http://"
 )
 
-// IsOCI indica se la sorgente è un'immagine in un registry.
+// IsOCI reports whether the source is an image in a registry.
 func IsOCI(source string) bool {
 	return strings.HasPrefix(source, SchemeOCI) || strings.HasPrefix(source, SchemeOCIHTTP)
 }
 
-// ociManifestTypes sono i formati di manifest accettati, indici multi-architettura compresi:
-// il digest dell'indice identifica l'immagine per tutte le architetture.
+// ociManifestTypes are the accepted manifest formats, multi-architecture indexes included:
+// the index digest identifies the image for all architectures.
 var ociManifestTypes = []string{
 	"application/vnd.oci.image.index.v1+json",
 	"application/vnd.docker.distribution.manifest.list.v2+json",
@@ -40,13 +40,13 @@ var ociManifestTypes = []string{
 	"application/vnd.docker.distribution.manifest.v2+json",
 }
 
-// ociRef è un riferimento a un'immagine: registry/repository[:tag][@sha256:digest].
+// ociRef is a reference to an image: registry/repository[:tag][@sha256:digest].
 type ociRef struct {
-	scheme   string // https o http
-	registry string // host[:porta] come compare nel riferimento
+	scheme   string // https or http
+	registry string // host[:port] as written in the reference
 	repo     string
 	tag      string
-	digest   string // esadecimale, senza "sha256:"
+	digest   string // hexadecimal, without "sha256:"
 }
 
 var (
@@ -55,7 +55,7 @@ var (
 	ociDigestRe = regexp.MustCompile(`^[a-f0-9]{64}$`)
 )
 
-// parseOCI interpreta una sorgente oci:// o oci+http://.
+// parseOCI parses an oci:// or oci+http:// source.
 func parseOCI(source string) (ociRef, error) {
 	r := ociRef{scheme: "https"}
 	rest := strings.TrimPrefix(source, SchemeOCI)
@@ -89,7 +89,7 @@ func parseOCI(source string) (ociRef, error) {
 	return r, nil
 }
 
-// apiHost è l'host dell'API del registry: Docker Hub risponde su registry-1.docker.io.
+// apiHost is the host of the registry API: Docker Hub answers on registry-1.docker.io.
 func (r ociRef) apiHost() string {
 	if r.registry == "docker.io" || r.registry == "index.docker.io" {
 		return "registry-1.docker.io"
@@ -97,15 +97,15 @@ func (r ociRef) apiHost() string {
 	return r.registry
 }
 
-// reference è il nome dell'immagine fissato al digest, da passare a docker/podman o a Kubernetes.
+// reference is the image name pinned to the digest, to pass to docker/podman or Kubernetes.
 func (r ociRef) reference(digest string) string {
 	return r.registry + "/" + r.repo + "@sha256:" + digest
 }
 
-// fetchOCI risolve il manifest dell'immagine e ne calcola il digest, che diventa lo sha256
-// dell'artefatto: così promozioni e rollback rilasciano esattamente l'immagine verificata,
-// anche se nel frattempo il tag è stato spostato. In locale viene scritto solo il riferimento
-// fissato al digest (plugin.ImageRefExt), non i layer.
+// fetchOCI resolves the image manifest and computes its digest, which becomes the artifact's
+// sha256: promotions and rollbacks then release exactly the verified image, even if the tag
+// has moved in the meantime. Only the reference pinned to the digest is written locally
+// (plugin.ImageRefExt), not the layers.
 func (f DefaultFetcher) fetchOCI(ctx context.Context, source, destDir string) (*Fetched, error) {
 	if err := f.Sources.Check(source); err != nil {
 		return nil, err
@@ -138,9 +138,9 @@ func (f DefaultFetcher) fetchOCI(ctx context.Context, source, destDir string) (*
 	return &Fetched{LocalPath: dest, SHA256: digest, Size: int64(len(body))}, nil
 }
 
-// ociGet legge il manifest. Se il registry chiede un token (401 con WWW-Authenticate Bearer,
-// come Docker Hub, GHCR, Harbor) lo ottiene dal servizio indicato, con le credenziali della
-// sorgente se configurate, e ripete la richiesta.
+// ociGet reads the manifest. If the registry asks for a token (401 with WWW-Authenticate
+// Bearer, as Docker Hub, GHCR, Harbor) it gets one from the given service, with the source
+// credentials if configured, and repeats the request.
 func (f DefaultFetcher) ociGet(ctx context.Context, source string, ref ociRef, u string) ([]byte, error) {
 	get := func(token string) (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -179,8 +179,8 @@ func (f DefaultFetcher) ociGet(ctx context.Context, source string, ref ociRef, u
 	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 }
 
-// ociToken ottiene un token di sola lettura per il repository dal servizio indicato nella
-// challenge Bearer del registry.
+// ociToken gets a read-only token for the repository from the service named in the
+// registry's Bearer challenge.
 func (f DefaultFetcher) ociToken(ctx context.Context, source string, ref ociRef, challenge string) (string, error) {
 	scheme, params, _ := strings.Cut(challenge, " ")
 	if !strings.EqualFold(scheme, "Bearer") {
@@ -204,7 +204,7 @@ func (f DefaultFetcher) ociToken(ctx context.Context, source string, ref ociRef,
 	if err != nil {
 		return "", err
 	}
-	// Le credenziali della sorgente (basic) servono al servizio dei token.
+	// The source credentials (basic) are for the token service.
 	client, err := f.Sources.prepare(ctx, req, source)
 	if err != nil {
 		return "", err
@@ -233,7 +233,7 @@ func (f DefaultFetcher) ociToken(ctx context.Context, source string, ref ociRef,
 	return t.Token, nil
 }
 
-// parseChallenge legge i parametri chiave="valore" di una challenge WWW-Authenticate.
+// parseChallenge reads the key="value" parameters of a WWW-Authenticate challenge.
 func parseChallenge(s string) map[string]string {
 	out := map[string]string{}
 	for s = strings.TrimSpace(s); s != ""; {
@@ -259,7 +259,7 @@ func parseChallenge(s string) map[string]string {
 	return out
 }
 
-// client restituisce il client indicato o quello di default.
+// client returns the given client or the default one.
 func (f DefaultFetcher) client(c *http.Client) *http.Client {
 	switch {
 	case c != nil:

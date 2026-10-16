@@ -1,4 +1,4 @@
-# Sito della documentazione di manent: make docs (build in docs/site) o make docs-serve.
+# manent documentation site: make docs (build into docs/site) or make docs-serve.
 site_name: manent
 site_description: Deploy as code on durable DBOS workflows
 site_url: https://joeg-ita.github.io/manent/
@@ -21,7 +21,7 @@ theme:
     code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
-  # Scuro di default; i colori sono in stylesheets/extra.css.
+  # Dark by default; colors are in stylesheets/extra.css.
   palette:
     - scheme: slate
       primary: custom
@@ -63,7 +63,7 @@ extra:
 plugins:
   - search:
       lang: [en, it]
-  # Inglese di default (pagina.md, alla radice); italiano in pagina.it.md, servito sotto /it/.
+  # English by default (page.md, at the root); Italian in page.it.md, served under /it/.
   - i18n:
       docs_structure: suffix
       fallback_to_default: false

@@ -35,8 +35,8 @@ func (m mapSecrets) Resolve(_ context.Context, ref string) (string, error) {
 	return "", fmt.Errorf("segreto %s assente", ref)
 }
 
-// LocalDialer esegue i comandi con la shell locale: stesse regole di quotatura di un target
-// raggiunto via SSH.
+// LocalDialer runs the commands with the local shell: same quoting rules as a target reached
+// over SSH.
 type localDialer struct {
 	mu    sync.Mutex
 	dials []string
@@ -79,7 +79,7 @@ func (m *memAudit) Record(_ context.Context, e audit.Entry) error {
 	return nil
 }
 
-// syncBuffer raccoglie i log.
+// syncBuffer collects the logs.
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -99,7 +99,7 @@ func (s *syncBuffer) String() string {
 
 const secretValue = "s3cr3t-db-password"
 
-// tool è il comando di prova: registra argomenti, ambiente, segreti e scrive un output.
+// tool is the test command: it records arguments, environment, secrets and writes an output.
 const tool = `#!/bin/sh
 state=$1; code=$2; shift 2
 for a in "$@"; do printf 'arg=[%s]\n' "$a"; done
@@ -200,7 +200,7 @@ func TestComando(t *testing.T) {
 		t.Errorf("connessioni (run_once): %v", got)
 	}
 	logs := f.logs.String()
-	// Gli argomenti arrivano intatti, senza interpretazione della shell.
+	// Arguments arrive intact, without shell interpretation.
 	for _, want := range []string{"arg=[--to=1.4.0]", "arg=[shop]", "avviso su stderr", "password letta: ***"} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("log senza %q:\n%s", want, logs)
@@ -250,14 +250,14 @@ func TestComandoDryRun(t *testing.T) {
 	if _, err := dr.DryRun(context.Background(), in); err != nil {
 		t.Fatalf("dry-run: %v", err)
 	}
-	// Il dry-run riceve solo i suoi segreti, non quelli di run.
+	// The dry-run receives only its own secrets, not run's.
 	if sec, _ := os.ReadFile(f.state + ".secret"); string(sec) != "none\n" {
 		t.Errorf("il dry-run ha ricevuto il segreto di run: %q", sec)
 	}
 	if env, _ := os.ReadFile(f.state + ".env"); !strings.Contains(string(env), "MANENT_DRY_RUN=true") {
 		t.Errorf("ambiente del dry-run:\n%s", env)
 	}
-	// Durante un freeze i comandi non girano neppure in dry-run, salvo deroga.
+	// During a freeze commands do not run even in dry-run, unless overridden.
 	f.b.Frozen = func(string, string, time.Time) bool { return true }
 	before := len(f.dial.dials)
 	out, err := dr.DryRun(context.Background(), in)
@@ -287,7 +287,8 @@ func TestComandoErrori(t *testing.T) {
 	if err := run(ps, map[string]string{"database": "shop", "label": "-oProxyCommand=evil"}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "opzione") {
 		t.Errorf("argument injection: %v", err)
 	}
-	// Un parametro vuoto vale il default; un segnaposto senza valore è un errore, mai una stringa vuota.
+	// An empty parameter takes the default; a placeholder without a value is an error, never an
+	// empty string.
 	s0 := f.commandSpec()
 	s0.Params["label"] = customspec.Param{Pattern: "[a-z]*"}
 	if err := run(f.planned(t, "db-migrate", s0), map[string]string{"database": "shop", "label": ""}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), `"label"`) {
@@ -303,7 +304,7 @@ func TestComandoErrori(t *testing.T) {
 		t.Errorf("exit 3 deve essere permanente: %v", err)
 	}
 
-	// Firma, revoca e appartenenza della specifica.
+	// Signature, revocation and ownership of the spec.
 	bad := ps
 	bad.SpecMAC = strings.Repeat("0", 64)
 	if err := run(bad, ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "firma") {
@@ -320,7 +321,7 @@ func TestComandoErrori(t *testing.T) {
 	}
 	f.b.Revoked = nil
 
-	// Binario verificato con lo sha256.
+	// Binary verified with the sha256.
 	data, _ := os.ReadFile(f.tool)
 	sum := sha256.Sum256(data)
 	s := f.commandSpec()
@@ -333,21 +334,21 @@ func TestComandoErrori(t *testing.T) {
 		t.Errorf("sha256 errato: %v", err)
 	}
 
-	// Output non dichiarati o con segreti vengono rifiutati.
+	// Undeclared outputs or outputs with secrets are rejected.
 	s = f.commandSpec()
 	s.Outputs = map[string]customspec.Output{"other": {Pattern: ".*"}}
 	if err := run(f.planned(t, "db-migrate", s), ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "non dichiarato") {
 		t.Errorf("output non dichiarato: %v", err)
 	}
 
-	// Versione non utilizzabile nei segnaposto.
+	// Version not usable in placeholders.
 	in := input(ok)
 	in.Descriptor.Artifact.Version = "1.0 --evil"
 	if _, err := f.b.Build(ps, "").Run(context.Background(), in); !errors.Is(err, pipeline.ErrPermanent) {
 		t.Errorf("versione non valida: %v", err)
 	}
 
-	// Segreto non dichiarato nel descrittore effettivo.
+	// Secret not declared in the effective descriptor.
 	in = input(ok)
 	in.Descriptor.Secrets = in.Descriptor.Secrets[1:]
 	if _, err := f.b.Build(ps, "").Run(context.Background(), in); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "db-admin") {
@@ -443,7 +444,7 @@ func TestHTTP(t *testing.T) {
 	if out["purge_id"] != "p-1" {
 		t.Errorf("output: %v", out)
 	}
-	// Il valore resta un solo segmento del percorso e una stringa del corpo JSON.
+	// The value stays a single path segment and a string of the JSON body.
 	want := `POST /zones/a%2Fb%3Fc%3D1%26x%22y/purge Bearer cdn-token-value shop-1.4.0-prod:cdn-purge {"n":12345678901234567890,"reason":"a/b?c=1\u0026x\"y","tags":["shop"]}`
 	if got[0] != want {
 		t.Errorf("richiesta:\n%s\natteso:\n%s", got[0], want)

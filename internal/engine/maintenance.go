@@ -8,20 +8,19 @@ import (
 	"github.com/joeg-ita/manent/internal/cluster"
 )
 
-// MaintenanceOptions configura le attività periodiche del worker.
+// MaintenanceOptions configures the worker's periodic tasks.
 type MaintenanceOptions struct {
-	// HeartbeatInterval è ogni quanto il worker aggiorna il registro (default 15s).
+	// HeartbeatInterval is how often the worker updates the registry (default 15s).
 	HeartbeatInterval time.Duration
-	// StaleAfter è il ritardo di heartbeat oltre il quale un worker è considerato perso
-	// (default 4 heartbeat).
+	// StaleAfter is the heartbeat delay beyond which a worker is considered lost (default 4 heartbeats).
 	StaleAfter time.Duration
-	// RecoverAfter, se > 0, abilita la recovery automatica: i workflow in sospeso di un worker
-	// della stessa versione arrestato o senza heartbeat da RecoverAfter vengono ripresi da un
-	// altro worker. Deve superare di molto le interruzioni di rete attese verso il database.
+	// RecoverAfter, if > 0, enables automatic recovery: the pending workflows of a worker of the
+	// same version that stopped or sent no heartbeat for RecoverAfter are resumed by another
+	// worker. It must be well above the expected network outages towards the database.
 	RecoverAfter time.Duration
-	// Retention, con MaxAge > 0, abilita la pulizia periodica dello storico.
+	// Retention, with MaxAge > 0, enables periodic history cleanup.
 	Retention RetentionOptions
-	// RetentionInterval è ogni quanto viene eseguita la pulizia (default 1h).
+	// RetentionInterval is how often the cleanup runs (default 1h).
 	RetentionInterval time.Duration
 }
 
@@ -38,13 +37,13 @@ func (o MaintenanceOptions) withDefaults() MaintenanceOptions {
 	return o
 }
 
-// Lease delle attività che un solo worker alla volta deve svolgere.
+// Leases of the tasks only one worker at a time must perform.
 const (
 	leaseRecovery  = "recovery"
 	leaseRetention = "retention"
 )
 
-// maintain invia gli heartbeat e, se configurate, esegue recovery automatica e retention.
+// maintain sends heartbeats and, if configured, runs automatic recovery and retention.
 func (w *Worker) maintain() {
 	defer w.wg.Done()
 	o := w.maintenance
@@ -63,16 +62,16 @@ func (w *Worker) maintain() {
 		switch {
 		case errors.Is(err, cluster.ErrReplaced):
 			if !replaced {
-				// Un altro processo si è registrato con lo stesso ID dopo che questo è risultato
-				// perso: entrambi possono riprendere gli stessi deploy.
+				// Another process registered with the same ID after this one was declared lost: both can
+				// resume the same deploys.
 				w.logger.Error("un altro processo si è registrato con lo stesso executor_id: questo worker va arrestato", "executor", w.id)
 				replaced = true
 			}
 		case err != nil:
 			w.logger.Warn("heartbeat non registrato", "error", err)
 		case by != "" && !warned:
-			// Il worker è stato considerato perso (es. database irraggiungibile) e i suoi
-			// workflow ripresi altrove: quelli ancora in esecuzione qui girano due volte.
+			// The worker was declared lost (e.g. database unreachable) and its workflows resumed
+			// elsewhere: those still running here run twice.
 			w.logger.Error("i workflow di questo worker sono stati recuperati da un altro: va riavviato", "recovered_by", by)
 			warned = true
 		}
@@ -88,9 +87,9 @@ func (w *Worker) maintain() {
 	}
 }
 
-// autoRecover riprende i workflow in sospeso dei worker della stessa versione persi da
-// almeno RecoverAfter. Lo esegue un worker alla volta (lease), e ogni worker perso viene
-// rivendicato da uno solo.
+// autoRecover resumes the pending workflows of the same-version workers lost for at least
+// RecoverAfter. One worker at a time runs it (lease), and every lost worker is claimed by
+// only one.
 func (w *Worker) autoRecover() {
 	o := w.maintenance
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -119,7 +118,7 @@ func (w *Worker) autoRecover() {
 	}
 }
 
-// prune esegue la retention se il worker ottiene il lease; restituisce true se l'ha eseguita.
+// prune runs the retention if the worker gets the lease; it returns true if it ran.
 func (w *Worker) prune() bool {
 	o := w.maintenance
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)

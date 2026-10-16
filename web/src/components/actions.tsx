@@ -15,7 +15,7 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Invalida le query che un'azione può aver cambiato. */
+/** Invalidates the queries an action may have changed. */
 function useRefresh() {
   const qc = useQueryClient();
   return () => {
@@ -25,7 +25,7 @@ function useRefresh() {
   };
 }
 
-// --- Approvazione ------------------------------------------------------------------------------
+// --- Approval ---------------------------------------------------------------------------------
 
 export function DecisionButtons({ dep }: { dep: Status }) {
   const { t } = useI18n();
@@ -119,7 +119,7 @@ function DecisionDialog({ dep, approve, onClose }: { dep: Status; approve: boole
   );
 }
 
-// --- Annullamento ----------------------------------------------------------------------------
+// --- Cancellation -----------------------------------------------------------------------------
 
 export function CancelButton({ dep }: { dep: Status }) {
   const { t } = useI18n();
@@ -163,13 +163,13 @@ export function CancelButton({ dep }: { dep: Status }) {
   );
 }
 
-// --- Promozione e rollback, con dry-run ------------------------------------------------------
+// --- Promotion and rollback, with dry-run -----------------------------------------------------
 
 type DryRun = { state: "idle" } | { state: "running"; id: string } | { state: "ok" } | { state: "failed"; message: string };
 
 /**
- * useDryRun esegue la richiesta in dry-run (un vero workflow su un worker, che non modifica i
- * target) e ne attende l'esito: la conferma diventa possibile solo dopo un dry-run riuscito.
+ * useDryRun runs the request as a dry-run (a real workflow on a worker, which does not change
+ * the targets) and waits for its outcome: confirming is possible only after a successful dry-run.
  */
 function useDryRun() {
   const api = useApi();
@@ -235,8 +235,8 @@ export function PromoteDialog({
   const toast = useToast();
   const refresh = useRefresh();
   const navigate = useNavigate();
-  // Ambienti suggeriti (quelli dell'inventario), ma si può scriverne uno nuovo: il primo rilascio
-  // in un ambiente non ha ancora una riga nell'inventario.
+  // Suggested environments (the inventory's), but a new one can be typed: the first release to
+  // an environment has no inventory row yet.
   const suggestions = environments.filter((e) => e !== from);
   const [to, setTo] = useState(suggestions.find((e) => can(me.data, "deployment.submit", application, e)) ?? "");
   const target = to.trim();

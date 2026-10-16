@@ -73,7 +73,7 @@ func TestCatenaEManomissioni(t *testing.T) {
 	}
 	record(t, f, 3, "oidc:alice")
 	_ = f.Close()
-	// Alla riapertura la catena prosegue dall'ultima voce.
+	// On reopening, the chain continues from the last entry.
 	f, err = NewFileRecorder(path, FileOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -117,12 +117,12 @@ func TestRotazioneEChiave(t *testing.T) {
 	if rep, err := Verify(files, key); err != nil || rep.Entries != 10 {
 		t.Fatalf("la catena deve proseguire tra i file ruotati: %+v %v", rep, err)
 	}
-	// Senza la chiave (o con una diversa) la catena non è verificabile, quindi non è nemmeno
-	// ricalcolabile da chi modifica il file.
+	// Without the key (or with another one) the chain cannot be verified, so whoever edits the
+	// file cannot recompute it either.
 	if _, err := Verify(files, nil); err == nil {
 		t.Error("verifica senza chiave: atteso errore")
 	}
-	// Un file ruotato mancante interrompe la catena.
+	// A missing rotated file breaks the chain.
 	if _, err := Verify(append(files[:1:1], files[2:]...), key); err == nil {
 		t.Error("file mancante non rilevato")
 	}

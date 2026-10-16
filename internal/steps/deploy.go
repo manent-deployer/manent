@@ -13,18 +13,18 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Policy seleziona il plugin di deploy adatto al descrittore.
+// Policy selects the deploy plugin suited to the descriptor.
 type Policy interface {
 	Select(d *descriptor.Descriptor) (plugin.Deployer, error)
 }
 
-// DefaultPolicy usa il plugin indicato nel descrittore; altrimenti il primo plugin attivo
-// (in ordine alfabetico) che supporta il tipo di artefatto.
+// DefaultPolicy uses the plugin named in the descriptor; otherwise the first active plugin
+// (in alphabetical order) that supports the artifact type.
 type DefaultPolicy struct {
 	Plugins *plugin.Registry
 }
 
-// Select applica la policy di selezione.
+// Select applies the selection policy.
 func (p DefaultPolicy) Select(d *descriptor.Descriptor) (plugin.Deployer, error) {
 	if name := d.Deploy.Plugin; name != "" {
 		dep, ok := p.Plugins.Get(name)
@@ -45,24 +45,24 @@ func (p DefaultPolicy) Select(d *descriptor.Descriptor) (plugin.Deployer, error)
 	return nil, fmt.Errorf("nessun plugin attivo supporta artefatti di tipo %q", d.Artifact.Type)
 }
 
-// Deploy seleziona il plugin tramite le policy e ne esegue il deploy.
+// Deploy selects the plugin through the policies and runs its deploy.
 type Deploy struct {
-	// Policies associa il nome della policy (deploy.policy nel descrittore) alla sua implementazione.
-	// La chiave "" è la policy di default.
+	// Policies maps the policy name (deploy.policy in the descriptor) to its implementation.
+	// The "" key is the default policy.
 	Policies map[string]Policy
 	Secrets  secrets.Provider
-	// Artifacts garantisce la presenza dell'artefatto anche se il deploy è stato recuperato su un altro worker.
+	// Artifacts ensures the artifact is present even if the deploy was recovered on another worker.
 	Artifacts ArtifactStore
-	// Locators sono le strategie con cui individuare la release a cui tornare in caso di
-	// rollback, per nome (rollback.locator).
+	// Locators are the strategies to find the release to go back to on rollback, by name
+	// (rollback.locator).
 	Locators map[string]plugin.ReleaseLocator
 	Logger   *slog.Logger
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (Deploy) Name() string { return "deploy" }
 
-// Run costruisce la richiesta per il plugin, la valida ed esegue il deploy.
+// Run builds the request for the plugin, validates it and runs the deploy.
 func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	dep, req, log, err := s.prepare(ctx, in)
 	if err != nil {
@@ -71,7 +71,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	log.InfoContext(ctx, "deploy avviato", "targets", len(req.Targets))
 	deploy := dep.Deploy
 	if req.Traffic != nil {
-		// Rilascio per percentuale: la nuova versione va accanto a quella stabile, senza traffico.
+		// Percentage rollout: the new version goes next to the stable one, without traffic.
 		sd, ok := dep.(plugin.SlotDeployer)
 		if !ok {
 			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
@@ -91,8 +91,8 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	return pipeline.Output{"plugin": dep.Name(), "result": string(raw)}, nil
 }
 
-// DryRun seleziona il plugin e ne valida la richiesta come Run, ma invece di Deploy chiama
-// il DryRun del plugin; se il plugin non lo implementa si ferma alla validazione.
+// DryRun selects the plugin and validates its request as Run does, but calls the plugin's
+// DryRun instead of Deploy; if the plugin does not implement it, it stops at validation.
 func (s Deploy) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	dep, req, log, err := s.prepare(ctx, in)
 	if err != nil {
@@ -124,7 +124,7 @@ func (s Deploy) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output,
 	return out, nil
 }
 
-// prepare seleziona il plugin, garantisce la presenza dell'artefatto e costruisce la richiesta validata.
+// prepare selects the plugin, ensures the artifact is present and builds the validated request.
 func (s Deploy) prepare(ctx context.Context, in pipeline.Input) (plugin.Deployer, *plugin.Request, *slog.Logger, error) {
 	dep, log, err := s.selectPlugin(in)
 	if err != nil {
@@ -145,7 +145,7 @@ func (s Deploy) prepare(ctx context.Context, in pipeline.Input) (plugin.Deployer
 	return dep, req, log, nil
 }
 
-// selectPlugin applica la policy di selezione del plugin.
+// selectPlugin applies the plugin selection policy.
 func (s Deploy) selectPlugin(in pipeline.Input) (plugin.Deployer, *slog.Logger, error) {
 	d := in.Descriptor
 	pol, ok := s.Policies[d.Deploy.Policy]
@@ -159,7 +159,7 @@ func (s Deploy) selectPlugin(in pipeline.Input) (plugin.Deployer, *slog.Logger, 
 	return dep, s.Logger.With("deployment", in.DeploymentID, "plugin", dep.Name()), nil
 }
 
-// request costruisce e valida la richiesta per il plugin.
+// request builds and validates the request for the plugin.
 func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string) (*plugin.Request, error) {
 	d := in.Descriptor
 	art := in.Outputs["artifacts"]
@@ -182,25 +182,25 @@ func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string
 		req.Targets = append(req.Targets, plugin.Target{Host: t.Host, Port: t.Port, User: t.User})
 	}
 	if err := dep.Validate(req); err != nil {
-		// Non è marcato permanente: un plugin esterno può fallire Validate perché il processo
-		// non è raggiungibile, e quel caso va ritentato.
+		// Not marked permanent: an external plugin can fail Validate because the process is
+		// unreachable, and that case must be retried.
 		return nil, fmt.Errorf("richiesta non valida per il plugin %q: %w", dep.Name(), err)
 	}
 	return req, nil
 }
 
-// Chiavi dell'output del checkpoint di deploy.
+// Output keys of the deploy checkpoint.
 const (
 	OutPreviousVersion = "previous_version"
 	OutPrevious        = "previous"
 	OutLocator         = "locator"
 )
 
-// Checkpoint verifica che il plugin supporti il rollback e registra, tramite il locator della
-// policy, la release in esercizio prima del deploy. Non modifica i target.
+// Checkpoint checks that the plugin supports rollback and records, through the policy's
+// locator, the release in service before the deploy. It does not change the targets.
 func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	if _, ok := in.Outputs[TrafficOutput]; ok {
-		// Nei rilasci per percentuale il ritorno è uno spostamento di traffico, fatto dal motore.
+		// In percentage rollouts the return is a traffic shift, done by the engine.
 		return pipeline.Output{"mode": "traffic"}, nil
 	}
 	dep, log, err := s.selectPlugin(in)
@@ -219,7 +219,7 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 	if !ok {
 		return nil, fmt.Errorf("locator di rollback %q sconosciuto", name)
 	}
-	// L'artefatto non serve per leggere la release in esercizio: basta il percorso registrato.
+	// The artifact is not needed to read the release in service: the recorded path is enough.
 	req, err := s.request(dep, in, in.Outputs["artifacts"][OutLocalPath])
 	if err != nil {
 		return nil, err
@@ -240,8 +240,8 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 	return out, nil
 }
 
-// Compensate riporta i target alla release registrata dal checkpoint. Senza una release
-// precedente (primo deploy) non c'è nulla da ripristinare.
+// Compensate brings the targets back to the release recorded by the checkpoint. Without a
+// previous release (first deploy) there is nothing to restore.
 func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.Output) (pipeline.Output, error) {
 	if cp["mode"] == "traffic" {
 		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "rilascio per percentuale: il traffico torna alla versione stabile"}, nil

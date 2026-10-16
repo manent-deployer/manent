@@ -9,9 +9,9 @@ import { stream } from "@/lib/sse";
 export type LiveMode = "stream" | "polling";
 
 /**
- * useDeployment segue un deploy: stato e righe di log arrivano dallo stream SSE
- * (/deployments/:id/events); se lo stream non è disponibile (es. un proxy che lo blocca) si
- * passa a leggere stato e log a intervalli.
+ * useDeployment follows a deploy: state and log lines arrive from the SSE stream
+ * (/deployments/:id/events); if the stream is unavailable (e.g. a proxy blocking it) it
+ * falls back to reading state and logs periodically.
  */
 export function useDeployment(id: string) {
   const api = useApi();
@@ -29,7 +29,7 @@ export function useDeployment(id: string) {
   const known = status.isSuccess;
   const done = status.data ? TERMINAL.has(status.data.state) : false;
 
-  // Stream: parte quando il deploy esiste; a deploy concluso invia le righe rimaste e "end".
+  // Stream: starts when the deploy exists; when the deploy ends it sends the remaining lines and "end".
   useEffect(() => {
     if (!known || mode !== "stream") return;
     const ctrl = new AbortController();
@@ -55,7 +55,7 @@ export function useDeployment(id: string) {
     return () => ctrl.abort();
   }, [id, known, mode, auth.token, qc]);
 
-  // Ripiego: righe nuove a intervalli finché il deploy non è concluso.
+  // Fallback: new lines periodically until the deploy ends.
   useEffect(() => {
     if (mode !== "polling") return;
     let stop = false;

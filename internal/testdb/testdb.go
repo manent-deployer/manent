@@ -1,6 +1,6 @@
-// Package testdb fornisce ai test un database di sistema DBOS isolato: SQLite in una
-// directory temporanea oppure, se MANENT_TEST_DATABASE_URL indica un server Postgres, un
-// database nuovo creato per il singolo test ed eliminato alla fine.
+// Package testdb gives tests an isolated DBOS system database: SQLite in a temporary
+// directory or, if MANENT_TEST_DATABASE_URL points to a Postgres server, a new database
+// created for the single test and dropped at the end.
 package testdb
 
 import (
@@ -17,14 +17,14 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// EnvURL è la variabile con l'URL di un server Postgres per i test (es.
-// postgres://postgres:postgres@localhost:5432/postgres). L'utente deve poter creare database.
+// EnvURL is the variable with the URL of a Postgres server for tests (e.g.
+// postgres://postgres:postgres@localhost:5432/postgres). The user must be able to create databases.
 const EnvURL = "MANENT_TEST_DATABASE_URL"
 
-// Postgres indica se i test usano Postgres.
+// Postgres reports whether tests use Postgres.
 func Postgres() bool { return os.Getenv(EnvURL) != "" }
 
-// URL restituisce l'URL di un database vuoto riservato al test.
+// URL returns the URL of an empty database reserved for the test.
 func URL(t testing.TB) string {
 	t.Helper()
 	admin := os.Getenv(EnvURL)
@@ -54,7 +54,7 @@ func URL(t testing.TB) string {
 			return
 		}
 		defer db.Close()
-		// Le connessioni di DBOS possono essere ancora aperte: FORCE le chiude (Postgres 13+).
+		// DBOS connections may still be open: FORCE closes them (Postgres 13+).
 		_, _ = db.Exec("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)")
 	})
 	u.Path = "/" + name

@@ -1,5 +1,5 @@
-# UC2: configurazione di ambiente (target e parametri non stanno nel descrittore), accesso con
-# token e permessi, promozione test → prod con approvazione, rifiuto e freeze con deroga.
+# UC2: environment configuration (targets and parameters are not in the descriptor), access
+# with tokens and permissions, test → prod promotion with approval, rejection and freeze with override.
 APP=uc2-api
 log "UC2 · configurazione di ambiente, permessi, promozione con approvazione e freeze"
 

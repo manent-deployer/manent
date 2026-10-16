@@ -16,7 +16,7 @@ import (
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// mapProvider risolve i riferimenti da una mappa.
+// mapProvider resolves references from a map.
 type mapProvider map[string]string
 
 func (m mapProvider) Resolve(_ context.Context, ref string) (string, error) {
@@ -27,7 +27,7 @@ func (m mapProvider) Resolve(_ context.Context, ref string) (string, error) {
 	return v, nil
 }
 
-// received è una richiesta registrata dal server di test.
+// received is a request recorded by the test server.
 type received struct {
 	header http.Header
 	body   []byte
@@ -122,13 +122,13 @@ func TestNotifyErrori(t *testing.T) {
 	if err := newNotifier().Notify(context.Background(), d, descriptor.Callback{URL: srv.URL}, testEvent()); err == nil {
 		t.Error("atteso errore per status 500")
 	}
-	// Il redirect non viene seguito: 3xx è un errore.
+	// The redirect is not followed: 3xx is an error.
 	redir := httptest.NewServer(http.RedirectHandler(srv.URL, http.StatusFound))
 	defer redir.Close()
 	if err := newNotifier().Notify(context.Background(), d, descriptor.Callback{URL: redir.URL}, testEvent()); err == nil {
 		t.Error("atteso errore per redirect")
 	}
-	// Segreto dell'auth non dichiarato.
+	// Undeclared auth secret.
 	cb := descriptor.Callback{URL: srv.URL, Auth: &descriptor.CallbackAuth{Type: "bearer", Secret: "manca"}}
 	if err := newNotifier().Notify(context.Background(), d, cb, testEvent()); err == nil {
 		t.Error("atteso errore per segreto mancante")

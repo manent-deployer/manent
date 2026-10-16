@@ -1,9 +1,9 @@
-// Package remotecopy è il primo plugin di deploy: copia l'artefatto su server remoti via SSH/SFTP,
-// ne verifica l'integrità e, opzionalmente, esegue un comando post-copia.
+// Package remotecopy is the first deploy plugin: it copies the artifact to remote servers over
+// SSH/SFTP, verifies its integrity and, optionally, runs a post-copy command.
 //
-// Con il layout "releases" ogni versione ha la sua directory (<dest_dir>/releases/<versione>) e
-// il symlink <dest_dir>/current indica quella in esercizio: il plugin sa quindi leggere la
-// release corrente e tornare alla precedente (rollback).
+// With the "releases" layout every version has its own directory
+// (<dest_dir>/releases/<version>) and the <dest_dir>/current symlink marks the one in service:
+// the plugin can therefore read the current release and go back to the previous one (rollback).
 package remotecopy
 
 import (
@@ -22,78 +22,78 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "remote-copy"
 
-// Parametri del descrittore (deploy.params) letti dal plugin.
+// Descriptor parameters (deploy.params) read by the plugin.
 const (
-	ParamDestDir        = "dest_dir"        // obbligatorio: directory remota di destinazione
-	ParamPostCommand    = "post_command"    // opzionale: comando eseguito dopo la copia
-	ParamSSHKeySecret   = "ssh_key_secret"  // nome del segreto con la chiave privata PEM
-	ParamPasswordSecret = "password_secret" // in alternativa: nome del segreto con la password
-	ParamVerify         = "verify_checksum" // "false" per disattivare la verifica sha256 remota
-	// ParamLayout è "flat" (default: file in dest_dir) o "releases" (necessario per il rollback).
+	ParamDestDir        = "dest_dir"        // required: remote destination directory
+	ParamPostCommand    = "post_command"    // optional: command run after the copy
+	ParamSSHKeySecret   = "ssh_key_secret"  // name of the secret with the PEM private key
+	ParamPasswordSecret = "password_secret" // alternatively: name of the secret with the password
+	ParamVerify         = "verify_checksum" // "false" to disable the remote sha256 check
+	// ParamLayout is "flat" (default: file in dest_dir) or "releases" (needed for rollback).
 	ParamLayout = "layout"
-	// ParamKeepReleases è il numero di release conservate con il layout releases (default 5, minimo 2).
+	// ParamKeepReleases is the number of releases kept with the releases layout (default 5, at least 2).
 	ParamKeepReleases = "keep_releases"
-	// ParamPrepareCommand, solo con il layout releases, è eseguito prima dello switch (es. estrazione).
+	// ParamPrepareCommand, releases layout only, runs before the switch (e.g. extraction).
 	ParamPrepareCommand = "prepare_command"
-	// ParamRollbackCommand è eseguito dopo il rollback su ogni target (default: post_command).
+	// ParamRollbackCommand runs after the rollback on every target (default: post_command).
 	ParamRollbackCommand = "rollback_command"
 )
 
-// Layout della directory di destinazione.
+// Layouts of the destination directory.
 const (
 	LayoutFlat     = "flat"
 	LayoutReleases = "releases"
 )
 
-// defaultKeepReleases è il numero di release conservate se keep_releases non è indicato.
+// defaultKeepReleases is the number of releases kept when keep_releases is not set.
 const defaultKeepReleases = 5
 
-// releaseRe limita le versioni, che con il layout releases diventano nomi di directory remote.
+// releaseRe limits versions, which with the releases layout become remote directory names.
 var releaseRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$`)
 
-// Auth contiene le credenziali risolte al momento della connessione.
+// Auth holds the credentials resolved at connection time.
 type Auth struct {
 	PrivateKey string
 	Password   string
 }
 
-// Session è una connessione verso un singolo host remoto.
+// Session is a connection to a single remote host.
 type Session interface {
 	Upload(ctx context.Context, localPath, remotePath string) error
 	Run(ctx context.Context, cmd string) (string, error)
 	Close() error
 }
 
-// StdinRunner è implementato dalle sessioni che possono passare dati sullo stdin di un comando
-// (es. una password), senza farli comparire nella riga di comando remota.
+// StdinRunner is implemented by sessions that can pass data on a command's stdin (e.g. a
+// password), without it showing up in the remote command line.
 type StdinRunner interface {
 	RunStdin(ctx context.Context, cmd string, stdin io.Reader) (string, error)
 }
 
-// Dialer apre sessioni verso gli host remoti; astratto per poterlo sostituire nei test.
+// Dialer opens sessions to remote hosts; abstracted so tests can replace it.
 type Dialer interface {
 	Dial(ctx context.Context, target plugin.Target, auth Auth) (Session, error)
 }
 
-// Plugin implementa plugin.Deployer.
+// Plugin implements plugin.Deployer.
 type Plugin struct {
 	dialer Dialer
 	types  []string
 	logger *slog.Logger
 }
 
-// New crea il plugin con il dialer indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given dialer and supported artifact types.
 func New(dialer Dialer, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{dialer: dialer, types: types, logger: logger}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - known_hosts: percorso del file known_hosts (default ~/.ssh/known_hosts)
-//   - insecure_ignore_host_key: true per saltare la verifica della host key (solo sviluppo)
-//   - artifact_types: lista dei tipi supportati (default ["application"])
+// Factory builds the plugin from the application configuration:
+//   - known_hosts: path of the known_hosts file (default ~/.ssh/known_hosts)
+//   - insecure_ignore_host_key: true to skip host key verification (development only)
+//   - artifact_types: list of supported types (default ["application"])
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	knownHosts, _ := cfg["known_hosts"].(string)
 	insecure, _ := cfg["insecure_ignore_host_key"].(bool)
@@ -111,10 +111,10 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return New(&SSHDialer{KnownHostsPath: knownHosts, InsecureIgnoreHostKey: insecure}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool {
 	for _, t := range p.types {
 		if t == artifactType {
@@ -124,7 +124,7 @@ func (p *Plugin) Supports(artifactType string) bool {
 	return false
 }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if req.Params[ParamDestDir] == "" {
@@ -159,7 +159,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	return errors.Join(errs...)
 }
 
-// layout restituisce il layout richiesto.
+// layout returns the requested layout.
 func layout(req *plugin.Request) string {
 	if l := req.Params[ParamLayout]; l != "" {
 		return l
@@ -167,7 +167,7 @@ func layout(req *plugin.Request) string {
 	return LayoutFlat
 }
 
-// keepReleases legge keep_releases: almeno 2, per conservare sempre la release precedente.
+// keepReleases reads keep_releases: at least 2, to always keep the previous release.
 func keepReleases(req *plugin.Request) (int, error) {
 	raw := req.Params[ParamKeepReleases]
 	if raw == "" {
@@ -180,7 +180,7 @@ func keepReleases(req *plugin.Request) (int, error) {
 	return n, nil
 }
 
-// paths calcola i percorsi remoti dell'artefatto e, con il layout releases, della release.
+// paths computes the remote paths of the artifact and, with the releases layout, of the release.
 func paths(req *plugin.Request) (remote, releaseDir string) {
 	dest := req.Params[ParamDestDir]
 	if layout(req) == LayoutReleases {
@@ -190,8 +190,8 @@ func paths(req *plugin.Request) (remote, releaseDir string) {
 	return path.Join(dest, path.Base(req.Artifact.LocalPath)), ""
 }
 
-// Deploy copia l'artefatto su ogni target in sequenza; si ferma al primo errore.
-// La copia sovrascrive il file remoto, quindi l'operazione è idempotente.
+// Deploy copies the artifact to every target in sequence; it stops at the first error.
+// The copy overwrites the remote file, so the operation is idempotent.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -222,7 +222,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 	details := map[string]string{"remote_path": remote}
 	var previous string
 	if releaseDir != "" {
-		// La release corrente, letta prima dello switch, non viene mai eliminata dalla pulizia.
+		// The current release, read before the switch, is never deleted by the cleanup.
 		if previous, err = readCurrent(ctx, sess, dest); err != nil {
 			return nil, err
 		}
@@ -270,14 +270,14 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 	if releaseDir != "" {
 		keep, _ := keepReleases(req)
 		if _, err := sess.Run(ctx, pruneCommand(dest, keep, req.Artifact.Version, previous)); err != nil {
-			// La pulizia non compromette il deploy: le release in più restano sul target.
+			// Cleanup does not compromise the deploy: extra releases stay on the target.
 			log.WarnContext(ctx, "pulizia delle release precedenti fallita", "error", err)
 		}
 	}
 	return details, nil
 }
 
-// runCommand esegue un comando configurato e ne registra l'output.
+// runCommand runs a configured command and logs its output.
 func (p *Plugin) runCommand(ctx context.Context, log *slog.Logger, sess Session, name, cmd string) error {
 	out, err := sess.Run(ctx, cmd)
 	if err != nil {
@@ -287,10 +287,10 @@ func (p *Plugin) runCommand(ctx context.Context, log *slog.Logger, sess Session,
 	return nil
 }
 
-// currentLink è il symlink alla release in esercizio, relativo a dest_dir.
+// currentLink is the symlink to the release in service, relative to dest_dir.
 const currentLink = "current"
 
-// readCurrent restituisce la versione indicata dal symlink current, o "" se non esiste.
+// readCurrent returns the version the current symlink points to, or "" if it does not exist.
 func readCurrent(ctx context.Context, sess Session, dest string) (string, error) {
 	link := shellQuote(path.Join(dest, currentLink))
 	out, err := sess.Run(ctx, "if [ -L "+link+" ]; then readlink "+link+"; fi")
@@ -303,8 +303,8 @@ func readCurrent(ctx context.Context, sess Session, dest string) (string, error)
 	return "", nil
 }
 
-// switchCurrent punta current alla release indicata con uno scambio atomico del symlink
-// (rename di un symlink temporaneo; richiede "mv -T" di GNU coreutils).
+// switchCurrent points current to the given release with an atomic symlink swap (rename of a
+// temporary symlink; requires GNU coreutils "mv -T").
 func switchCurrent(ctx context.Context, sess Session, dest, version string) error {
 	tmp := shellQuote(path.Join(dest, ".current.tmp"))
 	cmd := "ln -sfn " + shellQuote(path.Join(LayoutReleases, version)) + " " + tmp +
@@ -315,8 +315,8 @@ func switchCurrent(ctx context.Context, sess Session, dest, version string) erro
 	return nil
 }
 
-// pruneCommand elimina le release più vecchie (per data di modifica) oltre keep, senza mai
-// toccare quella appena attivata e quella precedente.
+// pruneCommand deletes the oldest releases (by modification time) beyond keep, never touching
+// the one just activated and the previous one.
 func pruneCommand(dest string, keep int, current, previous string) string {
 	exclude := []string{current}
 	if previous != "" && previous != current {
@@ -331,8 +331,8 @@ func pruneCommand(dest string, keep int, current, previous string) string {
 		` | while IFS= read -r r; do rm -rf -- "$r"; done`
 }
 
-// commandEnv restituisce le assegnazioni delle variabili passate ai comandi configurati.
-// MANENT_ARTIFACT è vuota nel rollback, quando il nome del file della release non è noto.
+// commandEnv returns the assignments of the variables passed to the configured commands.
+// MANENT_ARTIFACT is empty in rollbacks, when the release file name is unknown.
 func commandEnv(dest, releaseDir, artifact, version string) string {
 	vars := []string{
 		"MANENT_RELEASE_DIR=" + shellQuote(releaseDir),
@@ -343,9 +343,9 @@ func commandEnv(dest, releaseDir, artifact, version string) string {
 	return strings.Join(vars, " ") + "; export MANENT_RELEASE_DIR MANENT_ARTIFACT MANENT_VERSION MANENT_CURRENT; "
 }
 
-// CurrentRelease legge su ogni target la release indicata da current (layout releases).
-// Un target senza current (es. appena aggiunto) viene ignorato; versioni diverse tra i target
-// sono un errore, perché non sarebbe chiaro a quale release tornare.
+// CurrentRelease reads on every target the release current points to (releases layout).
+// A target without current (e.g. just added) is ignored; different versions across targets
+// are an error, because it would be unclear which release to go back to.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	if layout(req) != LayoutReleases {
 		return nil, fmt.Errorf("la release in esercizio si legge solo con %s %q", ParamLayout, LayoutReleases)
@@ -388,9 +388,9 @@ func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth Auth, dest
 	return readCurrent(ctx, sess, dest)
 }
 
-// Rollback riporta current alla release indicata su tutti i target ed esegue rollback_command
-// (o, se assente, post_command). Prosegue anche se un target fallisce, per ripristinare il
-// maggior numero di target, e riporta gli errori alla fine. È idempotente.
+// Rollback moves current back to the given release on all targets and runs rollback_command
+// (or, if absent, post_command). It continues even if a target fails, to restore as many
+// targets as possible, and reports the errors at the end. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if layout(req) != LayoutReleases {
 		return nil, fmt.Errorf("il rollback richiede %s %q", ParamLayout, LayoutReleases)
@@ -439,7 +439,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, auth Auth,
 		cmd = req.Params[ParamPostCommand]
 	}
 	if cmd != "" {
-		// Le variabili indicano la release ripristinata.
+		// The variables point to the restored release.
 		env := commandEnv(dest, releaseDir, "", version)
 		if err := p.runCommand(ctx, log, sess, "rollback_command", env+cmd); err != nil {
 			return details, err
@@ -449,9 +449,9 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, auth Auth,
 	return details, nil
 }
 
-// DryRun verifica su ogni target, senza modificarlo, che il deploy sia eseguibile: connessione
-// e credenziali, directory di destinazione scrivibile (o creabile) e, se serve, sha256sum.
-// Il post_command non viene eseguito. A differenza di Deploy controlla tutti i target.
+// DryRun checks on every target, without changing it, that the deploy can run: connection and
+// credentials, writable (or creatable) destination directory and, if needed, sha256sum.
+// post_command does not run. Unlike Deploy it checks all targets.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -508,13 +508,14 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, auth Auth, re
 	return details, nil
 }
 
-// writableDirCheck restituisce un comando che, senza creare nulla, risale alla prima directory
-// esistente del percorso (quella in cui "mkdir -p" creerebbe le mancanti) e ne verifica la scrittura.
+// writableDirCheck returns a command that, without creating anything, climbs to the first
+// existing directory of the path (the one where "mkdir -p" would create the missing ones) and
+// checks it is writable.
 func writableDirCheck(dir string) string {
 	return "d=" + shellQuote(dir) + `; while [ ! -e "$d" ]; do d=$(dirname "$d"); done; test -d "$d" && test -w "$d"`
 }
 
-// resolveAuth legge le credenziali dai segreti solo al momento del deploy.
+// resolveAuth reads the credentials from the secrets only at deploy time.
 func (p *Plugin) resolveAuth(ctx context.Context, req *plugin.Request) (Auth, error) {
 	var a Auth
 	var err error
@@ -531,10 +532,10 @@ func (p *Plugin) resolveAuth(ctx context.Context, req *plugin.Request) (Auth, er
 	return a, nil
 }
 
-// ShellQuote racchiude un argomento tra apici singoli per la shell remota.
+// ShellQuote wraps an argument in single quotes for the remote shell.
 func ShellQuote(s string) string { return shellQuote(s) }
 
-// shellQuote racchiude un argomento tra apici singoli per la shell remota.
+// shellQuote wraps an argument in single quotes for the remote shell.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

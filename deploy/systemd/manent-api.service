@@ -1,4 +1,4 @@
-# API di manent senza worker (manent-server api).
+# manent API without workers (manent-server api).
 [Unit]
 Description=manent API
 Documentation=https://github.com/joeg-ita/manent

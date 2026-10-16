@@ -1,5 +1,5 @@
-# UC7: manifest sul cluster k3s, namespace uc7-prod.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC7: manifests on the k3s cluster, namespace uc7-prod.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: kubernetes
 targets:
   - {host: k3s, port: 6443, labels: {region: eu-1}}

@@ -12,48 +12,48 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// KindRelease identifica il descrittore di una release composta.
+// KindRelease identifies the descriptor of a composite release.
 const KindRelease = "Release"
 
-// Politiche di una release quando un deploy fallisce.
+// Policies of a release when a deploy fails.
 const (
-	// ReleaseOnFailureStop non avvia i deploy non ancora partiti; quelli in corso terminano.
+	// ReleaseOnFailureStop does not start the deploys not yet started; running ones finish.
 	ReleaseOnFailureStop = "stop"
-	// ReleaseOnFailureContinue prosegue con i deploy che non dipendono da quello fallito.
+	// ReleaseOnFailureContinue goes on with the deploys that do not depend on the failed one.
 	ReleaseOnFailureContinue = "continue"
-	// ReleaseOnFailureRollback si ferma come stop, poi riporta i deploy riusciti alla versione
-	// precedente, in ordine inverso alle dipendenze.
+	// ReleaseOnFailureRollback stops like stop, then brings the successful deploys back to the
+	// previous version, in reverse dependency order.
 	ReleaseOnFailureRollback = "rollback"
 )
 
-// maxReleaseDeploys limita i deploy di una release.
+// maxReleaseDeploys limits the deploys of a release.
 const maxReleaseDeploys = 50
 
-// Release rilascia insieme più deploy con dipendenze tra loro: quelli indipendenti in
-// parallelo, gli altri dopo il successo dei deploy da cui dipendono.
+// Release releases several interdependent deploys together: independent ones in parallel,
+// the others after the deploys they depend on succeed.
 type Release struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	Kind       string `json:"kind" yaml:"kind"`
-	// ID identifica la release ed è la chiave di idempotenza: obbligatorio.
+	// ID identifies the release and is the idempotency key: required.
 	ID string `json:"id" yaml:"id"`
-	// OnFailure è stop (default), continue o rollback.
+	// OnFailure is stop (default), continue or rollback.
 	OnFailure string          `json:"onFailure,omitempty" yaml:"onFailure,omitempty"`
 	Deploys   []ReleaseDeploy `json:"deploys" yaml:"deploys"`
 }
 
-// ReleaseDeploy è un deploy della release.
+// ReleaseDeploy is a deploy of the release.
 type ReleaseDeploy struct {
-	// Name identifica il deploy nella release e nelle dipendenze (after).
+	// Name identifies the deploy in the release and in the dependencies (after).
 	Name string `json:"name" yaml:"name"`
-	// File è il descrittore YAML, relativo al file della release: solo per la CLI, che lo
-	// legge e lo invia come Descriptor.
+	// File is the YAML descriptor, relative to the release file: CLI only, which reads it and
+	// sends it as Descriptor.
 	File       string      `json:"file,omitempty" yaml:"file,omitempty"`
 	Descriptor *Descriptor `json:"descriptor,omitempty" yaml:"descriptor,omitempty"`
-	// After sono i nomi dei deploy della release che devono riuscire prima di questo.
+	// After are the names of the release deploys that must succeed before this one.
 	After []string `json:"after,omitempty" yaml:"after,omitempty"`
 }
 
-// ParseReleaseJSON legge una release JSON (API): i descrittori devono essere inclusi.
+// ParseReleaseJSON reads a JSON release (API): the descriptors must be inlined.
 func ParseReleaseJSON(data []byte) (*Release, error) {
 	var r Release
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -64,8 +64,8 @@ func ParseReleaseJSON(data []byte) (*Release, error) {
 	return &r, r.Validate()
 }
 
-// LoadReleaseYAMLFile legge una release YAML e i descrittori a cui rimanda (file), con
-// percorsi relativi alla directory della release.
+// LoadReleaseYAMLFile reads a YAML release and the descriptors it refers to (file), with
+// paths relative to the release directory.
 func LoadReleaseYAMLFile(path string) (*Release, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -98,8 +98,8 @@ func LoadReleaseYAMLFile(path string) (*Release, error) {
 	return &r, r.Validate()
 }
 
-// Validate controlla la release: nomi e ID distinti, dipendenze esistenti e senza cicli,
-// descrittori validi e senza schedule né dry-run.
+// Validate checks the release: distinct names and IDs, existing and acyclic dependencies,
+// valid descriptors without schedule or dry-run.
 func (r *Release) Validate() error {
 	var errs []error
 	if r.APIVersion != APIVersion {
@@ -159,7 +159,7 @@ func (r *Release) Validate() error {
 	return errors.Join(errs...)
 }
 
-// DeploymentID è l'ID del deploy nella release: quello del descrittore o "<release>.<nome>".
+// DeploymentID is the ID of the deploy in the release: the descriptor's or "<release>.<name>".
 func (r *Release) DeploymentID(rd ReleaseDeploy) string {
 	if rd.Descriptor != nil && rd.Descriptor.ID != "" {
 		return rd.Descriptor.ID
@@ -167,7 +167,7 @@ func (r *Release) DeploymentID(rd ReleaseDeploy) string {
 	return r.ID + "." + rd.Name
 }
 
-// FailurePolicy restituisce onFailure con il default.
+// FailurePolicy returns onFailure with its default.
 func (r *Release) FailurePolicy() string {
 	if r.OnFailure == "" {
 		return ReleaseOnFailureStop
@@ -175,8 +175,8 @@ func (r *Release) FailurePolicy() string {
 	return r.OnFailure
 }
 
-// Order restituisce i deploy in ordine topologico: ognuno dopo quelli da cui dipende, a parità
-// nell'ordine del file. Errore se le dipendenze formano un ciclo.
+// Order returns the deploys in topological order: each after those it depends on, ties in
+// file order. Error if the dependencies form a cycle.
 func (r *Release) Order() ([]ReleaseDeploy, error) {
 	done := map[string]bool{}
 	out := make([]ReleaseDeploy, 0, len(r.Deploys))

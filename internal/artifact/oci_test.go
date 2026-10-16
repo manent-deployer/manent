@@ -14,8 +14,8 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeRegistry serve il manifest di app:1.0 su /v2/team/app/manifests/; con token richiede
-// il flusso Bearer (come Docker Hub) con credenziali basic ci:segreto sul servizio dei token.
+// fakeRegistry serves the manifest of app:1.0 on /v2/team/app/manifests/; with a token it
+// requires the Bearer flow (as Docker Hub) with basic credentials ci:segreto on the token service.
 func fakeRegistry(t *testing.T, token bool) (*httptest.Server, string) {
 	t.Helper()
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`)
@@ -68,7 +68,7 @@ func TestImmagineOCI(t *testing.T) {
 		t.Fatalf("riferimento %q (%v)", ref, err)
 	}
 
-	// Con il digest nel riferimento: verificato.
+	// With the digest in the reference: verified.
 	if _, err := f.Fetch(ctx, "oci+http://"+host+"/team/app@sha256:"+digest, t.TempDir()); err != nil {
 		t.Errorf("immagine per digest: %v", err)
 	}
@@ -102,12 +102,12 @@ func TestImmagineOCIConToken(t *testing.T) {
 	if got.SHA256 != digest {
 		t.Errorf("digest %s, atteso %s", got.SHA256, digest)
 	}
-	// Una sorgente fuori dall'allowlist resta rifiutata.
+	// A source outside the allowlist is still rejected.
 	if _, err := f.Fetch(context.Background(), "oci+http://"+host+"/altro/app:1.0", t.TempDir()); err == nil {
 		t.Error("attesa sorgente non ammessa")
 	}
 
-	// Store.Ensure riscarica e confronta il digest: un tag spostato fa fallire il deploy.
+	// Store.Ensure downloads again and compares the digest: a moved tag makes the deploy fail.
 	s := &Store{Fetcher: f, WorkDir: t.TempDir()}
 	if _, _, err := s.Ensure(context.Background(), "d1", src+"app:1.0", "/assente", digest); err != nil {
 		t.Errorf("ensure: %v", err)

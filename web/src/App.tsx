@@ -20,14 +20,14 @@ import { DeploymentsPage } from "@/pages/Deployments";
 import { InventoryPage } from "@/pages/Inventory";
 import { ReleaseDetailPage, ReleasesPage } from "@/pages/Releases";
 
-// Le metriche usano Recharts (circa 100 KB compressi): caricate solo quando si apre la pagina.
+// Metrics use Recharts (about 100 KB compressed): loaded only when the page opens.
 const MetricsPage = lazy(() => import("@/pages/Metrics").then((m) => ({ default: m.MetricsPage })));
 
 export function newQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Un 4xx non migliora riprovando; gli altri errori si ritentano due volte.
+        // A 4xx does not improve by retrying; other errors are retried twice.
         retry: (n, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && n < 2,
         refetchOnWindowFocus: true,
         staleTime: 5_000,
@@ -55,7 +55,7 @@ export function AppRoutes() {
   return (
     <Layout>
       <Routes>
-        {/* Ritorno dal login: AuthProvider completa l'accesso e porta alla pagina richiesta. */}
+        {/* Back from login: AuthProvider completes the sign-in and goes to the requested page. */}
         <Route path={config.redirect_path ?? "/auth/callback"} element={<Loading />} />
         <Route path="/" element={<Navigate to="/deployments" replace />} />
         <Route path="/deployments" element={<DeploymentsPage />} />
@@ -80,7 +80,7 @@ export function AppRoutes() {
   );
 }
 
-/** Gate mostra l'app solo a login concluso; altrimenti lo stato del login. */
+/** Gate shows the app only once login is done; otherwise the login state. */
 function Gate({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const { t } = useI18n();
@@ -124,7 +124,7 @@ function Gate({ children }: { children: ReactNode }) {
   }
 }
 
-/** App con una configurazione già letta: usata dai test con un'API finta. */
+/** App with an already read configuration: used by tests with a fake API. */
 export function AppWithConfig({ config, api, queryClient, lang }: { config: UIConfig; api?: Api; queryClient?: QueryClient; lang?: Lang }) {
   const [qc] = useState(() => queryClient ?? newQueryClient());
   return (

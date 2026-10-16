@@ -11,16 +11,16 @@ import (
 	"strings"
 )
 
-// Impostazioni del provider nginx-plus (API di NGINX Plus).
+// Settings of the nginx-plus provider (NGINX Plus API).
 const (
-	settingAPIURLs  = "api_urls"    // URL dell'API di ogni istanza (es. https://lb1:8080/api), separati da virgola
-	settingUpstream = "upstream"    // upstream http con i server
-	settingAPIVer   = "api_version" // versione dell'API (default 9)
+	settingAPIURLs  = "api_urls"    // API URL of every instance (e.g. https://lb1:8080/api), comma separated
+	settingUpstream = "upstream"    // http upstream with the servers
+	settingAPIVer   = "api_version" // API version (default 9)
 )
 
 var upstreamRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
-// nginxPlusPool svuota i server di un upstream con l'API di NGINX Plus su ogni istanza.
+// nginxPlusPool drains the servers of an upstream with the NGINX Plus API on every instance.
 type nginxPlusPool struct {
 	urls     []string
 	upstream string
@@ -51,7 +51,7 @@ func validateNginxPlus(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewNginxPlusPool costruisce il pool nginx-plus.
+// NewNginxPlusPool builds the nginx-plus pool.
 func NewNginxPlusPool(ctx context.Context, env Env) (Pool, error) {
 	if err := validateNginxPlus(env.Settings); err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (p *nginxPlusPool) peers(ctx context.Context, base string) ([]nginxPeer, er
 	return out.Peers, nil
 }
 
-// Members implementa Pool: un membro è sano e attivo solo se lo è su tutte le istanze.
+// Members implements Pool: a member is healthy and active only if it is on all instances.
 func (p *nginxPlusPool) Members(ctx context.Context) ([]Member, error) {
 	byName := map[string]*Member{}
 	var order []string
@@ -143,7 +143,7 @@ func (p *nginxPlusPool) Members(ctx context.Context) ([]Member, error) {
 	return out, nil
 }
 
-// setServers modifica i server indicati su ogni istanza.
+// setServers changes the given servers on every instance.
 func (p *nginxPlusPool) setServers(ctx context.Context, members []string, body []byte) error {
 	for _, base := range p.urls {
 		var servers []nginxServer
@@ -168,17 +168,17 @@ func (p *nginxPlusPool) setServers(ctx context.Context, members []string, body [
 	return nil
 }
 
-// Drain implementa Pool.
+// Drain implements Pool.
 func (p *nginxPlusPool) Drain(ctx context.Context, members []string) error {
 	return p.setServers(ctx, members, []byte(`{"drain":true}`))
 }
 
-// Restore implementa Pool.
+// Restore implements Pool.
 func (p *nginxPlusPool) Restore(ctx context.Context, members []string) error {
 	return p.setServers(ctx, members, []byte(`{"drain":false,"down":false}`))
 }
 
-// Connections implementa Pool: connessioni attive sommate sulle istanze.
+// Connections implements Pool: active connections summed over the instances.
 func (p *nginxPlusPool) Connections(ctx context.Context, members []string) (map[string]int, error) {
 	out := map[string]int{}
 	for _, m := range members {
@@ -198,7 +198,7 @@ func (p *nginxPlusPool) Connections(ctx context.Context, members []string) (map[
 	return out, nil
 }
 
-// Healthy implementa Pool.
+// Healthy implements Pool.
 func (p *nginxPlusPool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, m := range members {

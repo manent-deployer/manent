@@ -12,11 +12,11 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// integrationTimeout è il timeout di default delle chiamate a Slack, Teams e agli ITSM.
+// integrationTimeout is the default timeout of calls to Slack, Teams and the ITSMs.
 const integrationTimeout = 15 * time.Second
 
-// NewChatNotifier crea il notificatore delle chat dalle destinazioni configurate; nil senza
-// destinazioni. Un nuovo canale di chat si aggiunge in internal/chat.
+// NewChatNotifier creates the chat notifier from the configured destinations; nil without
+// destinations. A new chat channel is added in internal/chat.
 func NewChatNotifier(cfg *config.Config, sp secrets.Provider, log *slog.Logger) *chat.Notifier {
 	in := cfg.Integrations
 	if len(in.Notifications) == 0 {
@@ -40,8 +40,8 @@ func NewChatNotifier(cfg *config.Config, sp secrets.Provider, log *slog.Logger) 
 	return n
 }
 
-// NewChangeProvider crea il sistema di change management configurato; nil se assente.
-// Un nuovo sistema ITSM si aggiunge qui, implementando change.Provider.
+// NewChangeProvider creates the configured change management system; nil if absent.
+// A new ITSM is added here, implementing change.Provider.
 func NewChangeProvider(cfg *config.Config, sp secrets.Provider) change.Provider {
 	ch := cfg.Integrations.Change
 	client := change.NewHTTPClient(cmp.Or(cfg.Integrations.Timeout, integrationTimeout))
@@ -75,8 +75,8 @@ func NewChangeProvider(cfg *config.Config, sp secrets.Provider) change.Provider 
 	return nil
 }
 
-// NewSlackInteractions crea il ricevitore dei pulsanti di approvazione di Slack; nil senza
-// signing secret. Le decisioni passano da decider, il servizio con i permessi.
+// NewSlackInteractions creates the receiver of Slack approval buttons; nil without a signing
+// secret. Decisions go through decider, the service with permissions.
 func NewSlackInteractions(cfg *config.Config, sp secrets.Provider, decider chat.Decider, log *slog.Logger) http.Handler {
 	s := cfg.Integrations.Slack
 	if s.SigningSecretRef == "" {

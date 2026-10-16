@@ -1,5 +1,5 @@
-// Client SSE su fetch: EventSource non permette l'header Authorization, necessario con OIDC.
-// Riprende dopo una disconnessione con Last-Event-ID (l'offset dei log).
+// SSE client on fetch: EventSource does not allow the Authorization header, needed with OIDC.
+// It resumes after a disconnection with Last-Event-ID (the log offset).
 
 export interface SSEMessage {
   event: string;
@@ -7,7 +7,7 @@ export interface SSEMessage {
   data: string;
 }
 
-/** parseSSE divide il testo ricevuto in messaggi completi e restituisce il resto non ancora completo. */
+/** parseSSE splits the received text into complete messages and returns the incomplete rest. */
 export function parseSSE(buffer: string): { messages: SSEMessage[]; rest: string } {
   const messages: SSEMessage[] = [];
   const blocks = buffer.replace(/\r\n/g, "\n").split("\n\n");
@@ -34,12 +34,12 @@ export interface StreamOptions {
   url: string;
   token?: () => string | undefined;
   onMessage: (m: SSEMessage) => void;
-  /** Chiamato quando lo stream non è disponibile (es. un proxy che lo blocca). */
+  /** Called when the stream is unavailable (e.g. a proxy blocking it). */
   onUnavailable?: (err: unknown) => void;
   signal: AbortSignal;
 }
 
-/** stream legge l'endpoint SSE finché il server non chiude dopo "end" o il segnale non annulla. */
+/** stream reads the SSE endpoint until the server closes after "end" or the signal aborts. */
 export async function stream({ url, token, onMessage, onUnavailable, signal }: StreamOptions): Promise<void> {
   let lastId: string | undefined;
   let failures = 0;

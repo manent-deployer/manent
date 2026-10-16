@@ -10,8 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestSpecificaOpenAPI verifica che api/openapi.yaml descriva esattamente le rotte del server:
-// la specifica è il contratto della UI e dei client, quindi non deve divergere dal codice.
+// TestSpecificaOpenAPI checks that api/openapi.yaml describes exactly the server routes:
+// the spec is the contract of the UI and of the clients, so it must not drift from the code.
 func TestSpecificaOpenAPI(t *testing.T) {
 	raw, err := os.ReadFile("../../api/openapi.yaml")
 	if err != nil {

@@ -1,11 +1,11 @@
-// Package lambda rilascia il codice di una funzione AWS Lambda: aggiorna il codice (immagine
-// di container o pacchetto .zip), pubblica una versione immutabile e sposta su di essa un
-// alias. La release in esercizio è la versione puntata dall'alias; il rollback riporta
-// l'alias alla versione precedente, senza ricaricare il codice.
+// Package lambda releases the code of an AWS Lambda function: it updates the code (container
+// image or .zip package), publishes an immutable version and moves an alias to it. The release
+// in service is the version the alias points to; rollback moves the alias back to the
+// previous version, without uploading the code again.
 //
-// La funzione (ruolo, memoria, variabili, trigger) resta di chi gestisce l'infrastruttura
-// (Terraform, CloudFormation, SAM): il plugin cambia solo il codice. Chi invoca la funzione
-// deve usare l'alias (ARN qualificato), non $LATEST. Ogni target è una region.
+// The function (role, memory, variables, triggers) belongs to whoever manages the
+// infrastructure (Terraform, CloudFormation, SAM): the plugin changes only the code. Callers
+// must invoke the alias (qualified ARN), not $LATEST. Every target is a region.
 package lambda
 
 import (
@@ -28,32 +28,31 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "lambda"
 
-// Parametri del descrittore (deploy.params) letti dal plugin, oltre a quelli delle
-// credenziali di awsauth.
+// Descriptor parameters (deploy.params) read by the plugin, besides the awsauth credential ones.
 const (
-	ParamFunction      = "function"     // nome della funzione (default: nome dell'applicazione)
-	ParamAlias         = "alias"        // alias spostato sulla nuova versione (default "live")
-	ParamWaitTimeout   = "wait_timeout" // attesa dell'aggiornamento e della versione (default 10m)
+	ParamFunction      = "function"     // function name (default: application name)
+	ParamAlias         = "alias"        // alias moved to the new version (default "live")
+	ParamWaitTimeout   = "wait_timeout" // wait for the update and the version (default 10m)
 	defaultAlias       = "live"
 	defaultWaitTimeout = 10 * time.Minute
-	// maxZipSize è il limite di Lambda per il caricamento diretto di un .zip.
+	// maxZipSize is Lambda's limit for direct .zip upload.
 	maxZipSize = 50 << 20
 )
 
-// Tipi di pacchetto di una funzione.
+// Package types of a function.
 const (
 	PackageImage = "Image"
 	PackageZip   = "Zip"
 )
 
-// DetailFunctionVersion è il prefisso delle chiavi di Release.Details con la versione della
-// funzione su ciascun target ("function_version@<target>").
+// DetailFunctionVersion is the prefix of the Release.Details keys with the function version
+// on each target ("function_version@<target>").
 const DetailFunctionVersion = "function_version"
 
-// ErrNotFound indica una funzione, una versione o un alias inesistente.
+// ErrNotFound means a function, version or alias that does not exist.
 var ErrNotFound = errors.New("non trovato")
 
 var (
@@ -63,7 +62,7 @@ var (
 	ecrRe      = regexp.MustCompile(`^([0-9]{12}\.dkr\.ecr\.)([a-z0-9-]+)(\.amazonaws\.com(\.cn)?/)`)
 )
 
-// Function è la configurazione di una funzione o di una sua versione.
+// Function is the configuration of a function or of one of its versions.
 type Function struct {
 	Name             string
 	PackageType      string
@@ -76,41 +75,41 @@ type Function struct {
 	Description      string
 }
 
-// Alias è un alias della funzione.
+// Alias is a function alias.
 type Alias struct {
 	Name            string
 	FunctionVersion string
 	Description     string
-	// Weights sono le versioni aggiuntive con la loro quota di traffico (0-1).
+	// Weights are the additional versions with their traffic share (0-1).
 	Weights map[string]float64
 }
 
-// Code è il nuovo codice: un'immagine o un pacchetto .zip.
+// Code is the new code: an image or a .zip package.
 type Code struct {
 	ImageURI string
 	ZipFile  []byte
 }
 
-// API sono le operazioni su Lambda usate dal plugin, in una region.
+// API are the Lambda operations used by the plugin, in a region.
 type API interface {
-	// GetFunction legge la configurazione della funzione o, con qualifier, di una versione.
+	// GetFunction reads the configuration of the function or, with qualifier, of a version.
 	GetFunction(ctx context.Context, name, qualifier string) (*Function, error)
 	UpdateCode(ctx context.Context, name string, code Code, dryRun bool) (*Function, error)
 	PublishVersion(ctx context.Context, name, codeSha256, description string) (*Function, error)
 	GetAlias(ctx context.Context, name, alias string) (*Alias, error)
-	// PutAlias crea l'alias o lo sposta sulla versione, azzerando eventuali pesi di traffico.
+	// PutAlias creates the alias or moves it to the version, clearing any traffic weights.
 	PutAlias(ctx context.Context, name, alias, version, description string, create bool) error
-	// RouteAlias lascia l'alias sulla versione e manda alle versioni di weights la loro quota.
+	// RouteAlias leaves the alias on the version and sends the weights' versions their share.
 	RouteAlias(ctx context.Context, name, alias, version, description string, weights map[string]float64) error
 	ListVersions(ctx context.Context, name string) ([]Function, error)
 }
 
-// Connector apre l'accesso a Lambda in una region con le credenziali della richiesta.
+// Connector opens access to Lambda in a region with the request's credentials.
 type Connector interface {
 	Connect(ctx context.Context, region string, req *plugin.Request) (API, error)
 }
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	connector Connector
 	types     []string
@@ -118,14 +117,14 @@ type Plugin struct {
 	poll      time.Duration
 }
 
-// New crea il plugin con il connettore indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given connector and supported artifact types.
 func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{connector: c, types: types, logger: logger, poll: 2 * time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - endpoint: endpoint alternativo dell'API Lambda (es. LocalStack)
-//   - artifact_types: tipi supportati (default ["lambda"])
+// Factory builds the plugin from the application configuration:
+//   - endpoint: alternative Lambda API endpoint (e.g. LocalStack)
+//   - artifact_types: supported types (default ["lambda"])
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	types, err := pluginutil.ArtifactTypes(cfg, Name)
 	if err != nil {
@@ -138,10 +137,10 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return New(SDKConnector{Endpoint: endpoint}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
 func functionName(req *plugin.Request) string {
@@ -160,7 +159,7 @@ func aliasName(req *plugin.Request) string {
 
 func isImage(a plugin.Artifact) bool { return strings.HasSuffix(a.LocalPath, plugin.ImageRefExt) }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
@@ -192,13 +191,13 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	return errors.Join(errs...)
 }
 
-// regionalImage riporta un'immagine ECR alla region del target: Lambda accetta solo immagini
-// di un repository della stessa region, e con la replica di ECR il digest è lo stesso.
+// regionalImage moves an ECR image to the target's region: Lambda accepts only images from a
+// repository in the same region, and with ECR replication the digest is the same.
 func regionalImage(ref, region string) string {
 	return ecrRe.ReplaceAllString(ref, "${1}"+region+"${3}")
 }
 
-// code prepara il codice per la region: l'immagine fissata al digest o il contenuto del .zip.
+// code prepares the code for the region: the image pinned to the digest or the .zip content.
 func code(a plugin.Artifact, region string) (Code, error) {
 	if isImage(a) {
 		ref, err := plugin.ImageReference(a)
@@ -221,12 +220,12 @@ func code(a plugin.Artifact, region string) (Code, error) {
 	return Code{ZipFile: b}, nil
 }
 
-// description è la descrizione di versioni e alias: da qui il plugin rilegge la release.
+// description is the description of versions and aliases: the plugin reads the release back from it.
 func description(version, deploymentID string) string {
 	return "manent version=" + version + " deployment=" + deploymentID
 }
 
-// parseDescription legge versione e deploy da una descrizione scritta da manent.
+// parseDescription reads version and deploy from a description written by manent.
 func parseDescription(s string) (version, deploymentID string) {
 	rest, ok := strings.CutPrefix(s, "manent ")
 	if !ok {
@@ -243,7 +242,7 @@ func parseDescription(s string) (version, deploymentID string) {
 	return version, deploymentID
 }
 
-// state è lo stato di un target letto prima di deploy, dry-run e rollback.
+// state is the state of a target read before deploy, dry-run and rollback.
 type state struct {
 	region string
 	api    API
@@ -291,9 +290,9 @@ func (s *state) details(req *plugin.Request) map[string]string {
 	return d
 }
 
-// Deploy rilascia il codice su ogni region in sequenza; si ferma al primo errore. È
-// idempotente: se l'alias punta già alla versione pubblicata da questo deploy non fa nulla, e
-// ripubblicare lo stesso codice restituisce la versione esistente.
+// Deploy releases the code to every region in sequence; it stops at the first error. It is
+// idempotent: if the alias already points to the version published by this deploy it does
+// nothing, and publishing the same code again returns the existing version.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	for _, t := range req.Targets {
@@ -336,8 +335,8 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	return details, nil
 }
 
-// publish aggiorna il codice della funzione e pubblica una versione, senza toccare l'alias.
-// Restituisce la versione della funzione pubblicata.
+// publish updates the function code and publishes a version, without touching the alias.
+// It returns the published function version.
 func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, details map[string]string, log *slog.Logger) (string, error) {
 	name := functionName(req)
 	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
@@ -345,8 +344,8 @@ func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, det
 	if err != nil {
 		return "", err
 	}
-	// Un aggiornamento in corso (es. della configurazione) farebbe fallire quello del codice;
-	// uno fallito in precedenza no.
+	// An update in progress (e.g. of the configuration) would fail the code one; a previously
+	// failed one would not.
 	if _, err := p.waitFunction(ctx, s.api, name, "", timeout, false, log); err != nil {
 		return "", err
 	}
@@ -365,7 +364,7 @@ func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, det
 			return "", fmt.Errorf("sha256 del codice caricato (%s) diverso da quello dell'artefatto (%s)", fn.CodeSha256, want)
 		}
 	}
-	// CodeSha256 impedisce di pubblicare codice cambiato nel frattempo da un altro aggiornamento.
+	// CodeSha256 prevents publishing code changed meanwhile by another update.
 	v, err := s.api.PublishVersion(ctx, name, fn.CodeSha256, description(req.Artifact.Version, req.DeploymentID))
 	if err != nil {
 		return "", fmt.Errorf("pubblicazione della versione: %w", err)
@@ -388,8 +387,8 @@ func hexToBase64(h string) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-// waitFunction attende che la funzione (o la versione qualifier) sia attiva e senza
-// aggiornamenti in corso. Con strict, un aggiornamento fallito è un errore immediato.
+// waitFunction waits until the function (or version qualifier) is active and without updates
+// in progress. With strict, a failed update is an immediate error.
 func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier string, timeout time.Duration, strict bool, log *slog.Logger) (*Function, error) {
 	what := "funzione " + name
 	if qualifier != "" {
@@ -425,8 +424,8 @@ func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier stri
 	}
 }
 
-// CurrentRelease legge su ogni region la versione puntata dall'alias. Un alias assente o non
-// creato da manent non ha release; versioni diverse tra le region sono un errore.
+// CurrentRelease reads on every region the version the alias points to. An alias missing or
+// not created by manent has no release; different versions across regions are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
 	details := map[string]string{"source": "alias " + aliasName(req)}
@@ -461,9 +460,9 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	return nil, fmt.Errorf("versioni diverse tra le region: %s", strings.Join(desc, "; "))
 }
 
-// Rollback riporta l'alias di ogni region alla versione della funzione della release
-// indicata: quella nei dettagli della release o, in mancanza, la più recente pubblicata con
-// quella versione. Prosegue anche se una region fallisce. È idempotente.
+// Rollback moves every region's alias back to the function version of the given release: the
+// one in the release details or, failing that, the most recent published with that version.
+// It continues even if a region fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("versione %q non valida", previous.Version)
@@ -516,7 +515,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	return details, nil
 }
 
-// findVersion cerca la versione della funzione più recente pubblicata con la versione indicata.
+// findVersion looks for the most recent function version published with the given version.
 func (p *Plugin) findVersion(ctx context.Context, api API, name, version string) (string, string, error) {
 	list, err := api.ListVersions(ctx, name)
 	if err != nil {
@@ -537,9 +536,8 @@ func (p *Plugin) findVersion(ctx context.Context, api API, name, version string)
 	return best, depID, nil
 }
 
-// DryRun verifica su ogni region, senza modificarla, che funzione e tipo di pacchetto siano
-// quelli attesi e che le credenziali permettano di aggiornare il codice (UpdateFunctionCode
-// con DryRun).
+// DryRun checks on every region, without changing it, that function and package type are the
+// expected ones and that the credentials can update the code (UpdateFunctionCode with DryRun).
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	var errs []error

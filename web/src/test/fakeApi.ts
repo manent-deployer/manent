@@ -11,7 +11,7 @@ export interface Call {
 
 type Handler = (req: { method: string; path: string; query: URLSearchParams; body?: unknown }) => { status?: number; json?: unknown } | undefined;
 
-/** fakeApi crea un client dell'API che risponde con i dati indicati e registra le chiamate. */
+/** fakeApi creates an API client that answers with the given data and records the calls. */
 export function fakeApi(handler: Handler): { api: Api; calls: Call[] } {
   const calls: Call[] = [];
   const fetch = async (input: Request | string | URL, init?: RequestInit): Promise<Response> => {

@@ -74,7 +74,7 @@ func TestClient(t *testing.T) {
 		t.Error("un deploy respinto è un errore")
 	}
 
-	// Gli errori del server diventano gli errori dell'engine, con il messaggio originale.
+	// Server errors become engine errors, with the original message.
 	d.Environment = "prod"
 	_, err = c.Submit(ctx, d)
 	if !errors.Is(err, service.ErrForbidden) || err.Error() != "permesso negato: token:ci non può eseguire deployment.submit su app/prod" {

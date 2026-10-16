@@ -16,13 +16,13 @@ import (
 	"github.com/crewjam/rfc5424"
 )
 
-// journalInline è la dimensione oltre la quale il messaggio passa da un file: i datagrammi
-// unix hanno un limite (SO_SNDBUF su Linux, molto più basso su macOS).
+// journalInline is the size beyond which the message goes through a file: unix datagrams have
+// a limit (SO_SNDBUF on Linux, much lower on macOS).
 const journalInline = 128 * 1024
 
-// JournalSender invia i messaggi a systemd-journald con il protocollo nativo
-// (https://systemd.io/JOURNAL_NATIVE_PROTOCOL/): ogni parametro
-// dello structured data diventa un campo MANENT_<NOME>, filtrabile con journalctl (es.
+// JournalSender sends messages to systemd-journald with the native protocol
+// (https://systemd.io/JOURNAL_NATIVE_PROTOCOL/): every structured data parameter becomes a
+// MANENT_<NAME> field, filterable with journalctl (e.g.
 // journalctl -t manent MANENT_DEPLOYMENT=<id>).
 type JournalSender struct {
 	path string
@@ -31,7 +31,7 @@ type JournalSender struct {
 	conn *net.UnixConn
 }
 
-// NewJournalSender crea il sender; il socket è aperto al primo invio.
+// NewJournalSender creates the sender; the socket is opened at the first send.
 func NewJournalSender(path string) (*JournalSender, error) {
 	if path == "" {
 		return nil, errors.New("socket di journald obbligatorio")
@@ -39,9 +39,9 @@ func NewJournalSender(path string) (*JournalSender, error) {
 	return &JournalSender{path: path}, nil
 }
 
-// Send invia il messaggio. Un messaggio troppo grande per un datagramma viene scritto in un
-// file temporaneo, già rimosso, di cui si passa il descrittore (come sd_journal_send). Un errore
-// riapre il socket e ritenta una volta: journald può essere stato riavviato.
+// Send sends the message. A message too large for a datagram is written to a temporary,
+// already removed file whose descriptor is passed (like sd_journal_send). An error reopens
+// the socket and retries once: journald may have been restarted.
 func (s *JournalSender) Send(msg rfc5424.Message) error {
 	data := journalFields(msg)
 	s.mu.Lock()
@@ -71,7 +71,7 @@ func (s *JournalSender) send(data []byte) error {
 	return s.sendFile(data)
 }
 
-// sendFile passa il messaggio tramite il descrittore di un file temporaneo.
+// sendFile passes the message through the descriptor of a temporary file.
 func (s *JournalSender) sendFile(data []byte) error {
 	f, err := os.CreateTemp("", "manent-journal-")
 	if err != nil {
@@ -82,7 +82,7 @@ func (s *JournalSender) sendFile(data []byte) error {
 	if _, err := f.Write(data); err != nil {
 		return err
 	}
-	// Go non ammette WriteMsgUnix su un socket a datagrammi connesso: sendmsg diretto.
+	// Go does not allow WriteMsgUnix on a connected datagram socket: direct sendmsg.
 	raw, err := s.conn.SyscallConn()
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (s *JournalSender) reset() {
 	}
 }
 
-// Close chiude il socket.
+// Close closes the socket.
 func (s *JournalSender) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,9 +113,8 @@ func (s *JournalSender) Close() error {
 	return nil
 }
 
-// journalFields serializza il messaggio nel protocollo nativo di journald: "NOME=valore\n",
-// oppure, se il valore contiene un a capo, "NOME\n" + lunghezza (64 bit little endian) + valore
-// + "\n".
+// journalFields serializes the message in the native journald protocol: "NAME=value\n", or,
+// if the value contains a newline, "NAME\n" + length (64-bit little endian) + value + "\n".
 func journalFields(msg rfc5424.Message) []byte {
 	var b bytes.Buffer
 	add := func(name, value string) {
@@ -144,9 +143,9 @@ func journalFields(msg rfc5424.Message) []byte {
 	return b.Bytes()
 }
 
-// journalName converte il nome di un attributo in un campo del journal: "MANENT_" seguito dal
-// nome in maiuscolo, con ogni carattere diverso da lettere e cifre sostituito da "_" (es.
-// step.name → MANENT_STEP_NAME), al più 64 caratteri.
+// journalName converts an attribute name into a journal field: "MANENT_" followed by the
+// uppercase name, with every character other than letters and digits replaced by "_" (e.g.
+// step.name → MANENT_STEP_NAME), at most 64 characters.
 func journalName(s string) string {
 	name := "MANENT_" + strings.Map(func(r rune) rune {
 		switch {

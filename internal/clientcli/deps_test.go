@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestClientLeggero verifica che il client non includa il motore: DBOS, driver di database,
-// plugin, SSH, SDK dei cloud, server HTTP, metriche e tracing restano nel server.
+// TestClientLeggero checks that the client does not include the engine: DBOS, database
+// drivers, plugins, SSH, cloud SDKs, HTTP server, metrics and tracing stay in the server.
 func TestClientLeggero(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "github.com/joeg-ita/manent/cmd/manent").CombinedOutput()
 	if err != nil {

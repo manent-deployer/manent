@@ -15,7 +15,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// fakeSSH simula le istanze di NGINX: un file per host e i comandi usati dal pool.
+// fakeSSH simulates the NGINX instances: one file per host and the commands used by the pool.
 type fakeSSH struct {
 	mu      sync.Mutex
 	files   map[string]string
@@ -70,7 +70,7 @@ func TestNginxPoolViaSSH(t *testing.T) {
 	if !strings.Contains(f.files["lb2"], "server 10.0.0.1:80 max_fails=3 down;") {
 		t.Fatalf("file: %s", f.files["lb2"])
 	}
-	// Ripetuto, lo svuotamento non riscrive il file né ricarica NGINX.
+	// Repeated, draining neither rewrites the file nor reloads NGINX.
 	if err := p.Drain(ctx, []string{"10.0.0.1:80"}); err != nil || len(f.reloads) != 2 {
 		t.Errorf("ricariche: %v %v", f.reloads, err)
 	}
@@ -95,7 +95,7 @@ func TestNginxPoolViaSSH(t *testing.T) {
 func TestPesiDeiServer(t *testing.T) {
 	members := map[string][]string{"a": {"a1", "a2", "a3"}, "b": {"b1"}}
 	w := memberWeights(map[string]int{"a": 75, "b": 25}, members, 256)
-	// Ogni slot riceve la sua quota: 3 server da 25 contro 1 da 25.
+	// Every slot gets its share: 3 servers at 25 against 1 at 25.
 	if w["a1"] != w["b1"] || w["a1"] == 0 {
 		t.Errorf("pesi: %v", w)
 	}
@@ -143,7 +143,7 @@ func TestRouterNginxPlus(t *testing.T) {
 	}
 }
 
-// fakeDataplaneConfig aggiunge alla Data Plane API l'API di configurazione dei server.
+// fakeDataplaneConfig adds the server configuration API to the Data Plane API.
 type fakeDataplaneConfig struct {
 	mu      sync.Mutex
 	version int
@@ -200,7 +200,7 @@ func TestRouterF5(t *testing.T) {
 		"10.0.0.2:80": {"name": "10.0.0.2:80", "session": "user-disabled", "state": "up", "ratio": 1.0},
 	}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Lettura di un singolo membro e ratio, oltre alle chiamate del pool.
+		// Reading a single member and ratio, besides the pool calls.
 		const base = "/mgmt/tm/ltm/pool/~Common~shop/members/~Common~"
 		if strings.HasPrefix(r.URL.Path, base) && !strings.HasSuffix(r.URL.Path, "/stats") {
 			f.mu.Lock()

@@ -1,7 +1,7 @@
-# UC6: immagini di container su VM con Docker (plugin container). L'artefatto è un'immagine
-# del registry (oci+http://registry:5000/uc/web:<tag>): manent ne fissa il digest, che diventa
-# lo sha256 del deploy. Ambiente test su vm-a; prod su vm-a e vm-b, a ondate (canary su vm-a),
-# con health gate su /healthz e rollback-all.
+# UC6: container images on VMs with Docker (container plugin). The artifact is a registry
+# image (oci+http://registry:5000/uc/web:<tag>): manent pins its digest, which becomes the
+# deploy's sha256. Test environment on vm-a; prod on vm-a and vm-b, in waves (canary on vm-a),
+# with health gate on /healthz and rollback-all.
 APP=uc6-web
 log "UC6 · container su VM con Docker (plugin container)"
 

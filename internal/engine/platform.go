@@ -13,16 +13,16 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// ExecutorLister elenca gli executor registrati e quelli con workflow in sospeso (Admin).
+// ExecutorLister lists the registered executors and those with pending workflows (Admin).
 type ExecutorLister interface {
 	Executors(ctx context.Context, staleAfter time.Duration) ([]ExecutorStatus, error)
 }
 
-// maxActive limita i workflow non conclusi letti da Workers e Activity.
+// maxActive limits the unfinished workflows read by Workers and Activity.
 const maxActive = 1000
 
-// Workers implementa PlatformService: gli executor del registro, con i workflow in esecuzione
-// (PENDING) di ciascuno. Senza registro restano solo gli executor che hanno workflow in sospeso.
+// Workers implements PlatformService: the registry executors, with the running (PENDING)
+// workflows of each. Without a registry only executors with pending workflows remain.
 func (e *Engine) Workers(ctx context.Context) ([]WorkerInfo, error) {
 	byID := map[string]*WorkerInfo{}
 	if e.executors != nil {
@@ -57,7 +57,7 @@ func (e *Engine) Workers(ctx context.Context) ([]WorkerInfo, error) {
 	return out, nil
 }
 
-// workerInfo converte lo stato di un executor nel formato esposto dal servizio.
+// workerInfo converts the state of an executor into the format exposed by the service.
 func workerInfo(x ExecutorStatus) *WorkerInfo {
 	wi := &WorkerInfo{
 		ID: x.ID, Version: x.Version, Build: x.Build, Hostname: x.Hostname, Region: x.Region,
@@ -81,8 +81,8 @@ func workerInfo(x ExecutorStatus) *WorkerInfo {
 	return wi
 }
 
-// toTask descrive un workflow in esecuzione. I passi e le sonde di un rollout non hanno
-// attributi: applicazione, ambiente e region si leggono dalla chiave di partizione
+// toTask describes a running workflow. Rollout passes and probes have no attributes:
+// application, environment and region are read from the partition key
 // ("<application>/<environment>/<region>[/gate]").
 func toTask(w dbos.WorkflowStatus) WorkerTask {
 	t := WorkerTask{
@@ -119,7 +119,7 @@ func toTask(w dbos.WorkflowStatus) WorkerTask {
 	return t
 }
 
-// parentID ricava l'ID del deploy da quello di un workflow figlio ("<id>.pass.<passo>").
+// parentID derives the deploy ID from that of a child workflow ("<id>.pass.<pass>").
 func parentID(id string, seps ...string) string {
 	for _, s := range seps {
 		if i := strings.LastIndex(id, s); i > 0 {
@@ -129,9 +129,9 @@ func parentID(id string, seps ...string) string {
 	return id
 }
 
-// Activity implementa PlatformService: i deploy e le approvazioni non conclusi. Dei deploy in
-// esecuzione legge il rollout (approvazioni tra ondate) e l'ultimo step registrato, delle
-// approvazioni e delle attese lo stato completo, al più per maxPendingChecked workflow.
+// Activity implements PlatformService: unfinished deploys and approvals. For running deploys
+// it reads the rollout (approvals between waves) and the last recorded step, for approvals and
+// waits the full state, at most for maxPendingChecked workflows.
 func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, error) {
 	wfs, err := dbos.ListWorkflows(e.client,
 		dbos.WithFilterName(workflowName, approvalWorkflowName, afterWorkflowName),
@@ -152,14 +152,14 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 		switch {
 		case detailed >= maxPendingChecked:
 		case w.Name == workflowName && w.Status == dbos.WorkflowStatusPending:
-			// Deploy in corso: il workflow è già letto, servono solo rollout e ultimo step.
+			// Running deploy: the workflow is already read, only rollout and last step are needed.
 			detailed++
 			e.readRollout(&s, w)
 			if s.State == StatePending {
 				s.LastStep = e.lastStep(w.ID)
 			}
 		case w.Status == dbos.WorkflowStatusPending || w.Name == afterWorkflowName:
-			// Approvazione o attesa delle dipendenze: lo stato completo ne riporta i dettagli.
+			// Approval or dependency wait: the full state reports the details.
 			detailed++
 			if full, err := e.Status(ctx, s.ID); err == nil {
 				s = *full
@@ -178,7 +178,7 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 			a.Delayed = append(a.Delayed, s)
 		}
 	}
-	// In coda e pianificati: prima chi parte prima.
+	// Queued and scheduled: whoever starts first comes first.
 	slices.SortStableFunc(a.Queued, func(x, y Status) int { return x.CreatedAt.Compare(y.CreatedAt) })
 	slices.SortStableFunc(a.Delayed, func(x, y Status) int { return startsAt(x).Compare(startsAt(y)) })
 	return a, nil
@@ -191,7 +191,7 @@ func startsAt(s Status) time.Time {
 	return s.CreatedAt
 }
 
-// lastStep restituisce il nome dell'ultimo step registrato del workflow, o "" se non ce ne sono.
+// lastStep returns the name of the workflow's last recorded step, or "" if there are none.
 func (e *Engine) lastStep(id string) string {
 	steps, err := dbos.GetWorkflowSteps(e.client, id, dbos.WithStepsLoadOutput(false))
 	if err != nil || len(steps) == 0 {

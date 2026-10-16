@@ -77,7 +77,7 @@ func TestEventiSSE(t *testing.T) {
 		t.Fatalf("eventi inattesi:\n%s", body)
 	}
 
-	// Ripresa dopo una disconnessione: nessuna riga già ricevuta.
+	// Resume after a disconnection: no line already received.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/deployments/dep-1/events", nil)
 	req.Header.Set("Last-Event-ID", "2")
 	w = httptest.NewRecorder()

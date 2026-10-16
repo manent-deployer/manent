@@ -15,15 +15,15 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Tipi di autenticazione verso una sorgente di artefatti.
+// Authentication types towards an artifact source.
 const (
-	AuthBasic  = "basic"  // Authorization: Basic <username>:<segreto>
-	AuthBearer = "bearer" // Authorization: Bearer <segreto>
-	AuthHeader = "header" // <header>: <segreto> (es. X-JFrog-Art-Api)
+	AuthBasic  = "basic"  // Authorization: Basic <username>:<secret>
+	AuthBearer = "bearer" // Authorization: Bearer <secret>
+	AuthHeader = "header" // <header>: <secret> (e.g. X-JFrog-Art-Api)
 )
 
-// SourceAuth sono le credenziali di una sorgente. SecretRef è un riferimento del secret
-// provider (es. "vault:secret/data/manent/nexus#password"), risolto a ogni download.
+// SourceAuth are the credentials of a source. SecretRef is a secret provider reference
+// (e.g. "vault:secret/data/manent/nexus#password"), resolved at every download.
 type SourceAuth struct {
 	Type      string
 	Username  string
@@ -31,28 +31,27 @@ type SourceAuth struct {
 	SecretRef string
 }
 
-// Source è una sorgente di artefatti configurata, identificata da un prefisso dell'URL
-// (es. "https://nexus.example.com/repository/releases/" o "file:///srv/artifacts/").
+// Source is a configured artifact source, identified by a URL prefix
+// (e.g. "https://nexus.example.com/repository/releases/" or "file:///srv/artifacts/").
 type Source struct {
 	Prefix string
 	Auth   *SourceAuth
-	// CAFile è un bundle di CA aggiuntive per la sorgente.
+	// CAFile is a bundle of extra CAs for the source.
 	CAFile string
 	client *http.Client
 }
 
-// Sources applica le sorgenti configurate: quali sono ammesse e con quali credenziali.
+// Sources applies the configured sources: which ones are allowed and with which credentials.
 type Sources struct {
 	list []Source
-	// AllowUnlisted ammette anche le sorgenti che non corrispondono a nessun prefisso
-	// (senza credenziali).
+	// AllowUnlisted also allows sources that match no prefix (without credentials).
 	AllowUnlisted bool
 	Secrets       secrets.Provider
-	// Client è il client HTTP delle sorgenti senza CA dedicata.
+	// Client is the HTTP client of the sources without a dedicated CA.
 	Client *http.Client
 }
 
-// NewSources verifica le sorgenti e prepara i client con le CA dedicate.
+// NewSources checks the sources and prepares the clients with dedicated CAs.
 func NewSources(list []Source, allowUnlisted bool, sp secrets.Provider, client *http.Client) (*Sources, error) {
 	s := &Sources{AllowUnlisted: allowUnlisted, Secrets: sp, Client: client}
 	for i, src := range list {
@@ -86,7 +85,7 @@ func NewSources(list []Source, allowUnlisted bool, sp secrets.Provider, client *
 	return s, nil
 }
 
-// clientWithCA restituisce una copia del client che si fida anche delle CA del file indicato.
+// clientWithCA returns a copy of the client that also trusts the CAs of the given file.
 func clientWithCA(base *http.Client, caFile string) (*http.Client, error) {
 	pem, err := os.ReadFile(caFile)
 	if err != nil {
@@ -107,8 +106,8 @@ func clientWithCA(base *http.Client, caFile string) (*http.Client, error) {
 	return c, nil
 }
 
-// normalize porta la sorgente nella forma confrontata con i prefissi: gli URL http(s) e le
-// immagini oci restano invariati, i percorsi locali diventano "file://" più il percorso assoluto ripulito.
+// normalize turns the source into the form compared with the prefixes: http(s) URLs and oci
+// images are unchanged, local paths become "file://" plus the cleaned absolute path.
 func normalize(source string) (string, error) {
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") || IsOCI(source) {
 		return source, nil
@@ -120,7 +119,7 @@ func normalize(source string) (string, error) {
 	return "file://" + filepath.ToSlash(abs), nil
 }
 
-// match restituisce la sorgente configurata con il prefisso più lungo, o nil.
+// match returns the configured source with the longest prefix, or nil.
 func (s *Sources) match(source string) (*Source, error) {
 	norm, err := normalize(source)
 	if err != nil {
@@ -135,7 +134,7 @@ func (s *Sources) match(source string) (*Source, error) {
 	return best, nil
 }
 
-// Check verifica che la sorgente sia ammessa.
+// Check verifies that the source is allowed.
 func (s *Sources) Check(source string) error {
 	if s == nil {
 		return nil
@@ -150,8 +149,8 @@ func (s *Sources) Check(source string) error {
 	return nil
 }
 
-// prepare restituisce il client da usare per la richiesta e vi aggiunge le credenziali della
-// sorgente, lette dal secret provider al momento del download.
+// prepare returns the client to use for the request and adds the source credentials, read
+// from the secret provider at download time.
 func (s *Sources) prepare(ctx context.Context, req *http.Request, source string) (*http.Client, error) {
 	if s == nil {
 		return nil, nil

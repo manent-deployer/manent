@@ -1,6 +1,6 @@
-# Configurazione di deploy di myapp nell'ambiente test.
-# Con provider consul il contenuto è il valore della chiave manent/myapp/test (YAML o JSON).
-# Solo riferimenti ai segreti, mai valori: la configurazione viene salvata nello storico del deploy.
+# Deploy configuration of myapp in the test environment.
+# With the consul provider the content is the value of the manent/myapp/test key (YAML or JSON).
+# Only secret references, never values: the configuration is saved in the deploy history.
 plugin: remote-copy
 policy: default
 targets:
@@ -14,8 +14,8 @@ params:
 secrets:
   - name: deploy-key
     ref: env:DEPLOY_SSH_KEY
-# L'ambiente può imporre il rollback automatico (il descrittore non può disattivarlo),
-# nei limiti della policy del tipo di artefatto in manent.yml.
+# The environment can impose automatic rollback (the descriptor cannot disable it),
+# within the artifact type policy in manent.yml.
 # rollback:
 #   enabled: true
 #   locator: plugin

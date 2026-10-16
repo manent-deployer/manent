@@ -1,5 +1,5 @@
-# Server SSH per i test end-to-end del plugin remote-copy (scripts/e2e-ssh.sh).
-# Debian e non Alpine: il plugin usa GNU coreutils (sha256sum, mv -T, readlink).
+# SSH server for the end-to-end tests of the remote-copy plugin (scripts/e2e-ssh.sh).
+# Debian and not Alpine: the plugin uses GNU coreutils (sha256sum, mv -T, readlink).
 FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssh-server coreutils tar gzip \

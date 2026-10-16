@@ -15,11 +15,11 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// UIConfig è la configurazione che l'interfaccia web legge da /ui/config.json prima del login.
-// Non contiene segreti: il client OIDC della UI è pubblico (PKCE).
+// UIConfig is the configuration the web interface reads from /ui/config.json before login.
+// It holds no secrets: the UI OIDC client is public (PKCE).
 type UIConfig struct {
-	// AuthMode è "none" (nessun login), "oidc" (login con l'identity provider) oppure
-	// "unavailable" (autenticazione attiva ma senza un client OIDC per la UI).
+	// AuthMode is "none" (no login), "oidc" (login with the identity provider) or
+	// "unavailable" (authentication enabled but no OIDC client for the UI).
 	AuthMode     string   `json:"auth_mode"`
 	Issuer       string   `json:"issuer,omitempty"`
 	ClientID     string   `json:"client_id,omitempty"`
@@ -28,15 +28,15 @@ type UIConfig struct {
 	Version      string   `json:"version"`
 }
 
-// Modalità di autenticazione dell'interfaccia web.
+// Authentication modes of the web interface.
 const (
 	UIAuthNone        = "none"
 	UIAuthOIDC        = "oidc"
 	UIAuthUnavailable = "unavailable"
 )
 
-// mountUI registra /ui/config.json e serve l'interfaccia web per i percorsi non gestiti
-// dall'API. Le rotte /api/v1 sconosciute restano un 404 JSON.
+// mountUI registers /ui/config.json and serves the web interface for paths not handled by
+// the API. Unknown /api/v1 routes stay a JSON 404.
 func (s *Server) mountUI(r *gin.Engine, o Options) {
 	if o.UIConfig != nil {
 		cfg := *o.UIConfig
@@ -55,7 +55,7 @@ func (s *Server) mountUI(r *gin.Engine, o Options) {
 	})
 }
 
-// me restituisce l'identità della richiesta e i suoi permessi.
+// me returns the identity of the request and its permissions.
 func (s *Server) me(c *gin.Context) {
 	id, err := s.svc.Me(c.Request.Context())
 	if err != nil {
@@ -65,7 +65,7 @@ func (s *Server) me(c *gin.Context) {
 	c.JSON(http.StatusOK, id)
 }
 
-// approvals elenca i deploy in attesa che l'identità può approvare.
+// approvals lists the waiting deploys the identity can approve.
 func (s *Server) approvals(c *gin.Context) {
 	deps, err := s.svc.Approvals(c.Request.Context())
 	if err != nil {
@@ -75,17 +75,17 @@ func (s *Server) approvals(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"approvals": deps})
 }
 
-// heartbeatEvery è l'intervallo dei commenti che tengono aperta la connessione SSE attraverso
-// proxy e bilanciatori.
+// heartbeatEvery is the interval of the comments that keep the SSE connection open through
+// proxies and load balancers.
 const heartbeatEvery = 15 * time.Second
 
-// events invia come Server-Sent Events lo stato di un deploy (evento "status", quando cambia)
-// e le nuove righe di log (evento "log", con id = offset successivo, così un client che si
-// riconnette con Last-Event-ID riprende da lì). Alla conclusione del deploy, dopo le ultime
-// righe, invia "end" e chiude. Lo stato è letto dal servizio a intervalli, quindi valgono gli
-// stessi permessi di Status e Logs.
+// events sends as Server-Sent Events the status of a deploy (event "status", when it changes)
+// and the new log lines (event "log", with id = next offset, so a client reconnecting with
+// Last-Event-ID resumes from there). When the deploy ends, after the last lines, it sends
+// "end" and closes. Status is read from the service periodically, so the same permissions as
+// Status and Logs apply.
 func (s *Server) events(c *gin.Context) {
-	// Lo stato letto a ogni giro autorizza anche la lettura dei log: il Guard non lo rilegge.
+	// The status read at every round also authorizes reading the logs: the Guard does not read it again.
 	ctx := authz.WithDeploymentScope(c.Request.Context())
 	id := c.Param("id")
 	offset := 0

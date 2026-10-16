@@ -1,5 +1,5 @@
-# Configurazione di deploy di myapp in produzione: 3 region × 3 AZ rilasciate a ondate.
-# Vedi docs/content/guida/ondate.md. Solo riferimenti ai segreti, mai valori.
+# Deploy configuration of myapp in production: 3 regions × 3 AZs released in waves.
+# See docs/content/guida/ondate.md. Only secret references, never values.
 plugin: remote-copy
 targets:
   - {host: eu1-a-01.internal, user: deploy, labels: {region: eu-1, az: eu-1a, canary: "true"}}

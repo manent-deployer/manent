@@ -6,7 +6,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Esiti di un'approvazione.
+// Outcomes of an approval.
 const (
 	ApprovalPending  = "pending"
 	ApprovalApproved = "approved"
@@ -14,7 +14,7 @@ const (
 	ApprovalExpired  = "expired"
 )
 
-// Decision è la decisione di un approvatore.
+// Decision is the decision of an approver.
 type Decision struct {
 	Approver string    `json:"approver"`
 	Approve  bool      `json:"approve"`
@@ -22,81 +22,81 @@ type Decision struct {
 	Time     time.Time `json:"time"`
 }
 
-// DecisionRequest è la decisione richiesta tramite CLI o API: l'approvatore è l'identità
-// nel context.
+// DecisionRequest is the decision requested through CLI or API: the approver is the identity
+// in the context.
 type DecisionRequest struct {
 	Approve bool   `json:"approve"`
 	Comment string `json:"comment,omitempty"`
 }
 
-// ApprovalState è lo stato di un'approvazione.
+// ApprovalState is the state of an approval.
 type ApprovalState struct {
 	Status    string     `json:"status"`
 	Required  int        `json:"required"`
 	AllowSelf bool       `json:"allow_self,omitempty"`
 	ExpiresAt time.Time  `json:"expires_at"`
 	Decisions []Decision `json:"decisions,omitempty"`
-	// Change è il ticket di change da approvare nel sistema ITSM, se richiesto.
+	// Change is the change ticket to approve in the ITSM, if required.
 	Change *ChangeTicket `json:"change,omitempty"`
 }
 
-// ChangeTicket è il ticket di change management di un deploy.
+// ChangeTicket is the change management ticket of a deploy.
 type ChangeTicket struct {
-	// ID è l'identificativo tecnico nel sistema ITSM (sys_id, id dell'issue).
+	// ID is the technical identifier in the ITSM (sys_id, issue id).
 	ID     string `json:"id,omitempty"`
 	Number string `json:"number"`
 	URL    string `json:"url,omitempty"`
-	// Approval è lo stato dell'approvazione nel sistema ITSM: pending, approved, rejected.
+	// Approval is the approval state in the ITSM: pending, approved, rejected.
 	Approval string `json:"approval,omitempty"`
 }
 
-// InventoryFilter filtra l'inventario.
+// InventoryFilter filters the inventory.
 type InventoryFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
 }
 
-// InventoryEntry è lo stato di un'applicazione in un ambiente.
+// InventoryEntry is the state of an application in an environment.
 type InventoryEntry struct {
 	Application string `json:"application"`
 	Environment string `json:"environment"`
-	// Current è l'ultimo deploy concluso con successo.
+	// Current is the last successfully ended deploy.
 	Current *Status `json:"current,omitempty"`
-	// LastFailure è l'ultimo deploy fallito o annullato, se successivo a Current: senza un
-	// rollback completato l'ambiente potrebbe non essere nello stato di Current.
+	// LastFailure is the last failed or cancelled deploy, if after Current: without a completed
+	// rollback the environment may not be in Current's state.
 	LastFailure *Status `json:"last_failure,omitempty"`
-	// Drift indica un rollout fermato dopo aver aggiornato una parte delle region o AZ:
-	// l'ambiente ha versioni diverse (dettaglio in LastFailure.RolloutProgress).
+	// Drift is a rollout stopped after updating part of the regions or AZs: the environment has
+	// different versions (details in LastFailure.RolloutProgress).
 	Drift bool `json:"drift,omitempty"`
 }
 
-// Redeploy sono le opzioni comuni a promozioni e rollback manuali.
+// Redeploy are the options shared by promotions and manual rollbacks.
 type Redeploy struct {
-	// ID opzionale del nuovo deploy (chiave di idempotenza).
+	// ID of the new deploy, optional (idempotency key).
 	ID     string `json:"id,omitempty"`
 	DryRun bool   `json:"dry_run,omitempty"`
-	// FreezeOverride, se presente, è il motivo della deroga a un freeze attivo.
+	// FreezeOverride, if set, is the reason for overriding an active freeze.
 	FreezeOverride string `json:"freeze_override,omitempty"`
 }
 
-// PromoteRequest chiede di rilasciare in To l'artefatto già rilasciato con successo in From.
+// PromoteRequest asks to release to To the artifact already successfully released to From.
 type PromoteRequest struct {
 	Application string `json:"application"`
 	From        string `json:"from"`
 	To          string `json:"to"`
-	// Version, se indicata, sceglie la versione da promuovere; default quella in esercizio in From.
+	// Version, if given, chooses the version to promote; default the one in service in From.
 	Version string `json:"version,omitempty"`
-	// Deploy sostituisce la sezione deploy del descrittore di origine; senza, i target di
-	// origine non vengono copiati e arrivano dalla configurazione di ambiente di To.
+	// Deploy replaces the deploy section of the source descriptor; without it, the source
+	// targets are not copied and come from To's environment configuration.
 	Deploy *descriptor.Deploy `json:"deploy,omitempty"`
 	Redeploy
 }
 
-// RollbackRequest chiede di tornare a una versione rilasciata in precedenza.
+// RollbackRequest asks to go back to a previously released version.
 type RollbackRequest struct {
 	Application string `json:"application"`
 	Environment string `json:"environment"`
-	// Version, se indicata, è la versione a cui tornare; default la precedente a quella in esercizio.
+	// Version, if given, is the version to go back to; default the one before the version in service.
 	Version string `json:"version,omitempty"`
 	Redeploy
 }

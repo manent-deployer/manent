@@ -1,4 +1,4 @@
-// Package artifact recupera gli artefatti di deploy in una directory di lavoro locale.
+// Package artifact fetches deploy artifacts into a local working directory.
 package artifact
 
 import (
@@ -13,28 +13,28 @@ import (
 	"strings"
 )
 
-// Fetched descrive un artefatto scaricato in locale.
+// Fetched describes an artifact downloaded locally.
 type Fetched struct {
 	LocalPath string `json:"local_path"`
 	SHA256    string `json:"sha256"`
 	Size      int64  `json:"size"`
 }
 
-// Fetcher recupera un artefatto dalla sorgente indicata.
+// Fetcher fetches an artifact from the given source.
 type Fetcher interface {
 	Fetch(ctx context.Context, source, destDir string) (*Fetched, error)
 }
 
-// DefaultFetcher supporta percorsi locali, file://, http(s):// e immagini dei registry
+// DefaultFetcher supports local paths, file://, http(s):// and registry images
 // (oci://, oci+http://).
 type DefaultFetcher struct {
 	Client *http.Client
-	// Sources, se presente, limita le sorgenti ammesse e fornisce le credenziali.
+	// Sources, if set, limits the allowed sources and provides the credentials.
 	Sources *Sources
 }
 
-// Fetch copia l'artefatto in destDir calcolandone lo SHA-256.
-// La scrittura passa da un file temporaneo per restare idempotente in caso di retry.
+// Fetch copies the artifact into destDir computing its SHA-256.
+// Writing goes through a temporary file to stay idempotent across retries.
 func (f DefaultFetcher) Fetch(ctx context.Context, source, destDir string) (*Fetched, error) {
 	if IsOCI(source) {
 		return f.fetchOCI(ctx, source, destDir)
@@ -69,7 +69,7 @@ func (f DefaultFetcher) Fetch(ctx context.Context, source, destDir string) (*Fet
 	return &Fetched{LocalPath: dest, SHA256: hex.EncodeToString(h.Sum(nil)), Size: n}, nil
 }
 
-// open apre la sorgente e restituisce il nome file di destinazione.
+// open opens the source and returns the destination file name.
 func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser, string, error) {
 	if err := f.Sources.Check(source); err != nil {
 		return nil, "", err
@@ -89,8 +89,8 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 		if client == nil {
 			client = http.DefaultClient
 		}
-		// Le credenziali non seguono un redirect verso un altro host: net/http rimuove
-		// Authorization e gli header sensibili quando il dominio cambia.
+		// Credentials do not follow a redirect to another host: net/http drops Authorization
+		// and the sensitive headers when the domain changes.
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, "", err
@@ -109,26 +109,26 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 	return file, filepath.Base(path), nil
 }
 
-// Store gestisce gli artefatti di ogni deploy nella directory di lavoro locale del worker.
-// Ogni deploy usa la sottodirectory WorkDir/<deployment-id>.
+// Store manages the artifacts of every deploy in the worker's local working directory.
+// Every deploy uses the WorkDir/<deployment-id> subdirectory.
 type Store struct {
 	Fetcher Fetcher
 	WorkDir string
 }
 
-// dir restituisce la directory di lavoro di un deploy.
+// dir returns the working directory of a deploy.
 func (s *Store) dir(deploymentID string) string {
 	return filepath.Join(s.WorkDir, deploymentID)
 }
 
-// Fetch scarica l'artefatto nella directory del deploy.
+// Fetch downloads the artifact into the deploy directory.
 func (s *Store) Fetch(ctx context.Context, deploymentID, source string) (*Fetched, error) {
 	return s.Fetcher.Fetch(ctx, source, s.dir(deploymentID))
 }
 
-// Ensure garantisce che l'artefatto sia presente sul worker corrente e ne restituisce il percorso.
-// Se il deploy è stato recuperato su un worker diverso da quello che ha eseguito lo step
-// artifacts, il file non c'è: viene riscaricato e deve avere lo stesso sha256 registrato.
+// Ensure makes sure the artifact is on the current worker and returns its path.
+// If the deploy was recovered on a worker other than the one that ran the artifacts step,
+// the file is missing: it is downloaded again and must have the same recorded sha256.
 func (s *Store) Ensure(ctx context.Context, deploymentID, source, localPath, sha256 string) (string, bool, error) {
 	if localPath != "" {
 		if _, err := os.Stat(localPath); err == nil {
@@ -145,7 +145,7 @@ func (s *Store) Ensure(ctx context.Context, deploymentID, source, localPath, sha
 	return f.LocalPath, true, nil
 }
 
-// Cleanup rimuove la directory di lavoro del deploy dal worker corrente.
+// Cleanup removes the deploy's working directory from the current worker.
 func (s *Store) Cleanup(_ context.Context, deploymentID string) error {
 	if deploymentID == "" || strings.ContainsAny(deploymentID, `/\`) || deploymentID == "." || deploymentID == ".." {
 		return fmt.Errorf("ID di deploy %q non utilizzabile come directory", deploymentID)

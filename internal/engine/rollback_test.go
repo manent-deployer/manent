@@ -12,11 +12,11 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// compStep è uno step compensabile che registra checkpoint, esecuzioni e compensazioni.
+// compStep is a compensable step that records checkpoints, runs and compensations.
 type compStep struct {
 	recordStep
 	failCompensate bool
-	// nothing simula una compensazione senza nulla da ripristinare.
+	// nothing simulates a compensation with nothing to restore.
 	nothing bool
 }
 
@@ -40,7 +40,7 @@ func (s compStep) Compensate(_ context.Context, _ pipeline.Input, cp pipeline.Ou
 	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted}, nil
 }
 
-// fixedPolicy applica sempre la stessa decisione di rollback, o un errore.
+// fixedPolicy always applies the same rollback decision, or an error.
 type fixedPolicy struct {
 	rb  *descriptor.Rollback
 	err error
@@ -90,7 +90,7 @@ func TestRollbackDopoFallimento(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "rollback completato") {
 		t.Fatalf("atteso errore con rollback completato, ricevuto %v", err)
 	}
-	// Compensazioni in ordine inverso, compreso lo step fallito; b non è compensabile.
+	// Compensations in reverse order, failed step included; b is not compensable.
 	want := []string{"checkpoint:a", "a", "b", "checkpoint:c", "c", "rollback:c=v1-c", "rollback:a=v1-a"}
 	if !slices.Equal(runs, want) {
 		t.Fatalf("esecuzioni inattese:\n got %v\nwant %v", runs, want)
@@ -134,7 +134,7 @@ func TestRollbackFallitoSiFerma(t *testing.T) {
 	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "rollback fallito") {
 		t.Fatalf("atteso rollback fallito, ricevuto %v", err)
 	}
-	// La compensazione di a non viene tentata dopo quella fallita di c.
+	// a's compensation is not attempted after c's failed one.
 	if n := len(runs); runs[n-1] != "rollback:c=v1-c" || slices.Contains(runs, "rollback:a=v1-a") {
 		t.Fatalf("esecuzioni inattese: %v", runs)
 	}
@@ -158,7 +158,7 @@ func TestRollbackNienteDaRipristinare(t *testing.T) {
 func TestRollbackDisattivatoEDryRun(t *testing.T) {
 	ctx := context.Background()
 
-	// Rollback disattivato: nessun checkpoint e nessuna compensazione.
+	// Rollback disabled: no checkpoint and no compensation.
 	var runs []string
 	off := false
 	e := newRollbackEngine(t, fixedPolicy{rb: &descriptor.Rollback{Enabled: &off}}, nil,
@@ -175,7 +175,7 @@ func TestRollbackDisattivatoEDryRun(t *testing.T) {
 		t.Fatalf("esecuzioni inattese: %v", runs)
 	}
 
-	// Dry-run: il checkpoint viene verificato, ma nessuna compensazione.
+	// Dry-run: the checkpoint is verified, but no compensation.
 	runs = nil
 	e = newRollbackEngine(t, fixedPolicy{rb: enabledOn("a")}, nil,
 		compStep{recordStep: recordStep{name: "a", runs: &runs, fail: true}},

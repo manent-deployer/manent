@@ -38,7 +38,7 @@ func TestTokenFileRiletto(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		// Il controllo usa data di modifica e dimensione: si forza una data diversa.
+		// The check uses modification time and size: force a different time.
 		mt := time.Now().Add(time.Duration(len(content)) * time.Second)
 		_ = os.Chtimes(path, mt, mt)
 	}
@@ -53,7 +53,7 @@ func TestTokenFileRiletto(t *testing.T) {
 		t.Fatalf("token del file rifiutato: %v", err)
 	}
 
-	// Revoca: il token viene tolto dal file.
+	// Revocation: the token is removed from the file.
 	write("tokens:\n  - {name: altro, sha256: " + hashOf("t2") + "}\n")
 	if _, err := f.Authenticate(ctx, "t1"); !errors.Is(err, ErrUnauthenticated) {
 		t.Error("il token revocato è ancora valido")
@@ -62,13 +62,13 @@ func TestTokenFileRiletto(t *testing.T) {
 		t.Errorf("il nuovo token non è valido: %v", err)
 	}
 
-	// Un file non valido non cambia i token in uso.
+	// An invalid file does not change the tokens in use.
 	write("tokens: [non valido")
 	if _, err := f.Authenticate(ctx, "t2"); err != nil {
 		t.Errorf("con un file non valido restano i token precedenti: %v", err)
 	}
 
-	// Un file rimosso revoca tutto.
+	// A removed file revokes everything.
 	_ = os.Remove(path)
 	if _, err := f.Authenticate(ctx, "t2"); !errors.Is(err, ErrUnauthenticated) {
 		t.Error("con il file rimosso nessun token è valido")

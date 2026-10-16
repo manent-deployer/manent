@@ -16,8 +16,8 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// chaosStep simula un deploy di durata variabile, rispetta l'annullamento (come un processo
-// che muore) e misura esecuzioni e concorrenza per ambiente.
+// chaosStep simulates a deploy of variable duration, honors cancellation (like a dying
+// process) and measures runs and concurrency per environment.
 type chaosStep struct {
 	mu        sync.Mutex
 	running   map[string]int
@@ -51,9 +51,9 @@ func (s *chaosStep) Run(ctx context.Context, in pipeline.Input) (pipeline.Output
 	return pipeline.Output{}, nil
 }
 
-// TestCaricoECaos accoda molti deploy su più worker e ne fa cadere uno a metà: tutti i deploy
-// devono concludersi, ciascuno al più due volte (l'esecuzione interrotta e la ripresa) e mai
-// due insieme nello stesso ambiente. Lento: si esegue con MANENT_TEST_LOAD=1.
+// TestCaricoECaos enqueues many deploys on several workers and kills one halfway: all deploys
+// must end, each at most twice (the interrupted run and the resumption) and never two at once
+// in the same environment. Slow: runs with MANENT_TEST_LOAD=1.
 func TestCaricoECaos(t *testing.T) {
 	if os.Getenv("MANENT_TEST_LOAD") == "" {
 		t.Skip("MANENT_TEST_LOAD non impostata")
@@ -73,7 +73,7 @@ func TestCaricoECaos(t *testing.T) {
 		}
 		return o
 	}
-	// w2 parte per primo e preleva deploy; w1 e w3 arrivano dopo; poi w2 cade a metà lavoro.
+	// w2 starts first and dequeues deploys; w1 and w3 come later; then w2 dies halfway.
 	w2, err := NewWorker(opts("w2", true))
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestCaricoECaos(t *testing.T) {
 	w1 := startWorker(t, opts("w1", false))
 	startWorker(t, opts("w3", false))
 	svc = NewService(ServiceOptions{Client: w1.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
-	// Attende che w2 abbia deploy in esecuzione.
+	// Wait until w2 has running deploys.
 	for {
 		wfs, err := dbos.ListWorkflows(w1.Client(), dbos.WithFilterExecutorIDs("w2"), dbos.WithFilterStatus(dbos.WorkflowStatusPending))
 		if err != nil {

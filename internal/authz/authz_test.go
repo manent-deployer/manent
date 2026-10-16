@@ -85,14 +85,14 @@ func TestNewPolicyErrori(t *testing.T) {
 	}
 }
 
-// fakeService è un engine.Service in memoria.
+// fakeService is an in-memory engine.Service.
 type fakeService struct {
 	statuses  map[string]engine.Status
 	schedules map[string]engine.ScheduleInfo
 	submitted []*descriptor.Descriptor
 	cancelled []string
 	decided   []string
-	// statusReads conta le letture dello stato.
+	// statusReads counts the status reads.
 	statusReads int
 }
 
@@ -179,14 +179,14 @@ func (f *fakeService) Logs(context.Context, string, int) (*deploylog.Page, error
 	return &deploylog.Page{Lines: []deploylog.Line{{Message: "ok"}}}, nil
 }
 
-// DORA ignora Match, come un servizio remoto: il Guard deve filtrare comunque.
+// DORA ignores Match, like a remote service: the Guard must filter anyway.
 func (f *fakeService) DORA(context.Context, engine.DORAFilter) (*engine.DORAReport, error) {
 	return &engine.DORAReport{Environments: []engine.DORAMetrics{
 		{Application: "team-a-api", Environment: "test"}, {Application: "team-b-api", Environment: "test"},
 	}}, nil
 }
 
-// Workers e Activity ignorano Match, come un servizio remoto: il Guard deve filtrare comunque.
+// Workers and Activity ignore Match, like a remote service: the Guard must filter anyway.
 func (f *fakeService) Workers(context.Context) ([]engine.WorkerInfo, error) {
 	return []engine.WorkerInfo{{ID: "w1", State: "alive", Tasks: []engine.WorkerTask{
 		{ID: "a1", Application: "team-a-api", Environment: "test"}, {ID: "b1", Application: "team-b-api", Environment: "test"},
@@ -262,7 +262,7 @@ func TestGuard(t *testing.T) {
 		t.Fatalf("dry-run in prod ammesso dal ruolo tester: %v", err)
 	}
 
-	// Lettura e annullamento solo sulle proprie applicazioni.
+	// Read and cancel only on one's own applications.
 	if _, err := g.Status(alice, "b1"); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("atteso ErrForbidden, ricevuto %v", err)
 	}
@@ -275,14 +275,14 @@ func TestGuard(t *testing.T) {
 	if ss, _ := g.ListSchedules(alice); len(ss) != 0 {
 		t.Errorf("schedule di un altro team visibili: %+v", ss)
 	}
-	// Validate mostra la configurazione effettiva: richiede la lettura.
+	// Validate shows the effective configuration: it requires read.
 	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-b-api", Environment: "test"}); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("validate di un altro team: atteso ErrForbidden, ricevuto %v", err)
 	}
 	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-a-api", Environment: "prod"}); err != nil {
 		t.Errorf("validate in lettura: %v", err)
 	}
-	// Timeline, log e metriche DORA seguono il permesso di lettura.
+	// Timeline, logs and DORA metrics follow the read permission.
 	if _, err := g.Logs(alice, "b1", 0); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("log di un altro team: atteso ErrForbidden, ricevuto %v", err)
 	}
@@ -296,7 +296,7 @@ func TestGuard(t *testing.T) {
 		t.Errorf("DORA non filtrate: %+v", rep)
 	}
 
-	// Release: permessi su ogni deploy, lettura delle dipendenze esterne, rollback se richiesto.
+	// Release: permissions on every deploy, read of external dependencies, rollback if requested.
 	item := func(name, app, env string, after ...string) descriptor.ReleaseDeploy {
 		return descriptor.ReleaseDeploy{Name: name, Descriptor: &descriptor.Descriptor{Application: app, Environment: env, After: after}}
 	}
@@ -320,16 +320,16 @@ func TestGuard(t *testing.T) {
 		t.Errorf("after su un deploy non leggibile: %v", err)
 	}
 
-	// Attività: solo i deploy leggibili.
+	// Activity: only readable deploys.
 	if a, err := g.Activity(alice, engine.ActivityFilter{}); err != nil || len(a.Running) != 1 || len(a.Queued) != 0 {
 		t.Errorf("attività non filtrata: %+v %v", a, err)
 	}
-	// Worker: platform.read, che il ruolo deployer non ha.
+	// Workers: platform.read, which the deployer role lacks.
 	if _, err := g.Workers(alice); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("worker senza platform.read: atteso ErrForbidden, ricevuto %v", err)
 	}
 
-	// Una schedule con lo stesso nome di un'altra applicazione non può essere sovrascritta.
+	// A schedule with the same name as another application's cannot be overwritten.
 	op := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "ops", Method: auth.MethodOIDC})
 	cron := &descriptor.Descriptor{Application: "team-a-api", Environment: "test", Schedule: &descriptor.Schedule{Cron: "0 2 * * *", Name: "nightly"}}
 	if _, err := g.Submit(op, cron); !errors.Is(err, engine.ErrForbidden) {
@@ -339,18 +339,18 @@ func TestGuard(t *testing.T) {
 	if _, err := g.Submit(op, cron); err != nil {
 		t.Errorf("schedule nuova non creata: %v", err)
 	}
-	// operator ha platform.read (vale qualunque binding): vede i worker, ma dei workflow in
-	// esecuzione solo quelli che può leggere.
+	// operator has platform.read (any binding counts): it sees the workers, but only the running
+	// workflows it can read.
 	if ws, err := g.Workers(op); err != nil || len(ws) != 1 || len(ws[0].Tasks) != 1 || ws[0].Tasks[0].ID != "a1" || ws[0].HiddenTasks != 1 {
 		t.Errorf("worker: %+v %v", ws, err)
 	}
 
-	// Senza identità nel context tutto è negato.
+	// Without an identity in the context everything is denied.
 	if _, err := g.Status(context.Background(), "a1"); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("atteso ErrForbidden senza identità, ricevuto %v", err)
 	}
 
-	// Audit: azioni eseguite e negate, con l'identità.
+	// Audit: performed and denied actions, with the identity.
 	var allowed, denied int
 	for _, e := range rec.entries {
 		switch e.Outcome {
@@ -370,8 +370,8 @@ func TestGuard(t *testing.T) {
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// Con WithDeploymentScope i log di un deploy già letto non rileggono lo stato, ma il permesso
-// viene comunque verificato sulla policy.
+// With WithDeploymentScope the logs of an already read deploy do not read the status again,
+// but the permission is still checked against the policy.
 func TestGuardScopeDeploy(t *testing.T) {
 	svc := &fakeService{statuses: map[string]engine.Status{
 		"a1": {ID: "a1", Application: "team-a-api", Environment: "test"},
@@ -390,7 +390,7 @@ func TestGuardScopeDeploy(t *testing.T) {
 	if svc.statusReads != 1 {
 		t.Errorf("letture dello stato: %d, attesa 1", svc.statusReads)
 	}
-	// Un deploy non autorizzato non viene ricordato: i log restano negati.
+	// An unauthorized deploy is not remembered: logs stay denied.
 	if _, err := g.Status(alice, "b1"); !errors.Is(err, engine.ErrForbidden) {
 		t.Fatal(err)
 	}
@@ -419,11 +419,11 @@ func TestGuardGovernance(t *testing.T) {
 	}
 	alice, bob, carl := ctxOf("alice", "team-a"), ctxOf("bob", "cab"), ctxOf("carl", "team-b")
 
-	// Chi ha richiesto il deploy non può approvarlo, anche se è approvatore.
+	// Whoever requested the deploy cannot approve it, even as an approver.
 	if err := g.Decide(alice, "p1", engine.DecisionRequest{Approve: true}); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("auto-approvazione: atteso ErrForbidden, ricevuto %v", err)
 	}
-	// Può però ritirarlo respingendolo.
+	// They can withdraw it by rejecting it, though.
 	if err := g.Decide(alice, "p1", engine.DecisionRequest{Approve: false, Comment: "ritirato"}); err != nil {
 		t.Errorf("rifiuto del richiedente: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestGuardGovernance(t *testing.T) {
 		t.Errorf("approvazione senza ruolo: atteso ErrForbidden, ricevuto %v", err)
 	}
 
-	// La promozione richiede lettura sull'origine e submit sulla destinazione.
+	// Promotion requires read on the source and submit on the destination.
 	if _, err := g.Promote(alice, engine.PromoteRequest{Application: "app", From: "test", To: "prod"}); err != nil {
 		t.Errorf("promozione: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestGuardGovernance(t *testing.T) {
 		t.Errorf("rollback dell'approvatore: atteso ErrForbidden, ricevuto %v", err)
 	}
 
-	// La deroga al freeze richiede un permesso a parte.
+	// A freeze override requires a separate permission.
 	d := &descriptor.Descriptor{Application: "app", Environment: "prod", FreezeOverride: "INC-1"}
 	if _, err := g.Submit(alice, d); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("deroga senza permesso: atteso ErrForbidden, ricevuto %v", err)
@@ -457,7 +457,7 @@ func TestGuardGovernance(t *testing.T) {
 		t.Errorf("deroga dell'admin: %v", err)
 	}
 
-	// Il piano richiede la lettura.
+	// The plan requires read.
 	if _, err := g.Plan(carl, &descriptor.Descriptor{Application: "app", Environment: "prod"}); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("piano senza permessi: atteso ErrForbidden, ricevuto %v", err)
 	}
@@ -496,7 +496,7 @@ func TestGuardMeEApprovazioni(t *testing.T) {
 		!slices.Contains(me.Grants[1].Actions, string(DeploymentSubmit)) {
 		t.Errorf("me: %+v %v", me, err)
 	}
-	// Solo i deploy che l'identità può approvare: non quelli di altri team né i propri.
+	// Only the deploys the identity can approve: not other teams' ones nor its own.
 	if list, _ := g.Approvals(carol); len(list) != 1 || list[0].ID != "a1" {
 		t.Errorf("approvazioni di carol: %+v", list)
 	}
@@ -504,7 +504,7 @@ func TestGuardMeEApprovazioni(t *testing.T) {
 		t.Errorf("alice non può approvare il proprio deploy: %+v", list)
 	}
 
-	// Senza autenticazione tutto è consentito e Me lo dice.
+	// Without authentication everything is allowed, and Me says so.
 	open := &Guard{Next: svc, Policy: Policy{Disabled: true}, Logger: discardLogger()}
 	if me, _ := open.Me(context.Background()); me.AuthEnabled || len(me.Grants) != 1 || me.Grants[0].Role != "*" {
 		t.Errorf("me senza autenticazione: %+v", me)

@@ -10,57 +10,57 @@ import (
 	"time"
 )
 
-// Strategie di rollout.
+// Rollout strategies.
 const (
-	// StrategyWaves aggiorna i target a ondate (default).
+	// StrategyWaves updates the targets in waves (default).
 	StrategyWaves = "waves"
-	// StrategyTraffic rilascia la nuova versione accanto a quella stabile e sposta il traffico
-	// per percentuali (canary; blue/green con un solo gradino al 100%).
+	// StrategyTraffic releases the new version next to the stable one and shifts traffic by
+	// percentages (canary; blue/green with a single 100% step).
 	StrategyTraffic = "traffic"
 )
 
-// Comportamenti quando i pesi del router non sono quelli impostati da manent.
+// Behaviors when the router weights are not the ones set by manent.
 const (
 	OnDriftPause  = "pause"
 	OnDriftIgnore = "ignore"
 )
 
-// ReplicasProportional scala la versione candidata in proporzione al peso del gradino.
+// ReplicasProportional scales the candidate version in proportion to the step weight.
 const ReplicasProportional = "proportional"
 
-// TrafficRollout è la strategia di rilascio per percentuale di traffico.
+// TrafficRollout is the release strategy by traffic percentage.
 type TrafficRollout struct {
-	// Steps sono le percentuali di traffico verso la nuova versione, crescenti, l'ultima 100.
-	// [100] è un blue/green: un solo switch dopo i test a peso 0.
+	// Steps are the increasing traffic percentages towards the new version, the last one 100.
+	// [100] is a blue/green: a single switch after the tests at weight 0.
 	Steps []int `json:"steps" yaml:"steps"`
-	// Bake è il tempo di osservazione dopo ogni gradino tranne l'ultimo (es. "10m").
+	// Bake is the observation time after every step but the last (e.g. "10m").
 	Bake string `json:"bake,omitempty" yaml:"bake,omitempty"`
-	// Testers instrada verso la nuova versione, prima del primo gradino, solo le richieste dei
-	// tester (header o tag, secondo il router).
+	// Testers routes to the new version, before the first step, only the testers' requests
+	// (header or tag, depending on the router).
 	Testers *Testers `json:"testers,omitempty" yaml:"testers,omitempty"`
-	// ScaleDownDelay è l'attesa prima di ridimensionare la versione sostituita: fino ad allora
-	// un rollback è un cambio di peso (default 30m).
+	// ScaleDownDelay is the wait before scaling down the replaced version: until then a rollback
+	// is a weight change (default 30m).
 	ScaleDownDelay string `json:"scaleDownDelay,omitempty" yaml:"scaleDownDelay,omitempty"`
-	// Replicas è "" (stesse repliche della versione stabile) o "proportional".
+	// Replicas is "" (same replicas as the stable version) or "proportional".
 	Replicas string `json:"replicas,omitempty" yaml:"replicas,omitempty"`
-	// OnDrift è pause (default: il rollout si ferma in attesa di una decisione) o ignore.
+	// OnDrift is pause (default: the rollout stops waiting for a decision) or ignore.
 	OnDrift string `json:"onDrift,omitempty" yaml:"onDrift,omitempty"`
 }
 
-// Testers identifica le richieste dei tester.
+// Testers identifies the testers' requests.
 type Testers struct {
-	// Header è "nome: valore" (es. "x-canary: always"), per i router che instradano per header.
+	// Header is "name: value" (e.g. "x-canary: always"), for routers that route by header.
 	Header string `json:"header,omitempty" yaml:"header,omitempty"`
-	// Tag è l'etichetta della revisione candidata, per i router che danno un URL ai tester
-	// (es. Cloud Run).
+	// Tag is the label of the candidate revision, for routers that give testers a URL
+	// (e.g. Cloud Run).
 	Tag string `json:"tag,omitempty" yaml:"tag,omitempty"`
 }
 
-// DefaultScaleDownDelay è l'attesa di default prima di ridimensionare la versione sostituita.
+// DefaultScaleDownDelay is the default wait before scaling down the replaced version.
 const DefaultScaleDownDelay = 30 * time.Minute
 
-// StageZero è il valore di approvalsBetween che chiede un'approvazione dopo i test a peso 0,
-// prima del primo spostamento di traffico.
+// StageZero is the approvalsBetween value that asks for an approval after the tests at
+// weight 0, before the first traffic shift.
 const StageZero = "0"
 
 var (
@@ -68,16 +68,16 @@ var (
 	tagRe        = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,44}[a-z0-9])?$`)
 )
 
-// IsTraffic indica la strategia per percentuale di traffico.
+// IsTraffic reports the traffic percentage strategy.
 func (r *Rollout) IsTraffic() bool { return r != nil && r.Strategy == StrategyTraffic }
 
-// BakeDuration restituisce il tempo di osservazione di un gradino.
+// BakeDuration returns the observation time of a step.
 func (t *TrafficRollout) BakeDuration() time.Duration {
 	d, _ := time.ParseDuration(t.Bake)
 	return d
 }
 
-// ScaleDownDelayDuration restituisce l'attesa prima del ridimensionamento.
+// ScaleDownDelayDuration returns the wait before scaling down.
 func (t *TrafficRollout) ScaleDownDelayDuration() time.Duration {
 	if t.ScaleDownDelay == "" {
 		return DefaultScaleDownDelay
@@ -86,7 +86,7 @@ func (t *TrafficRollout) ScaleDownDelayDuration() time.Duration {
 	return d
 }
 
-// HeaderPair restituisce nome e valore dell'header dei tester.
+// HeaderPair returns name and value of the testers' header.
 func (t *Testers) HeaderPair() (string, string) {
 	if t == nil {
 		return "", ""
@@ -148,8 +148,8 @@ func (t *TrafficRollout) validate() error {
 	return errors.Join(errs...)
 }
 
-// stageNames sono i nomi validi in approvalsBetween per la strategia traffic: "0" e le
-// percentuali dei gradini tranne l'ultimo.
+// stageNames are the valid approvalsBetween names for the traffic strategy: "0" and the
+// percentages of every step but the last.
 func (t *TrafficRollout) stageNames() []string {
 	out := []string{StageZero}
 	for _, s := range t.Steps {
@@ -160,59 +160,60 @@ func (t *TrafficRollout) stageNames() []string {
 	return out
 }
 
-// TrafficConfig è l'integrazione con load balancer e router di un ambiente. Sta solo nella
-// configurazione di ambiente: il descrittore non può definirla.
+// TrafficConfig is the integration with an environment's load balancers and routers. It lives
+// only in the environment configuration: the descriptor cannot define it.
 type TrafficConfig struct {
-	// Pool svuota i target dal load balancer prima di aggiornarli e li rimette in servizio dopo.
+	// Pool drains the targets from the load balancer before updating them and puts them back in
+	// service afterwards.
 	Pool *PoolConfig `json:"pool,omitempty" yaml:"pool,omitempty"`
-	// Router sposta il traffico tra due gruppi di target (etichetta slot) nei rilasci per
-	// percentuale. Senza, il router è quello del plugin di deploy.
+	// Router shifts traffic between two groups of targets (slot label) in percentage rollouts.
+	// Without it, the router is the deploy plugin's.
 	Router *RouterConfig `json:"router,omitempty" yaml:"router,omitempty"`
 }
 
-// Comportamenti allo scadere dello svuotamento.
+// Behaviors when draining times out.
 const (
 	OnTimeoutProceed = "proceed"
 	OnTimeoutFail    = "fail"
 )
 
-// Durate di default del pool.
+// Default pool durations.
 const (
 	DefaultDrainTimeout   = 5 * time.Minute
 	DefaultRestoreTimeout = 5 * time.Minute
 	DefaultPollInterval   = 5 * time.Second
 )
 
-// PoolConfig è il pool di un load balancer.
+// PoolConfig is the pool of a load balancer.
 type PoolConfig struct {
-	// Provider è haproxy, aws-elb, health-flag, f5, nginx-plus o nginx.
+	// Provider is haproxy, aws-elb, health-flag, f5, nginx-plus or nginx.
 	Provider string `json:"provider" yaml:"provider"`
-	// Member è il nome del membro del pool di un target: {host}, {port} e {label.<nome>}
-	// vengono sostituiti (default "{host}").
+	// Member is the pool member name of a target: {host}, {port} and {label.<name>} are
+	// replaced (default "{host}").
 	Member string `json:"member,omitempty" yaml:"member,omitempty"`
-	// DrainTimeout è l'attesa massima delle connessioni residue (default 5m).
+	// DrainTimeout is the maximum wait for the remaining connections (default 5m).
 	DrainTimeout string `json:"drain_timeout,omitempty" yaml:"drain_timeout,omitempty"`
-	// RestoreTimeout è l'attesa massima del rientro in salute (default 5m).
+	// RestoreTimeout is the maximum wait for returning healthy (default 5m).
 	RestoreTimeout string `json:"restore_timeout,omitempty" yaml:"restore_timeout,omitempty"`
-	// PollInterval è la frequenza delle letture durante le attese (default 5s).
+	// PollInterval is the frequency of reads during waits (default 5s).
 	PollInterval string `json:"poll_interval,omitempty" yaml:"poll_interval,omitempty"`
-	// MinHealthy sono i membri sani che devono restare in servizio: un numero o una
-	// percentuale dei membri del pool (default 1).
+	// MinHealthy are the healthy members that must stay in service: a number or a percentage of
+	// the pool members (default 1).
 	MinHealthy string `json:"min_healthy,omitempty" yaml:"min_healthy,omitempty"`
-	// OnTimeout è proceed (default: il deploy chiude le connessioni residue) o fail.
+	// OnTimeout is proceed (default: the deploy closes the remaining connections) or fail.
 	OnTimeout string `json:"on_timeout,omitempty" yaml:"on_timeout,omitempty"`
-	// Settings sono le impostazioni del provider (URL delle API, backend, segreti per nome).
+	// Settings are the provider settings (API URLs, backends, secrets by name).
 	Settings map[string]string `json:"settings,omitempty" yaml:"settings,omitempty"`
 }
 
-// RouterConfig è il router del traffico tra gli slot.
+// RouterConfig is the router of traffic between slots.
 type RouterConfig struct {
-	// Provider è aws-alb, haproxy, f5 o nginx-plus.
+	// Provider is aws-alb, haproxy, f5 or nginx-plus.
 	Provider string            `json:"provider" yaml:"provider"`
 	Settings map[string]string `json:"settings,omitempty" yaml:"settings,omitempty"`
 }
 
-// Durations restituisce le attese del pool.
+// Durations returns the pool waits.
 func (p *PoolConfig) Durations() (drain, restore, poll time.Duration) {
 	parse := func(s string, def time.Duration) time.Duration {
 		if d, err := time.ParseDuration(s); err == nil && d > 0 {
@@ -223,7 +224,7 @@ func (p *PoolConfig) Durations() (drain, restore, poll time.Duration) {
 	return parse(p.DrainTimeout, DefaultDrainTimeout), parse(p.RestoreTimeout, DefaultRestoreTimeout), parse(p.PollInterval, DefaultPollInterval)
 }
 
-// MinHealthyFor restituisce i membri sani da conservare su n membri del pool.
+// MinHealthyFor returns the healthy members to keep out of n pool members.
 func (p *PoolConfig) MinHealthyFor(n int) int {
 	v := strings.TrimSpace(p.MinHealthy)
 	if v == "" {
@@ -231,20 +232,20 @@ func (p *PoolConfig) MinHealthyFor(n int) int {
 	}
 	if pct, ok := strings.CutSuffix(v, "%"); ok {
 		k, _ := strconv.Atoi(pct)
-		// Arrotondato per eccesso: 66% di 3 membri sono 2.
+		// Rounded up: 66% of 3 members is 2.
 		return (n*k + 99) / 100
 	}
 	k, _ := strconv.Atoi(v)
 	return k
 }
 
-// MemberName calcola il nome del membro del pool di un target.
+// MemberName computes the pool member name of a target.
 func (p *PoolConfig) MemberName(t Target) string {
 	return ExpandTarget(p.Member, t)
 }
 
-// ExpandTarget sostituisce {host}, {port} e {label.<nome>} con i dati del target; un modello
-// vuoto vale "{host}".
+// ExpandTarget replaces {host}, {port} and {label.<name>} with the target data; an empty
+// template means "{host}".
 func ExpandTarget(tmpl string, t Target) string {
 	if tmpl == "" {
 		tmpl = "{host}"
@@ -258,7 +259,7 @@ func ExpandTarget(tmpl string, t Target) string {
 
 var settingKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-// Validate verifica la struttura; le impostazioni del provider le verifica internal/traffic.
+// Validate checks the structure; internal/traffic checks the provider settings.
 func (c *TrafficConfig) Validate() error {
 	var errs []error
 	if p := c.Pool; p != nil {
@@ -308,14 +309,14 @@ func checkSettings(field string, s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// SlotLabel è l'etichetta dei target che indica lo slot (a o b) nei rilasci per percentuale
-// con un router esterno al plugin.
+// SlotLabel is the target label that names the slot (a or b) in percentage rollouts with a
+// router outside the plugin.
 const SlotLabel = "slot"
 
-// Slots sono i due slot affiancati.
+// Slots are the two side-by-side slots.
 var Slots = []string{"a", "b"}
 
-// OtherSlot restituisce lo slot diverso da s ("a" se s è vuoto).
+// OtherSlot returns the slot other than s ("a" if s is empty).
 func OtherSlot(s string) string {
 	if s == "a" {
 		return "b"
@@ -323,5 +324,5 @@ func OtherSlot(s string) string {
 	return "a"
 }
 
-// ValidSlot indica uno slot valido.
+// ValidSlot reports a valid slot.
 func ValidSlot(s string) bool { return slices.Contains(Slots, s) }

@@ -13,8 +13,8 @@ import (
 	"github.com/joeg-ita/manent/internal/deploylog"
 )
 
-// workflowFor restituisce l'ID del workflow che rappresenta il deploy: il deploy stesso o, se
-// non è ancora partito, la sua approvazione.
+// workflowFor returns the ID of the workflow representing the deploy: the deploy itself or,
+// if not started yet, its approval.
 func (e *Engine) workflowFor(id string) (dbos.WorkflowStatus, error) {
 	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id, id+approvalSuffix, id+afterSuffix),
 		dbos.WithFilterName(workflowNames...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
@@ -32,7 +32,7 @@ func (e *Engine) workflowFor(id string) (dbos.WorkflowStatus, error) {
 	return dbos.WorkflowStatus{}, fmt.Errorf("%w: deploy %s", ErrNotFound, id)
 }
 
-// Steps implementa InsightService.
+// Steps implements InsightService.
 func (e *Engine) Steps(_ context.Context, id string) ([]StepRecord, error) {
 	w, err := e.workflowFor(id)
 	if err != nil {
@@ -64,7 +64,7 @@ func (e *Engine) Steps(_ context.Context, id string) ([]StepRecord, error) {
 	return out, nil
 }
 
-// Logs implementa InsightService.
+// Logs implements InsightService.
 func (e *Engine) Logs(_ context.Context, id string, offset int) (*deploylog.Page, error) {
 	if offset < 0 {
 		return nil, fmt.Errorf("%w: offset negativo", ErrInvalidRequest)
@@ -83,18 +83,18 @@ func (e *Engine) Logs(_ context.Context, id string, offset int) (*deploylog.Page
 	return &p, nil
 }
 
-// doraAcc accumula i dati di un ambiente.
+// doraAcc accumulates the data of an environment.
 type doraAcc struct {
 	m         DORAMetrics
 	successes int
 	restores  []time.Duration
 	leads     []time.Duration
-	// events sono i deploy conclusi del periodo, in ordine cronologico.
+	// events are the deploys ended in the period, in chronological order.
 	events []Status
 }
 
-// DORA implementa InsightService. Esamina al più gli ultimi maxListScan deploy: con uno storico
-// più lungo (o una retention più breve del periodo) le metriche sono parziali.
+// DORA implements InsightService. It examines at most the last maxListScan deploys: with a
+// longer history (or a retention shorter than the period) the metrics are partial.
 func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 	until := e.now().UTC()
 	if f.Since.IsZero() {
@@ -107,7 +107,7 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 			return true
 		}
 		if s.State == string(dbos.WorkflowStatusSuccess) {
-			// Lo scan va dal più recente: l'ultimo valore visto è il primo rilascio.
+			// The scan goes from the most recent: the last value seen is the first release.
 			firstSuccess[s.Application+"\x00"+s.Artifact+"\x00"+s.Version] = s.UpdatedAt
 		}
 		if s.UpdatedAt.Before(f.Since) || (f.Application != "" && s.Application != f.Application) ||
@@ -150,7 +150,7 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 	return rep, nil
 }
 
-// compute ricostruisce la cronologia dell'ambiente: guasti, ripristini e lead time.
+// compute rebuilds the environment's chronology: failures, restores and lead times.
 func (a *doraAcc) compute(firstSuccess map[string]time.Time) {
 	slices.Reverse(a.events)
 	var failedAt time.Time
@@ -165,8 +165,8 @@ func (a *doraAcc) compute(firstSuccess map[string]time.Time) {
 		}
 		a.successes++
 		if s.Kind == KindRollback {
-			// Un rollback manuale segnala che la release precedente era difettosa: il guasto
-			// conta dalla richiesta del rollback, se non era già aperto.
+			// A manual rollback signals that the previous release was faulty: the failure counts from the
+			// rollback request, if not already open.
 			a.m.Failures++
 			if failedAt.IsZero() {
 				failedAt = s.CreatedAt
@@ -182,7 +182,7 @@ func (a *doraAcc) compute(firstSuccess map[string]time.Time) {
 	}
 }
 
-// finish calcola i rapporti.
+// finish computes the ratios.
 func (a *doraAcc) finish(days float64) {
 	if days > 0 {
 		a.m.DeploymentsPerDay = round2(float64(a.successes) / days)

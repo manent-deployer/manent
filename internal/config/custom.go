@@ -6,26 +6,26 @@ import (
 	"strings"
 )
 
-// CustomSteps configura l'esecuzione degli step personalizzati.
+// CustomSteps configures the execution of custom steps.
 type CustomSteps struct {
-	// SpecKeyRefs sono i riferimenti alle chiavi HMAC che firmano le specifiche fotografate
-	// nei piani: la prima firma, tutte verificano (rotazione). Senza, le specifiche non sono
-	// firmate e chi scrive nel database DBOS può far eseguire comandi sui target.
+	// SpecKeyRefs reference the HMAC keys that sign the specs captured in plans: the first signs,
+	// all verify (rotation). Without them specs are unsigned and whoever writes to the DBOS
+	// database can run commands on the targets.
 	SpecKeyRefs []string `yaml:"spec_key_refs"`
-	// RevokedSpecs sono gli sha256 delle specifiche da non eseguire più, anche se già
-	// fotografate in deploy accodati o schedule.
+	// RevokedSpecs are the sha256 of the specs not to run any more, even if already captured in
+	// enqueued deploys or schedules.
 	RevokedSpecs []string `yaml:"revoked_specs"`
-	// KnownHosts è il file known_hosts per i comandi via SSH (default ~/.ssh/known_hosts).
+	// KnownHosts is the known_hosts file for commands over SSH (default ~/.ssh/known_hosts).
 	KnownHosts string `yaml:"known_hosts"`
-	// InsecureIgnoreHostKey disattiva la verifica della host key: solo per lo sviluppo.
+	// InsecureIgnoreHostKey disables host key verification: development only.
 	InsecureIgnoreHostKey bool `yaml:"insecure_ignore_host_key"`
-	// SecretsDir è la directory dei segreti sui target, su tmpfs (default /dev/shm/manent).
+	// SecretsDir is the secrets directory on the targets, on tmpfs (default /dev/shm/manent).
 	SecretsDir string `yaml:"secrets_dir"`
-	// AllowHTTP ammette URL http negli step http (default: solo https).
+	// AllowHTTP allows http URLs in http steps (default: https only).
 	AllowHTTP bool `yaml:"allow_http"`
 }
 
-// DefaultCustomSecretsDir è la directory dei segreti sui target.
+// DefaultCustomSecretsDir is the secrets directory on the targets.
 const DefaultCustomSecretsDir = "/dev/shm/manent"
 
 var (
@@ -34,7 +34,7 @@ var (
 	standardStep = []string{"secrets", "artifacts", "qa", "deploy", "post-test", "activation", "drain", "restore"}
 )
 
-// HasCustom indica se la pipeline contiene step personalizzati.
+// HasCustom reports whether the pipeline contains custom steps.
 func (p Pipeline) HasCustom() bool {
 	for _, s := range p.Steps {
 		if s.IsCustom() {

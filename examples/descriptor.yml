@@ -1,6 +1,6 @@
-# Descrittore di deploy di esempio (CLI: manent deploy -f examples/descriptor.yml)
+# Sample deploy descriptor (CLI: manent deploy -f examples/descriptor.yml)
 apiVersion: manent/v1
-# Opzionale: chiave di idempotenza. Lo stesso id non viene eseguito due volte.
+# Optional: idempotency key. The same id never runs twice.
 id: myapp-1.2.3-test
 application: myapp
 environment: test
@@ -9,18 +9,18 @@ artifact:
   type: application
   name: myapp
   version: 1.2.3
-  source: ./dist/myapp-1.2.3.tar.gz   # percorso locale, file:// o http(s)://
-  # sha256: <hash atteso, verificato dallo step qa>
+  source: ./dist/myapp-1.2.3.tar.gz   # local path, file:// or http(s)://
+  # sha256: <expected hash, verified by the qa step>
 
 secrets:
   - name: deploy-key
-    ref: env:DEPLOY_SSH_KEY            # schemi supportati: env:, file:
+    ref: env:DEPLOY_SSH_KEY            # supported schemes: env:, file:
   - name: callback-key
     ref: env:MANENT_CALLBACK_KEY
 
 deploy:
   policy: default
-  plugin: remote-copy                  # opzionale: altrimenti scelto dalla policy per tipo artefatto
+  plugin: remote-copy                  # optional: otherwise chosen by the policy per artifact type
   targets:
     - host: 192.168.1.10
       port: 22
@@ -30,20 +30,20 @@ deploy:
     ssh_key_secret: deploy-key
     post_command: "tar -xzf /opt/myapp/releases/myapp-1.2.3.tar.gz -C /opt/myapp/current"
 
-# Callback (opzionali): ricevono in POST l'esito di ogni step e del deploy.
-# L'autenticazione riferisce un segreto della sezione secrets, mai il valore.
+# Callbacks (optional): they receive via POST the outcome of every step and of the deploy.
+# Authentication refers to a secret of the secrets section, never to its value.
 callbacks:
   - url: https://ci.example.com/hooks/manent
     auth:
-      type: hmac                       # bearer | basic (con username) | header (con header) | hmac
+      type: hmac                       # bearer | basic (with username) | header (with header) | hmac
       secret: callback-key
   - url: https://chat.example.com/hooks/deploy
-    events: [deployment]               # step | deployment (default: tutti)
+    events: [deployment]               # step | deployment (default: all)
 
-# Rollback automatico (opzionale): se ammesso per il tipo di artefatto (rollback.artifact_types
-# in manent.yml), in caso di fallimento riporta i target alla release precedente.
-# Con remote-copy richiede il layout releases: aggiungere in deploy.params
-#   layout: releases                  # <dest_dir>/releases/<versione> + symlink <dest_dir>/current
+# Automatic rollback (optional): if allowed for the artifact type (rollback.artifact_types
+# in manent.yml), on failure it brings the targets back to the previous release.
+# With remote-copy it requires the releases layout: add to deploy.params
+#   layout: releases                  # <dest_dir>/releases/<version> + symlink <dest_dir>/current
 #   keep_releases: "5"
 #   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
 #   post_command: "systemctl restart myapp"
@@ -51,16 +51,16 @@ callbacks:
 #   enabled: true
 #   on: [deploy, post-test]           # default: deploy, post-test, activation
 
-# Dry-run (opzionale): simula il deploy senza modificare i target (equivale a "deploy --dry-run").
+# Dry-run (optional): simulates the deploy without changing the targets (same as "deploy --dry-run").
 # dryRun: true
 
-# Pianificazione (opzionale). Senza schedule il deploy parte subito.
-# Deploy singolo a un orario (es. finestra di manutenzione): resta DELAYED nella coda DBOS fino ad allora.
+# Scheduling (optional). Without schedule the deploy starts at once.
+# Single deploy at a time (e.g. maintenance window): it stays DELAYED in the DBOS queue until then.
 # schedule:
 #   at: 2026-10-10T02:00:00+02:00
-# Deploy ricorrente: vedi examples/descriptor-scheduled.yml
+# Recurring deploy: see examples/descriptor-scheduled.yml
 
-# Attivazione/disattivazione degli step opzionali (gli obbligatori non sono disattivabili)
+# Enabling/disabling optional steps (mandatory ones cannot be disabled)
 steps:
   qa: true
   post-test: true

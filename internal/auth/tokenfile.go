@@ -12,15 +12,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultTokenFileInterval è l'intervallo minimo tra due controlli del file dei token.
+// DefaultTokenFileInterval is the minimum interval between two checks of the token file.
 const DefaultTokenFileInterval = 5 * time.Second
 
-// TokenFile autentica i token statici elencati in un file YAML, riletto quando cambia: un
-// token si aggiunge o si revoca modificando il file, senza riavviare. Se il file modificato
-// non è valido restano in uso i token letti l'ultima volta.
+// TokenFile authenticates the static tokens listed in a YAML file, reloaded when it changes: a
+// token is added or revoked by editing the file, without restarting. If the changed file is
+// invalid, the tokens read last time stay in use.
 type TokenFile struct {
 	Path string
-	// Interval è il tempo minimo tra due controlli del file (default DefaultTokenFileInterval).
+	// Interval is the minimum time between two checks of the file (default DefaultTokenFileInterval).
 	Interval time.Duration
 	Logger   *slog.Logger
 
@@ -31,7 +31,7 @@ type TokenFile struct {
 	size    int64
 }
 
-// tokenFileDoc è il formato del file.
+// tokenFileDoc is the file format.
 type tokenFileDoc struct {
 	Tokens []struct {
 		Name      string    `yaml:"name"`
@@ -41,7 +41,7 @@ type tokenFileDoc struct {
 	} `yaml:"tokens"`
 }
 
-// NewTokenFile legge il file: all'avvio un file non valido è un errore.
+// NewTokenFile reads the file: at startup an invalid file is an error.
 func NewTokenFile(path string, logger *slog.Logger) (*TokenFile, error) {
 	f := &TokenFile{Path: path, Logger: logger}
 	st, err := os.Stat(path)
@@ -56,7 +56,7 @@ func NewTokenFile(path string, logger *slog.Logger) (*TokenFile, error) {
 	return f, nil
 }
 
-// ParseTokenFile legge e verifica un file dei token.
+// ParseTokenFile reads and validates a token file.
 func ParseTokenFile(path string) (Tokens, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -80,7 +80,7 @@ func ParseTokenFile(path string) (Tokens, error) {
 	return ts, nil
 }
 
-// validHash verifica che s sia uno sha256 esadecimale.
+// validHash checks that s is a hexadecimal sha256.
 func validHash(s string) bool {
 	if len(s) != 64 {
 		return false
@@ -93,12 +93,12 @@ func validHash(s string) bool {
 	return true
 }
 
-// Authenticate implementa Authenticator.
+// Authenticate implements Authenticator.
 func (f *TokenFile) Authenticate(ctx context.Context, token string) (*Principal, error) {
 	return f.current().Authenticate(ctx, token)
 }
 
-// current restituisce i token, rileggendo il file se è cambiato dall'ultimo controllo.
+// current returns the tokens, reloading the file if it changed since the last check.
 func (f *TokenFile) current() Tokens {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -112,7 +112,7 @@ func (f *TokenFile) current() Tokens {
 	f.checked = time.Now()
 	st, err := os.Stat(f.Path)
 	if err != nil {
-		// Un file rimosso revoca tutti i suoi token.
+		// A removed file revokes all its tokens.
 		if f.tokens != nil {
 			f.Logger.Warn("file dei token non leggibile: token revocati", "path", f.Path, "error", err)
 		}

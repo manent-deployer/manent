@@ -13,14 +13,14 @@ import (
 	"strings"
 )
 
-// Document è la forma fotografata nel piano: nome dello step e specifica. Il nome fa parte
-// della firma, così una specifica non può essere spostata su un altro step.
+// Document is the form captured in the plan: step name and spec. The name is part of the
+// signature, so a spec cannot be moved to another step.
 type Document struct {
 	Name string `json:"name"`
 	Spec
 }
 
-// Encode restituisce la forma canonica (JSON con chiavi ordinate) della specifica.
+// Encode returns the canonical form (JSON with sorted keys) of the spec.
 func Encode(name string, s Spec) (string, error) {
 	b, err := json.Marshal(Document{Name: name, Spec: s})
 	if err != nil {
@@ -29,33 +29,33 @@ func Encode(name string, s Spec) (string, error) {
 	return string(b), nil
 }
 
-// Decode legge una specifica fotografata nel piano.
+// Decode reads a spec captured in the plan.
 func Decode(doc string) (Document, error) {
 	var d Document
 	dec := json.NewDecoder(strings.NewReader(doc))
-	dec.UseNumber() // i numeri del corpo JSON restano esatti
+	dec.UseNumber() // numbers of the JSON body stay exact
 	if err := dec.Decode(&d); err != nil {
 		return d, fmt.Errorf("specifica dello step non leggibile: %w", err)
 	}
 	return d, nil
 }
 
-// Hash è lo sha256 esadecimale della forma canonica: identifica la specifica, anche nelle revoche.
+// Hash is the hex sha256 of the canonical form: it identifies the spec, also in revocations.
 func Hash(doc string) string {
 	h := sha256.Sum256([]byte(doc))
 	return hex.EncodeToString(h[:])
 }
 
-// macDomain separa le firme delle specifiche da altri usi della stessa chiave.
+// macDomain separates spec signatures from other uses of the same key.
 const macDomain = "manent-step-spec-v1\n"
 
-// Keys sono le chiavi di firma: la prima firma, tutte verificano (rotazione).
+// Keys are the signing keys: the first signs, all verify (rotation).
 type Keys [][]byte
 
-// MinKeyLen è la lunghezza minima di una chiave.
+// MinKeyLen is the minimum length of a key.
 const MinKeyLen = 32
 
-// Sign firma la forma canonica con la prima chiave; senza chiavi restituisce "".
+// Sign signs the canonical form with the first key; without keys it returns "".
 func (k Keys) Sign(doc string) string {
 	if len(k) == 0 {
 		return ""
@@ -63,8 +63,8 @@ func (k Keys) Sign(doc string) string {
 	return mac(k[0], doc)
 }
 
-// Verify controlla la firma. Senza chiavi configurate accetta solo specifiche non firmate;
-// con le chiavi, una specifica senza firma o con una firma non valida è rifiutata.
+// Verify checks the signature. Without configured keys it accepts only unsigned specs; with
+// keys, a spec without a signature or with an invalid one is rejected.
 func (k Keys) Verify(doc, sig string) error {
 	if len(k) == 0 {
 		return nil
@@ -87,9 +87,9 @@ func mac(key []byte, doc string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// EffectiveParams calcola i parametri dello step: default della specifica, poi i valori
-// configurati. complete indica che la configurazione di ambiente è stata letta: solo allora
-// un parametro obbligatorio mancante è un errore.
+// EffectiveParams computes the step parameters: spec defaults, then configured values.
+// complete means the environment configuration was read: only then is a missing required
+// parameter an error.
 func (s Spec) EffectiveParams(values map[string]string, complete bool) (map[string]string, error) {
 	out := map[string]string{}
 	var errs []error
@@ -124,7 +124,7 @@ func (s Spec) EffectiveParams(values map[string]string, complete bool) (map[stri
 	return out, errors.Join(errs...)
 }
 
-// DeclaredSecrets sono tutti i segreti che lo step può usare: run, dry_run e SSH.
+// DeclaredSecrets are all the secrets the step can use: run, dry_run and SSH.
 func (s Spec) DeclaredSecrets() []string {
 	names := slices.Clone(s.Secrets)
 	if s.DryRun != nil {
@@ -137,15 +137,15 @@ func (s Spec) DeclaredSecrets() []string {
 	return slices.Compact(names)
 }
 
-// PathStep è un passo di un percorso JSON: una chiave o un indice.
+// PathStep is a step of a JSON path: a key or an index.
 type PathStep struct {
 	Key   string
 	Index int
 	IsKey bool
 }
 
-// ParsePath legge un percorso nella forma $.a.b[0]["c"]: un sottoinsieme di JSONPath senza
-// filtri né caratteri jolly, così il valore estratto è sempre uno solo.
+// ParsePath reads a path of the form $.a.b[0]["c"]: a subset of JSONPath without filters or
+// wildcards, so the extracted value is always a single one.
 func ParsePath(p string) ([]PathStep, error) {
 	if !strings.HasPrefix(p, "$") {
 		return nil, errors.New("il percorso inizia con $")
@@ -193,7 +193,7 @@ func ParsePath(p string) ([]PathStep, error) {
 	return out, nil
 }
 
-// Lookup estrae dal documento JSON decodificato il valore scalare indicato da path.
+// Lookup extracts from the decoded JSON document the scalar value at path.
 func Lookup(doc any, path string) (string, bool) {
 	steps, err := ParsePath(path)
 	if err != nil {

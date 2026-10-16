@@ -12,7 +12,7 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// countStep conta le esecuzioni in modo sicuro tra goroutine.
+// countStep counts runs safely across goroutines.
 type countStep struct{ n *atomic.Int32 }
 
 func (countStep) Name() string { return "count" }
@@ -55,8 +55,8 @@ func TestDeployPianificatoAt(t *testing.T) {
 		t.Errorf("deploy eseguito prima dell'orario o più volte (esecuzioni: %d)", n.Load())
 	}
 
-	// Reinvio dello stesso descrittore dopo l'orario (es. una CI che riprova): restituisce il
-	// deploy esistente invece di rifiutare l'orario come passato.
+	// Resubmitting the same descriptor after its time (e.g. a retrying CI): it returns the
+	// existing deploy instead of rejecting the time as past.
 	again, err := e.Submit(ctx, scheduled(descriptor.Schedule{At: &at}, "at-1"))
 	if err != nil {
 		t.Fatalf("reinvio dopo l'orario: %v", err)
@@ -64,7 +64,7 @@ func TestDeployPianificatoAt(t *testing.T) {
 	if again.ID != sub.ID || again.State != "SUCCESS" || n.Load() != 1 {
 		t.Errorf("reinvio non idempotente: %+v (esecuzioni: %d)", again, n.Load())
 	}
-	// Un altro id con l'orario passato resta un errore.
+	// Another id with a past time is still an error.
 	if _, err := e.Submit(ctx, scheduled(descriptor.Schedule{At: &at}, "at-2")); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("atteso ErrInvalidRequest, ricevuto %v", err)
 	}
@@ -117,7 +117,7 @@ func TestScheduleRicorrente(t *testing.T) {
 		t.Fatalf("submission inattesa: %+v", sub)
 	}
 
-	// Riapplicare lo stesso descrittore aggiorna la schedule invece di duplicarla.
+	// Applying the same descriptor again updates the schedule instead of duplicating it.
 	if _, err := e.Submit(ctx, scheduled(descriptor.Schedule{Cron: "* * * * * *", Name: "ogni-secondo"}, "")); err != nil {
 		t.Fatal(err)
 	}

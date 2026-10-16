@@ -11,8 +11,8 @@ const levelRank = (l: string) => Math.max(0, LEVELS.indexOf(l.toUpperCase()));
 const levelClass: Record<string, string> = { DEBUG: "text-muted", INFO: "text-accent", WARN: "text-warn", ERROR: "text-bad" };
 
 /**
- * LogViewer mostra le righe di log come testo (mai HTML: possono contenere output dei comandi
- * remoti), filtrabili per livello e step. Con "segui" scorre alle righe nuove.
+ * LogViewer shows log lines as text (never HTML: they may contain the output of remote
+ * commands), filterable by level and step. With "follow" it scrolls to new lines.
  */
 export function LogViewer({ lines }: { lines: LogLine[] }) {
   const { t, locale } = useI18n();

@@ -1,6 +1,6 @@
-// Package audit registra chi ha fatto cosa: richieste di deploy, annullamenti, modifiche alle
-// schedule, accessi negati ed esiti finali dei deploy. Le voci vanno al log applicativo (e
-// quindi al SIEM) e, se configurato, a un file JSON Lines in sola aggiunta.
+// Package audit records who did what: deploy requests, cancellations, schedule changes,
+// denied accesses and final deploy outcomes. Entries go to the application log (and so to
+// the SIEM) and, if configured, to an append-only JSON Lines file.
 package audit
 
 import (
@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-// Esiti di una voce di audit.
+// Outcomes of an audit entry.
 const (
-	OutcomeAllowed   = "allowed"   // azione autorizzata ed eseguita
-	OutcomeDenied    = "denied"    // azione negata dai permessi
-	OutcomeError     = "error"     // azione autorizzata ma fallita
-	OutcomeSucceeded = "succeeded" // deploy concluso con successo
-	OutcomeFailed    = "failed"    // deploy concluso con errore
+	OutcomeAllowed   = "allowed"   // action authorized and done
+	OutcomeDenied    = "denied"    // action denied by permissions
+	OutcomeError     = "error"     // action authorized but failed
+	OutcomeSucceeded = "succeeded" // deploy ended successfully
+	OutcomeFailed    = "failed"    // deploy ended with an error
 )
 
-// Entry è una voce di audit. Non deve contenere segreti.
+// Entry is an audit entry. It must not contain secrets.
 type Entry struct {
 	Time        time.Time `json:"time"`
 	Actor       string    `json:"actor"`
@@ -31,30 +31,30 @@ type Entry struct {
 	Schedule    string    `json:"schedule,omitempty"`
 	DryRun      bool      `json:"dry_run,omitempty"`
 	Rollback    string    `json:"rollback,omitempty"`
-	// Step, Spec e Targets descrivono l'esecuzione di uno step personalizzato: nome, sha256
-	// della specifica e target raggiunti.
+	// Step, Spec and Targets describe the run of a custom step: name, sha256 of the spec and
+	// targets reached.
 	Step    string   `json:"step,omitempty"`
 	Spec    string   `json:"spec,omitempty"`
 	Targets []string `json:"targets,omitempty"`
-	// Comment è il commento di un'approvazione o il motivo di una deroga al freeze.
+	// Comment is the comment of an approval or the reason of a freeze override.
 	Comment string `json:"comment,omitempty"`
 	Reason  string `json:"reason,omitempty"`
-	// PrevHash è l'hash della voce precedente nel file di audit (catena).
+	// PrevHash is the hash of the previous entry in the audit file (chain).
 	PrevHash string `json:"prev_hash,omitempty"`
 }
 
-// Recorder registra le voci di audit. Un errore di registrazione non deve bloccare l'azione,
-// ma va segnalato.
+// Recorder records audit entries. A recording error must not block the action, but must be
+// reported.
 type Recorder interface {
 	Record(ctx context.Context, e Entry) error
 }
 
-// LogRecorder scrive le voci sul logger, che le inoltra anche al SIEM.
+// LogRecorder writes entries to the logger, which also forwards them to the SIEM.
 type LogRecorder struct {
 	Logger *slog.Logger
 }
 
-// Record implementa Recorder.
+// Record implements Recorder.
 func (r LogRecorder) Record(ctx context.Context, e Entry) error {
 	level := slog.LevelInfo
 	if e.Outcome == OutcomeDenied {
@@ -80,10 +80,10 @@ func (r LogRecorder) Record(ctx context.Context, e Entry) error {
 	return nil
 }
 
-// Multi inoltra ogni voce a tutti i recorder.
+// Multi forwards every entry to all recorders.
 type Multi []Recorder
 
-// Record implementa Recorder.
+// Record implements Recorder.
 func (m Multi) Record(ctx context.Context, e Entry) error {
 	if e.Time.IsZero() {
 		e.Time = time.Now().UTC()

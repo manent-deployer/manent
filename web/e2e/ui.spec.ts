@@ -1,19 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-// Dati preparati da uc8.sh: un deploy concluso di uc8-web in test e la regola di governance
-// che chiede un'approvazione in prod.
+// Data prepared by uc8.sh: a finished uc8-web deploy in test and the governance rule that
+// asks for an approval in prod.
 const DEP_ID = process.env.DEP_ID ?? "";
 
 async function login(page: Page, user: string, path = "/deployments") {
   await page.goto(path);
-  // L'identity provider di prova chiede solo quale utente usare.
+  // The test identity provider only asks which user to use.
   await page.getByRole("button", { name: user, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 }
 
 async function expectAccessible(page: Page) {
-  // AxeBuilder dipende da una propria versione di playwright-core: a runtime la pagina è compatibile.
+  // AxeBuilder depends on its own playwright-core version: at runtime the page is compatible.
   const results = await new AxeBuilder({ page: page as never }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
@@ -36,12 +36,12 @@ test("login OIDC, navigazione e accessibilità delle viste", async ({ page }) =>
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeFocused();
     await expectAccessible(page);
   }
-  // Tema chiaro: anche il contrasto della seconda palette è verificato.
+  // Light theme: the contrast of the second palette is checked too.
   await page.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Inventory" }).click();
   await expectAccessible(page);
-  // Il viewer non vede azioni.
+  // The viewer sees no actions.
   await expect(page.getByRole("button", { name: "Promote" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Roll back" })).toHaveCount(0);
 });
@@ -67,7 +67,7 @@ test("promozione con dry-run e divieto di auto-approvazione", async ({ page }) =
   await dialog.getByRole("button", { name: "Run a dry-run" }).click();
   await expect(dialog.getByText("Dry-run succeeded: the deployment can run.")).toBeVisible({ timeout: 60_000 });
   await confirm.click();
-  // La promozione in prod richiede un'approvazione: chi l'ha chiesta non può darla.
+  // Promotion to prod requires an approval: whoever asked for it cannot give it.
   await expect(page.getByRole("heading", { level: 1, name: /uc8-web → prod/ })).toBeVisible();
   await expect(page.getByText("Awaiting approval").first()).toBeVisible();
   const approve = page.getByRole("button", { name: "Approve" });
@@ -83,12 +83,12 @@ test("approvazione da un altro utente e avanzamento in tempo reale", async ({ pa
   await dialog.getByLabel("Comment").fill("CAB-UC8 ok");
   await dialog.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approval recorded.")).toBeVisible();
-  // Il ricaricamento della pagina perde il token in memoria: la sessione dell'identity provider
-  // completa di nuovo il login senza chiedere l'utente.
+  // Reloading the page loses the in-memory token: the identity provider session completes the
+  // login again without asking for the user.
   await page.goto("/deployments?application=uc8-web&environment=prod");
   await page.getByRole("link", { name: /uc8-web.*prod/ }).first().click();
   await expect(page.getByText("Live")).toBeVisible();
-  // Lo stato arriva dallo stream SSE, senza ricaricare la pagina.
+  // The state arrives from the SSE stream, without reloading the page.
   await expect(page.getByText("Succeeded").first()).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText("cab approved")).toBeVisible();
 });

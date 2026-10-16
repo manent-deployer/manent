@@ -14,14 +14,14 @@ import (
 	"github.com/joeg-ita/manent/internal/customspec"
 )
 
-// maxResponse limita la risposta letta.
+// maxResponse limits the response read.
 const maxResponse = 1 << 20
 
-// HeaderIdempotencyKey è inviato con ogni richiesta: dopo una recovery lo step può ripetere
-// la richiesta, e il destinatario la riconosce da questa chiave ("<deploy>:<step>").
+// HeaderIdempotencyKey is sent with every request: after a recovery the step may repeat the
+// request, and the receiver recognizes it by this key ("<deploy>:<step>").
 const HeaderIdempotencyKey = "Idempotency-Key"
 
-// http esegue la richiesta e, se previsto, attende l'esito interrogando poll.url.
+// http runs the request and, if configured, waits for the result by polling poll.url.
 func (r *run) http(ctx context.Context) (map[string]string, error) {
 	a := r.action
 	u, err := renderURL("url", a.URL, r.data, r.s.b.AllowHTTP)
@@ -79,7 +79,7 @@ func (r *run) http(ctx context.Context) (map[string]string, error) {
 	return out, nil
 }
 
-// authorize aggiunge l'autenticazione con il segreto dichiarato.
+// authorize adds authentication with the declared secret.
 func (r *run) authorize(req *http.Request) error {
 	au := r.action.Auth
 	if au == nil {
@@ -101,10 +101,10 @@ func (r *run) authorize(req *http.Request) error {
 	return nil
 }
 
-// do invia la richiesta e legge la risposta. Gli status 5xx, 408 e 429 sono temporanei, gli
-// altri fuori da expect permanenti. Con parse la risposta deve essere JSON.
+// do sends the request and reads the response. Statuses 5xx, 408 and 429 are temporary, the
+// others outside expect permanent. With parse the response must be JSON.
 func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
-	// Nei log solo host e percorso: la query può contenere token.
+	// Only host and path in the logs: the query may contain tokens.
 	target := req.URL.Host + req.URL.Path
 	resp, err := r.s.b.HTTP.Do(req)
 	if err != nil {
@@ -139,9 +139,9 @@ func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
 	return doc, nil
 }
 
-// poll interroga poll.url a intervalli finché until o fail sono veri, o fino al timeout.
-// L'attesa avviene dentro lo step: dopo un crash lo step riparte e ripete la richiesta
-// iniziale con la stessa Idempotency-Key.
+// poll polls poll.url periodically until until or fail are true, or until the timeout.
+// The wait happens inside the step: after a crash the step restarts and repeats the initial
+// request with the same Idempotency-Key.
 func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, error) {
 	data := r.data
 	data.Response = first
@@ -175,7 +175,7 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 		case isPermanent(err):
 			return nil, err
 		case err != nil:
-			// Un errore temporaneo durante l'attesa non la interrompe.
+			// A temporary error during the wait does not stop it.
 			r.log.WarnContext(ctx, "lettura dello stato fallita, nuovo tentativo", "error", r.red.apply(err.Error()))
 			continue
 		}
@@ -190,7 +190,7 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 	}
 }
 
-// accepted verifica lo status: con expect vuoto vale qualunque 2xx.
+// accepted checks the status: with an empty expect any 2xx is fine.
 func accepted(code int, expect []int) bool {
 	if len(expect) == 0 {
 		return code >= 200 && code <= 299

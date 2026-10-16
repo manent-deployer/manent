@@ -20,7 +20,7 @@ func TestValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Validate non accede al database: basta un Engine senza client.
+	// Validate does not access the database: an Engine without a client is enough.
 	e := NewService(ServiceOptions{Planner: planner, Logger: discard, Resolver: newFakeResolver("r7"), Governance: gov})
 	ctx := context.Background()
 
@@ -40,7 +40,7 @@ func TestValidate(t *testing.T) {
 		t.Errorf("governance inattesa: %+v", v.Governance)
 	}
 
-	// Policy violata: richiesta non valida. Configurazione irraggiungibile: solo un avviso.
+	// Policy violated: invalid request. Configuration unreachable: only a warning.
 	e.resolver = policyResolver{}
 	d.Application = "vietata"
 	if _, err := e.Validate(ctx, d); !errors.Is(err, ErrInvalidRequest) {
@@ -63,12 +63,12 @@ func TestValidateRollout(t *testing.T) {
 	if v.Rollout == nil || v.Rollout.Status != "planned" || len(v.Rollout.Stages) != 4 || v.Rollout.Stages[3].Name != "resto/eu-2b+us-1b" {
 		t.Fatalf("piano a ondate: %+v", v.Rollout)
 	}
-	// Un target senza ondata rende la richiesta non valida.
+	// A target without a wave makes the request invalid.
 	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "ap-1a", Labels: map[string]string{"region": "ap-1", "az": "ap-1a"}})
 	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a non appartiene") {
 		t.Errorf("target scoperto: %v", err)
 	}
-	// Un onFailure con rollback senza rollback attivo è rifiutato.
+	// An onFailure with rollback without rollback enabled is rejected.
 	d = waveDescriptor("v-ondate-2")
 	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
 	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback attivo") {

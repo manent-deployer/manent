@@ -19,8 +19,8 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// I test E2E usano un server SSH reale: scripts/e2e-ssh.sh ne avvia uno in Docker e imposta
-// MANENT_TEST_SSH_ADDR (host:porta), MANENT_TEST_SSH_USER e MANENT_TEST_SSH_KEY (chiave privata).
+// E2E tests use a real SSH server: scripts/e2e-ssh.sh starts one in Docker and sets
+// MANENT_TEST_SSH_ADDR (host:port), MANENT_TEST_SSH_USER and MANENT_TEST_SSH_KEY (private key).
 func e2eTarget(t *testing.T) (plugin.Target, mapSecrets) {
 	t.Helper()
 	addr := os.Getenv("MANENT_TEST_SSH_ADDR")
@@ -39,7 +39,7 @@ func e2eTarget(t *testing.T) (plugin.Target, mapSecrets) {
 	return plugin.Target{Host: host, Port: port, User: os.Getenv("MANENT_TEST_SSH_USER")}, mapSecrets{"key": string(key)}
 }
 
-// e2eArtifact crea un tar.gz con un file VERSION e ne restituisce percorso e sha256.
+// e2eArtifact creates a tar.gz with a VERSION file and returns its path and sha256.
 func e2eArtifact(t *testing.T, version string) (string, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "app.tar.gz")
@@ -107,7 +107,7 @@ func TestE2EReleasesERollback(t *testing.T) {
 		t.Fatalf("release dopo il rollback: %+v", rel)
 	}
 
-	// Verifica diretta sul server: file attivo, release conservate (keep_releases=2 più l'attiva).
+	// Direct check on the server: active file, kept releases (keep_releases=2 plus the active one).
 	sess, err := p.dialer.Dial(ctx, target, Auth{PrivateKey: secrets["key"]})
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestE2EReleasesERollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Il rollback esegue post_command (default di rollback_command): il file torna a 1.1.0.
+	// The rollback runs post_command (rollback_command default): the file goes back to 1.1.0.
 	if !strings.HasPrefix(out, "1.1.0\n") || !strings.Contains(out, "1.1.0 1.2.0") || strings.Contains(out, "1.0.0 ") {
 		t.Errorf("stato remoto inatteso: %q", out)
 	}

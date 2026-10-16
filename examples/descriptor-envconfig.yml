@@ -1,6 +1,6 @@
-# Descrittore minimale: plugin, target, parametri e segreti arrivano dalla configurazione
-# di ambiente (Consul: manent/myapp/test, oppure examples/envconfig/myapp/test.yml).
-# Mostra il deploy effettivo con: manent-server -c <config> validate -f examples/descriptor-envconfig.yml
+# Minimal descriptor: plugin, targets, parameters and secrets come from the environment
+# configuration (Consul: manent/myapp/test, or examples/envconfig/myapp/test.yml).
+# Show the effective deploy with: manent-server -c <config> validate -f examples/descriptor-envconfig.yml
 apiVersion: manent/v1
 application: myapp
 environment: test

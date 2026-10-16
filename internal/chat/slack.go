@@ -16,10 +16,10 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// DefaultSlackAPI è l'indirizzo dell'API Web di Slack.
+// DefaultSlackAPI is the address of the Slack Web API.
 const DefaultSlackAPI = "https://slack.com/api"
 
-// SlackAPI chiama l'API Web di Slack con il bot token, letto dai segreti a ogni uso.
+// SlackAPI calls the Slack Web API with the bot token, read from the secrets at every use.
 type SlackAPI struct {
 	URL      string
 	TokenRef string
@@ -35,7 +35,7 @@ func (s *SlackAPI) endpoint(method string) string {
 	return strings.TrimRight(base, "/") + "/" + method
 }
 
-// call esegue un metodo dell'API; ok=false nella risposta è un errore.
+// call runs an API method; ok=false in the response is an error.
 func (s *SlackAPI) call(ctx context.Context, method string, body any, out any) error {
 	tok, err := s.Secrets.Resolve(ctx, s.TokenRef)
 	if err != nil {
@@ -58,7 +58,7 @@ func (s *SlackAPI) call(ctx context.Context, method string, body any, out any) e
 	return nil
 }
 
-// Post invia un messaggio al canale e ne restituisce il riferimento.
+// Post sends a message to the channel and returns its reference.
 func (s *SlackAPI) Post(ctx context.Context, channel, text string, blocks []any) (*Ref, error) {
 	var out struct {
 		Channel string `json:"channel"`
@@ -70,12 +70,12 @@ func (s *SlackAPI) Post(ctx context.Context, channel, text string, blocks []any)
 	return &Ref{Channel: out.Channel, TS: out.TS}, nil
 }
 
-// Update sostituisce il contenuto di un messaggio inviato.
+// Update replaces the content of a sent message.
 func (s *SlackAPI) Update(ctx context.Context, ref Ref, text string, blocks []any) error {
 	return s.call(ctx, "chat.update", map[string]any{"channel": ref.Channel, "ts": ref.TS, "text": text, "blocks": blocks}, nil)
 }
 
-// UserEmail legge l'email di un utente (scope users:read.email).
+// UserEmail reads a user's email (scope users:read.email).
 func (s *SlackAPI) UserEmail(ctx context.Context, user string) (string, error) {
 	tok, err := s.Secrets.Resolve(ctx, s.TokenRef)
 	if err != nil {
@@ -113,7 +113,7 @@ func (s *SlackAPI) UserEmail(ctx context.Context, user string) (string, error) {
 	return out.User.Profile.Email, nil
 }
 
-// postJSON invia un corpo JSON e restituisce la risposta; uno stato diverso da 2xx è un errore.
+// postJSON sends a JSON body and returns the response; a non-2xx status is an error.
 func postJSON(ctx context.Context, client HTTPDoer, u string, headers map[string]string, body, out any) ([]byte, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -130,7 +130,7 @@ func postJSON(ctx context.Context, client HTTPDoer, u string, headers map[string
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		// L'URL può contenere un token (webhook): l'errore riporta solo l'host.
+		// The URL may contain a token (webhook): the error reports only the host.
 		var ue *url.Error
 		if errors.As(err, &ue) {
 			err = ue.Err
@@ -157,8 +157,8 @@ func postJSON(ctx context.Context, client HTTPDoer, u string, headers map[string
 	return raw, nil
 }
 
-// VerifySlackSignature verifica la firma di una richiesta di Slack (v0, HMAC-SHA256 di
-// "v0:<timestamp>:<corpo>") e rifiuta le richieste più vecchie di 5 minuti.
+// VerifySlackSignature verifies the signature of a Slack request (v0, HMAC-SHA256 of
+// "v0:<timestamp>:<body>") and rejects requests older than 5 minutes.
 func VerifySlackSignature(secret string, header http.Header, body []byte, now time.Time) error {
 	ts := header.Get("X-Slack-Request-Timestamp")
 	sec, err := strconv.ParseInt(ts, 10, 64)

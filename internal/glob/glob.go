@@ -1,10 +1,10 @@
-// Package glob confronta stringhe con pattern semplici, usati nelle policy di configurazione.
+// Package glob matches strings against simple patterns, used in configuration policies.
 package glob
 
 import "strings"
 
-// Match indica se s corrisponde al pattern, in cui "*" vale qualsiasi sequenza di caratteri
-// (anche vuota e anche con "/"). Gli altri caratteri sono confrontati alla lettera.
+// Match reports whether s matches the pattern, where "*" stands for any sequence of
+// characters (also empty and also with "/"). Other characters are compared literally.
 func Match(pattern, s string) bool {
 	parts := strings.Split(pattern, "*")
 	if len(parts) == 1 {
@@ -25,7 +25,7 @@ func Match(pattern, s string) bool {
 	return strings.HasSuffix(s, last)
 }
 
-// Any indica se s corrisponde ad almeno uno dei pattern.
+// Any reports whether s matches at least one of the patterns.
 func Any(patterns []string, s string) bool {
 	for _, p := range patterns {
 		if Match(p, s) {

@@ -24,9 +24,9 @@ import (
 
 const svcName = "projects/acme-prod/locations/europe-west1/services/shop"
 
-// fakeRun emula l'Admin API v2 di Cloud Run e l'endpoint dei token OAuth. Un aggiornamento
-// del template crea una revisione; con un'immagine che contiene "broken" la revisione non
-// diventa pronta e l'operazione fallisce, come in Cloud Run.
+// fakeRun emulates the Cloud Run Admin API v2 and the OAuth token endpoint. A template update
+// creates a revision; with an image containing "broken" the revision never becomes ready and
+// the operation fails, as in Cloud Run.
 type fakeRun struct {
 	mu        sync.Mutex
 	t         *testing.T
@@ -56,7 +56,7 @@ func newFakeRun(t *testing.T) *fakeRun {
 	return f
 }
 
-// addRevision crea una revisione dal template corrente, con il nome indicato o generato.
+// addRevision creates a revision from the current template, with the given or a generated name.
 func (f *fakeRun) addRevision(ann map[string]any, broken bool, fixed ...string) string {
 	f.clock = f.clock.Add(time.Minute)
 	name := fmt.Sprintf("%s/revisions/shop-%05d", svcName, len(f.revisions)+1)
@@ -129,7 +129,7 @@ func (f *fakeRun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.patches++
-		// Un template cambiato con il nome di una revisione esistente è rifiutato da Cloud Run.
+		// A changed template with the name of an existing revision is rejected by Cloud Run.
 		fixed, _ := get(in, "template", "revision").(string)
 		changed := fmt.Sprint(in["template"]) != fmt.Sprint(f.svc["template"])
 		if changed && fixed != "" && slices.ContainsFunc(f.revisions, func(r Object) bool { return short(str(r, "name")) == fixed }) {
@@ -191,8 +191,8 @@ func (m mapSecrets) Secret(_ context.Context, name string) (string, error) {
 	return v, nil
 }
 
-// serviceAccountKey genera la chiave JSON di un service account il cui endpoint dei token è
-// quello del server di prova.
+// serviceAccountKey generates the JSON key of a service account whose token endpoint is the
+// test server's.
 func serviceAccountKey(t *testing.T, tokenURL string) string {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -243,7 +243,7 @@ func TestDeployERollback(t *testing.T) {
 	if err := p.Validate(req); err != nil {
 		t.Fatal(err)
 	}
-	// La revisione creata fuori da manent non è una release.
+	// The revision created outside manent is not a release.
 	if rel, err := p.CurrentRelease(ctx, req); err != nil || rel != nil {
 		t.Fatalf("release prima del primo deploy: %+v, %v", rel, err)
 	}
@@ -266,7 +266,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Fatalf("release in esercizio: %+v, %v", rel, err)
 	}
 
-	// Una revisione che non si avvia fa fallire il deploy; il traffico resta sulla precedente.
+	// A revision that does not start fails the deploy; traffic stays on the previous one.
 	broken := request(t, key, "2.0.0", "europe-docker.pkg.dev/acme/shop/shop-broken@"+digest)
 	if _, err := p.Deploy(ctx, broken); err == nil || !strings.Contains(err.Error(), "not ready") {
 		t.Fatalf("deploy fallito atteso: %v", err)
@@ -286,21 +286,21 @@ func TestDeployERollback(t *testing.T) {
 	if cur, err := p.CurrentRelease(ctx, req2); err != nil || cur == nil || cur.Version != "1.0.0" {
 		t.Errorf("dopo il rollback: %+v, %v", cur, err)
 	}
-	// Senza dettagli si sceglie la revisione più recente con la versione (non quella fallita).
+	// Without details the most recent revision with the version is chosen (not the failed one).
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "2.0.0"}); err != nil || f.traffic() != "shop-00004" {
 		t.Fatalf("rollback senza dettagli: %v, traffico %s", err, f.traffic())
 	}
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.1.0"}); err == nil || !strings.Contains(err.Error(), "nessuna revisione") {
 		t.Errorf("versione assente: %v", err)
 	}
-	// Dopo un rollback il deploy successivo riporta il traffico sull'ultima revisione.
+	// After a rollback the next deploy brings traffic back to the latest revision.
 	req3 := request(t, key, "3.0.0", "europe-docker.pkg.dev/acme/shop/shop-v3@"+digest)
 	if _, err := p.Deploy(ctx, req3); err != nil || f.traffic() != "shop-00005" || !latestOnly(f.svc) {
 		t.Fatalf("deploy dopo il rollback: %v, traffico %s", err, f.traffic())
 	}
 
-	// Con il traffico diviso (rilascio per percentuale in corso) vale la revisione con la quota
-	// maggiore; a parità la release in esercizio non è determinabile.
+	// With split traffic (percentage rollout in progress) the revision with the larger share
+	// counts; on a tie the release in service cannot be determined.
 	f.svc["trafficStatuses"] = []any{Object{"type": trafficRevision, "revision": "shop-00004", "percent": 90.0}, Object{"type": trafficRevision, "revision": "shop-00005", "percent": 10.0}}
 	if rel, err := p.CurrentRelease(ctx, req3); err != nil || rel.Details[DetailRevision+"@europe-west1"] != "shop-00004" {
 		t.Errorf("traffico diviso: %v %+v", err, rel)

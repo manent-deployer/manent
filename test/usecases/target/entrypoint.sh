@@ -1,6 +1,6 @@
 #!/bin/sh
-# Installa la chiave pubblica condivisa (/keys/id.pub), avvia il server HTTP delle applicazioni
-# come utente deploy e sshd in primo piano.
+# Installs the shared public key (/keys/id.pub), starts the applications' HTTP server as the
+# deploy user and sshd in the foreground.
 set -eu
 until [ -s /keys/id.pub ]; do sleep 1; done
 cp /keys/id.pub /home/deploy/.ssh/authorized_keys

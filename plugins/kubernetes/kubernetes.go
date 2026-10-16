@@ -1,13 +1,13 @@
-// Package kubernetes rilascia manifest su uno o più cluster Kubernetes con server-side apply,
-// attende il completamento del rollout dei workload (Deployment, StatefulSet, DaemonSet) e
-// conserva nel cluster lo storico delle release, da cui legge la release in esercizio e torna
-// alla precedente.
+// Package kubernetes releases manifests to one or more Kubernetes clusters with server-side
+// apply, waits for the workloads (Deployment, StatefulSet, DaemonSet) to finish their rollout
+// and keeps the release history in the cluster, from which it reads the release in service
+// and goes back to the previous one.
 //
-// L'artefatto è un file di manifest (YAML o JSON, anche con più documenti), un archivio
-// .tar.gz di manifest o un chart Helm impacchettato: è quello verificato con lo sha256 e
-// promosso tra gli ambienti. Un chart viene renderizzato con "helm template" per ogni cluster
-// e i suoi oggetti seguono lo stesso percorso dei manifest. Ogni target è il server API di un
-// cluster. Il plugin parla direttamente con l'API REST, senza kubectl né client-go.
+// The artifact is a manifest file (YAML or JSON, also multi-document), a .tar.gz archive of
+// manifests or a packaged Helm chart: it is what gets verified by sha256 and promoted across
+// environments. A chart is rendered with "helm template" for every cluster and its objects
+// follow the same path as manifests. Every target is the API server of a cluster. The plugin
+// talks to the REST API directly, without kubectl or client-go.
 package kubernetes
 
 import (
@@ -32,27 +32,27 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "kubernetes"
 
-// Parametri del descrittore (deploy.params) letti dal plugin.
+// Descriptor parameters (deploy.params) read by the plugin.
 const (
-	ParamNamespace      = "namespace"            // namespace degli oggetti senza namespace e dello storico (default "default")
-	ParamTokenSecret    = "token_secret"         // segreto con il bearer token
-	ParamCertSecret     = "client_cert_secret"   // in alternativa: certificato client PEM
-	ParamKeySecret      = "client_key_secret"    // e relativa chiave privata PEM
-	ParamCASecret       = "ca_secret"            // CA del cluster (PEM); default: ca_file del plugin o CA di sistema
-	ParamWaitTimeout    = "wait_timeout"         // attesa del rollout dei workload (default 5m)
-	ParamPrune          = "prune"                // "true": elimina gli oggetti della release precedente non più presenti
-	ParamKeepReleases   = "keep_releases"        // release conservate nello storico (default 5, minimo 2)
-	ParamRequireDigest  = "require_image_digest" // "true": le immagini dei workload devono essere fissate al digest
-	ParamVarPrefix      = "var."                 // var.NOME sostituisce ${NOME} nei manifest
+	ParamNamespace      = "namespace"            // namespace of objects without one and of the history (default "default")
+	ParamTokenSecret    = "token_secret"         // secret with the bearer token
+	ParamCertSecret     = "client_cert_secret"   // alternatively: PEM client certificate
+	ParamKeySecret      = "client_key_secret"    // and its PEM private key
+	ParamCASecret       = "ca_secret"            // cluster CA (PEM); default: the plugin's ca_file or the system CAs
+	ParamWaitTimeout    = "wait_timeout"         // wait for the workloads' rollout (default 5m)
+	ParamPrune          = "prune"                // "true": deletes the objects of the previous release no longer present
+	ParamKeepReleases   = "keep_releases"        // releases kept in the history (default 5, at least 2)
+	ParamRequireDigest  = "require_image_digest" // "true": workload images must be pinned to the digest
+	ParamVarPrefix      = "var."                 // var.NAME replaces ${NAME} in the manifests
 	defaultNamespace    = "default"
 	defaultWaitTimeout  = 5 * time.Minute
 	defaultKeepReleases = 5
 )
 
-// Etichette e annotazioni scritte da manent.
+// Labels and annotations written by manent.
 const (
 	LabelManagedBy      = "app.kubernetes.io/managed-by"
 	LabelApplication    = "manent.io/application"
@@ -75,12 +75,12 @@ const (
 	configMapAPIVersion = "v1"
 )
 
-// DetailRelease è la chiave di Release.Details con il nome della ConfigMap della release.
+// DetailRelease is the Release.Details key with the name of the release ConfigMap.
 const DetailRelease = "release"
 
 var versionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$`)
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	connector Connector
 	types     []string
@@ -89,16 +89,16 @@ type Plugin struct {
 	helm      Helm
 }
 
-// New crea il plugin con il connettore indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given connector and supported artifact types.
 func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{connector: c, types: types, logger: logger, poll: 2 * time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - ca_file: CA del cluster (es. quella del service account, con manent nel cluster)
-//   - insecure_skip_tls_verify: true per non verificare il certificato (solo sviluppo)
-//   - artifact_types: tipi supportati (default ["kubernetes"])
-//   - helm: command (default "helm"), sha256 del binario, timeout del rendering (default 2m)
+// Factory builds the plugin from the application configuration:
+//   - ca_file: cluster CA (e.g. the service account's, with manent in the cluster)
+//   - insecure_skip_tls_verify: true to skip certificate verification (development only)
+//   - artifact_types: supported types (default ["kubernetes"])
+//   - helm: command (default "helm"), sha256 of the binary, rendering timeout (default 2m)
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	caFile, _ := cfg["ca_file"].(string)
 	insecure, _ := cfg["insecure_skip_tls_verify"].(bool)
@@ -132,13 +132,13 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return p, nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !versionRe.MatchString(req.Artifact.Version) {
@@ -207,7 +207,7 @@ func keepReleases(req *plugin.Request) (int, error) {
 	return n, nil
 }
 
-// connect apre l'accesso al cluster del target con le credenziali risolte dai segreti.
+// connect opens access to the target's cluster with the credentials resolved from the secrets.
 func (p *Plugin) connect(ctx context.Context, t plugin.Target, req *plugin.Request) (API, error) {
 	var c Credentials
 	var err error
@@ -231,8 +231,8 @@ func (p *Plugin) connect(ctx context.Context, t plugin.Target, req *plugin.Reque
 	return api, nil
 }
 
-// names calcola i nomi delle ConfigMap dello storico: il puntatore alla release in esercizio
-// e quella di ogni versione.
+// names computes the names of the history ConfigMaps: the pointer to the release in service
+// and the one of every version.
 type names struct{ pointer, prefix string }
 
 func historyNames(req *plugin.Request) names {
@@ -242,8 +242,8 @@ func historyNames(req *plugin.Request) names {
 
 func (n names) release(version string) string { return dnsName(n.prefix + "-" + version) }
 
-// dnsName rende un nome valido per Kubernetes (minuscole, cifre, '-', al più 63 caratteri):
-// i nomi troppo lunghi sono accorciati con un hash, così restano univoci.
+// dnsName makes a name valid for Kubernetes (lowercase, digits, '-', at most 63 characters):
+// names that are too long are shortened with a hash, so they stay unique.
 func dnsName(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {
@@ -267,8 +267,8 @@ func dnsName(s string) string {
 
 var labelValueRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$`)
 
-// labelValue rende un valore valido per un'etichetta: invariato se lo è già, altrimenti
-// normalizzato come un nome (con hash, per restare univoco).
+// labelValue makes a value valid for a label: unchanged if it already is, otherwise
+// normalized like a name (with a hash, to stay unique).
 func labelValue(s string) string {
 	if labelValueRe.MatchString(s) {
 		return s
@@ -276,18 +276,18 @@ func labelValue(s string) string {
 	return dnsName(s)
 }
 
-// prepared sono gli oggetti da applicare su un cluster.
+// prepared are the objects to apply on a cluster.
 type prepared struct {
 	objects []Object
 	refs    []ObjectRef
-	// newNamespaces sono i Namespace creati dai manifest.
+	// newNamespaces are the Namespaces created by the manifests.
 	newNamespaces []string
-	// hooksSkipped sono gli hook del chart Helm non applicati.
+	// hooksSkipped are the Helm chart hooks not applied.
 	hooksSkipped []string
 }
 
-// prepare legge, interpreta e completa gli oggetti per il cluster: namespace di default,
-// etichette e annotazioni di manent, controllo dei digest delle immagini.
+// prepare reads, parses and completes the objects for the cluster: default namespace, manent
+// labels and annotations, image digest check.
 func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*prepared, error) {
 	objs, hooks, err := p.objects(ctx, api, req)
 	if err != nil {
@@ -341,8 +341,8 @@ func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*pr
 	return pr, nil
 }
 
-// objects legge gli oggetti dell'artefatto: renderizza il chart Helm per il cluster, oppure
-// legge i manifest e ne sostituisce le variabili. Per un chart restituisce anche gli hook tolti.
+// objects reads the artifact objects: it renders the Helm chart for the cluster, or reads the
+// manifests and replaces their variables. For a chart it also returns the removed hooks.
 func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]Object, []string, error) {
 	chart, err := isChart(req.Artifact.LocalPath)
 	if err != nil {
@@ -388,8 +388,8 @@ func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]O
 	return objs, nil, err
 }
 
-// Deploy rilascia i manifest su ogni cluster in sequenza; si ferma al primo errore. Il
-// server-side apply è idempotente, quindi il deploy può essere rieseguito.
+// Deploy releases the manifests to every cluster in sequence; it stops at the first error.
+// Server-side apply is idempotent, so the deploy can run again.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	for _, t := range req.Targets {
@@ -427,7 +427,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	if prev != nil {
 		details["previous"] = prev.version
 	}
-	// I Namespace vanno creati prima dello storico, che può stare in uno di essi.
+	// Namespaces must be created before the history, which may live in one of them.
 	for _, o := range pr.objects {
 		if o.Kind() == "Namespace" {
 			if _, err := api.Apply(ctx, o, false); err != nil {
@@ -435,8 +435,8 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 			}
 		}
 	}
-	// La release è salvata prima di applicare gli oggetti: un rollback deve poter sapere
-	// cosa è stato creato anche se il deploy si ferma a metà.
+	// The release is saved before applying the objects: a rollback must be able to know what was
+	// created even if the deploy stops halfway.
 	if err := saveRelease(ctx, api, ns, n, req, pr); err != nil {
 		return details, err
 	}
@@ -470,7 +470,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	return details, nil
 }
 
-// waitRollout attende che i workload applicati abbiano completato il rollout.
+// waitRollout waits for the applied workloads to complete their rollout.
 func (p *Plugin) waitRollout(ctx context.Context, api API, objs []Object, req *plugin.Request, log *slog.Logger) error {
 	timeout, _ := waitTimeout(req)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -530,8 +530,8 @@ func num(o Object, keys ...string) int {
 	return 0
 }
 
-// ready dice se il rollout del workload è completo; un errore indica un rollout fallito
-// (es. Deployment oltre il progressDeadlineSeconds).
+// ready says whether the workload rollout is complete; an error means a failed rollout (e.g.
+// Deployment beyond progressDeadlineSeconds).
 func ready(o Object) (bool, string, error) {
 	gen, observed := num(o, "metadata", "generation"), num(o, "status", "observedGeneration")
 	if observed < gen {
@@ -586,18 +586,18 @@ func ready(o Object) (bool, string, error) {
 	return true, "completato", nil
 }
 
-// release è una release letta dallo storico.
+// release is a release read from the history.
 type release struct {
 	version string
 	name    string
 	objects []ObjectRef
-	// slot è lo slot della release nei rilasci per percentuale ("" per un rilascio in place).
+	// slot is the release slot in percentage rollouts ("" for an in-place release).
 	slot string
-	// previousVersion e previousSlot sono la release sostituita dalla promozione di uno slot.
+	// previousVersion and previousSlot are the release replaced by a slot's promotion.
 	previousVersion, previousSlot string
 }
 
-// readPointer legge la release in esercizio (nil se non ce n'è una) con i suoi oggetti.
+// readPointer reads the release in service (nil if there is none) with its objects.
 func readPointer(ctx context.Context, api API, ns string, n names) (*release, error) {
 	cm, err := api.Get(ctx, configMapAPIVersion, "ConfigMap", ns, n.pointer)
 	if errors.Is(err, ErrNotFound) {
@@ -612,7 +612,7 @@ func readPointer(ctx context.Context, api API, ns string, n names) (*release, er
 	}
 	rel, err := readRelease(ctx, api, ns, n, v)
 	if errors.Is(err, ErrNotFound) {
-		// Storico incompleto (es. ConfigMap eliminata a mano): si conosce solo la versione.
+		// Incomplete history (e.g. ConfigMap deleted by hand): only the version is known.
 		rel, err = &release{version: v, name: n.release(v)}, nil
 	}
 	if rel != nil {
@@ -621,7 +621,7 @@ func readPointer(ctx context.Context, api API, ns string, n names) (*release, er
 	return rel, err
 }
 
-// readRelease legge una release dello storico, oggetti compresi.
+// readRelease reads a release of the history, objects included.
 func readRelease(ctx context.Context, api API, ns string, n names, version string) (*release, error) {
 	cm, err := api.Get(ctx, configMapAPIVersion, "ConfigMap", ns, n.release(version))
 	if err != nil {
@@ -636,7 +636,7 @@ func readRelease(ctx context.Context, api API, ns string, n names, version strin
 	return rel, nil
 }
 
-// loadObjects legge dallo storico gli oggetti applicati da una release.
+// loadObjects reads from the history the objects applied by a release.
 func loadObjects(ctx context.Context, api API, ns string, n names, version string) ([]Object, error) {
 	cm, err := api.Get(ctx, configMapAPIVersion, "ConfigMap", ns, n.release(version))
 	if err != nil {
@@ -677,8 +677,8 @@ func historyLabels(req *plugin.Request, role string) map[string]any {
 	}
 }
 
-// saveRelease salva nello storico gli oggetti della release (compressi in binaryData, per
-// restare sotto il limite di 1 MiB di una ConfigMap).
+// saveRelease saves the release objects in the history (compressed in binaryData, to stay
+// below the 1 MiB limit of a ConfigMap).
 func saveRelease(ctx context.Context, api API, ns string, n names, req *plugin.Request, pr *prepared) error {
 	data, err := json.Marshal(pr.objects)
 	if err != nil {
@@ -717,12 +717,12 @@ func saveRelease(ctx context.Context, api API, ns string, n names, req *plugin.R
 	return nil
 }
 
-// writePointer indica la release in esercizio.
+// writePointer marks the release in service.
 func writePointer(ctx context.Context, api API, ns string, n names, req *plugin.Request, version string) error {
 	return writePointerData(ctx, api, ns, n, req, version, nil)
 }
 
-// writePointerData indica la release in esercizio con dati aggiuntivi (es. lo slot).
+// writePointerData marks the release in service with extra data (e.g. the slot).
 func writePointerData(ctx context.Context, api API, ns string, n names, req *plugin.Request, version string, extra map[string]any) error {
 	data := map[string]any{dataVersion: version, dataRelease: n.release(version), dataDeployment: req.DeploymentID}
 	for k, v := range extra {
@@ -739,7 +739,7 @@ func writePointerData(ctx context.Context, api API, ns string, n names, req *plu
 	return nil
 }
 
-// prune elimina gli oggetti della release precedente che la nuova non contiene più.
+// prune deletes the objects of the previous release the new one no longer contains.
 func prune(ctx context.Context, api API, previous, current []ObjectRef) ([]string, error) {
 	keep := map[string]bool{}
 	for _, r := range current {
@@ -749,7 +749,7 @@ func prune(ctx context.Context, api API, previous, current []ObjectRef) ([]strin
 	for i := len(previous) - 1; i >= 0; i-- {
 		r := previous[i]
 		if keep[r.String()] || r.Kind == "Namespace" {
-			// I Namespace non vengono mai eliminati: cancellerebbero tutto il loro contenuto.
+			// Namespaces are never deleted: that would delete all their content.
 			continue
 		}
 		if err := api.Delete(ctx, r.APIVersion, r.Kind, r.Namespace, r.Name); err != nil {
@@ -760,8 +760,8 @@ func prune(ctx context.Context, api API, previous, current []ObjectRef) ([]strin
 	return removed, nil
 }
 
-// pruneHistory elimina le release più vecchie oltre keep_releases, senza mai toccare quella
-// in esercizio e la precedente. Un errore non compromette il deploy.
+// pruneHistory deletes the oldest releases beyond keep_releases, never touching the one in
+// service and the previous one. An error does not compromise the deploy.
 func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, req *plugin.Request, prev *release, log *slog.Logger) {
 	keep, _ := keepReleases(req)
 	sel := LabelManagedBy + "=" + managedBy + "," + LabelRole + "=" + roleRelease + "," +
@@ -793,8 +793,8 @@ func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, 
 	}
 }
 
-// CurrentRelease legge su ogni cluster la release in esercizio dallo storico. Un cluster senza
-// storico (es. appena aggiunto) viene ignorato; release diverse tra i cluster sono un errore.
+// CurrentRelease reads on every cluster the release in service from the history. A cluster
+// without history (e.g. just added) is ignored; different releases across clusters are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	n := historyNames(req)
 	found := map[string][]string{}
@@ -829,9 +829,10 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	return nil, fmt.Errorf("release diverse sui cluster: %s", strings.Join(desc, "; "))
 }
 
-// Rollback riapplica su ogni cluster gli oggetti della release indicata, salvati nello
-// storico, ne attende il rollout e, con prune, elimina gli oggetti creati solo dalla release
-// fallita. Prosegue anche se un cluster fallisce e riporta gli errori alla fine. È idempotente.
+// Rollback applies again on every cluster the objects of the given release, saved in the
+// history, waits for their rollout and, with prune, deletes the objects created only by the
+// failed release. It continues even if a cluster fails and reports the errors at the end. It
+// is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !versionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("versione %q non valida", previous.Version)
@@ -892,9 +893,9 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	return details, nil
 }
 
-// DryRun verifica su ogni cluster, senza modificarlo, che il deploy sia eseguibile: credenziali,
-// tipi degli oggetti e un apply con dryRun=All, che passa da validazione, admission e RBAC del
-// cluster. Gli oggetti in un namespace creato dagli stessi manifest non sono verificabili.
+// DryRun checks on every cluster, without changing it, that the deploy can run: credentials,
+// object kinds and an apply with dryRun=All, which goes through the cluster's validation,
+// admission and RBAC. Objects in a namespace created by the same manifests cannot be checked.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	var errs []error

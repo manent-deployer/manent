@@ -18,13 +18,13 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// SSHDialer apre sessioni SSH/SFTP reali.
+// SSHDialer opens real SSH/SFTP sessions.
 type SSHDialer struct {
 	KnownHostsPath        string
 	InsecureIgnoreHostKey bool
 }
 
-// Dial si connette al target autenticandosi con chiave privata e/o password.
+// Dial connects to the target authenticating with a private key and/or password.
 func (d *SSHDialer) Dial(ctx context.Context, t plugin.Target, auth Auth) (Session, error) {
 	hostKey, err := d.hostKeyCallback()
 	if err != nil {
@@ -88,14 +88,14 @@ func (d *SSHDialer) hostKeyCallback() (ssh.HostKeyCallback, error) {
 	return knownhosts.New(p)
 }
 
-// sshSession implementa Session su una connessione SSH.
+// sshSession implements Session on an SSH connection.
 type sshSession struct {
 	client *ssh.Client
 	sftp   *sftp.Client
 }
 
-// Upload copia il file locale sul percorso remoto passando da un file temporaneo,
-// così un'interruzione non lascia un artefatto parziale al posto di quello definitivo.
+// Upload copies the local file to the remote path through a temporary file, so an
+// interruption does not leave a partial artifact in place of the final one.
 func (s *sshSession) Upload(ctx context.Context, localPath, remotePath string) error {
 	src, err := os.Open(localPath)
 	if err != nil {
@@ -117,13 +117,13 @@ func (s *sshSession) Upload(ctx context.Context, localPath, remotePath string) e
 	return s.sftp.PosixRename(tmp, remotePath)
 }
 
-// Run esegue un comando remoto restituendo stdout; in caso di errore include stderr.
+// Run runs a remote command returning stdout; on error it includes stderr.
 func (s *sshSession) Run(ctx context.Context, cmd string) (string, error) {
 	return s.RunStdin(ctx, cmd, nil)
 }
 
-// RunStdin esegue un comando remoto passandogli stdin (es. una password, che così non compare
-// nella riga di comando visibile sul target).
+// RunStdin runs a remote command passing it stdin (e.g. a password, which so does not show up
+// in the command line visible on the target).
 func (s *sshSession) RunStdin(ctx context.Context, cmd string, stdin io.Reader) (string, error) {
 	sess, err := s.client.NewSession()
 	if err != nil {
@@ -146,13 +146,13 @@ func (s *sshSession) RunStdin(ctx context.Context, cmd string, stdin io.Reader) 
 	}
 }
 
-// Close chiude SFTP e SSH.
+// Close closes SFTP and SSH.
 func (s *sshSession) Close() error {
 	s.sftp.Close()
 	return s.client.Close()
 }
 
-// contextReader interrompe la copia quando il contesto viene cancellato.
+// contextReader stops the copy when the context is cancelled.
 type contextReader struct {
 	ctx context.Context
 	r   io.Reader

@@ -14,21 +14,21 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// GateInput descrive i target da controllare dopo uno stadio.
+// GateInput describes the targets to check after a stage.
 type GateInput struct {
 	Application string
 	Environment string
 	Stage       string
 	Passes      []Pass
 	Health      descriptor.Health
-	// Track e StableTrack sono gli slot della versione candidata e di quella stabile nei
-	// rilasci per percentuale ({track} nelle query); Version è la versione candidata.
+	// Track and StableTrack are the slots of the candidate and stable versions in percentage
+	// rollouts ({track} in queries); Version is the candidate version.
 	Track       string `json:",omitempty"`
 	StableTrack string `json:",omitempty"`
 	Version     string `json:",omitempty"`
 }
 
-// CheckResult è l'esito di un singolo controllo.
+// CheckResult is the outcome of a single check.
 type CheckResult struct {
 	Kind   string   `json:"kind"`
 	Name   string   `json:"name"`
@@ -40,13 +40,13 @@ type CheckResult struct {
 	Detail string   `json:"detail,omitempty"`
 }
 
-// GateResult è l'esito di una lettura dell'health gate: verde solo se tutti i controlli lo sono.
+// GateResult is the outcome of a health gate read: green only if all checks are.
 type GateResult struct {
 	OK     bool          `json:"ok"`
 	Checks []CheckResult `json:"checks"`
 }
 
-// Failed restituisce i controlli rossi, per i messaggi di errore.
+// Failed returns the red checks, for error messages.
 func (g GateResult) Failed() string {
 	var parts []string
 	for _, c := range g.Checks {
@@ -64,8 +64,8 @@ func (g GateResult) Failed() string {
 	return strings.Join(parts, "; ")
 }
 
-// Merge unisce le letture parziali di un gate (es. sonde eseguite nelle region e metriche
-// lette dall'orchestratore): verde solo se lo sono tutte.
+// Merge merges the partial reads of a gate (e.g. probes run in the regions and metrics read by
+// the orchestrator): green only if all are.
 func Merge(rs ...GateResult) GateResult {
 	res := GateResult{OK: true}
 	for _, r := range rs {
@@ -75,35 +75,35 @@ func Merge(rs ...GateResult) GateResult {
 	return res
 }
 
-// Checker esegue l'health gate. Un'implementazione per un altro sistema di metriche (es.
-// Datadog) si registra in app.NewHealthChecker.
+// Checker runs the health gate. An implementation for another metrics system (e.g. Datadog)
+// is registered in app.NewHealthChecker.
 type Checker interface {
-	// Check esegue una lettura. Gli errori dei sistemi interrogati sono controlli rossi, non
-	// errori della funzione: un gate che non può verificare non è verde.
+	// Check runs one read. Errors of the queried systems are red checks, not errors of the
+	// function: a gate that cannot verify is not green.
 	Check(ctx context.Context, in GateInput) GateResult
-	// Supports verifica che i controlli richiesti siano eseguibili (es. Prometheus configurato).
+	// Supports checks that the required checks can run (e.g. Prometheus configured).
 	Supports(h *descriptor.Health) error
 }
 
-// Tipi di controllo.
+// Check types.
 const (
 	KindProbe  = "probe"
 	KindMetric = "metric"
 	KindAlert  = "alert"
 )
 
-// HTTPChecker esegue sonde HTTP, query Prometheus e la lettura degli allarmi di Alertmanager.
+// HTTPChecker runs HTTP probes, Prometheus queries and the Alertmanager alerts read.
 type HTTPChecker struct {
 	Client *http.Client
-	// PrometheusURL è l'indirizzo dell'API di Prometheus (es. http://prometheus:9090).
+	// PrometheusURL is the address of the Prometheus API (e.g. http://prometheus:9090).
 	PrometheusURL string
-	// AlertmanagerURL è l'indirizzo dell'API di Alertmanager (es. http://alertmanager:9093).
+	// AlertmanagerURL is the address of the Alertmanager API (e.g. http://alertmanager:9093).
 	AlertmanagerURL string
 }
 
 var _ Checker = (*HTTPChecker)(nil)
 
-// Supports implementa Checker.
+// Supports implements Checker.
 func (c *HTTPChecker) Supports(h *descriptor.Health) error {
 	if h == nil {
 		return nil
@@ -118,7 +118,7 @@ func (c *HTTPChecker) Supports(h *descriptor.Health) error {
 	return errors.Join(errs...)
 }
 
-// Check implementa Checker.
+// Check implements Checker.
 func (c *HTTPChecker) Check(ctx context.Context, in GateInput) GateResult {
 	var res GateResult
 	for _, p := range in.Passes {
@@ -167,8 +167,8 @@ func (c *HTTPChecker) probe(ctx context.Context, pr descriptor.Probe, p Pass, ho
 	return r
 }
 
-// metric valuta una query PromQL per il passo. Nessun dato è un controllo rosso: un gate che
-// non vede traffico non può dire che il rilascio è sano (per accettarlo, "or vector(0)").
+// metric evaluates a PromQL query for the pass. No data is a red check: a gate that sees no
+// traffic cannot say the release is healthy (to accept it, "or vector(0)").
 func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in GateInput, p Pass) CheckResult {
 	r := CheckResult{Kind: KindMetric, Name: m.Name, Region: p.Region, AZ: p.AZ}
 	expand := func(q, track string) string {
@@ -200,7 +200,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 		return r
 	}
 	if in.StableTrack == "" {
-		// Primo rilascio: non c'è una versione stabile con cui confrontare.
+		// First release: there is no stable version to compare with.
 		r.OK, r.Detail = true, "nessuna versione stabile da confrontare"
 		return r
 	}
@@ -224,7 +224,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	return r
 }
 
-// query esegue una query istantanea e restituisce il primo valore.
+// query runs an instant query and returns the first value.
 func (c *HTTPChecker) query(ctx context.Context, q string) (float64, error) {
 	u := strings.TrimRight(c.PrometheusURL, "/") + "/api/v1/query?" + url.Values{"query": {q}}.Encode()
 	var out struct {
@@ -268,7 +268,7 @@ func (c *HTTPChecker) query(ctx context.Context, q string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-// alerts restituisce un controllo rosso per ogni allarme attivo che blocca un passo dello stadio.
+// alerts returns a red check for every active alert that blocks a pass of the stage.
 func (c *HTTPChecker) alerts(ctx context.Context, a descriptor.AlertGate, in GateInput) []CheckResult {
 	u := strings.TrimRight(c.AlertmanagerURL, "/") + "/api/v2/alerts?active=true&silenced=false&inhibited=false"
 	var list []struct {

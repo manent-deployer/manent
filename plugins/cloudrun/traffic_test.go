@@ -9,7 +9,7 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// split restituisce il traffico del finto servizio come "revisione=percentuale".
+// split returns the fake service's traffic as "revision=percent".
 func (f *fakeRun) split() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -49,7 +49,7 @@ func TestRevisioneCandidata(t *testing.T) {
 	if got := f.split(); got != stable+"=100 "+cand+"=0" {
 		t.Fatalf("traffico dopo il deploy della candidata: %s", got)
 	}
-	// Ripetuto, il deploy della candidata non crea un'altra revisione.
+	// Repeated, the candidate deploy does not create another revision.
 	n := len(f.revisions)
 	if _, err := p.DeployCandidate(ctx, req); err != nil || len(f.revisions) != n {
 		t.Fatalf("deploy ripetuto: %v, revisioni %d -> %d", err, n, len(f.revisions))
@@ -66,7 +66,7 @@ func TestRevisioneCandidata(t *testing.T) {
 	if w, err := p.CandidateWeight(ctx, req); err != nil || w != 10 {
 		t.Errorf("peso letto: %d %v", w, err)
 	}
-	// Con il traffico diviso la release in esercizio resta la stabile.
+	// With split traffic the release in service stays the stable one.
 	if cur, err := p.CurrentRelease(ctx, req); err != nil || cur.Version != "1.0.0" {
 		t.Errorf("release durante il rilascio: %+v %v", cur, err)
 	}

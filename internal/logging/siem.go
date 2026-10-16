@@ -1,4 +1,4 @@
-// Package logging fornisce il logger applicativo e l'inoltro dei log al SIEM in formato RFC 5424.
+// Package logging provides the application logger and log forwarding to the SIEM in RFC 5424 format.
 package logging
 
 import (
@@ -12,33 +12,32 @@ import (
 	"github.com/crewjam/rfc5424"
 )
 
-// SIEMSender invia un messaggio RFC 5424 al SIEM.
+// SIEMSender sends an RFC 5424 message to the SIEM.
 type SIEMSender interface {
 	Send(msg rfc5424.Message) error
 	Close() error
 }
 
-// NoopSender scarta i messaggi; usato quando il SIEM è disabilitato.
+// NoopSender discards messages; used when the SIEM is disabled.
 type NoopSender struct{}
 
-// Send non fa nulla.
+// Send does nothing.
 func (NoopSender) Send(rfc5424.Message) error { return nil }
 
-// Close non fa nulla.
+// Close does nothing.
 func (NoopSender) Close() error { return nil }
 
-// Reti delle destinazioni dei log strutturati.
+// Networks of the structured log destinations.
 const (
 	NetworkUDP = "udp"
 	NetworkTCP = "tcp"
-	// NetworkUnixgram è il socket syslog locale (/dev/log): rsyslog, syslog-ng o journald.
+	// NetworkUnixgram is the local syslog socket (/dev/log): rsyslog, syslog-ng or journald.
 	NetworkUnixgram = "unixgram"
-	// NetworkJournald è il protocollo nativo di systemd-journald: gli attributi diventano
-	// campi del journal.
+	// NetworkJournald is the native systemd-journald protocol: attributes become journal fields.
 	NetworkJournald = "journald"
 )
 
-// DefaultSyslogSocket è il socket syslog locale del sistema.
+// DefaultSyslogSocket is the system's local syslog socket.
 func DefaultSyslogSocket() string {
 	if runtime.GOOS == "darwin" {
 		return "/var/run/syslog"
@@ -46,11 +45,11 @@ func DefaultSyslogSocket() string {
 	return "/dev/log"
 }
 
-// DefaultJournalSocket è il socket del protocollo nativo di journald.
+// DefaultJournalSocket is the socket of the native journald protocol.
 const DefaultJournalSocket = "/run/systemd/journal/socket"
 
-// NewSender crea il sender per una destinazione. Per unixgram e journald l'indirizzo è il
-// percorso del socket, con un default se vuoto.
+// NewSender creates the sender for a destination. For unixgram and journald the address is
+// the socket path, with a default if empty.
 func NewSender(network, address string) (SIEMSender, error) {
 	switch network {
 	case NetworkJournald:
@@ -69,10 +68,10 @@ func NewSender(network, address string) (SIEMSender, error) {
 	return NewNetSender(network, address)
 }
 
-// MultiSender invia ogni messaggio a più destinazioni: l'errore di una non ferma le altre.
+// MultiSender sends every message to several destinations: an error on one does not stop the others.
 type MultiSender []SIEMSender
 
-// Send invia il messaggio a tutte le destinazioni.
+// Send sends the message to all destinations.
 func (m MultiSender) Send(msg rfc5424.Message) error {
 	var errs []error
 	for _, s := range m {
@@ -81,7 +80,7 @@ func (m MultiSender) Send(msg rfc5424.Message) error {
 	return errors.Join(errs...)
 }
 
-// Close chiude tutte le destinazioni.
+// Close closes all destinations.
 func (m MultiSender) Close() error {
 	var errs []error
 	for _, s := range m {
@@ -90,8 +89,8 @@ func (m MultiSender) Close() error {
 	return errors.Join(errs...)
 }
 
-// NetSender invia i messaggi via UDP o socket unix a datagrammi (un datagramma per messaggio)
-// o TCP (octet counting, RFC 6587).
+// NetSender sends messages over UDP or unix datagram sockets (one datagram per message) or
+// TCP (octet counting, RFC 6587).
 type NetSender struct {
 	network string
 	address string
@@ -101,7 +100,7 @@ type NetSender struct {
 	conn net.Conn
 }
 
-// NewNetSender crea un sender di rete; la connessione è aperta alla prima Send.
+// NewNetSender creates a network sender; the connection is opened at the first Send.
 func NewNetSender(network, address string) (*NetSender, error) {
 	if network != NetworkUDP && network != NetworkTCP && network != NetworkUnixgram {
 		return nil, fmt.Errorf("rete SIEM %q non supportata (udp|tcp|unixgram|journald)", network)
@@ -112,9 +111,9 @@ func NewNetSender(network, address string) (*NetSender, error) {
 	return &NetSender{network: network, address: address, timeout: 5 * time.Second}, nil
 }
 
-// Send serializza e invia il messaggio, riaprendo la connessione in caso di errore. Su un socket
-// unix il messaggio viene ritentato una volta: il demone syslog può aver ricreato il socket
-// (es. al riavvio di journald) e un datagramma non arriva mai a metà.
+// Send serializes and sends the message, reopening the connection on error. On a unix socket
+// the message is retried once: the syslog daemon may have recreated the socket (e.g. when
+// journald restarts) and a datagram never arrives half-way.
 func (s *NetSender) Send(msg rfc5424.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,7 +149,7 @@ func (s *NetSender) send(msg rfc5424.Message) error {
 	return err
 }
 
-// Close chiude la connessione aperta.
+// Close closes the open connection.
 func (s *NetSender) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -162,18 +161,18 @@ func (s *NetSender) Close() error {
 	return err
 }
 
-// maxDatagram è la dimensione massima di un messaggio inviato come datagramma: il limite di UDP
-// (65507 byte) con un margine; vale anche per /dev/log, dove rsyslog e syslog-ng troncano
-// comunque i messaggi lunghi.
+// maxDatagram is the maximum size of a message sent as a datagram: the UDP limit (65507
+// bytes) with a margin; it also applies to /dev/log, where rsyslog and syslog-ng truncate long
+// messages anyway.
 const maxDatagram = 60 * 1024
 
-// maxDatagramParam è la lunghezza a cui vengono accorciati i valori degli attributi di un
-// messaggio troppo grande per un datagramma.
+// maxDatagramParam is the length attribute values are shortened to in a message too large
+// for a datagram.
 const maxDatagramParam = 1024
 
-// marshalDatagram serializza il messaggio in al più limit byte: se è più grande accorcia prima i
-// valori lunghi dello structured data, poi il testo. Un messaggio troncato non va perso: un
-// datagramma oltre il limite verrebbe rifiutato per intero.
+// marshalDatagram serializes the message in at most limit bytes: if larger it first shortens
+// the long structured data values, then the text. A truncated message is not lost: a datagram
+// beyond the limit would be rejected entirely.
 func marshalDatagram(msg rfc5424.Message, limit int) ([]byte, error) {
 	b, err := msg.MarshalBinary()
 	if err != nil || len(b) <= limit {

@@ -1,8 +1,8 @@
-# Immagini di manent, statiche (SQLite è in Go puro) e senza shell, eseguite come utente non root:
-#   - server (default): manent-server (API, worker, admin), il client manent, il plugin esterno
-#     remote-copy e helm (rendering dei chart nel plugin kubernetes);
-#   - client (--target client): solo il client manent, che parla con l'API.
-# Interfaccia web: vite build scrive in internal/webui/dist, incorporata da go:embed.
+# manent images, static (SQLite is pure Go) and without a shell, run as a non-root user:
+#   - server (default): manent-server (API, worker, admin), the manent client, the external
+#     remote-copy plugin and helm (chart rendering in the kubernetes plugin);
+#   - client (--target client): only the manent client, which talks to the API.
+# Web interface: vite build writes to internal/webui/dist, embedded by go:embed.
 FROM node:22.11.0-bookworm-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
@@ -24,7 +24,7 @@ RUN LDFLAGS="-s -w -X github.com/joeg-ita/manent/internal/version.Version=${VERS
  && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o /out/manent-server ./cmd/manent-server \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/manent-plugin-remote-copy ./cmd/manent-plugin-remote-copy
 
-# Binario statico di Helm, usato solo per "helm template" dal plugin kubernetes.
+# Static Helm binary, used only for "helm template" by the kubernetes plugin.
 FROM alpine/helm:4.3.0 AS helm
 
 FROM gcr.io/distroless/static-debian12:nonroot AS client

@@ -21,7 +21,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// waveLog registra, in ordine, esecuzioni e compensazioni degli step dei test a ondate.
+// waveLog records, in order, runs and compensations of the steps of the wave tests.
 type waveLog struct {
 	mu    sync.Mutex
 	calls []string
@@ -39,8 +39,8 @@ func (l *waveLog) get() []string {
 	return slices.Clone(l.calls)
 }
 
-// waveStep simula uno step che lavora sui target: registra gli host (e il worker che lo
-// esegue), sa fare checkpoint e compensazione e fallisce sugli host indicati.
+// waveStep simulates a step working on targets: it records the hosts (and the worker running
+// it), supports checkpoint and compensation and fails on the given hosts.
 type waveStep struct {
 	name, worker string
 	log          *waveLog
@@ -77,7 +77,7 @@ func (s waveStep) Compensate(_ context.Context, in pipeline.Input, _ pipeline.Ou
 	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted}, nil
 }
 
-// fakeChecker è un health gate finto: rosso per gli stadi che toccano le region indicate.
+// fakeChecker is a fake health gate: red for the stages touching the given regions.
 type fakeChecker struct {
 	mu   sync.Mutex
 	red  map[string]bool
@@ -98,7 +98,7 @@ func (c *fakeChecker) Check(_ context.Context, in rollout.GateInput) rollout.Gat
 
 func (c *fakeChecker) Supports(*descriptor.Health) error { return nil }
 
-// waveTargets crea 3 region × 2 AZ, un nodo per AZ; il nodo di eu-1a è la canary.
+// waveTargets creates 3 regions × 2 AZs, one node per AZ; the eu-1a node is the canary.
 func waveTargets() []descriptor.Target {
 	var ts []descriptor.Target
 	for _, reg := range []string{"eu-1", "eu-2", "us-1"} {
@@ -135,7 +135,7 @@ type waveEnv struct {
 	checker *fakeChecker
 }
 
-// newWaveEngine avvia un worker con gli step prepare (una volta), deploy e activation (per passo).
+// newWaveEngine starts a worker with the steps prepare (once), deploy and activation (per pass).
 func newWaveEngine(t *testing.T, fail string, gov Governance) waveEnv {
 	t.Helper()
 	l := &waveLog{}
@@ -163,8 +163,8 @@ func TestRolloutAOndate(t *testing.T) {
 	}
 	want := []string{
 		"deploy:w1:eu-1a", "activation:w1:eu-1a", // canary
-		"deploy:w1:eu-1b", "activation:w1:eu-1b", // eu-1, un'AZ alla volta
-		"deploy:w1:eu-2a", "activation:w1:eu-2a", "deploy:w1:us-1a", "activation:w1:us-1a", // eu-2 e us-1 insieme, AZ a
+		"deploy:w1:eu-1b", "activation:w1:eu-1b", // eu-1, one AZ at a time
+		"deploy:w1:eu-2a", "activation:w1:eu-2a", "deploy:w1:us-1a", "activation:w1:us-1a", // eu-2 and us-1 together, AZ a
 		"deploy:w1:eu-2b", "activation:w1:eu-2b", "deploy:w1:us-1b", "activation:w1:us-1b",
 	}
 	if got := env.log.get(); !slices.Equal(got, want) {
@@ -183,7 +183,7 @@ func TestRolloutAOndate(t *testing.T) {
 	if s := st.Rollout.Stages[2]; s.Name != "resto/eu-2a+us-1a" || len(s.Passes) != 2 || s.Passes[1].Hosts[0] != "us-1a" {
 		t.Errorf("stadio inatteso: %+v", s)
 	}
-	// I log degli step dei passi arrivano al log del deploy con il nome del passo.
+	// The logs of the pass steps reach the deploy log with the pass name.
 	p, _ := env.e.Logs(ctx, sub.ID, 0)
 	if len(p.Lines) == 0 || p.Lines[0].Step != "deploy@canary#0" {
 		t.Errorf("log: %+v", p.Lines)
@@ -213,7 +213,7 @@ func TestRolloutGateRossoFerma(t *testing.T) {
 	if !strings.Contains(st.Rollout.Stages[2].Gate, "error-rate (us-1): valore 0.2") {
 		t.Errorf("gate: %q", st.Rollout.Stages[2].Gate)
 	}
-	// L'inventario segnala l'ambiente disallineato.
+	// The inventory flags the misaligned environment.
 	inv, _ := env.e.Inventory(ctx, InventoryFilter{})
 	if len(inv) != 1 || !inv[0].Drift {
 		t.Errorf("inventario senza drift: %+v", inv)
@@ -241,7 +241,7 @@ func TestRolloutRollbackAll(t *testing.T) {
 			undo = append(undo, strings.TrimPrefix(c, "undo:"))
 		}
 	}
-	// In ordine inverso: lo stadio fallito (us-1a fallito, eu-2a), poi eu-1b, poi la canary.
+	// In reverse order: the failed stage (us-1a failed, eu-2a), then eu-1b, then the canary.
 	want := []string{"deploy:w1:us-1a", "activation:w1:eu-2a", "deploy:w1:eu-2a", "activation:w1:eu-1b", "deploy:w1:eu-1b", "activation:w1:eu-1a", "deploy:w1:eu-1a"}
 	if !slices.Equal(undo, want) {
 		t.Fatalf("compensazioni:\n %v\natteso\n %v", undo, want)
@@ -250,11 +250,11 @@ func TestRolloutRollbackAll(t *testing.T) {
 	if st.Rollout.Rollback != RollbackCompleted || st.Rollout.Stages[0].State != service.StageRolledBack {
 		t.Errorf("stato: %+v", st.Rollout)
 	}
-	// Un rollback richiesto senza rollback attivo è rifiutato all'accodamento.
+	// A rollback requested without rollback enabled is rejected at submission.
 	d2 := waveDescriptor("ondate-rb-2")
 	d2.Rollout.OnFailure = descriptor.OnFailureRollbackWave
 	if _, err := env.e.Submit(ctx, d2); err == nil {
-		// Senza resolver la verifica avviene nel worker: il deploy fallisce subito.
+		// Without a resolver the check happens in the worker: the deploy fails at once.
 		if _, err := env.e.Wait(ctx, "ondate-rb-2"); err == nil || !strings.Contains(err.Error(), "richiede il rollback attivo") {
 			t.Errorf("rollback non attivo: %v", err)
 		}
@@ -274,7 +274,7 @@ func TestRolloutApprovazioneTraLeOndate(t *testing.T) {
 	if st.Approval == nil || st.Rollout.Paused != "approvazione dopo l'ondata canary" || len(env.log.get()) != 2 {
 		t.Fatalf("pausa inattesa: %+v %v", st.Rollout, env.log.get())
 	}
-	// L'auto-approvazione è scartata dal workflow; quella di un'altra identità lo sblocca.
+	// Self-approval is discarded by the workflow; another identity's approval unblocks it.
 	if err := env.e.Decide(alice, sub.ID, DecisionRequest{Approve: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestRolloutBake(t *testing.T) {
 	}
 }
 
-// waitDeployState attende che il deploy arrivi allo stato indicato.
+// waitDeployState waits until the deploy reaches the given state.
 func waitDeployState(t *testing.T, e *Engine, id, state string) *Status {
 	t.Helper()
 	for range 100 {
@@ -352,7 +352,7 @@ func waitDeployState(t *testing.T, e *Engine, id, state string) *Status {
 	return nil
 }
 
-// waitRollout attende che il rollout arrivi allo stato indicato.
+// waitRollout waits until the rollout reaches the given state.
 func waitRollout(t *testing.T, e *Engine, id, state string) *Status {
 	t.Helper()
 	for range 100 {
@@ -400,7 +400,7 @@ func TestRolloutInstradatoPerRegion(t *testing.T) {
 			t.Errorf("il target %s è stato toccato dal worker di %s", parts[2], parts[1])
 		}
 	}
-	// I log scritti dai worker di region arrivano al log del deploy.
+	// The logs written by region workers reach the deploy log.
 	p, _ := e.Logs(ctx, sub.ID, 0)
 	steps := map[string]bool{}
 	for _, line := range p.Lines {
@@ -410,7 +410,7 @@ func TestRolloutInstradatoPerRegion(t *testing.T) {
 		t.Errorf("log dei passi mancanti: %v", steps)
 	}
 
-	// Una region senza worker: il passo fallisce con un errore chiaro.
+	// A region without workers: the pass fails with a clear error.
 	d := waveDescriptor("ondate-region-2")
 	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "ap-1a", Labels: map[string]string{"region": "ap-1", "az": "ap-1a"}})
 	d.Rollout.Waves[2].Select = "region in (eu-2, us-1, ap-1)"
@@ -423,8 +423,8 @@ func TestRolloutInstradatoPerRegion(t *testing.T) {
 	}
 }
 
-// regionChecker simula un worker che raggiunge solo i target della propria region: le sonde
-// verso un'altra region sono rosse, come con le reti separate per region.
+// regionChecker simulates a worker that reaches only its own region's targets: probes to
+// another region are red, as with separate networks per region.
 type regionChecker struct {
 	region string
 	mu     sync.Mutex
@@ -525,15 +525,15 @@ func TestRolloutInstradatoConRollback(t *testing.T) {
 			undo = append(undo, strings.TrimPrefix(c, "undo:"))
 		}
 	}
-	// Solo lo stadio fallito, ogni passo compensato dal worker della sua region.
+	// Only the failed stage, every pass compensated by its region's worker.
 	slices.Sort(undo)
 	if want := []string{"deploy:eu-2:eu-2a", "deploy:us-1:us-1a"}; !slices.Equal(undo, want) {
 		t.Fatalf("compensazioni: %v, attese %v", undo, want)
 	}
 }
 
-// crashOnceStep si blocca alla prima esecuzione sull'host indicato, come un worker che muore
-// a metà passo; dalla seconda registra l'esecuzione e prosegue.
+// crashOnceStep blocks on its first run on the given host, like a worker dying halfway
+// through a pass; from the second it records the run and continues.
 type crashOnceStep struct {
 	host    string
 	log     *waveLog
@@ -584,7 +584,7 @@ func TestRolloutRipresoDopoUnCrash(t *testing.T) {
 	if _, err := e.Wait(ctx, sub.ID); err != nil {
 		t.Fatal(err)
 	}
-	// Gli stadi già superati non sono ripetuti: canary ed eu-1b una volta sola.
+	// Stages already passed are not repeated: canary and eu-1b once only.
 	got := l.get()
 	if want := []string{"eu-1a", "eu-1b", "eu-2a", "us-1a", "eu-2b", "us-1b"}; !slices.Equal(got, want) {
 		t.Fatalf("esecuzioni dopo la ripresa: %v, attese %v", got, want)
@@ -599,7 +599,7 @@ func TestRolloutApprovazioniSpostateNelRollout(t *testing.T) {
 	}
 	env := newWaveEngine(t, "", gov)
 	ctx := context.Background()
-	// Senza punti di approvazione nel rollout il deploy partirebbe senza approvazioni.
+	// Without approval points in the rollout the deploy would start without approvals.
 	if _, err := env.e.Submit(alice, waveDescriptor("ondate-when-senza")); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("atteso ErrInvalidRequest, ottenuto %v", err)
 	}
@@ -609,8 +609,8 @@ func TestRolloutApprovazioniSpostateNelRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nessuna approvazione prima del deploy: l'ondata canary parte subito, poi la pausa
-	// chiede le approvazioni della regola.
+	// No approval before the deploy: the canary wave starts at once, then the pause asks for the
+	// rule's approvals.
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
 	if st.Rollout == nil || st.Rollout.Approval == nil || st.Rollout.Approval.Required != 2 || len(env.log.get()) != 2 {
 		t.Fatalf("pausa inattesa: %+v %v", st.Rollout, env.log.get())

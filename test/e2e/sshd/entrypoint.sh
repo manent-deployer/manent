@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installa la chiave pubblica passata in AUTHORIZED_KEY e avvia sshd in primo piano.
+# Installs the public key passed in AUTHORIZED_KEY and starts sshd in the foreground.
 set -eu
 printf '%s\n' "$AUTHORIZED_KEY" > /home/deploy/.ssh/authorized_keys
 chown deploy:deploy /home/deploy/.ssh/authorized_keys

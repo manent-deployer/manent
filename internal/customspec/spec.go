@@ -1,6 +1,6 @@
-// Package customspec definisce la specifica degli step personalizzati (pipeline.steps con type),
-// la sua validazione, la forma canonica fotografata nel piano e la firma che il worker verifica.
-// Non dipende da altri package di manent: lo usano config, pipeline, engine e customstep.
+// Package customspec defines the spec of custom steps (pipeline.steps with type), its
+// validation, the canonical form captured in the plan and the signature the worker verifies.
+// It depends on no other manent package: config, pipeline, engine and customstep use it.
 package customspec
 
 import (
@@ -17,16 +17,16 @@ import (
 	"time"
 )
 
-// Tipi di step personalizzato.
+// Custom step types.
 const (
 	TypeCommand = "command"
 	TypeHTTP    = "http"
 )
 
-// OnTargets esegue il comando sui target del deploy (o del lotto) via SSH.
+// OnTargets runs the command on the targets of the deploy (or of the batch) over SSH.
 const OnTargets = "targets"
 
-// Limiti della specifica.
+// Spec limits.
 const (
 	DefaultTimeout      = 10 * time.Minute
 	MaxTimeout          = 6 * time.Hour
@@ -37,78 +37,79 @@ const (
 	maxCommandArgs      = 64
 )
 
-// Spec è la definizione di uno step personalizzato, scritta solo in manent.yml.
+// Spec is the definition of a custom step, written only in manent.yml.
 type Spec struct {
-	// Type è command o http; vuoto per gli step standard.
+	// Type is command or http; empty for standard steps.
 	Type string `yaml:"type" json:"type,omitempty"`
-	// Timeout è la durata massima di un'esecuzione (default 10m).
+	// Timeout is the maximum duration of a run (default 10m).
 	Timeout time.Duration `yaml:"timeout" json:"timeout,omitempty"`
-	// Secrets sono i nomi logici dei segreti passati a run (sezione secrets del descrittore effettivo).
+	// Secrets are the logical names of the secrets passed to run (secrets section of the
+	// effective descriptor).
 	Secrets []string `yaml:"secrets" json:"secrets,omitempty"`
-	// Params dichiara i parametri accettati, con il pattern dei valori.
+	// Params declares the accepted parameters, with the pattern of their values.
 	Params map[string]Param `yaml:"params" json:"params,omitempty"`
-	// Outputs dichiara le sole chiavi di output accettate, con il pattern dei valori.
+	// Outputs declares the only accepted output keys, with the pattern of their values.
 	Outputs map[string]Output `yaml:"outputs" json:"outputs,omitempty"`
-	// SSH sono le credenziali per i comandi sui target.
+	// SSH holds the credentials for commands on the targets.
 	SSH *SSH `yaml:"ssh" json:"ssh,omitempty"`
-	// Run è l'esecuzione reale.
+	// Run is the real run.
 	Run *Action `yaml:"run" json:"run,omitempty"`
-	// DryRun, se presente, è eseguito nei dry-run; senza, lo step viene saltato.
+	// DryRun, if set, runs in dry-runs; without it the step is skipped.
 	DryRun *Action `yaml:"dry_run" json:"dry_run,omitempty"`
 }
 
-// Param è un parametro dello step: il valore arriva dalla configurazione di ambiente o, se
-// ammesso da descriptor_policy.step_params, dal descrittore.
+// Param is a step parameter: its value comes from the environment configuration or, if
+// allowed by descriptor_policy.step_params, from the descriptor.
 type Param struct {
-	// Pattern è un'espressione regolare che il valore deve rispettare per intero.
+	// Pattern is a regular expression the whole value must match.
 	Pattern  string `yaml:"pattern" json:"pattern"`
 	Required bool   `yaml:"required" json:"required,omitempty"`
 	Default  string `yaml:"default" json:"default,omitempty"`
 }
 
-// Output è una chiave di output dello step.
+// Output is an output key of the step.
 type Output struct {
-	// Pattern è un'espressione regolare che il valore deve rispettare per intero.
+	// Pattern is a regular expression the whole value must match.
 	Pattern string `yaml:"pattern" json:"pattern"`
-	// Path, solo per http, è il percorso nella risposta JSON ($.a.b[0]).
+	// Path, http only, is the path in the JSON response ($.a.b[0]).
 	Path string `yaml:"path" json:"path,omitempty"`
 }
 
-// SSH sono utente e credenziali (nomi logici di segreti) per i comandi sui target.
+// SSH holds user and credentials (logical secret names) for commands on the targets.
 type SSH struct {
-	// User sostituisce l'utente del target: meglio un utente dedicato, con i soli privilegi necessari.
+	// User replaces the target user: better a dedicated user with only the needed privileges.
 	User           string `yaml:"user" json:"user,omitempty"`
 	KeySecret      string `yaml:"key_secret" json:"key_secret,omitempty"`
 	PasswordSecret string `yaml:"password_secret" json:"password_secret,omitempty"`
 }
 
-// Action è un'esecuzione: un comando (type command) o una richiesta HTTP (type http).
+// Action is a run: a command (type command) or an HTTP request (type http).
 type Action struct {
-	// On è dove gira il comando: solo "targets" in questa versione.
+	// On is where the command runs: only "targets" in this version.
 	On string `yaml:"on" json:"on,omitempty"`
-	// RunOnce esegue il comando su un solo target (il primo) invece che su tutti.
+	// RunOnce runs the command on a single target (the first) instead of all.
 	RunOnce bool `yaml:"run_once" json:"run_once,omitempty"`
-	// Command è la lista degli argomenti; il primo è un percorso assoluto senza segnaposto.
+	// Command is the argument list; the first is an absolute path without placeholders.
 	Command []string `yaml:"command" json:"command,omitempty"`
-	// SHA256 del binario Command[0], verificato sul target prima di ogni esecuzione.
+	// SHA256 of the Command[0] binary, verified on the target before every run.
 	SHA256 string `yaml:"sha256" json:"sha256,omitempty"`
 
 	Method  string            `yaml:"method" json:"method,omitempty"`
 	URL     string            `yaml:"url" json:"url,omitempty"`
 	Headers map[string]string `yaml:"headers" json:"headers,omitempty"`
 	Auth    *Auth             `yaml:"auth" json:"auth,omitempty"`
-	// JSON è il corpo della richiesta: una struttura serializzata da manent, con segnaposto
-	// solo nei valori stringa.
+	// JSON is the request body: a structure serialized by manent, with placeholders only in
+	// string values.
 	JSON any `yaml:"json" json:"json,omitempty"`
-	// Expect sono gli status accettati (default: 2xx).
+	// Expect are the accepted statuses (default: 2xx).
 	Expect []int `yaml:"expect" json:"expect,omitempty"`
 	Poll   *Poll `yaml:"poll" json:"poll,omitempty"`
 
-	// Secrets, solo in dry_run, sono i segreti del dry-run: quelli di run non vengono passati.
+	// Secrets, dry_run only, are the dry-run secrets: run's are not passed.
 	Secrets []string `yaml:"secrets" json:"secrets,omitempty"`
 }
 
-// Auth è l'autenticazione HTTP con un segreto.
+// Auth is HTTP authentication with a secret.
 type Auth struct {
 	Type     string `yaml:"type" json:"type"` // bearer | basic | header
 	Secret   string `yaml:"secret" json:"secret"`
@@ -116,9 +117,9 @@ type Auth struct {
 	Header   string `yaml:"header" json:"header,omitempty"`
 }
 
-// Poll attende che un'operazione asincrona si concluda interrogando un URL.
+// Poll waits for an asynchronous operation to end by polling a URL.
 type Poll struct {
-	// URL può usare {{ .Response.<campo> }} della prima risposta.
+	// URL may use {{ .Response.<field> }} of the first response.
 	URL      string        `yaml:"url" json:"url"`
 	Interval time.Duration `yaml:"interval" json:"interval,omitempty"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`
@@ -126,22 +127,22 @@ type Poll struct {
 	Fail     *Condition    `yaml:"fail" json:"fail,omitempty"`
 }
 
-// Condition è vera quando il valore in Path è uno di In.
+// Condition is true when the value at Path is one of In.
 type Condition struct {
 	Path string   `yaml:"path" json:"path"`
 	In   []string `yaml:"in" json:"in"`
 }
 
-// IsCustom indica se lo step è personalizzato.
+// IsCustom reports whether the step is a custom one.
 func (s Spec) IsCustom() bool { return s.Type != "" }
 
-// IsZero indica che nessun campo della specifica è valorizzato (step standard).
+// IsZero reports that no spec field is set (standard step).
 func (s Spec) IsZero() bool {
 	return s.Type == "" && s.Timeout == 0 && len(s.Secrets) == 0 && len(s.Params) == 0 && len(s.Outputs) == 0 &&
 		s.SSH == nil && s.Run == nil && s.DryRun == nil
 }
 
-// ApplyDefaults completa i valori di default, così la forma fotografata nel piano è esplicita.
+// ApplyDefaults fills in the defaults, so the form captured in the plan is explicit.
 func (s *Spec) ApplyDefaults() {
 	if !s.IsCustom() {
 		return
@@ -172,7 +173,7 @@ func (s *Spec) ApplyDefaults() {
 		}
 	}
 	if s.Type == TypeCommand && s.DryRun != nil && s.Run != nil {
-		// Il dry-run gira dove gira run.
+		// The dry-run runs where run runs.
 		s.DryRun.On, s.DryRun.RunOnce = s.Run.On, s.Run.RunOnce
 	}
 }
@@ -185,10 +186,10 @@ var (
 	headerRe     = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 )
 
-// Header che la specifica non può impostare: li gestisce manent.
+// Headers the spec cannot set: manent manages them.
 var reservedHeaders = []string{"host", "content-length", "content-type", "transfer-encoding", "connection"}
 
-// Validate controlla la specifica dello step name. allowHTTP ammette URL http.
+// Validate checks the spec of step name. allowHTTP allows http URLs.
 func (s Spec) Validate(name string, allowHTTP bool) error {
 	if !s.IsCustom() {
 		if !s.IsZero() {
@@ -408,7 +409,7 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 	return errors.Join(errs...)
 }
 
-// authSecretDeclared controlla che l'autenticazione HTTP di run usi un segreto dichiarato.
+// authSecretDeclared checks that run's HTTP authentication uses a declared secret.
 func (s Spec) authSecretDeclared() error {
 	if s.Type == TypeHTTP && s.Run != nil && s.Run.Auth != nil && !slices.Contains(s.Secrets, s.Run.Auth.Secret) {
 		return errors.New("run.auth.secret deve essere tra i segreti dello step (secrets)")
@@ -416,8 +417,8 @@ func (s Spec) authSecretDeclared() error {
 	return nil
 }
 
-// LiteralOrigin restituisce schema e host dell'URL, che devono essere scritti senza segnaposto:
-// i valori sostituiti possono cambiare solo percorso e query, mai la destinazione.
+// LiteralOrigin returns scheme and host of the URL, which must be written without
+// placeholders: substituted values can change only path and query, never the destination.
 func LiteralOrigin(raw string, allowHTTP bool) (string, error) {
 	lit := raw
 	if i := strings.Index(raw, "{{"); i >= 0 {
@@ -446,7 +447,7 @@ func LiteralOrigin(raw string, allowHTTP bool) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-// Compile compila un pattern ancorato: il valore deve rispettarlo per intero.
+// Compile compiles an anchored pattern: the whole value must match it.
 func Compile(pattern string) (*regexp.Regexp, error) {
 	return regexp.Compile(`^(?:` + pattern + `)$`)
 }
@@ -477,7 +478,7 @@ func prefixed(prefix string, err error) error {
 	return fmt.Errorf("%s: %w", prefix, err)
 }
 
-// walkStrings visita i valori stringa di una struttura JSON.
+// walkStrings visits the string values of a JSON structure.
 func walkStrings(v any, path string, fn func(path, s string) error) error {
 	var errs []error
 	switch t := v.(type) {
@@ -495,16 +496,16 @@ func walkStrings(v any, path string, fn func(path, s string) error) error {
 	return errors.Join(errs...)
 }
 
-// Radici ammesse nei segnaposto.
+// Roots allowed in placeholders.
 var templateRoots = []string{"Application", "Environment", "Version", "Artifact", "DeploymentID", "SHA256", "DryRun", "Params", "Outputs"}
 
-// templateCheck verifica i segnaposto: sintassi, radici note e parametri dichiarati.
+// templateCheck checks the placeholders: syntax, known roots and declared parameters.
 type templateCheck struct {
 	params map[string]Param
 }
 
-// NewTemplate crea un template con le regole di manent: una chiave mancante è un errore,
-// mai "<no value>".
+// NewTemplate creates a template with manent's rules: a missing key is an error, never
+// "<no value>".
 func NewTemplate(name, text string) (*template.Template, error) {
 	return template.New(name).Option("missingkey=error").Parse(text)
 }
@@ -533,7 +534,7 @@ func (tc templateCheck) check(field, text string, response bool) error {
 	return errors.Join(errs...)
 }
 
-// visitFields chiama fn per ogni riferimento a un campo (.A.B) del template.
+// visitFields calls fn for every field reference (.A.B) of the template.
 func visitFields(n parse.Node, fn func([]string)) {
 	switch t := n.(type) {
 	case *parse.ListNode:

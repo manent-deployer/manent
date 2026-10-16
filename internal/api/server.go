@@ -1,4 +1,4 @@
-// Package api espone le funzionalità di manent come API HTTP (Gin) con descrittori JSON.
+// Package api exposes manent as an HTTP API (Gin) with JSON descriptors.
 package api
 
 import (
@@ -25,46 +25,46 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// maxBodySize limita la dimensione di un descrittore JSON.
+// maxBodySize limits the size of a JSON descriptor.
 const maxBodySize = 1 << 20
 
-// Server contiene le dipendenze degli handler HTTP.
+// Server holds the dependencies of the HTTP handlers.
 type Server struct {
 	svc     engine.Service
 	authn   auth.Authenticator
 	logger  *slog.Logger
 	metrics telemetry.Recorder
-	// eventInterval è l'intervallo con cui lo stream SSE rilegge stato e log.
+	// eventInterval is how often the SSE stream reads status and logs again.
 	eventInterval time.Duration
 }
 
-// Options sono le dipendenze facoltative del router.
+// Options are the optional dependencies of the router.
 type Options struct {
-	// Metrics registra durata ed esito delle richieste.
+	// Metrics records duration and outcome of requests.
 	Metrics telemetry.Recorder
-	// MetricsHandler, se presente, è servito su /metrics senza autenticazione.
+	// MetricsHandler, if set, is served on /metrics without authentication.
 	MetricsHandler http.Handler
-	// Ready, se presente, è verificato da /readyz (es. raggiungibilità del database).
+	// Ready, if set, is checked by /readyz (e.g. database reachability).
 	Ready func(context.Context) error
-	// UI, se presente, serve l'interfaccia web per i percorsi non gestiti dall'API.
+	// UI, if set, serves the web interface for paths not handled by the API.
 	UI http.Handler
-	// UIConfig, se presente, è servita su /ui/config.json senza autenticazione.
+	// UIConfig, if set, is served on /ui/config.json without authentication.
 	UIConfig *UIConfig
-	// EventInterval è l'intervallo di aggiornamento dello stream SSE (default 1s).
+	// EventInterval is the refresh interval of the SSE stream (default 1s).
 	EventInterval time.Duration
-	// SlackInteractions, se presente, riceve i clic sui pulsanti dei messaggi Slack su
-	// /integrations/slack/interactions: l'autenticazione è la firma di Slack, non un bearer.
+	// SlackInteractions, if set, receives Slack message button clicks on
+	// /integrations/slack/interactions: authentication is Slack's signature, not a bearer.
 	SlackInteractions http.Handler
 }
 
-// NewRouter crea il router Gin con tutte le rotte. Con authn nil l'autenticazione è
-// disattivata e ogni richiesta usa l'identità anonima; altrimenti le rotte /api/v1 richiedono
-// un token bearer. /healthz, /readyz e /metrics restano sempre accessibili.
+// NewRouter creates the Gin router with all routes. With a nil authn authentication is
+// disabled and every request uses the anonymous identity; otherwise the /api/v1 routes
+// require a bearer token. /healthz, /readyz and /metrics are always reachable.
 func NewRouter(svc engine.Service, authn auth.Authenticator, logger *slog.Logger) *gin.Engine {
 	return NewRouterWith(svc, authn, logger, Options{})
 }
 
-// NewRouterWith crea il router con le opzioni indicate.
+// NewRouterWith creates the router with the given options.
 func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Logger, o Options) *gin.Engine {
 	s := &Server{svc: svc, authn: authn, logger: logger.With("component", "api"), metrics: o.Metrics, eventInterval: o.EventInterval}
 	if s.metrics == nil {
@@ -118,9 +118,9 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	return r
 }
 
-// submit accoda un deploy (202), anche pianificato con schedule.at,
-// oppure crea/aggiorna una schedule ricorrente con schedule.cron (201).
-// Con ?dry_run=true (o dryRun nel descrittore) accoda una simulazione del deploy.
+// submit enqueues a deploy (202), possibly scheduled with schedule.at,
+// or creates/updates a recurring schedule with schedule.cron (201).
+// With ?dry_run=true (or dryRun in the descriptor) it enqueues a simulation of the deploy.
 func (s *Server) submit(c *gin.Context) {
 	d, ok := s.readDescriptor(c)
 	if !ok {
@@ -142,8 +142,8 @@ func (s *Server) submit(c *gin.Context) {
 	writeSubmission(c, sub, err)
 }
 
-// writeSubmission risponde all'accodamento di un deploy: 202 (201 per una schedule ricorrente).
-// Un errore che non sia di permessi è un descrittore non accettabile (422).
+// writeSubmission answers the enqueuing of a deploy: 202 (201 for a recurring schedule).
+// An error other than a permission error is an unacceptable descriptor (422).
 func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 	if err != nil {
 		if errors.Is(err, engine.ErrForbidden) || errors.Is(err, engine.ErrNotFound) {
@@ -162,7 +162,7 @@ func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 	c.JSON(http.StatusAccepted, sub)
 }
 
-// list elenca i deploy più recenti (query: schedule, application, environment, state, limit).
+// list lists the most recent deploys (query: schedule, application, environment, state, limit).
 func (s *Server) list(c *gin.Context) {
 	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"), State: c.Query("state"), Cursor: c.Query("cursor")}
 	if l := c.Query("limit"); l != "" {
@@ -179,14 +179,14 @@ func (s *Server) list(c *gin.Context) {
 		return
 	}
 	out := gin.H{"deployments": deps}
-	// Una pagina piena può avere un seguito: next_cursor è l'ID dell'ultimo deploy.
+	// A full page may continue: next_cursor is the ID of the last deploy.
 	if limit := cmp.Or(f.Limit, 50); len(deps) >= limit && len(deps) > 0 {
 		out["next_cursor"] = deps[len(deps)-1].ID
 	}
 	c.JSON(http.StatusOK, out)
 }
 
-// cancel annulla un deploy in attesa o in esecuzione.
+// cancel cancels a waiting or running deploy.
 func (s *Server) cancel(c *gin.Context) {
 	if err := s.svc.Cancel(c.Request.Context(), c.Param("id")); err != nil {
 		writeError(c, err)
@@ -195,7 +195,7 @@ func (s *Server) cancel(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// listSchedules elenca le schedule ricorrenti.
+// listSchedules lists the recurring schedules.
 func (s *Server) listSchedules(c *gin.Context) {
 	ss, err := s.svc.ListSchedules(c.Request.Context())
 	if err != nil {
@@ -205,7 +205,7 @@ func (s *Server) listSchedules(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"schedules": ss})
 }
 
-// getSchedule restituisce una schedule per nome.
+// getSchedule returns a schedule by name.
 func (s *Server) getSchedule(c *gin.Context) {
 	sc, err := s.svc.GetSchedule(c.Request.Context(), c.Param("name"))
 	if err != nil {
@@ -215,7 +215,7 @@ func (s *Server) getSchedule(c *gin.Context) {
 	c.JSON(http.StatusOK, sc)
 }
 
-// scheduleOp crea un handler per le operazioni sulle schedule (pausa, ripresa, eliminazione).
+// scheduleOp creates a handler for schedule operations (pause, resume, delete).
 func (s *Server) scheduleOp(op func(context.Context, string) error) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := op(c.Request.Context(), c.Param("name")); err != nil {
@@ -226,7 +226,7 @@ func (s *Server) scheduleOp(op func(context.Context, string) error) gin.HandlerF
 	}
 }
 
-// plan restituisce gli step che verrebbero eseguiti, senza avviare il deploy.
+// plan returns the steps that would run, without starting the deploy.
 func (s *Server) plan(c *gin.Context) {
 	d, ok := s.readDescriptor(c)
 	if !ok {
@@ -244,7 +244,7 @@ func (s *Server) plan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"plan": p})
 }
 
-// status restituisce lo stato di un deploy.
+// status returns the status of a deploy.
 func (s *Server) status(c *gin.Context) {
 	st, err := s.svc.Status(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *Server) status(c *gin.Context) {
 	c.JSON(http.StatusOK, st)
 }
 
-// decide approva o respinge un deploy in attesa di approvazione (body opzionale: {"comment": ...}).
+// decide approves or rejects a deploy awaiting approval (optional body: {"comment": ...}).
 func (s *Server) decide(approve bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
@@ -275,7 +275,7 @@ func (s *Server) decide(approve bool) gin.HandlerFunc {
 	}
 }
 
-// promote rilascia in un ambiente l'artefatto già rilasciato in un altro.
+// promote releases to an environment the artifact already released to another one.
 func (s *Server) promote(c *gin.Context) {
 	var r engine.PromoteRequest
 	if !readJSON(c, &r) {
@@ -285,7 +285,7 @@ func (s *Server) promote(c *gin.Context) {
 	writeSubmission(c, sub, err)
 }
 
-// rollback rilascia di nuovo una versione precedente.
+// rollback releases a previous version again.
 func (s *Server) rollback(c *gin.Context) {
 	var r engine.RollbackRequest
 	if !readJSON(c, &r) {
@@ -295,7 +295,7 @@ func (s *Server) rollback(c *gin.Context) {
 	writeSubmission(c, sub, err)
 }
 
-// inventory restituisce la release in esercizio per applicazione e ambiente.
+// inventory returns the release in service per application and environment.
 func (s *Server) inventory(c *gin.Context) {
 	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment")})
 	if err != nil {
@@ -305,7 +305,7 @@ func (s *Server) inventory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"inventory": inv})
 }
 
-// freezes elenca le finestre di freeze attive e future.
+// freezes lists the active and future freeze windows.
 func (s *Server) freezes(c *gin.Context) {
 	ws, err := s.svc.Freezes(c.Request.Context(), c.Query("application"), c.Query("environment"))
 	if err != nil {
@@ -315,9 +315,9 @@ func (s *Server) freezes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"freezes": ws})
 }
 
-// readJSON decodifica il body JSON, rifiutando campi sconosciuti.
-// submitRelease accoda una release composta: 202 con lo stato iniziale, che riporta gli ID
-// dei deploy.
+// readJSON decodes the JSON body, rejecting unknown fields.
+// submitRelease enqueues a composite release: 202 with the initial state, which reports the
+// IDs of the deploys.
 func (s *Server) submitRelease(c *gin.Context) {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxReleaseBodySize))
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *Server) submitRelease(c *gin.Context) {
 	c.JSON(http.StatusAccepted, rs)
 }
 
-// maxReleaseBodySize è il limite del corpo di una release: contiene più descrittori.
+// maxReleaseBodySize is the body limit of a release: it holds several descriptors.
 const maxReleaseBodySize = 16 * maxBodySize
 
 func (s *Server) listReleases(c *gin.Context) {
@@ -403,7 +403,7 @@ func readJSON(c *gin.Context, v any) bool {
 	return true
 }
 
-// validate verifica un descrittore come all'accodamento e restituisce il deploy effettivo.
+// validate checks a descriptor as at submission and returns the effective deploy.
 func (s *Server) validate(c *gin.Context) {
 	d, ok := s.readDescriptor(c)
 	if !ok {
@@ -417,7 +417,7 @@ func (s *Server) validate(c *gin.Context) {
 	c.JSON(http.StatusOK, v)
 }
 
-// steps restituisce la timeline degli step di un deploy.
+// steps returns the step timeline of a deploy.
 func (s *Server) steps(c *gin.Context) {
 	steps, err := s.svc.Steps(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -427,7 +427,7 @@ func (s *Server) steps(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"steps": steps})
 }
 
-// logs restituisce il log di un deploy da ?offset= (default 0).
+// logs returns the log of a deploy from ?offset= (default 0).
 func (s *Server) logs(c *gin.Context) {
 	offset := 0
 	if v := c.Query("offset"); v != "" {
@@ -446,7 +446,7 @@ func (s *Server) logs(c *gin.Context) {
 	c.JSON(http.StatusOK, p)
 }
 
-// dora calcola le metriche DORA; ?since= accetta una data RFC 3339 o una durata (es. 720h).
+// dora computes the DORA metrics; ?since= takes an RFC 3339 date or a duration (e.g. 720h).
 func (s *Server) dora(c *gin.Context) {
 	f := engine.DORAFilter{Application: c.Query("application"), Environment: c.Query("environment")}
 	if v := c.Query("since"); v != "" {
@@ -465,7 +465,7 @@ func (s *Server) dora(c *gin.Context) {
 	c.JSON(http.StatusOK, rep)
 }
 
-// writeError traduce gli errori dell'engine nel codice HTTP corrispondente.
+// writeError maps engine errors to the matching HTTP status.
 func writeError(c *gin.Context, err error) {
 	code := http.StatusInternalServerError
 	switch {
@@ -479,7 +479,7 @@ func writeError(c *gin.Context, err error) {
 	c.JSON(code, gin.H{"error": err.Error()})
 }
 
-// readDescriptor legge e valida il descrittore JSON dal body.
+// readDescriptor reads and validates the JSON descriptor from the body.
 func (s *Server) readDescriptor(c *gin.Context) (*descriptor.Descriptor, bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 	if err != nil {
@@ -494,8 +494,8 @@ func (s *Server) readDescriptor(c *gin.Context) (*descriptor.Descriptor, bool) {
 	return d, true
 }
 
-// authenticate verifica il token bearer e mette l'identità nel context della richiesta.
-// I dettagli di un errore di verifica finiscono solo nel log, non nella risposta.
+// authenticate verifies the bearer token and puts the identity in the request context.
+// The details of a verification error go only to the log, never to the response.
 func (s *Server) authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if s.authn == nil {
@@ -518,9 +518,9 @@ func (s *Server) authenticate() gin.HandlerFunc {
 	}
 }
 
-// accessLog registra ogni richiesta sul logger applicativo (e quindi anche sul SIEM).
-// AddProbes aggiunge /healthz (processo attivo) e /readyz (pronto a servire: ready, se
-// presente, non restituisce errori).
+// accessLog logs every request on the application logger (and therefore to the SIEM).
+// AddProbes adds /healthz (process alive) and /readyz (ready to serve: ready, if set,
+// returns no error).
 func AddProbes(r gin.IRoutes, ready func(context.Context) error) {
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
@@ -536,8 +536,8 @@ func AddProbes(r gin.IRoutes, ready func(context.Context) error) {
 	})
 }
 
-// trace apre una span per ogni richiesta, figlia di quella indicata dal client (traceparent).
-// La span arriva al worker tramite la richiesta di deploy (engine.Request.TraceParent).
+// trace opens a span for every request, child of the one sent by the client (traceparent).
+// The span reaches the worker through the deploy request (engine.Request.TraceParent).
 func (s *Server) trace() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := telemetry.Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))

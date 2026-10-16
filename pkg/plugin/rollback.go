@@ -6,31 +6,31 @@ import (
 	"fmt"
 )
 
-// Release è una versione dell'applicazione in esercizio su un ambiente.
-// Viene persistita da DBOS: Details non deve contenere segreti.
+// Release is a version of the application in service in an environment.
+// DBOS persists it: Details must not contain secrets.
 type Release struct {
 	Version string            `json:"version"`
 	Details map[string]string `json:"details,omitempty"`
 }
 
-// Rollbacker è un'interfaccia opzionale del Deployer: riporta i target alla release indicata,
-// quella in esercizio prima del deploy. Viene chiamato quando un deploy fallisce e la policy
-// di rollback lo prevede. Deve essere idempotente: può essere rieseguito da retry o recovery,
-// anche su target che il deploy non aveva ancora modificato.
+// Rollbacker is an optional interface of the Deployer: it brings the targets back to the
+// given release, the one in service before the deploy. It is called when a deploy fails and
+// the rollback policy provides for it. It must be idempotent: retries or recoveries can run it
+// again, also on targets the deploy had not changed yet.
 type Rollbacker interface {
 	Rollback(ctx context.Context, req *Request, previous Release) (*Result, error)
 }
 
-// RollbackChecker è implementato dai Deployer che conoscono il supporto al rollback solo a
-// runtime (es. un plugin esterno, che lo dichiara all'avvio del processo).
+// RollbackChecker is implemented by Deployers that know rollback support only at runtime
+// (e.g. an external plugin, which declares it when the process starts).
 type RollbackChecker interface {
 	RollbackSupported(ctx context.Context) (bool, error)
 }
 
-// ErrRollbackUnsupported indica un plugin che non supporta il rollback.
+// ErrRollbackUnsupported means a plugin that does not support rollback.
 var ErrRollbackUnsupported = errors.New("rollback non supportato dal plugin")
 
-// CanRollback indica se il Deployer supporta il rollback.
+// CanRollback reports whether the Deployer supports rollback.
 func CanRollback(ctx context.Context, d Deployer) (bool, error) {
 	if c, ok := d.(RollbackChecker); ok {
 		return c.RollbackSupported(ctx)
@@ -39,28 +39,28 @@ func CanRollback(ctx context.Context, d Deployer) (bool, error) {
 	return ok, nil
 }
 
-// ReleaseInspector è un'interfaccia opzionale del Deployer: legge dai target la release
-// attualmente in esercizio, senza modificarli. Restituisce nil se non ce n'è nessuna
-// (primo deploy). È usata dal locator "plugin".
+// ReleaseInspector is an optional interface of the Deployer: it reads from the targets the
+// release currently in service, without changing them. It returns nil if there is none
+// (first deploy). The "plugin" locator uses it.
 type ReleaseInspector interface {
 	CurrentRelease(ctx context.Context, req *Request) (*Release, error)
 }
 
-// ReleaseLocator individua, prima del deploy, la release in esercizio a cui tornare in caso
-// di rollback. Le implementazioni sono strategie diverse: leggerla dai target tramite il plugin
-// (PluginLocator) o chiederla a un sistema aziendale che registra i rilasci in esercizio.
-// Restituisce nil se non esiste una release precedente.
+// ReleaseLocator finds, before the deploy, the release in service to go back to on rollback.
+// Implementations are different strategies: reading it from the targets through the plugin
+// (PluginLocator) or asking a company system that records the releases in service.
+// It returns nil if there is no previous release.
 type ReleaseLocator interface {
 	Current(ctx context.Context, dep Deployer, req *Request) (*Release, error)
 }
 
-// PluginLocatorName è il nome del locator che interroga il plugin di deploy.
+// PluginLocatorName is the name of the locator that queries the deploy plugin.
 const PluginLocatorName = "plugin"
 
-// PluginLocator legge la release in esercizio dai target tramite il ReleaseInspector del plugin.
+// PluginLocator reads the release in service from the targets through the plugin's ReleaseInspector.
 type PluginLocator struct{}
 
-// Current delega al plugin; errore se il plugin non sa leggere la release in esercizio.
+// Current delegates to the plugin; an error if the plugin cannot read the release in service.
 func (PluginLocator) Current(ctx context.Context, dep Deployer, req *Request) (*Release, error) {
 	ins, ok := dep.(ReleaseInspector)
 	if !ok {

@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-// ImageRefExt è l'estensione del file che manent scrive al posto dell'artefatto quando la
-// sorgente è un'immagine in un registry (oci:// o oci+http://): contiene il riferimento
-// all'immagine fissato al digest, "registry/repository@sha256:<digest>". In questo caso
-// Artifact.SHA256 è il digest del manifest.
+// ImageRefExt is the extension of the file manent writes instead of the artifact when the
+// source is an image in a registry (oci:// or oci+http://): it holds the image reference
+// pinned to the digest, "registry/repository@sha256:<digest>". In this case Artifact.SHA256
+// is the manifest digest.
 const ImageRefExt = ".image"
 
 var imageRefRe = regexp.MustCompile(`^[A-Za-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$`)
 
-// ImageReference restituisce il riferimento all'immagine fissato al digest per un artefatto
-// che proviene da un registry; errore per gli altri artefatti.
+// ImageReference returns the image reference pinned to the digest for an artifact coming from
+// a registry; an error for other artifacts.
 func ImageReference(a Artifact) (string, error) {
 	if !strings.HasSuffix(a.LocalPath, ImageRefExt) {
 		return "", fmt.Errorf("l'artefatto %s non è un'immagine di un registry: indicare una sorgente oci://registry/repository:tag", a.Name)

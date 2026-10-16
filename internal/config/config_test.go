@@ -50,7 +50,7 @@ artifacts:
 	if err != nil {
 		t.Fatal(err)
 	}
-	// La policy configurata sostituisce quella di default, non vi si aggiunge.
+	// The configured policy replaces the default one instead of adding to it.
 	if _, ok := cfg.DescriptorPolicy.Params["*"]; ok {
 		t.Error("il default * non deve restare nella policy configurata")
 	}
@@ -74,7 +74,7 @@ func TestConfigurazioneSicurezzaErrata(t *testing.T) {
 }
 
 func TestDestinazioniSIEM(t *testing.T) {
-	// SIEM remoto e journal locale insieme.
+	// Remote SIEM and local journal together.
 	cfg, err := load(t, `
 siem:
   enabled: true
@@ -92,7 +92,7 @@ siem:
 	if len(got) != 3 || got[0].Network != "tcp" || got[1].Network != "journald" || got[2].Address != "/dev/log" {
 		t.Errorf("destinazioni: %+v", got)
 	}
-	// Solo il journal: network di default (udp) senza address non è una destinazione.
+	// Journal only: the default network (udp) without address is not a destination.
 	cfg, err = load(t, "siem: {enabled: true, destinations: [{network: journald}]}\n")
 	if err != nil {
 		t.Fatal(err)

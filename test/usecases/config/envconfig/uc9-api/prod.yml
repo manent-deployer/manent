@@ -1,4 +1,4 @@
-# UC9: catene di deploy. Ogni applicazione su un proprio target, per verificare l'ordine.
+# UC9: deploy chains. Every application on its own target, to check the order.
 plugin: remote-copy
 targets:
   - {host: eu1-b, user: deploy, labels: {region: eu-1}}
@@ -8,7 +8,7 @@ params:
   keep_releases: "5"
   ssh_key_secret: deploy-key
   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
-  # Guasti simulati: $HOME/fault/uc9-api.sleep (attesa) e .fail (errore).
+  # Simulated faults: $HOME/fault/uc9-api.sleep (wait) and .fail (error).
   post_command: 'f=$HOME/fault/uc9-api; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
   rollback_command: "true"
 secrets:

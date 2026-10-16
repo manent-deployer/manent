@@ -1,18 +1,18 @@
-# UC3: più worker sullo stesso Postgres. Deploy serializzati nello stesso ambiente e paralleli
-# tra ambienti, worker che cade durante un deploy (recovery automatica da parte dell'altro) e
-# arresto ordinato (drain) che attende il deploy in corso.
+# UC3: several workers on the same Postgres. Deploys serialized in the same environment and
+# parallel across environments, a worker dying during a deploy (automatic recovery by the
+# other) and orderly shutdown (drain) waiting for the running deploy.
 APP=uc3-batch
 log "UC3 · più worker: concorrenza, caduta di un worker e drain"
 
 for v in 1.0.0 1.1.0 1.2.0 1.3.0; do artifact $APP $v >/dev/null; done
 
-# executor_of <id>: il worker che ha eseguito l'ultimo step del deploy (dai log).
+# executor_of <id>: the worker that ran the last step of the deploy (from the logs).
 executor_of() {
   dc logs -t worker-1 worker-2 2>/dev/null | grep "deployment=$1 " | awk '{print $3, $1}' | sort | tail -1 | awk '{print $2}' | sed 's/-1$//'
 }
-# started <target> <versione>: esecuzioni del post_command per la versione.
+# started <target> <version>: post_command runs for the version.
 started() { dc exec -T "$1" sh -c "cat /home/deploy/fault/$APP.log 2>/dev/null | grep -c 'start $2' || true"; }
-# wait_started <target> <versione>: attende che il post_command della versione sia in corso.
+# wait_started <target> <version>: waits for the version's post_command to be running.
 wait_started() {
   t=0
   while [ "$(started "$1" "$2")" = 0 ] && [ "$t" -lt 60 ]; do sleep 1; t=$((t + 1)); done

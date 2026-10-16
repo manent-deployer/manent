@@ -1,5 +1,5 @@
-// Testi dell'interfaccia in inglese (lingua di default). Le chiavi sono la fonte dei tipi:
-// it.ts deve avere esattamente le stesse.
+// Interface texts in English (default language). The keys are the source of the types:
+// it.ts must have exactly the same ones.
 export const en = {
   "app.skip": "Skip to content",
   "app.loading": "Loading…",

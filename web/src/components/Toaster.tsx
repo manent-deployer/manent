@@ -11,8 +11,8 @@ interface Toast {
 
 const ToastContext = createContext<((kind: Toast["kind"], text: string) => void) | null>(null);
 
-// Notifiche brevi dopo un'azione. Sono annunciate dagli screen reader (role=status per gli
-// esiti positivi, role=alert per gli errori) e restano finché non le chiude l'utente se sono errori.
+// Short notifications after an action. Screen readers announce them (role=status for
+// successes, role=alert for errors) and errors stay until the user closes them.
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const next = useRef(1);

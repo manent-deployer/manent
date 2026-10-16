@@ -66,7 +66,7 @@ What counts as incompatible is described in [Versions and upgrades](operazioni/a
 
 - Every service is defined through interfaces, to ease mocks and tests.
 - Every component receives the logger by injection. Logs reach both the application log and the SIEM as `rfc5424.Message`.
-- Code comments are in Italian, descriptive but concise.
+- Code comments are in English, concise but complete.
 - `internal/app` is the only composition point: new internal plugins are registered in `app.NewPlugins`, new steps in `app.NewSteps`.
 - A new step that must work in a dry-run implements `pipeline.DryRunner`. Otherwise it is skipped.
 - A new step that changes environments implements `pipeline.Compensator` (and, if it must record the previous state, `pipeline.Checkpointer`), so rollback can undo it.

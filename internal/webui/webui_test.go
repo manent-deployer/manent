@@ -61,7 +61,7 @@ func TestHandler(t *testing.T) {
 		t.Errorf("HEAD: %d", w.Code)
 	}
 
-	// Senza build: una pagina che spiega come costruirla.
+	// Without a build: a page that explains how to build it.
 	empty := newHandler(fstest.MapFS{".gitkeep": {}}, Options{})
 	if empty.Built() {
 		t.Error("senza index.html la UI non è costruita")

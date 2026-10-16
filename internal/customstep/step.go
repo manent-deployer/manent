@@ -1,6 +1,6 @@
-// Package customstep esegue gli step personalizzati definiti in manent.yml: comandi sui target
-// via SSH e richieste HTTP. Ogni step è costruito dalla specifica fotografata nel piano
-// (pipeline.PlannedStep.Spec), che viene verificata (firma e revoca) dentro lo step DBOS.
+// Package customstep runs the custom steps defined in manent.yml: commands on the targets over
+// SSH and HTTP requests. Every step is built from the spec captured in the plan
+// (pipeline.PlannedStep.Spec), which is verified (signature and revocation) inside the DBOS step.
 package customstep
 
 import (
@@ -22,40 +22,40 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// HTTPDoer astrae il client HTTP per i test.
+// HTTPDoer abstracts the HTTP client for tests.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Builder costruisce gli step personalizzati del piano.
+// Builder builds the custom steps of the plan.
 type Builder struct {
 	Secrets secrets.Provider
-	// Keys verificano la firma delle specifiche; senza, sono accettate solo quelle non firmate.
+	// Keys verify the spec signatures; without them only unsigned specs are accepted.
 	Keys customspec.Keys
-	// Revoked sono gli sha256 delle specifiche da non eseguire più.
+	// Revoked are the sha256 of the specs not to run any more.
 	Revoked []string
 	Dialer  Dialer
 	HTTP    HTTPDoer
-	// AllowHTTP ammette URL http.
+	// AllowHTTP allows http URLs.
 	AllowHTTP bool
-	// SecretsDir è la directory dei segreti sui target (tmpfs).
+	// SecretsDir is the secrets directory on the targets (tmpfs).
 	SecretsDir string
 	Audit      audit.Recorder
-	// Frozen indica un freeze in corso: in dry-run gli step command vengono saltati.
+	// Frozen means a freeze is in progress: in dry-run command steps are skipped.
 	Frozen func(application, environment string, at time.Time) bool
 	Logger *slog.Logger
 	Now    func() time.Time
 }
 
-// NewHTTPClient crea il client degli step http: non segue i redirect, che porterebbero
-// richieste e credenziali verso un altro host. Il timeout è quello dello step.
+// NewHTTPClient creates the client of http steps: it does not follow redirects, which would
+// carry requests and credentials to another host. The timeout is the step's.
 func NewHTTPClient() *http.Client {
 	return &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
-// Build restituisce lo step della specifica fotografata. La verifica della firma e della
-// revoca avviene in Run, dentro lo step DBOS: così una recovery dopo una revoca riprende la
-// stessa sequenza di step e fallisce solo quelli non ancora eseguiti.
+// Build returns the step of the captured spec. Signature and revocation are checked in Run,
+// inside the DBOS step: so a recovery after a revocation resumes the same step sequence and
+// fails only the steps not yet run.
 func (b *Builder) Build(ps pipeline.PlannedStep, requestedBy string) pipeline.Step {
 	s := &step{b: b, ps: ps, requestedBy: requestedBy}
 	s.doc, s.decodeErr = customspec.Decode(ps.Spec)
@@ -65,7 +65,7 @@ func (b *Builder) Build(ps pipeline.PlannedStep, requestedBy string) pipeline.St
 	return s
 }
 
-// step è uno step personalizzato; implementa pipeline.Step.
+// step is a custom step; it implements pipeline.Step.
 type step struct {
 	b           *Builder
 	ps          pipeline.PlannedStep
@@ -74,32 +74,32 @@ type step struct {
 	requestedBy string
 }
 
-// dryStep è uno step con dry_run: implementa anche pipeline.DryRunner.
+// dryStep is a step with dry_run: it also implements pipeline.DryRunner.
 type dryStep struct{ *step }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (s *step) Name() string { return s.ps.Name }
 
-// Run esegue la specifica run.
+// Run runs the run spec.
 func (s *step) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	return s.exec(ctx, in, false)
 }
 
-// DryRun esegue la specifica dry_run.
+// DryRun runs the dry_run spec.
 func (s dryStep) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	return s.exec(ctx, in, true)
 }
 
-// versionRe limita le versioni usabili nei segnaposto: il descrittore non le valida.
+// versionRe limits the versions usable in placeholders: the descriptor does not validate them.
 var versionRe = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_-]{0,127}$`)
 
-// Chiavi di output scritte da manent (non dalla specifica).
+// Output keys written by manent (not by the spec).
 const (
 	OutDryRun = "dry_run"
 	OutReason = "reason"
 )
 
-// run è il contesto di un'esecuzione.
+// run is the context of a run.
 type run struct {
 	s       *step
 	in      pipeline.Input
@@ -107,7 +107,7 @@ type run struct {
 	action  *customspec.Action
 	dry     bool
 	data    templateData
-	secrets map[string]string // nome logico → valore, solo quelli dell'azione
+	secrets map[string]string // logical name → value, only the action's ones
 	red     *redactor
 	log     *slog.Logger
 	targets []string
@@ -121,8 +121,8 @@ func (s *step) exec(ctx context.Context, in pipeline.Input, dry bool) (pipeline.
 	log := s.b.Logger.With("deployment", in.DeploymentID, "step", s.ps.Name, "spec", s.ps.SpecHash)
 	if dry && s.doc.Type == customspec.TypeCommand && s.b.Frozen != nil && d.FreezeOverride == "" &&
 		s.b.Frozen(d.Application, d.Environment, s.now()) {
-		// Il dry-run non è soggetto alla governance, ma i comandi girano sui target di
-		// produzione: durante un freeze non vengono eseguiti.
+		// Dry-runs are not subject to governance, but the commands run on production targets: they
+		// do not run during a freeze.
 		log.InfoContext(ctx, "dry-run: comando saltato per il freeze in corso")
 		return pipeline.Output{OutDryRun: "skipped", OutReason: "freeze"}, nil
 	}
@@ -163,7 +163,7 @@ func (s *step) now() time.Time {
 	return time.Now()
 }
 
-// verify controlla che la specifica sia leggibile, appartenga allo step, sia firmata e non revocata.
+// verify checks that the spec is readable, belongs to the step, is signed and not revoked.
 func (s *step) verify() error {
 	if s.decodeErr != nil {
 		return s.decodeErr
@@ -180,7 +180,7 @@ func (s *step) verify() error {
 	return nil
 }
 
-// prepare valida parametri e versione, risolve i segreti e costruisce i dati dei segnaposto.
+// prepare validates parameters and version, resolves the secrets and builds the placeholder data.
 func (s *step) prepare(ctx context.Context, in pipeline.Input, dry bool, log *slog.Logger) (*run, error) {
 	d := in.Descriptor
 	if d.Artifact.Version != "" && !versionRe.MatchString(d.Artifact.Version) {
@@ -226,7 +226,7 @@ func (s *step) prepare(ctx context.Context, in pipeline.Input, dry bool, log *sl
 	return r, nil
 }
 
-// outputs accetta solo le chiavi dichiarate, con valori conformi al pattern e senza segreti.
+// outputs accepts only declared keys, with values matching the pattern and without secrets.
 func (r *run) outputs(raw map[string]string) (pipeline.Output, error) {
 	out := pipeline.Output{}
 	if r.dry && len(raw) == 0 {
@@ -253,7 +253,7 @@ func (r *run) outputs(raw map[string]string) (pipeline.Output, error) {
 	return out, nil
 }
 
-// audit registra l'esecuzione: una voce per tentativo, con la specifica e i target.
+// audit records the run: one entry per attempt, with the spec and the targets.
 func (r *run) audit(ctx context.Context, err error) {
 	if r.s.b.Audit == nil {
 		return
@@ -271,21 +271,21 @@ func (r *run) audit(ctx context.Context, err error) {
 	}
 }
 
-// ActionStepRun è l'azione di audit dell'esecuzione di uno step personalizzato.
+// ActionStepRun is the audit action of a custom step run.
 const ActionStepRun = "step.custom.run"
 
 func nonEmpty(v ...string) []string {
 	return slices.DeleteFunc(v, func(s string) bool { return s == "" })
 }
 
-// temporary marca un errore come ritentabile (il default degli step); usato per chiarezza.
+// temporary marks an error as retryable (the step default); used for clarity.
 func temporary(format string, a ...any) error { return fmt.Errorf(format, a...) }
 
-// permanent crea un errore permanente.
+// permanent creates a permanent error.
 func permanent(format string, a ...any) error { return pipeline.Permanent(fmt.Errorf(format, a...)) }
 
-// isPermanent indica un errore permanente.
+// isPermanent reports a permanent error.
 func isPermanent(err error) bool { return errors.Is(err, pipeline.ErrPermanent) }
 
-// safeHost descrive un target nei log e nell'audit.
+// safeHost describes a target in logs and audit.
 func safeHost(t descriptor.Target) string { return strings.TrimSpace(t.Host) }

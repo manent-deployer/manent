@@ -1,5 +1,5 @@
-# UC8: interfaccia web. Un target per ambiente, come UC1.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC8: web interface. One target per environment, like UC1.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: remote-copy
 targets:
   - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}

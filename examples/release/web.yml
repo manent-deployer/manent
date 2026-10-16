@@ -1,5 +1,5 @@
-# Deploy "web" della release di esempio (examples/release.yml). Senza id: nella release
-# riceve l'ID "<release>.web".
+# "web" deploy of the sample release (examples/release.yml). Without an id: in the release
+# it gets the ID "<release>.web".
 apiVersion: manent/v1
 application: shop-web
 environment: prod

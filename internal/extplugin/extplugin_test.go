@@ -19,7 +19,7 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeBin è il binario di testdata/fakeplugin, compilato una volta in TestMain.
+// fakeBin is the testdata/fakeplugin binary, built once in TestMain.
 var fakeBin string
 
 func TestMain(m *testing.M) {
@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// syncBuffer raccoglie i log in modo sicuro tra goroutine.
+// syncBuffer collects logs safely across goroutines.
 type syncBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -54,7 +54,7 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-// mapSecrets risolve i segreti da una mappa.
+// mapSecrets resolves secrets from a map.
 type mapSecrets map[string]string
 
 func (m mapSecrets) Secret(_ context.Context, name string) (string, error) {
@@ -75,7 +75,7 @@ func checksum(t *testing.T, path string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// newProcess attiva il plugin di test con la configurazione indicata.
+// newProcess activates the test plugin with the given configuration.
 func newProcess(t *testing.T, ext map[string]any, extra map[string]any) (*Process, *syncBuffer) {
 	t.Helper()
 	logs := &syncBuffer{}
@@ -117,14 +117,14 @@ func TestDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 	det := res.Targets[0].Details
-	// Il segreto arriva tramite il resolver; le variabili del worker non vengono ereditate.
+	// The secret arrives through the resolver; the worker's variables are not inherited.
 	if det["secret_len"] != "6" || det["leak"] != "" || det["foo"] != "bar" || res.Targets[0].Status != plugin.StatusDeployed {
 		t.Errorf("risultato inatteso: %+v", res.Targets[0])
 	}
 	if _, err := p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "manca"})); err == nil {
 		t.Error("atteso errore per segreto mancante")
 	}
-	// I log del plugin arrivano al logger di manent, in modo asincrono rispetto alla risposta.
+	// Plugin logs reach manent's logger, asynchronously with respect to the response.
 	deadline := time.Now().Add(5 * time.Second)
 	for !strings.Contains(logs.String(), `msg="deploy finto eseguito"`) {
 		if time.Now().After(deadline) {
@@ -151,7 +151,7 @@ func TestDryRun(t *testing.T) {
 
 func TestRollback(t *testing.T) {
 	ctx := context.Background()
-	// Plugin senza rollback: le capacità dichiarate lo escludono.
+	// Plugin without rollback: the declared capabilities exclude it.
 	p, _ := newProcess(t, map[string]any{"command": fakeBin}, nil)
 	if ok, err := plugin.CanRollback(ctx, p); err != nil || ok {
 		t.Fatalf("rollback non atteso: %v %v", ok, err)
@@ -230,7 +230,7 @@ func TestAttivazioneErrori(t *testing.T) {
 			}
 		})
 	}
-	// La configurazione rifiutata dal plugin emerge al primo avvio, non all'attivazione.
+	// A configuration rejected by the plugin shows up at the first start, not at activation.
 	d, err := NewFactory("x")(map[string]any{Key: map[string]any{"command": fakeBin}, "fail": true}, log)
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestAttivazioneErrori(t *testing.T) {
 
 func TestRilascioPerPercentuale(t *testing.T) {
 	ctx := context.Background()
-	// Plugin senza slot: le capacità dichiarate lo escludono e le chiamate non sono supportate.
+	// Plugin without slots: the declared capabilities exclude it and the calls are unsupported.
 	p, _ := newProcess(t, map[string]any{"command": fakeBin}, nil)
 	if s, err := plugin.SupportsTraffic(ctx, p); err != nil || s.Slots || s.Router {
 		t.Fatalf("supporto inatteso: %+v %v", s, err)
@@ -266,7 +266,7 @@ func TestRilascioPerPercentuale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stato del rilascio e segreti arrivano al processo del plugin.
+	// Rollout state and secrets reach the plugin process.
 	if d := res.Targets[0].Details; d["stable"] != "a" || d["header"] != "x-canary: 1" || d["secret_len"] != "6" {
 		t.Errorf("candidata: %v", d)
 	}

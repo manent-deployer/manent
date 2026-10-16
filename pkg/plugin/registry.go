@@ -9,19 +9,20 @@ import (
 	"sync"
 )
 
-// Registry raccoglie le factory dei plugin disponibili e le istanze attivate da configurazione.
+// Registry collects the factories of the available plugins and the instances activated by
+// the configuration.
 type Registry struct {
 	mu        sync.RWMutex
 	factories map[string]Factory
 	active    map[string]Deployer
 }
 
-// NewRegistry crea un registry vuoto.
+// NewRegistry creates an empty registry.
 func NewRegistry() *Registry {
 	return &Registry{factories: map[string]Factory{}, active: map[string]Deployer{}}
 }
 
-// Register rende disponibile una factory con il nome indicato.
+// Register makes a factory available under the given name.
 func (r *Registry) Register(name string, f Factory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -32,7 +33,7 @@ func (r *Registry) Register(name string, f Factory) error {
 	return nil
 }
 
-// Activate istanzia il plugin con la sua configurazione e lo rende utilizzabile.
+// Activate instantiates the plugin with its configuration and makes it usable.
 func (r *Registry) Activate(name string, cfg map[string]any, logger *slog.Logger) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -48,7 +49,7 @@ func (r *Registry) Activate(name string, cfg map[string]any, logger *slog.Logger
 	return nil
 }
 
-// Get restituisce un plugin attivo per nome.
+// Get returns an active plugin by name.
 func (r *Registry) Get(name string) (Deployer, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -56,7 +57,7 @@ func (r *Registry) Get(name string) (Deployer, bool) {
 	return d, ok
 }
 
-// Active restituisce i nomi dei plugin attivi in ordine alfabetico (ordine deterministico).
+// Active returns the names of the active plugins in alphabetical order (deterministic order).
 func (r *Registry) Active() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -68,8 +69,8 @@ func (r *Registry) Active() []string {
 	return names
 }
 
-// Close rilascia le risorse dei plugin attivi che le possiedono (es. il processo di un plugin
-// esterno), cioè quelli che implementano io.Closer.
+// Close releases the resources of the active plugins that own some (e.g. an external
+// plugin's process), that is those implementing io.Closer.
 func (r *Registry) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

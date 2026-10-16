@@ -22,14 +22,14 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeCluster è un server API minimo: discovery, server-side apply, get, list e delete.
-// Un Deployment con un'immagine che contiene "broken" non completa mai il rollout.
+// fakeCluster is a minimal API server: discovery, server-side apply, get, list and delete.
+// A Deployment with an image containing "broken" never completes its rollout.
 type fakeCluster struct {
 	mu      sync.Mutex
-	objects map[string]Object // percorso → oggetto
+	objects map[string]Object // path → object
 	applies int
 	dryRuns int
-	// rv è il resourceVersion globale, incrementato a ogni scrittura.
+	// rv is the global resourceVersion, incremented at every write.
 	rv int
 }
 
@@ -80,7 +80,7 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			mergePatch(prev, patch)
 			if prev.Kind() == "Deployment" {
-				// Il finto controller porta subito le repliche al valore richiesto.
+				// The fake controller immediately brings replicas to the requested value.
 				gen := num(prev, "metadata", "generation") + 1
 				n := float64(num(prev, "spec", "replicas"))
 				prev.metadata()["generation"] = float64(gen)
@@ -123,7 +123,7 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			o["status"] = st
 		}
-		// Round trip JSON, come in un vero cluster.
+		// JSON round trip, as in a real cluster.
 		b, _ := json.Marshal(o)
 		var stored Object
 		_ = json.Unmarshal(b, &stored)
@@ -157,7 +157,7 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// mergePatch applica una JSON merge patch (RFC 7386).
+// mergePatch applies a JSON merge patch (RFC 7386).
 func mergePatch(dst, patch map[string]any) {
 	for k, v := range patch {
 		switch pv := v.(type) {
@@ -303,8 +303,8 @@ func TestDeployERollback(t *testing.T) {
 		t.Fatalf("release in esercizio: %+v %v", rel, err)
 	}
 
-	// La 2.0.0 aggiunge una ConfigMap e ha un'immagine che non parte: il rollout fallisce
-	// e il puntatore resta sulla 1.0.0.
+	// 2.0.0 adds a ConfigMap and has an image that does not start: the rollout fails and the
+	// pointer stays on 1.0.0.
 	broken := strings.Replace(manifestV1, "registry/shop:${MANENT_VERSION}", "registry/shop:broken", 1) +
 		"---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: shop-extra\n"
 	v2 := request(server, "2.0.0", broken, t)
@@ -322,7 +322,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Errorf("rollback incompleto: deployment %s, extra %v, service %v", image(fc.get(deployPath)), fc.get(extraPath), fc.get(servicePath))
 	}
 
-	// La 3.0.0 non ha più il Service: con prune viene eliminato.
+	// 3.0.0 no longer has the Service: with prune it is deleted.
 	v3 := request(server, "3.0.0", strings.Split(manifestV1, "---")[0]+"---"+strings.Split(manifestV1, "---")[2], t)
 	v3.Params[ParamPrune] = "true"
 	res, err = p.Deploy(ctx, v3)
@@ -367,7 +367,7 @@ func TestStoricoEDryRun(t *testing.T) {
 		t.Errorf("dry-run inatteso: %+v (apply reali %d)", d, fc.applies-before)
 	}
 
-	// Credenziali errate: errore chiaro già nel dry-run.
+	// Wrong credentials: a clear error already in dry-run.
 	req.Secrets = mapSecrets{"tok": "sbagliato"}
 	if _, err := p.DryRun(ctx, req); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Errorf("atteso errore di autenticazione: %v", err)
@@ -386,14 +386,14 @@ func TestValidazioneEManifest(t *testing.T) {
 		}
 	}
 
-	// Immagini non fissate al digest con require_image_digest.
+	// Images not pinned to the digest with require_image_digest.
 	req := request(server, "1.0.0", manifestV1, t)
 	req.Params[ParamRequireDigest] = "true"
 	if _, err := p.Deploy(context.Background(), req); err == nil || !strings.Contains(err.Error(), "non fissata al digest") {
 		t.Errorf("atteso errore sul digest: %v", err)
 	}
 
-	// Archivio tar.gz: i file sono letti in ordine di nome, gli altri ignorati.
+	// tar.gz archive: files are read in name order, the others ignored.
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(zw)

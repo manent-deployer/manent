@@ -11,28 +11,27 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// PlannedStep è uno step selezionato per l'esecuzione con le sue opzioni di retry.
+// PlannedStep is a step selected for execution with its retry options.
 type PlannedStep struct {
 	Name       string `json:"name"`
 	MaxRetries int    `json:"max_retries"`
-	// Type, Spec, SpecMAC e SpecHash valgono solo per gli step personalizzati. Spec è la
-	// specifica in forma canonica, fotografata all'accodamento: un deploy ripreso dopo un
-	// crash esegue la definizione con cui era partito. SpecMAC è la sua firma, verificata
-	// dal worker prima di eseguirla.
+	// Type, Spec, SpecMAC and SpecHash apply only to custom steps. Spec is the spec in canonical
+	// form, captured at submission: a deploy resumed after a crash runs the definition it started
+	// with. SpecMAC is its signature, verified by the worker before running it.
 	Type     string `json:"type,omitempty"`
 	Spec     string `json:"spec,omitempty"`
 	SpecMAC  string `json:"spec_mac,omitempty"`
 	SpecHash string `json:"spec_hash,omitempty"`
 }
 
-// IsCustom indica uno step personalizzato.
+// IsCustom reports a custom step.
 func (p PlannedStep) IsCustom() bool { return p.Spec != "" }
 
-// Plan è la sequenza ordinata degli step da eseguire.
+// Plan is the ordered sequence of steps to run.
 type Plan []PlannedStep
 
-// Public restituisce il piano da mostrare a client e API: tipo e hash della specifica degli
-// step personalizzati, mai comandi, URL e firma.
+// Public returns the plan to show to clients and the API: type and hash of the custom step
+// specs, never commands, URLs and signature.
 func (p Plan) Public() Plan {
 	out := slices.Clone(p)
 	for i := range out {
@@ -41,25 +40,25 @@ func (p Plan) Public() Plan {
 	return out
 }
 
-// Planner calcola il piano combinando configurazione statica e descrittore.
+// Planner computes the plan by combining static configuration and descriptor.
 type Planner interface {
 	Plan(d *descriptor.Descriptor) (Plan, error)
 }
 
-// ConfigPlanner risolve il piano a partire dalla configurazione della pipeline.
+// ConfigPlanner resolves the plan from the pipeline configuration.
 type ConfigPlanner struct {
 	Steps    []config.Step
 	Registry *Registry
-	// Keys firmano le specifiche degli step personalizzati; senza, restano non firmate.
+	// Keys sign the custom step specs; without them, specs stay unsigned.
 	Keys customspec.Keys
 }
 
-// Plan applica le regole:
-//   - gli step obbligatori sono sempre eseguiti e non possono essere disattivati dal descrittore;
-//   - gli step opzionali usano il default di configurazione, sovrascrivibile dal descrittore;
-//   - il descrittore non può riferire step sconosciuti.
+// Plan applies the rules:
+//   - mandatory steps always run and the descriptor cannot disable them;
+//   - optional steps use the configuration default, which the descriptor can override;
+//   - the descriptor cannot refer to unknown steps.
 //
-// L'ordine segue sempre la configurazione, quindi è deterministico.
+// The order always follows the configuration, so it is deterministic.
 func (p ConfigPlanner) Plan(d *descriptor.Descriptor) (Plan, error) {
 	known := map[string]config.Step{}
 	for _, s := range p.Steps {

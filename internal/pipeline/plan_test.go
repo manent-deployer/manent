@@ -11,7 +11,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// stubStep è uno step vuoto usato nei test.
+// stubStep is an empty step used in tests.
 type stubStep string
 
 func (s stubStep) Name() string                               { return string(s) }

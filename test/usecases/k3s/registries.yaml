@@ -1,4 +1,4 @@
-# k3s scarica le immagini dal registry in chiaro del laboratorio.
+# k3s pulls images from the lab's plain-text registry.
 mirrors:
   "registry:5000":
     endpoint: ["http://registry:5000"]

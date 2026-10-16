@@ -21,7 +21,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// recordStep registra le esecuzioni e può fallire su richiesta.
+// recordStep records runs and can fail on request.
 type recordStep struct {
 	name string
 	runs *[]string
@@ -35,13 +35,13 @@ func (s recordStep) Run(_ context.Context, in pipeline.Input) (pipeline.Output, 
 	if s.fail {
 		return nil, errors.New("fallimento simulato")
 	}
-	// Ogni step vede gli output dei precedenti.
+	// Every step sees the outputs of the previous ones.
 	return pipeline.Output{"seen": strconv.Itoa(len(in.Outputs))}, nil
 }
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// testRegistry crea registry e planner con tutti gli step obbligatori.
+// testRegistry creates registry and planner with all mandatory steps.
 func testRegistry(t *testing.T, steps ...pipeline.Step) (*pipeline.Registry, pipeline.Planner) {
 	t.Helper()
 	reg, err := pipeline.NewRegistry(steps...)
@@ -55,7 +55,7 @@ func testRegistry(t *testing.T, steps ...pipeline.Step) (*pipeline.Registry, pip
 	return reg, pipeline.ConfigPlanner{Steps: cfgSteps, Registry: reg}
 }
 
-// workerOpts restituisce le opzioni di un worker di test sul database indicato (testdb.URL).
+// workerOpts returns the options of a test worker on the given database (testdb.URL).
 func workerOpts(databaseURL, executorID string, reg *pipeline.Registry) WorkerOptions {
 	return WorkerOptions{
 		AppName:     "manent-test",
@@ -69,7 +69,7 @@ func workerOpts(databaseURL, executorID string, reg *pipeline.Registry) WorkerOp
 	}
 }
 
-// startWorker avvia un worker e ne pianifica l'arresto a fine test.
+// startWorker starts a worker and schedules its shutdown at the end of the test.
 func startWorker(t *testing.T, opts WorkerOptions) *Worker {
 	t.Helper()
 	w, err := NewWorker(opts)
@@ -83,7 +83,7 @@ func startWorker(t *testing.T, opts WorkerOptions) *Worker {
 	return w
 }
 
-// newEngine avvia un singolo worker e restituisce il servizio costruito sul suo contesto.
+// newEngine starts a single worker and returns the service built on its context.
 func newEngine(t *testing.T, steps ...pipeline.Step) *Engine {
 	t.Helper()
 	reg, planner := testRegistry(t, steps...)
@@ -113,7 +113,7 @@ func TestWorkflowEseguePianoInOrdine(t *testing.T) {
 		t.Fatalf("risultato inatteso: %+v", res)
 	}
 
-	// Stesso ID: DBOS non riesegue il workflow (idempotenza).
+	// Same ID: DBOS does not run the workflow again (idempotency).
 	if _, err := e.Submit(ctx, testDescriptor("deploy-1")); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestWorkflowFallito(t *testing.T) {
 	}
 }
 
-// dryStep è uno step che supporta il dry-run e registra quale metodo è stato chiamato.
+// dryStep is a step that supports dry-run and records which method was called.
 type dryStep struct {
 	recordStep
 }
@@ -186,7 +186,7 @@ func TestWorkflowDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Lo step senza DryRun viene saltato, non eseguito.
+	// The step without DryRun is skipped, not run.
 	if !res.DryRun || len(res.Steps) != 2 || res.Steps[0].Output["dry"] != "ok" || res.Steps[1].Output["dry_run"] != "skipped" {
 		t.Fatalf("risultato inatteso: %+v", res)
 	}
@@ -194,7 +194,7 @@ func TestWorkflowDryRun(t *testing.T) {
 		t.Fatalf("esecuzioni inattese: %v", runs)
 	}
 
-	// Il dry-run non consuma l'ID: il deploy reale con lo stesso ID viene eseguito.
+	// The dry-run does not consume the ID: the real deploy with the same ID runs.
 	sub, err = e.Submit(ctx, testDescriptor("deploy-1"))
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func TestWorkflowDryRun(t *testing.T) {
 	}
 }
 
-// recordNotifier registra gli eventi ricevuti e può fallire su richiesta.
+// recordNotifier records the received events and can fail on request.
 type recordNotifier struct {
 	mu     sync.Mutex
 	events []callback.Event
@@ -224,7 +224,7 @@ func (n *recordNotifier) Notify(_ context.Context, _ *descriptor.Descriptor, _ d
 	return nil
 }
 
-// summary riduce gli eventi a "tipo/step/stato" per confrontarli.
+// summary reduces events to "type/step/state" to compare them.
 func (n *recordNotifier) summary() []string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -296,14 +296,14 @@ func TestCallbackFallitoNonBloccaDeploy(t *testing.T) {
 		t.Errorf("esecuzioni %v, eventi %v", runs, n.summary())
 	}
 
-	// Un URL non ammesso dalla policy viene rifiutato già all'accodamento.
+	// A URL not allowed by the policy is rejected already at submission.
 	d.Callbacks = []descriptor.Callback{{URL: "http://ci.example.com/hook"}}
 	if _, err := e.Submit(ctx, d); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("atteso ErrInvalidRequest, ricevuto %v", err)
 	}
 }
 
-// permanentStep fallisce con un errore permanente.
+// permanentStep fails with a permanent error.
 type permanentStep struct{ runs *int }
 
 func (permanentStep) Name() string { return "perm" }

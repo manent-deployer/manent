@@ -1,14 +1,14 @@
-# Deploy ricorrente: manent deploy -f examples/descriptor-scheduled.yml
-# Crea (o aggiorna, se esiste già una schedule con lo stesso nome) una schedule DBOS.
-# A ogni tick viene accodato un deploy con ID "<name>@<orario UTC>", ad es. myapp-nightly@20261010T000000Z.
+# Recurring deploy: manent deploy -f examples/descriptor-scheduled.yml
+# Creates (or updates, if a schedule with the same name exists) a DBOS schedule.
+# At every tick a deploy is enqueued with ID "<name>@<UTC time>", e.g. myapp-nightly@20261010T000000Z.
 apiVersion: manent/v1
 application: myapp
 environment: test
 
 schedule:
-  cron: "0 2 * * *"          # 5 campi, oppure 6 con i secondi ("0 0 2 * * *") o "@daily"
-  timezone: Europe/Rome      # opzionale, default: fuso dell'executor
-  name: myapp-nightly        # opzionale, default: <application>-<environment>
+  cron: "0 2 * * *"          # 5 fields, or 6 with seconds ("0 0 2 * * *") or "@daily"
+  timezone: Europe/Rome      # optional, default: the executor's time zone
+  name: myapp-nightly        # optional, default: <application>-<environment>
 
 artifact:
   type: application

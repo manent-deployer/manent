@@ -1,5 +1,5 @@
-# VM con Docker per il plugin container (UC6): Docker in Docker più sshd, con l'utente deploy
-# nel gruppo docker. Il registry del laboratorio è in chiaro (registry:5000).
+# VM with Docker for the container plugin (UC6): Docker in Docker plus sshd, with the deploy
+# user in the docker group. The lab registry is plain-text (registry:5000).
 FROM docker:27.3.1-dind
 RUN apk add --no-cache --upgrade openssh-server openssh-client \
  && adduser -D -s /bin/sh deploy \

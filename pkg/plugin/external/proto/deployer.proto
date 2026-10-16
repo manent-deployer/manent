@@ -1,30 +1,30 @@
-// Protocollo tra manent (host) e i plugin di deploy esterni, eseguiti come processi separati
-// tramite github.com/hashicorp/go-plugin. Rigenerare con "make proto".
+// Protocol between manent (host) and external deploy plugins, run as separate processes
+// through github.com/hashicorp/go-plugin. Regenerate with "make proto".
 syntax = "proto3";
 
 package manent.plugin.v1;
 
 option go_package = "github.com/joeg-ita/manent/pkg/plugin/external/proto;pluginpb";
 
-// Deployer è implementato dal plugin. Rispecchia plugin.Deployer e le interfacce opzionali
-// plugin.DryRunner, plugin.ReleaseInspector e plugin.Rollbacker.
+// Deployer is implemented by the plugin. It mirrors plugin.Deployer and the optional interfaces
+// plugin.DryRunner, plugin.ReleaseInspector and plugin.Rollbacker.
 service Deployer {
-  // Configure costruisce il deployer con la configurazione di manent.yml. È la prima chiamata
-  // dopo l'avvio del processo e viene ripetuta a ogni riavvio.
+  // Configure builds the deployer with the manent.yml configuration. It is the first call
+  // after the process starts and is repeated at every restart.
   rpc Configure(ConfigureRequest) returns (ConfigureResponse);
   rpc Supports(SupportsRequest) returns (SupportsResponse);
   rpc Validate(DeployRequest) returns (Empty);
   rpc Deploy(DeployRequest) returns (DeployResponse);
-  // DryRun restituisce UNIMPLEMENTED se il plugin non supporta il dry-run.
+  // DryRun returns UNIMPLEMENTED if the plugin does not support dry-run.
   rpc DryRun(DeployRequest) returns (DeployResponse);
-  // CurrentRelease legge dai target la release in esercizio; UNIMPLEMENTED se non supportato.
+  // CurrentRelease reads the release in service from the targets; UNIMPLEMENTED if unsupported.
   rpc CurrentRelease(DeployRequest) returns (CurrentReleaseResponse);
-  // Rollback riporta i target alla release indicata; UNIMPLEMENTED se non supportato.
+  // Rollback brings the targets back to the given release; UNIMPLEMENTED if unsupported.
   rpc Rollback(RollbackRequest) returns (DeployResponse);
 
-  // Rilasci per percentuale (plugin.SlotDeployer, plugin.TrafficRouter, plugin.TesterRouter,
-  // plugin.SlotScaler): UNIMPLEMENTED se non supportati. DeployRequest.traffic porta lo stato
-  // registrato da PrepareSlots.
+  // Percentage rollouts (plugin.SlotDeployer, plugin.TrafficRouter, plugin.TesterRouter,
+  // plugin.SlotScaler): UNIMPLEMENTED if unsupported. DeployRequest.traffic carries the state
+  // recorded by PrepareSlots.
   rpc PrepareSlots(DeployRequest) returns (StateResponse);
   rpc DeployCandidate(DeployRequest) returns (DeployResponse);
   rpc PromoteCandidate(DeployRequest) returns (Empty);
@@ -36,8 +36,8 @@ service Deployer {
   rpc ScaleCandidate(WeightRequest) returns (Empty);
 }
 
-// Secrets è servito da manent per la durata di una chiamata Deploy o DryRun, tramite il broker
-// di go-plugin: il plugin legge i segreti solo quando servono e non li riceve mai in anticipo.
+// Secrets is served by manent for the duration of a Deploy or DryRun call, through the
+// go-plugin broker: the plugin reads secrets only when needed and never receives them upfront.
 service Secrets {
   rpc Secret(SecretRequest) returns (SecretResponse);
 }
@@ -45,15 +45,15 @@ service Secrets {
 message Empty {}
 
 message ConfigureRequest {
-  // Configurazione del plugin in JSON (sezione plugins.<nome> senza la chiave external).
+  // Plugin configuration in JSON (plugins.<name> section without the external key).
   bytes config_json = 1;
 }
 
 message ConfigureResponse {
   string name = 1;
-  // Interfacce opzionali implementate dal plugin: "dry_run", "current_release", "rollback",
+  // Optional interfaces implemented by the plugin: "dry_run", "current_release", "rollback",
   // "slots", "traffic_router", "testers", "scale".
-  // Un plugin compilato con un SDK precedente non ne dichiara nessuna.
+  // A plugin built with an earlier SDK declares none.
   repeated string capabilities = 2;
 }
 
@@ -69,7 +69,7 @@ message Artifact {
   string type = 1;
   string name = 2;
   string version = 3;
-  // Percorso locale sul worker: il plugin gira sulla stessa macchina.
+  // Local path on the worker: the plugin runs on the same machine.
   string local_path = 4;
   string sha256 = 5;
 }
@@ -87,9 +87,9 @@ message DeployRequest {
   Artifact artifact = 4;
   repeated Target targets = 5;
   map<string, string> params = 6;
-  // ID del broker su cui è servito Secrets (0 = nessun resolver, es. in Validate).
+  // ID of the broker Secrets is served on (0 = no resolver, e.g. in Validate).
   uint32 secrets_broker_id = 7;
-  // Presente solo nei rilasci per percentuale.
+  // Present only in percentage rollouts.
   TrafficRequest traffic = 8;
 }
 
@@ -142,7 +142,7 @@ message Release {
 }
 
 message CurrentReleaseResponse {
-  // Assente se sui target non c'è nessuna release (primo deploy).
+  // Absent if the targets have no release (first deploy).
   Release release = 1;
 }
 

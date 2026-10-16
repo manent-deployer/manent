@@ -1,7 +1,7 @@
-# Funzioni comuni dei casi d'uso (incluso da run.sh). Le azioni passano dal client manent
-# (docker compose run client), le verifiche leggono lo stato dal client e i target con docker exec.
+# Shared use case functions (sourced by run.sh). Actions go through the manent client
+# (docker compose run client), checks read the state from the client and the targets with docker exec.
 
-UC_DIR=$(pwd)  # run.sh esegue i casi dalla directory test/usecases
+UC_DIR=$(pwd)  # run.sh runs the cases from the test/usecases directory
 WORK=$UC_DIR/.work
 PASSED=0
 FAILED=0
@@ -9,17 +9,17 @@ FAILURES=""
 
 dc() { docker compose -f "$UC_DIR/compose.yml" "$@"; }
 
-# dcp: come dc, con i profili containers e kubernetes attivi (registry, VM e k3s di UC6/UC7).
+# dcp: like dc, with the containers and kubernetes profiles enabled (registry, VMs and k3s of UC6/UC7).
 dcp() { dc --profile containers --profile kubernetes "$@"; }
 
-# as <ruolo> <comando...>: esegue il comando con il token di un altro ruolo (cab, admin, viewer).
-# Subshell: in sh POSIX "AS=x funzione" lascerebbe AS impostata dopo la chiamata.
+# as <role> <command...>: runs the command with another role's token (cab, admin, viewer).
+# Subshell: in POSIX sh "AS=x function" would leave AS set after the call.
 as() { (AS=$1; shift; "$@"); }
 
-# manent esegue il client con il token di $AS (ci, cab, admin, viewer; default ci).
+# manent runs the client with $AS's token (ci, cab, admin, viewer; default ci).
 manent() { dc run --rm -T -e MANENT_TOKEN="uc-${AS:-ci}-token" client "$@" 2>>"$WORK/client.log"; }
 
-# manent_err esegue il client e restituisce lo stderr (per verificare gli errori attesi).
+# manent_err runs the client and returns stderr (to check expected errors).
 manent_err() { dc run --rm -T -e MANENT_TOKEN="uc-${AS:-ci}-token" client "$@" 2>&1 >/dev/null | grep -v -e '^ *Container' -e '^time='; }
 
 log() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -33,21 +33,21 @@ fail() {
   return 0
 }
 
-# expect_eq <descrizione> <valore> <atteso>
+# expect_eq <description> <value> <expected>
 expect_eq() {
   if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "atteso '$3', ottenuto '$2'"; fi
 }
 
-# expect_match <descrizione> <testo> <regex estesa>
+# expect_match <description> <text> <extended regex>
 expect_match() {
   if printf '%s' "$2" | grep -Eq -- "$3"; then pass "$1"; else fail "$1" "'$3' non trovato in: $(printf '%s' "$2" | head -c 400)"; fi
 }
 
-# at_in <secondi>: orario RFC 3339 (UTC) tra <secondi>.
+# at_in <seconds>: RFC 3339 time (UTC) <seconds> from now.
 at_in() { date -u -v+"$1"S +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "+$1 seconds" +%Y-%m-%dT%H:%M:%SZ; }
 
-# artifact <app> <versione> [broken]: crea il tar.gz in .work/artifacts e stampa lo sha256.
-# Un artefatto "broken" non contiene healthz: post-test e health gate lo vedono rosso.
+# artifact <app> <version> [broken]: creates the tar.gz in .work/artifacts and prints its sha256.
+# A "broken" artifact has no healthz: post-test and health gate see it red.
 artifact() {
   d=$(mktemp -d)
   printf '%s\n' "$2" >"$d/version"
@@ -58,13 +58,13 @@ artifact() {
 }
 sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 
-# descriptor <file> <id> <app> <env> <versione> [yaml aggiuntivo]: scrive .work/uc/<file>.yml
-# per un artefatto application e stampa il percorso nel container del client.
+# descriptor <file> <id> <app> <env> <version> [extra yaml]: writes .work/uc/<file>.yml
+# for an application artifact and prints its path in the client container.
 descriptor() {
   art_descriptor "$1" "$2" "$3" "$4" "$5" application "file:///srv/artifacts/$3-$5.tar.gz" "${6:-}"
 }
 
-# art_descriptor <file> <id> <app> <env> <versione> <tipo> <sorgente> [yaml aggiuntivo]
+# art_descriptor <file> <id> <app> <env> <version> <type> <source> [extra yaml]
 art_descriptor() {
   cat >"$WORK/uc/$1.yml" <<EOF
 apiVersion: manent/v1
@@ -81,9 +81,9 @@ EOF
   echo "/uc/$1.yml"
 }
 
-# image <nome> <tag> [broken] [versione]: costruisce l'applicazione di prova (webapp), la
-# carica nel registry del laboratorio come uc/<nome>:<tag> e stampa il digest (senza sha256:).
-# Un'immagine "broken" non ha /healthz: HEALTHCHECK e readinessProbe restano rossi.
+# image <name> <tag> [broken] [version]: builds the test application (webapp), pushes it
+# to the lab registry as uc/<name>:<tag> and prints the digest (without sha256:).
+# A "broken" image has no /healthz: HEALTHCHECK and readinessProbe stay red.
 image() {
   healthy=true; [ "${3:-}" = broken ] && healthy=false
   ref=127.0.0.1:15000/uc/$1:$2
@@ -92,17 +92,17 @@ image() {
     docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref" | grep "^127.0.0.1:15000/uc/$1@" | head -1 | sed 's/.*@sha256://'
 }
 
-# wait_registry: attende che il registry del laboratorio risponda dall'host.
+# wait_registry: waits for the lab registry to answer from the host.
 wait_registry() {
   t=0; until curl -fs http://127.0.0.1:15000/v2/ >/dev/null 2>&1; do t=$((t + 1)); [ "$t" -gt 60 ] && return 1; sleep 1; done
 }
 
-# submit <descrittore> [opzioni]: accoda senza attendere e stampa l'ID.
+# submit <descriptor> [options]: enqueues without waiting and prints the ID.
 submit() { manent deploy --no-wait -f "$@" | jq -r .id; }
 
 state() { manent status "$1" | jq -r .state; }
 
-# wait_state <id> <stato|terminal> [timeout]: attende lo stato e lo stampa.
+# wait_state <id> <state|terminal> [timeout]: waits for the state and prints it.
 wait_state() {
   id=$1 want=$2 limit=${3:-120} t=0 s=""
   while [ "$t" -lt "$limit" ]; do
@@ -116,7 +116,7 @@ wait_state() {
   echo "$s"
 }
 
-# wait_rollout <id> <stato del rollout> [timeout]
+# wait_rollout <id> <rollout state> [timeout]
 wait_rollout() {
   id=$1 want=$2 limit=${3:-120} t=0 s=""
   while [ "$t" -lt "$limit" ]; do
@@ -127,19 +127,19 @@ wait_rollout() {
   echo "$s"
 }
 
-# current <target> <app>: versione puntata dal symlink current ("none" se assente).
+# current <target> <app>: version the current symlink points to ("none" if missing).
 current() {
   v=$(dc exec -T "$1" readlink "/home/deploy/apps/$2/current" 2>/dev/null) || { echo none; return; }
   basename "$v"
 }
 
-# currents <app> <target>...: versioni dei target separate da spazi.
+# currents <app> <target>...: space-separated versions of the targets.
 currents() { app=$1; shift; out=""; for h in "$@"; do out="$out $(current "$h" "$app")"; done; echo "${out# }"; }
 
-# healthy <target> <app>: 0 se /healthz della release attiva risponde 200.
+# healthy <target> <app>: 0 if /healthz of the active release answers 200.
 healthy() { dc exec -T "$1" busybox wget -q -O /dev/null "http://127.0.0.1:8080/$2/current/healthz" 2>/dev/null; }
 
-# fault <target> <app> fail|sleep <s>|clear: guasti simulati letti dal post_command.
+# fault <target> <app> fail|sleep <s>|clear: simulated faults read by the post_command.
 fault() {
   f=/home/deploy/fault/$2
   case "$3" in
@@ -149,31 +149,31 @@ fault() {
   esac
 }
 
-# runs <target> <app>: righe "start" del post_command (esecuzioni del deploy sul target).
+# runs <target> <app>: "start" lines of the post_command (deploy runs on the target).
 runs() { dc exec -T "$1" sh -c "cat /home/deploy/fault/$2.log 2>/dev/null | grep -c start || true"; }
 
-# steps <id>: nomi degli step eseguiti, separati da spazi.
+# steps <id>: names of the run steps, space separated.
 step_names() { manent status "$1" | jq -r '[.result.steps[]?.name] | join(" ")'; }
 
-# vm_version <vm> <container>: versione (etichetta manent.version) del container ("none" se assente).
+# vm_version <vm> <container>: version (manent.version label) of the container ("none" if missing).
 vm_version() {
   v=$(dcp exec -T "$1" docker inspect -f '{{index .Config.Labels "manent.version"}}' "$2" 2>/dev/null) || { echo none; return; }
   echo "$v"
 }
 
-# vm_image <vm> <container>: digest dell'immagine del container.
+# vm_image <vm> <container>: digest of the container image.
 vm_image() { dcp exec -T "$1" docker inspect -f '{{.Config.Image}}' "$2" 2>/dev/null | sed 's/.*@sha256://'; }
 
-# vm_get <vm> <porta> <percorso>: risposta dell'applicazione sulla VM ("" se non risponde).
+# vm_get <vm> <port> <path>: the application's answer on the VM ("" if it does not answer).
 vm_get() { dcp exec -T "$1" wget -q -O - "http://127.0.0.1:$2$3" 2>/dev/null | tr -d '\r\n'; }
 
-# kube <argomenti>: kubectl nel cluster k3s del laboratorio.
+# kube <arguments>: kubectl in the lab's k3s cluster.
 kube() { dcp exec -T k3s kubectl "$@"; }
 
-# k8s_manifest <app> <versione> <digest> [extra]: scrive i manifest <app>-<versione>.yaml in
-# .work/artifacts (Namespace, Deployment con readinessProbe, Service; con "extra" anche una
-# ConfigMap in più) e ne stampa lo sha256. L'immagine è fissata al digest; namespace e
-# repliche arrivano dalla configurazione di ambiente (${MANENT_NAMESPACE}, var.REPLICAS).
+# k8s_manifest <app> <version> <digest> [extra]: writes the <app>-<version>.yaml manifests to
+# .work/artifacts (Namespace, Deployment with readinessProbe, Service; with "extra" also one
+# more ConfigMap) and prints their sha256. The image is pinned to the digest; namespace and
+# replicas come from the environment configuration (${MANENT_NAMESPACE}, var.REPLICAS).
 k8s_manifest() {
   f=$WORK/artifacts/$1-$2.yaml
   cat >"$f" <<EOF
@@ -218,8 +218,8 @@ EOF
   sha "$f"
 }
 
-# k8s_image <namespace> <deployment>: digest dell'immagine del Deployment.
+# k8s_image <namespace> <deployment>: digest of the Deployment image.
 k8s_image() { kube -n "$1" get deploy "$2" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | sed 's/.*@sha256://'; }
 
-# k8s_ready <namespace> <deployment>: repliche pronte.
+# k8s_ready <namespace> <deployment>: ready replicas.
 k8s_ready() { kube -n "$1" get deploy "$2" -o jsonpath='{.status.readyReplicas}' 2>/dev/null; }

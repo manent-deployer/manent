@@ -25,7 +25,7 @@ func TestRegolaPrimaCorrispondenza(t *testing.T) {
 }
 
 func TestFinestraRicorrente(t *testing.T) {
-	// Ogni venerdì dalle 18 per 62 ore (fino a lunedì alle 8), ora di Roma.
+	// Every Friday from 18:00 for 62 hours (until Monday at 8:00), Rome time.
 	p, err := New(nil, []Window{{Name: "weekend", Applications: []string{"*"}, Environments: []string{"prod"},
 		Cron: "0 18 * * FRI", Duration: 62 * time.Hour, Timezone: "Europe/Rome"}})
 	if err != nil {
@@ -33,11 +33,11 @@ func TestFinestraRicorrente(t *testing.T) {
 	}
 	rome, _ := time.LoadLocation("Europe/Rome")
 	cases := map[time.Time]bool{
-		time.Date(2026, 10, 9, 17, 59, 0, 0, rome): false, // venerdì prima delle 18
+		time.Date(2026, 10, 9, 17, 59, 0, 0, rome): false, // Friday before 18:00
 		time.Date(2026, 10, 9, 18, 0, 0, 0, rome):  true,
-		time.Date(2026, 10, 11, 12, 0, 0, 0, rome): true, // domenica
+		time.Date(2026, 10, 11, 12, 0, 0, 0, rome): true, // Sunday
 		time.Date(2026, 10, 12, 7, 59, 0, 0, rome): true,
-		time.Date(2026, 10, 12, 8, 0, 0, 0, rome):  false, // lunedì alle 8
+		time.Date(2026, 10, 12, 8, 0, 0, 0, rome):  false, // Monday at 8:00
 		time.Date(2026, 10, 14, 12, 0, 0, 0, rome): false,
 	}
 	for at, want := range cases {

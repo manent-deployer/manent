@@ -23,9 +23,9 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// fakeLambda emula l'API REST di Lambda per le operazioni usate dal plugin. Un aggiornamento
-// del codice resta InProgress per una lettura, poi Successful (Failed se l'immagine contiene
-// "broken"); pubblicare codice invariato restituisce l'ultima versione, come Lambda.
+// fakeLambda emulates the Lambda REST API for the operations used by the plugin. A code update
+// stays InProgress for one read, then Successful (Failed if the image contains "broken");
+// publishing unchanged code returns the last version, as Lambda does.
 type fakeLambda struct {
 	mu        sync.Mutex
 	t         *testing.T
@@ -238,7 +238,7 @@ func TestImmagineERollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// L'immagine ECR è riportata alla region del target.
+	// The ECR image is moved to the target's region.
 	if img := res.Targets[0].Details["image"]; img != "123456789012.dkr.ecr.eu-west-1.amazonaws.com/shop@"+digest || f.functions["shop"].image != img {
 		t.Errorf("immagine %q", img)
 	}
@@ -253,7 +253,7 @@ func TestImmagineERollback(t *testing.T) {
 		t.Fatalf("release in esercizio: %+v, %v", rel, err)
 	}
 
-	// Un aggiornamento fallito lascia l'alias dov'era.
+	// A failed update leaves the alias where it was.
 	broken := imageRequest(t, "2.0.0", "shop-broken")
 	if _, err := p.Deploy(ctx, broken); err == nil || !strings.Contains(err.Error(), "image manifest not found") {
 		t.Fatalf("aggiornamento fallito atteso: %v", err)
@@ -273,7 +273,7 @@ func TestImmagineERollback(t *testing.T) {
 	if cur, _ := p.CurrentRelease(ctx, req2); cur == nil || cur.Version != "1.0.0" {
 		t.Errorf("dopo il rollback: %+v", cur)
 	}
-	// Senza dettagli la versione si cerca tra quelle pubblicate.
+	// Without details the version is searched among the published ones.
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "2.0.0"}); err != nil || f.alias("shop") != "2" {
 		t.Fatalf("rollback senza dettagli: %v, alias %s", err, f.alias("shop"))
 	}
@@ -294,7 +294,7 @@ func TestPacchettoZip(t *testing.T) {
 		t.Fatalf("alias %q", f.alias("worker"))
 	}
 
-	// Lo sha256 restituito da Lambda deve coincidere con quello dell'artefatto.
+	// The sha256 returned by Lambda must match the artifact's.
 	bad := request(t, "1.1.0", "worker.zip", "PK\x03\x04 altro")
 	bad.Params[ParamFunction] = "worker"
 	bad.Artifact.SHA256 = strings.Repeat("0", 64)
@@ -302,7 +302,7 @@ func TestPacchettoZip(t *testing.T) {
 		t.Errorf("sha256 diverso: %v", err)
 	}
 
-	// Pacchetto zip su una funzione a immagine.
+	// Zip package on an image function.
 	wrong := request(t, "1.0.0", "shop.zip", "PK")
 	if _, err := p.Deploy(ctx, wrong); err == nil || !strings.Contains(err.Error(), "pacchetti Image") {
 		t.Errorf("tipo di pacchetto: %v", err)

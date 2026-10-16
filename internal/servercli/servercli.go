@@ -1,6 +1,5 @@
-// Package servercli implementa la CLI di manent-server: API, worker e operazioni di
-// piattaforma sul database di sistema. Gli utenti usano il client (cmd/manent), che parla solo
-// con l'API.
+// Package servercli implements the manent-server CLI: API, workers and platform operations on
+// the system database. Users use the client (cmd/manent), which talks only to the API.
 package servercli
 
 import (
@@ -29,12 +28,12 @@ import (
 	"github.com/joeg-ita/manent/internal/rollout"
 )
 
-// GlobalOptions sono le opzioni comuni a tutti i comandi.
+// GlobalOptions are the options shared by all commands.
 type GlobalOptions struct {
 	Config string `short:"c" long:"config" env:"MANENT_CONFIG" description:"file di configurazione YAML"`
 }
 
-// Run esegue la CLI con gli argomenti indicati.
+// Run runs the CLI with the given arguments.
 func Run(args []string) error {
 	var global GlobalOptions
 	p := flags.NewParser(&global, flags.Default)
@@ -69,16 +68,16 @@ func Run(args []string) error {
 	return cliutil.Parse(p, args)
 }
 
-// ValidateCmd valida il descrittore senza avviare DBOS e mostra il deploy effettivo,
-// cioè il descrittore fuso con la configurazione di ambiente (es. letta da Consul).
-// A differenza di "deploy --dry-run" non contatta segreti, artefatto e target.
+// ValidateCmd validates the descriptor without starting DBOS and shows the effective deploy,
+// that is the descriptor merged with the environment configuration (e.g. read from Consul).
+// Unlike "deploy --dry-run" it touches no secrets, artifact or targets.
 type ValidateCmd struct {
 	global  *GlobalOptions
 	File    string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
 	Offline bool   `long:"offline" description:"non leggere la configurazione di ambiente"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ValidateCmd) Execute([]string) error {
 	d, err := descriptor.LoadYAMLFile(c.File)
 	if err != nil {
@@ -170,15 +169,16 @@ func (c *ValidateCmd) Execute([]string) error {
 	return cliutil.PrintJSON(out)
 }
 
-// ServeCmd avvia il server HTTP e lo arresta in modo pulito su SIGINT/SIGTERM.
-// Di default è anche un worker; con --no-worker espone solo le API e lascia l'esecuzione ai worker.
+// ServeCmd starts the HTTP server and stops it cleanly on SIGINT/SIGTERM.
+// By default it is also a worker; with --no-worker it only exposes the APIs and leaves
+// execution to the workers.
 type ServeCmd struct {
 	global   *GlobalOptions
 	Listen   string `short:"l" long:"listen" description:"indirizzo di ascolto (sovrascrive la configurazione)"`
 	NoWorker bool   `long:"no-worker" description:"solo API: accoda i deploy senza eseguirli"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ServeCmd) Execute([]string) error {
 	newApp := newWorker
 	if c.NoWorker {
@@ -226,12 +226,13 @@ func (c *ServeCmd) Execute([]string) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// WorkerCmd avvia un worker senza API: preleva ed esegue i deploy dalla coda finché non riceve SIGINT/SIGTERM.
+// WorkerCmd starts a worker without API: it dequeues and runs deploys until it receives
+// SIGINT/SIGTERM.
 type WorkerCmd struct {
 	global *GlobalOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *WorkerCmd) Execute([]string) error {
 	a, err := newWorker(c.global)
 	if err != nil {
@@ -242,8 +243,8 @@ func (c *WorkerCmd) Execute([]string) error {
 		a.Close()
 		return err
 	}
-	// In ordine inverso: drain e arresto, poi server di observability (che durante il drain
-	// risponde 503 su /readyz), infine le ultime span.
+	// In reverse order: drain and shutdown, then the observability server (which answers 503 on
+	// /readyz during the drain), finally the last spans.
 	defer stopTelemetry()
 	defer startOps(a)()
 	defer a.Close()
@@ -255,13 +256,13 @@ func (c *WorkerCmd) Execute([]string) error {
 	return nil
 }
 
-// cliContext restituisce il context dei comandi CLI, con l'identità dell'utente del sistema
-// operativo: i permessi RBAC si applicano anche alla CLI e l'audit registra chi ha agito.
+// cliContext returns the context of CLI commands, with the identity of the operating system
+// user: RBAC permissions apply to the CLI too and the audit records who acted.
 func cliContext() context.Context {
 	return auth.WithPrincipal(context.Background(), auth.CLIPrincipal())
 }
 
-// newClient crea l'applicazione in modalità client: accoda e interroga senza eseguire deploy.
+// newClient creates the application in client mode: it enqueues and queries without running deploys.
 func newClient(g *GlobalOptions) (*app.App, error) {
 	cfg, err := config.Load(g.Config)
 	if err != nil {
@@ -270,7 +271,8 @@ func newClient(g *GlobalOptions) (*app.App, error) {
 	return app.NewClient(cfg)
 }
 
-// newWorker crea l'applicazione in modalità worker: esegue i deploy e recupera i propri workflow interrotti.
+// newWorker creates the application in worker mode: it runs deploys and recovers its own
+// interrupted workflows.
 func newWorker(g *GlobalOptions) (*app.App, error) {
 	cfg, err := config.Load(g.Config)
 	if err != nil {
@@ -279,8 +281,8 @@ func newWorker(g *GlobalOptions) (*app.App, error) {
 	return app.NewWorker(cfg)
 }
 
-// AuditVerifyCmd verifica la catena di hash del file di audit. Senza argomenti verifica
-// audit.file della configurazione e i suoi file ruotati.
+// AuditVerifyCmd verifies the hash chain of the audit file. Without arguments it verifies the
+// configuration's audit.file and its rotated files.
 type AuditVerifyCmd struct {
 	global *GlobalOptions
 	Args   struct {
@@ -288,7 +290,7 @@ type AuditVerifyCmd struct {
 	} `positional-args:"yes"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *AuditVerifyCmd) Execute([]string) error {
 	cfg, err := config.Load(c.global.Config)
 	if err != nil {
@@ -297,7 +299,7 @@ func (c *AuditVerifyCmd) Execute([]string) error {
 	files := c.Args.Files
 	switch {
 	case len(files) == 1:
-		// Un solo file: si verificano anche i suoi file ruotati, in ordine cronologico.
+		// A single file: its rotated files are verified too, in chronological order.
 		if files, err = audit.Files(files[0]); err != nil {
 			return err
 		}
@@ -325,8 +327,8 @@ func (c *AuditVerifyCmd) Execute([]string) error {
 	return cliutil.PrintJSON(rep)
 }
 
-// withAdmin esegue fn con le operazioni di piattaforma. Lavorano sul database di sistema,
-// quindi non sono disponibili con --server.
+// withAdmin runs fn with the platform operations. They work on the system database, so they
+// are not available with --server.
 func withAdmin(g *GlobalOptions, fn func(context.Context, *app.App, *engine.Admin) error) error {
 	a, err := newClient(g)
 	if err != nil {
@@ -336,7 +338,7 @@ func withAdmin(g *GlobalOptions, fn func(context.Context, *app.App, *engine.Admi
 	return fn(cliContext(), a, a.Admin())
 }
 
-// adminActor identifica l'operatore nell'audit e nel registro dei worker.
+// adminActor identifies the operator in the audit and in the worker registry.
 func adminActor() string {
 	name := "unknown"
 	if u, err := user.Current(); err == nil {
@@ -345,12 +347,12 @@ func adminActor() string {
 	return "cli:" + name
 }
 
-// ExecutorsCmd elenca i worker registrati e quelli con workflow in sospeso.
+// ExecutorsCmd lists the registered workers and those with pending workflows.
 type ExecutorsCmd struct {
 	global *GlobalOptions
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ExecutorsCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, a *app.App, adm *engine.Admin) error {
 		es, err := adm.Executors(ctx, a.Config.Recovery.StaleAfter)
@@ -361,7 +363,7 @@ func (c *ExecutorsCmd) Execute([]string) error {
 	})
 }
 
-// RecoverCmd riprende i workflow di un worker perso o di una versione non più eseguita.
+// RecoverCmd resumes the workflows of a lost worker or of a version no longer run.
 type RecoverCmd struct {
 	global      *GlobalOptions
 	Executor    string `long:"executor" description:"riprende i workflow in sospeso di questo worker perso"`
@@ -372,7 +374,7 @@ type RecoverCmd struct {
 	DryRun      bool   `long:"dry-run" description:"mostra cosa verrebbe fatto senza modificare nulla"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *RecoverCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, a *app.App, adm *engine.Admin) error {
 		rep, err := adm.Recover(ctx, engine.RecoverOptions{
@@ -386,7 +388,7 @@ func (c *RecoverCmd) Execute([]string) error {
 	})
 }
 
-// PruneCmd elimina lo storico più vecchio di retention.max_age (o di --max-age).
+// PruneCmd deletes the history older than retention.max_age (or --max-age).
 type PruneCmd struct {
 	global       *GlobalOptions
 	MaxAge       time.Duration `long:"max-age" description:"età oltre la quale eliminare i workflow conclusi (default retention.max_age)"`
@@ -394,7 +396,7 @@ type PruneCmd struct {
 	DryRun       bool          `long:"dry-run" description:"conta i workflow senza eliminarli"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *PruneCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, a *app.App, adm *engine.Admin) error {
 		o := engine.RetentionOptions{
@@ -417,15 +419,15 @@ func (c *PruneCmd) Execute([]string) error {
 	})
 }
 
-// SpecsCmd elenca i workflow non conclusi e le schedule che contengono le specifiche
-// revocate degli step personalizzati (pipeline.custom.revoked_specs o --hash).
+// SpecsCmd lists the unfinished workflows and schedules containing revoked custom step specs
+// (pipeline.custom.revoked_specs or --hash).
 type SpecsCmd struct {
 	global *GlobalOptions
 	Hash   []string `long:"hash" description:"sha256 della specifica da cercare, al posto di pipeline.custom.revoked_specs (ripetibile)"`
 	All    bool     `long:"all" description:"elenca tutte le specifiche fotografate nei piani, revocate o no"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *SpecsCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, a *app.App, adm *engine.Admin) error {
 		var hashes []string
@@ -450,8 +452,8 @@ func (c *SpecsCmd) Execute([]string) error {
 	})
 }
 
-// startOps avvia, se configurato, il server di observability.listen (/metrics, /healthz,
-// /readyz). Restituisce la funzione che lo arresta.
+// startOps starts, if configured, the observability.listen server (/metrics, /healthz,
+// /readyz). It returns the function that stops it.
 func startOps(a *app.App) func() {
 	addr := a.Config.Observability.Listen
 	if addr == "" {
@@ -471,8 +473,8 @@ func startOps(a *app.App) func() {
 	}
 }
 
-// startTelemetry configura il tracing e le metriche di stato di un processo di lunga durata.
-// Restituisce la funzione che esporta le ultime span.
+// startTelemetry configures tracing and state metrics of a long-running process.
+// It returns the function that exports the last spans.
 func startTelemetry(a *app.App) (func(), error) {
 	shutdown, err := app.SetupTracing(context.Background(), a.Config, a.Config.DBOS.ExecutorID)
 	if err != nil {

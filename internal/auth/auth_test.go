@@ -48,7 +48,7 @@ func TestBearerToken(t *testing.T) {
 	}
 }
 
-// fakeIssuer è un identity provider OIDC minimale: discovery, JWKS e firma dei token.
+// fakeIssuer is a minimal OIDC identity provider: discovery, JWKS and token signing.
 type fakeIssuer struct {
 	srv *httptest.Server
 	key *rsa.PrivateKey
@@ -119,12 +119,12 @@ func TestOIDC(t *testing.T) {
 	if _, err := o.Authenticate(ctx, iss.token(t, claims("manent", now.Add(-time.Minute)))); err == nil {
 		t.Error("token scaduto accettato")
 	}
-	// Un valore che non è un JWT passa al prossimo authenticator della catena.
+	// A value that is not a JWT goes to the next authenticator of the chain.
 	if _, err := o.Authenticate(ctx, "token-statico"); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("atteso ErrUnauthenticated, ricevuto %v", err)
 	}
 
-	// Catena: token statico e OIDC.
+	// Chain: static token and OIDC.
 	sum := sha256.Sum256([]byte("ci-token"))
 	chain := Chain{Tokens{{Name: "ci", SHA256: hex.EncodeToString(sum[:])}}, o}
 	if p, err := chain.Authenticate(ctx, "ci-token"); err != nil || p.Method != MethodToken {

@@ -1,5 +1,5 @@
-// Package authz applica i permessi (RBAC) per applicazione e ambiente. Guard avvolge il
-// servizio dell'engine, quindi le stesse regole valgono per l'API e per la CLI.
+// Package authz applies permissions (RBAC) per application and environment. Guard wraps the
+// engine service, so the same rules apply to the API and the CLI.
 package authz
 
 import (
@@ -11,39 +11,39 @@ import (
 	"github.com/joeg-ita/manent/internal/glob"
 )
 
-// Action è un'operazione soggetta a permesso.
+// Action is an operation subject to a permission.
 type Action string
 
-// Azioni disponibili.
+// Available actions.
 const (
 	DeploymentRead   Action = "deployment.read"
 	DeploymentSubmit Action = "deployment.submit"
 	DeploymentDryRun Action = "deployment.dry-run"
 	DeploymentCancel Action = "deployment.cancel"
-	// DeploymentRollback consente il rollback manuale a una versione precedente.
+	// DeploymentRollback allows a manual rollback to a previous version.
 	DeploymentRollback Action = "deployment.rollback"
-	// DeploymentApprove consente di approvare o respingere un deploy.
+	// DeploymentApprove allows approving or rejecting a deploy.
 	DeploymentApprove Action = "deployment.approve"
-	// FreezeOverride consente un deploy durante una finestra di freeze.
+	// FreezeOverride allows a deploy during a freeze window.
 	FreezeOverride Action = "deployment.freeze-override"
 	ScheduleRead   Action = "schedule.read"
 	ScheduleWrite  Action = "schedule.write"
-	// PlatformRead consente di vedere i worker (host, versioni, region) e il loro carico.
-	// Non dipende da applicazione e ambiente: basta un binding qualsiasi che la conceda.
+	// PlatformRead allows seeing the workers (hosts, versions, regions) and their load.
+	// It does not depend on application and environment: any binding granting it is enough.
 	PlatformRead Action = "platform.read"
-	// All vale per tutte le azioni.
+	// All stands for every action.
 	All Action = "*"
 )
 
-// Actions elenca le azioni valide nella definizione di un ruolo.
+// Actions lists the valid actions in a role definition.
 var Actions = []Action{
 	DeploymentRead, DeploymentSubmit, DeploymentDryRun, DeploymentCancel, DeploymentRollback,
 	DeploymentApprove, FreezeOverride, ScheduleRead, ScheduleWrite, PlatformRead, All,
 }
 
-// BuiltinRoles sono i ruoli predefiniti; la configurazione può aggiungerne altri.
-// Approvazioni e deroghe al freeze non sono concesse da deployer e operator: chi rilascia non
-// deve potersi approvare da solo con un altro ruolo.
+// BuiltinRoles are the predefined roles; the configuration can add others.
+// deployer and operator do not grant approvals and freeze overrides: whoever releases must
+// not be able to approve themselves with another role.
 var BuiltinRoles = map[string][]Action{
 	"viewer":   {DeploymentRead, ScheduleRead},
 	"tester":   {DeploymentRead, ScheduleRead, DeploymentDryRun},
@@ -53,27 +53,27 @@ var BuiltinRoles = map[string][]Action{
 	"admin":    {All},
 }
 
-// Binding assegna un ruolo a utenti o gruppi su un insieme di applicazioni e ambienti.
-// Tutti i campi accettano pattern con "*".
+// Binding assigns a role to users or groups on a set of applications and environments.
+// All fields accept "*" patterns.
 type Binding struct {
-	// Subjects sono identità nella forma "<metodo>:<nome>" (es. "oidc:alice", "token:ci", "cli:*").
+	// Subjects are identities in the form "<method>:<name>" (e.g. "oidc:alice", "token:ci", "cli:*").
 	Subjects []string `yaml:"subjects"`
-	// Groups sono gruppi OIDC o dei token statici.
+	// Groups are OIDC or static token groups.
 	Groups       []string `yaml:"groups"`
 	Role         string   `yaml:"role"`
 	Applications []string `yaml:"applications"`
 	Environments []string `yaml:"environments"`
 }
 
-// Policy decide se un'identità può eseguire un'azione su un'applicazione/ambiente.
+// Policy decides whether an identity can perform an action on an application/environment.
 type Policy struct {
-	// Disabled concede tutto (autenticazione disattivata).
+	// Disabled allows everything (authentication disabled).
 	Disabled bool
 	Roles    map[string][]Action
 	Bindings []Binding
 }
 
-// NewPolicy unisce i ruoli predefiniti a quelli configurati e verifica i binding.
+// NewPolicy merges the predefined roles with the configured ones and validates the bindings.
 func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 	p := Policy{Roles: maps.Clone(BuiltinRoles), Bindings: bindings}
 	for name, acts := range roles {
@@ -101,8 +101,8 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 	return p, nil
 }
 
-// Allowed indica se p può eseguire a sull'applicazione e sull'ambiente indicati.
-// Senza identità l'esito è sempre negativo, salvo policy disattivata.
+// Allowed reports whether p can perform a on the given application and environment.
+// Without an identity the answer is always no, unless the policy is disabled.
 func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment string) bool {
 	if pol.Disabled {
 		return true
@@ -121,8 +121,8 @@ func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment 
 	return false
 }
 
-// AllowedAnywhere indica se p ha l'azione a in almeno un binding, qualunque siano applicazioni
-// e ambienti: serve per le azioni di piattaforma, che non riguardano un'applicazione.
+// AllowedAnywhere reports whether p has action a in at least one binding, whatever the
+// applications and environments: it is for platform actions, which concern no application.
 func (pol Policy) AllowedAnywhere(p *auth.Principal, a Action) bool {
 	if pol.Disabled {
 		return true
@@ -143,7 +143,7 @@ func (pol Policy) grants(role string, a Action) bool {
 	return slices.Contains(acts, All) || slices.Contains(acts, a)
 }
 
-// matches indica se il binding si applica all'identità.
+// matches reports whether the binding applies to the identity.
 func (b Binding) matches(p *auth.Principal) bool {
 	if glob.Any(b.Subjects, p.String()) {
 		return true

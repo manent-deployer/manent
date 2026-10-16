@@ -1,6 +1,6 @@
-// Command oidc è un identity provider OIDC minimo per il laboratorio dei casi d'uso: login con
-// la scelta di un utente di prova (nessuna password), Authorization Code con PKCE, refresh
-// token e token JWT RS256 con il claim dei gruppi. Non va mai usato fuori dal laboratorio.
+// Command oidc is a minimal OIDC identity provider for the use case lab: login by choosing a
+// test user (no password), Authorization Code with PKCE, refresh tokens and RS256 JWTs with
+// the groups claim. Never use it outside the lab.
 package main
 
 import (
@@ -21,7 +21,7 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-// users sono gli utenti di prova con i gruppi usati dalle regole RBAC del laboratorio.
+// users are the test users with the groups used by the lab's RBAC rules.
 var users = map[string][]string{
 	"ci":     {"ci"},
 	"cab":    {"cab"},
@@ -74,7 +74,7 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-// cors permette alla UI (altra origine) di leggere discovery, chiavi e token.
+// cors lets the UI (another origin) read discovery, keys and tokens.
 func cors(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -133,12 +133,12 @@ func random() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// sessionCookie ricorda l'utente scelto, come la sessione SSO di un identity provider vero:
-// dopo un ricaricamento della UI il login si completa senza chiedere di nuovo.
+// sessionCookie remembers the chosen user, like a real identity provider's SSO session:
+// after a UI reload the login completes without asking again.
 const sessionCookie = "uc_session"
 
-// authorize mostra la scelta dell'utente (GET) e, alla scelta (POST), rimanda al client con il
-// codice di autorizzazione. Con una sessione attiva il GET rimanda subito.
+// authorize shows the user choice (GET) and, on choice (POST), redirects to the client with
+// the authorization code. With an active session the GET redirects at once.
 func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -185,7 +185,7 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirect.String(), http.StatusFound)
 }
 
-// token scambia il codice (verificando PKCE) o un refresh token con nuovi token.
+// token exchanges the code (verifying PKCE) or a refresh token for new tokens.
 func (s *server) token(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost || r.ParseForm() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})

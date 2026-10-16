@@ -1,4 +1,5 @@
-// Package callback notifica agli endpoint HTTP indicati nel descrittore l'esito degli step e del deploy.
+// Package callback notifies the HTTP endpoints named in the descriptor of the outcome of
+// steps and deploy.
 package callback
 
 import (
@@ -22,16 +23,16 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Stati riportati negli eventi.
+// States reported in events.
 const (
 	StatusStarted   = "started"
 	StatusSucceeded = "succeeded"
 	StatusFailed    = "failed"
-	// StatusSkipped indica uno step saltato in dry-run.
+	// StatusSkipped is a step skipped in dry-run.
 	StatusSkipped = "skipped"
 )
 
-// Header inviati con ogni evento.
+// Headers sent with every event.
 const (
 	HeaderEvent     = "X-Manent-Event"
 	HeaderDelivery  = "X-Manent-Delivery"
@@ -39,10 +40,10 @@ const (
 	HeaderSignature = "X-Manent-Signature"
 )
 
-// Event è il corpo JSON inviato in POST ai callback.
+// Event is the JSON body POSTed to callbacks.
 type Event struct {
-	// ID è "<deployment>:<sequence>": in caso di recovery un evento può arrivare due volte
-	// e il destinatario lo riconosce da questo campo.
+	// ID is "<deployment>:<sequence>": after a recovery an event can arrive twice and the
+	// receiver recognizes it by this field.
 	ID           string `json:"id"`
 	Type         string `json:"event"`
 	Sequence     int    `json:"sequence"`
@@ -50,35 +51,35 @@ type Event struct {
 	Application  string `json:"application"`
 	Environment  string `json:"environment"`
 	DryRun       bool   `json:"dry_run,omitempty"`
-	// RequestedBy è l'identità che ha richiesto il deploy (es. "oidc:alice").
+	// RequestedBy is the identity that requested the deploy (e.g. "oidc:alice").
 	RequestedBy string `json:"requested_by,omitempty"`
-	// Step è valorizzato solo per gli eventi di tipo step.
+	// Step is set only for step events.
 	Step   string            `json:"step,omitempty"`
 	Status string            `json:"status"`
 	Output map[string]string `json:"output,omitempty"`
 	Error  string            `json:"error,omitempty"`
-	// Rollback è l'esito del rollback automatico (completed, skipped, failed), solo nell'evento
-	// finale di un deploy fallito per cui la policy lo prevedeva.
+	// Rollback is the outcome of the automatic rollback (completed, skipped, failed), only in the
+	// final event of a failed deploy whose policy provided for it.
 	Rollback string `json:"rollback,omitempty"`
-	// Timestamp è l'orario dell'invio.
+	// Timestamp is the time of sending.
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Notifier invia un evento a un callback del descrittore.
+// Notifier sends an event to a callback of the descriptor.
 type Notifier interface {
 	Notify(ctx context.Context, d *descriptor.Descriptor, cb descriptor.Callback, ev Event) error
 }
 
-// Policy limita gli URL raggiungibili dai callback: il descrittore arriva da chi richiede il deploy
-// e non deve poter far chiamare al worker servizi interni arbitrari.
+// Policy limits the URLs callbacks can reach: the descriptor comes from whoever requests the
+// deploy, who must not be able to make the worker call arbitrary internal services.
 type Policy struct {
-	// AllowHTTP ammette URL http (default: solo https).
+	// AllowHTTP allows http URLs (default: https only).
 	AllowHTTP bool
-	// AllowedHosts elenca gli host ammessi, anche con "*." iniziale per i sottodomini; vuoto = tutti.
+	// AllowedHosts lists the allowed hosts, also with a leading "*." for subdomains; empty = all.
 	AllowedHosts []string
 }
 
-// Check verifica che l'URL rispetti la policy.
+// Check verifies that the URL complies with the policy.
 func (p Policy) Check(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -100,13 +101,13 @@ func (p Policy) Check(raw string) error {
 	return fmt.Errorf("callback: host %q non ammesso dalla configurazione", host)
 }
 
-// HTTPDoer astrae il client HTTP per facilitare i test.
+// HTTPDoer abstracts the HTTP client to ease testing.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// NewHTTPClient crea il client per i callback. Non segue i redirect: aggirerebbero la Policy
-// e porterebbero le credenziali verso un altro host.
+// NewHTTPClient creates the callback client. It does not follow redirects: they would bypass
+// the Policy and carry the credentials to another host.
 func NewHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,
@@ -114,7 +115,7 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
-// HTTPNotifier invia gli eventi in POST con corpo JSON.
+// HTTPNotifier POSTs events with a JSON body.
 type HTTPNotifier struct {
 	Client  HTTPDoer
 	Secrets secrets.Provider
@@ -122,7 +123,7 @@ type HTTPNotifier struct {
 	Logger  *slog.Logger
 }
 
-// Notify invia l'evento; una risposta diversa da 2xx è un errore, così DBOS ritenta l'invio.
+// Notify sends the event; a non-2xx response is an error, so DBOS retries the sending.
 func (n HTTPNotifier) Notify(ctx context.Context, d *descriptor.Descriptor, cb descriptor.Callback, ev Event) error {
 	if err := n.Policy.Check(cb.URL); err != nil {
 		return err
@@ -143,7 +144,7 @@ func (n HTTPNotifier) Notify(ctx context.Context, d *descriptor.Descriptor, cb d
 		return err
 	}
 
-	// Nei log solo host e percorso: la query string potrebbe contenere token.
+	// Only host and path in the logs: the query string may contain tokens.
 	target := req.URL.Host + req.URL.Path
 	log := n.Logger.With("deployment", ev.DeploymentID, "callback", target, "event", ev.Type, "delivery", ev.ID)
 	resp, err := n.Client.Do(req)
@@ -161,7 +162,7 @@ func (n HTTPNotifier) Notify(ctx context.Context, d *descriptor.Descriptor, cb d
 	return nil
 }
 
-// authorize aggiunge l'autenticazione leggendo il segreto solo al momento dell'invio.
+// authorize adds authentication, reading the secret only at sending time.
 func (n HTTPNotifier) authorize(ctx context.Context, d *descriptor.Descriptor, a *descriptor.CallbackAuth, req *http.Request, body []byte, ts time.Time) error {
 	if a == nil {
 		return nil
@@ -188,8 +189,8 @@ func (n HTTPNotifier) authorize(ctx context.Context, d *descriptor.Descriptor, a
 	return nil
 }
 
-// Sign calcola la firma HMAC-SHA256 (esadecimale) di "<timestamp>.<body>".
-// Il timestamp firmato permette al destinatario di rifiutare le richieste ripetute.
+// Sign computes the HMAC-SHA256 signature (hex) of "<timestamp>.<body>".
+// The signed timestamp lets the receiver reject replayed requests.
 func Sign(secret, timestamp string, body []byte) string {
 	m := hmac.New(sha256.New, []byte(secret))
 	m.Write([]byte(timestamp))

@@ -9,22 +9,22 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// HTTPDoer astrae il client HTTP per facilitare i test.
+// HTTPDoer abstracts the HTTP client to ease testing.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// PostTest esegue i controlli HTTP dichiarati nel descrittore dopo il deploy.
-// I retry sono gestiti da DBOS tramite max_retries dello step.
+// PostTest runs the HTTP checks declared in the descriptor after the deploy.
+// Retries are handled by DBOS through the step's max_retries.
 type PostTest struct {
 	Client HTTPDoer
 	Logger *slog.Logger
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (PostTest) Name() string { return "post-test" }
 
-// Run verifica che ogni endpoint risponda con lo status atteso (default 200).
+// Run checks that every endpoint answers with the expected status (default 200).
 func (p PostTest) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	out := pipeline.Output{}
 	for _, c := range in.Descriptor.PostTest.HTTP {

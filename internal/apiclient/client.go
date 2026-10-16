@@ -1,6 +1,6 @@
-// Package apiclient implementa service.Service sopra l'API HTTP di manent. La CLI lo usa con
-// --server: le richieste passano da autenticazione, permessi e audit del server, senza
-// credenziali del database.
+// Package apiclient implements service.Service on top of the manent HTTP API. The CLI uses it
+// with --server: requests go through the server's authentication, permissions and audit,
+// without database credentials.
 package apiclient
 
 import (
@@ -25,37 +25,37 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// Client chiama l'API di un server manent.
+// Client calls the API of a manent server.
 type Client struct {
-	// BaseURL è l'indirizzo del server, es. https://manent.example.com.
+	// BaseURL is the server address, e.g. https://manent.example.com.
 	BaseURL string
-	// Token è il bearer token (OIDC o statico); vuoto con auth.mode none.
+	// Token is the bearer token (OIDC or static); empty with auth.mode none.
 	Token string
 	HTTP  *http.Client
-	// PollInterval è l'intervallo con cui Wait interroga lo stato (default 2s).
+	// PollInterval is how often Wait polls the status (default 2s).
 	PollInterval time.Duration
 }
 
 var _ service.Service = (*Client)(nil)
 
-// Options configura il client.
+// Options configures the client.
 type Options struct {
-	// Server è l'URL del server, es. https://manent.example.com.
+	// Server is the server URL, e.g. https://manent.example.com.
 	Server string
-	// Token è il bearer token (OIDC o statico); vuoto con auth.mode none.
+	// Token is the bearer token (OIDC or static); empty with auth.mode none.
 	Token string
-	// CAFile, se indicato, è il certificato della CA che ha firmato quello del server.
+	// CAFile, if set, is the certificate of the CA that signed the server's.
 	CAFile string
-	// Timeout di ogni richiesta (default 60s).
+	// Timeout of every request (default 60s).
 	Timeout time.Duration
 }
 
-// New crea un client per il server indicato.
+// New creates a client for the given server.
 func New(baseURL, token string) (*Client, error) {
 	return NewWithOptions(Options{Server: baseURL, Token: token})
 }
 
-// NewWithOptions crea un client con le opzioni indicate.
+// NewWithOptions creates a client with the given options.
 func NewWithOptions(o Options) (*Client, error) {
 	u, err := url.Parse(o.Server)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -82,8 +82,8 @@ func NewWithOptions(o Options) (*Client, error) {
 	}, nil
 }
 
-// do esegue la richiesta e decodifica la risposta in out (se non nil). Gli errori HTTP sono
-// tradotti negli errori dell'engine, così la CLI si comporta come con il database.
+// do runs the request and decodes the response into out (if not nil). HTTP errors are mapped
+// to engine errors, so the CLI behaves as it does on the database.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
 	var rd io.Reader
 	if body != nil {
@@ -133,11 +133,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	return json.Unmarshal(data, out)
 }
 
-// errAuth indica un token mancante o non valido.
+// errAuth means a missing or invalid token.
 var errAuth = errors.New("autenticazione richiesta: indicare un token valido (MANENT_TOKEN o --token-file)")
 
-// statusError riporta il messaggio del server con l'errore dell'engine corrispondente.
-// Il messaggio del server contiene già il prefisso dell'errore, che non viene ripetuto.
+// statusError carries the server message with the matching engine error.
+// The server message already contains the error prefix, which is not repeated.
 func statusError(code int, msg string) error {
 	var base error
 	switch code {
@@ -155,7 +155,7 @@ func statusError(code int, msg string) error {
 	return wrapped{msg: msg, base: base}
 }
 
-// wrapped è un errore con il messaggio del server e l'errore dell'engine come causa.
+// wrapped is an error with the server message and the engine error as cause.
 type wrapped struct {
 	msg  string
 	base error
@@ -164,7 +164,7 @@ type wrapped struct {
 func (w wrapped) Error() string { return w.msg }
 func (w wrapped) Unwrap() error { return w.base }
 
-// Plan implementa service.Service.
+// Plan implements service.Service.
 func (c *Client) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
 	var out struct {
 		Plan pipeline.Plan `json:"plan"`
@@ -173,7 +173,7 @@ func (c *Client) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.P
 	return out.Plan, err
 }
 
-// Submit implementa service.Service.
+// Submit implements service.Service.
 func (c *Client) Submit(ctx context.Context, d *descriptor.Descriptor) (*service.Submission, error) {
 	var sub service.Submission
 	if err := c.do(ctx, http.MethodPost, "/deployments", nil, d, &sub); err != nil {
@@ -182,7 +182,7 @@ func (c *Client) Submit(ctx context.Context, d *descriptor.Descriptor) (*service
 	return &sub, nil
 }
 
-// Status implementa service.Service.
+// Status implements service.Service.
 func (c *Client) Status(ctx context.Context, id string) (*service.Status, error) {
 	var st service.Status
 	if err := c.do(ctx, http.MethodGet, "/deployments/"+url.PathEscape(id), nil, nil, &st); err != nil {
@@ -191,7 +191,7 @@ func (c *Client) Status(ctx context.Context, id string) (*service.Status, error)
 	return &st, nil
 }
 
-// List implementa service.Service. f.Match non è applicabile a distanza e viene ignorato.
+// List implements service.Service. f.Match cannot be applied remotely and is ignored.
 func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Status, error) {
 	q := url.Values{}
 	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "state": f.State, "cursor": f.Cursor} {
@@ -209,7 +209,7 @@ func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Stat
 	return out.Deployments, err
 }
 
-// Wait interroga lo stato fino alla conclusione del deploy o alla scadenza di ctx.
+// Wait polls the status until the deploy ends or ctx expires.
 func (c *Client) Wait(ctx context.Context, id string) (*service.Result, error) {
 	interval := c.PollInterval
 	if interval <= 0 {
@@ -238,12 +238,12 @@ func (c *Client) Wait(ctx context.Context, id string) (*service.Result, error) {
 	}
 }
 
-// Cancel implementa service.Service.
+// Cancel implements service.Service.
 func (c *Client) Cancel(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/deployments/"+url.PathEscape(id)+"/cancel", nil, nil, nil)
 }
 
-// ListSchedules implementa service.Service.
+// ListSchedules implements service.Service.
 func (c *Client) ListSchedules(ctx context.Context) ([]service.ScheduleInfo, error) {
 	var out struct {
 		Schedules []service.ScheduleInfo `json:"schedules"`
@@ -252,7 +252,7 @@ func (c *Client) ListSchedules(ctx context.Context) ([]service.ScheduleInfo, err
 	return out.Schedules, err
 }
 
-// GetSchedule implementa service.Service.
+// GetSchedule implements service.Service.
 func (c *Client) GetSchedule(ctx context.Context, name string) (*service.ScheduleInfo, error) {
 	var s service.ScheduleInfo
 	if err := c.do(ctx, http.MethodGet, "/schedules/"+url.PathEscape(name), nil, nil, &s); err != nil {
@@ -261,22 +261,22 @@ func (c *Client) GetSchedule(ctx context.Context, name string) (*service.Schedul
 	return &s, nil
 }
 
-// PauseSchedule implementa service.Service.
+// PauseSchedule implements service.Service.
 func (c *Client) PauseSchedule(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodPost, "/schedules/"+url.PathEscape(name)+"/pause", nil, nil, nil)
 }
 
-// ResumeSchedule implementa service.Service.
+// ResumeSchedule implements service.Service.
 func (c *Client) ResumeSchedule(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodPost, "/schedules/"+url.PathEscape(name)+"/resume", nil, nil, nil)
 }
 
-// DeleteSchedule implementa service.Service.
+// DeleteSchedule implements service.Service.
 func (c *Client) DeleteSchedule(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodDelete, "/schedules/"+url.PathEscape(name), nil, nil, nil)
 }
 
-// Inventory implementa service.Service.
+// Inventory implements service.Service.
 func (c *Client) Inventory(ctx context.Context, f service.InventoryFilter) ([]service.InventoryEntry, error) {
 	q := url.Values{}
 	if f.Application != "" {
@@ -292,7 +292,7 @@ func (c *Client) Inventory(ctx context.Context, f service.InventoryFilter) ([]se
 	return out.Inventory, err
 }
 
-// Promote implementa service.Service.
+// Promote implements service.Service.
 func (c *Client) Promote(ctx context.Context, r service.PromoteRequest) (*service.Submission, error) {
 	var sub service.Submission
 	if err := c.do(ctx, http.MethodPost, "/promotions", nil, r, &sub); err != nil {
@@ -301,7 +301,7 @@ func (c *Client) Promote(ctx context.Context, r service.PromoteRequest) (*servic
 	return &sub, nil
 }
 
-// Rollback implementa service.Service.
+// Rollback implements service.Service.
 func (c *Client) Rollback(ctx context.Context, r service.RollbackRequest) (*service.Submission, error) {
 	var sub service.Submission
 	if err := c.do(ctx, http.MethodPost, "/rollbacks", nil, r, &sub); err != nil {
@@ -310,7 +310,7 @@ func (c *Client) Rollback(ctx context.Context, r service.RollbackRequest) (*serv
 	return &sub, nil
 }
 
-// Decide implementa service.Service.
+// Decide implements service.Service.
 func (c *Client) Decide(ctx context.Context, id string, r service.DecisionRequest) error {
 	op := "/approve"
 	if !r.Approve {
@@ -319,7 +319,7 @@ func (c *Client) Decide(ctx context.Context, id string, r service.DecisionReques
 	return c.do(ctx, http.MethodPost, "/deployments/"+url.PathEscape(id)+op, nil, map[string]string{"comment": r.Comment}, nil)
 }
 
-// Freezes implementa service.Service.
+// Freezes implements service.Service.
 func (c *Client) Freezes(ctx context.Context, application, environment string) ([]governance.WindowStatus, error) {
 	q := url.Values{}
 	if application != "" {
@@ -335,7 +335,7 @@ func (c *Client) Freezes(ctx context.Context, application, environment string) (
 	return out.Freezes, err
 }
 
-// Approvals implementa service.Service.
+// Approvals implements service.Service.
 func (c *Client) Approvals(ctx context.Context) ([]service.Status, error) {
 	var out struct {
 		Approvals []service.Status `json:"approvals"`
@@ -344,7 +344,7 @@ func (c *Client) Approvals(ctx context.Context) ([]service.Status, error) {
 	return out.Approvals, err
 }
 
-// SubmitRelease implementa service.Service.
+// SubmitRelease implements service.Service.
 func (c *Client) SubmitRelease(ctx context.Context, r *descriptor.Release) (*service.ReleaseStatus, error) {
 	var rs service.ReleaseStatus
 	if err := c.do(ctx, http.MethodPost, "/releases", nil, r, &rs); err != nil {
@@ -353,7 +353,7 @@ func (c *Client) SubmitRelease(ctx context.Context, r *descriptor.Release) (*ser
 	return &rs, nil
 }
 
-// ReleaseStatus implementa service.Service.
+// ReleaseStatus implements service.Service.
 func (c *Client) ReleaseStatus(ctx context.Context, id string) (*service.ReleaseStatus, error) {
 	var rs service.ReleaseStatus
 	if err := c.do(ctx, http.MethodGet, "/releases/"+url.PathEscape(id), nil, nil, &rs); err != nil {
@@ -362,7 +362,7 @@ func (c *Client) ReleaseStatus(ctx context.Context, id string) (*service.Release
 	return &rs, nil
 }
 
-// ListReleases implementa service.Service.
+// ListReleases implements service.Service.
 func (c *Client) ListReleases(ctx context.Context, limit int) ([]service.ReleaseStatus, error) {
 	q := url.Values{}
 	if limit > 0 {
@@ -375,12 +375,12 @@ func (c *Client) ListReleases(ctx context.Context, limit int) ([]service.Release
 	return out.Releases, err
 }
 
-// CancelRelease implementa service.Service.
+// CancelRelease implements service.Service.
 func (c *Client) CancelRelease(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/releases/"+url.PathEscape(id)+"/cancel", nil, nil, nil)
 }
 
-// Workers implementa service.Service.
+// Workers implements service.Service.
 func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
 	var out struct {
 		Workers []service.WorkerInfo `json:"workers"`
@@ -389,7 +389,7 @@ func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
 	return out.Workers, err
 }
 
-// Activity implementa service.Service.
+// Activity implements service.Service.
 func (c *Client) Activity(ctx context.Context, f service.ActivityFilter) (*service.Activity, error) {
 	q := url.Values{}
 	if f.Application != "" {
@@ -405,7 +405,7 @@ func (c *Client) Activity(ctx context.Context, f service.ActivityFilter) (*servi
 	return &a, nil
 }
 
-// Me implementa service.Service.
+// Me implements service.Service.
 func (c *Client) Me(ctx context.Context) (*service.Identity, error) {
 	var out service.Identity
 	if err := c.do(ctx, http.MethodGet, "/me", nil, nil, &out); err != nil {
@@ -414,7 +414,7 @@ func (c *Client) Me(ctx context.Context) (*service.Identity, error) {
 	return &out, nil
 }
 
-// Steps implementa service.Service.
+// Steps implements service.Service.
 func (c *Client) Steps(ctx context.Context, id string) ([]service.StepRecord, error) {
 	var out struct {
 		Steps []service.StepRecord `json:"steps"`
@@ -423,7 +423,7 @@ func (c *Client) Steps(ctx context.Context, id string) ([]service.StepRecord, er
 	return out.Steps, err
 }
 
-// Logs implementa service.Service.
+// Logs implements service.Service.
 func (c *Client) Logs(ctx context.Context, id string, offset int) (*service.LogPage, error) {
 	var p service.LogPage
 	q := url.Values{"offset": {strconv.Itoa(offset)}}
@@ -433,7 +433,7 @@ func (c *Client) Logs(ctx context.Context, id string, offset int) (*service.LogP
 	return &p, nil
 }
 
-// DORA implementa service.Service.
+// DORA implements service.Service.
 func (c *Client) DORA(ctx context.Context, f service.DORAFilter) (*service.DORAReport, error) {
 	q := url.Values{}
 	if f.Application != "" {
@@ -452,7 +452,7 @@ func (c *Client) DORA(ctx context.Context, f service.DORAFilter) (*service.DORAR
 	return &rep, nil
 }
 
-// Validate implementa service.Service.
+// Validate implements service.Service.
 func (c *Client) Validate(ctx context.Context, d *descriptor.Descriptor) (*service.Validation, error) {
 	var v service.Validation
 	if err := c.do(ctx, http.MethodPost, "/deployments/validate", nil, d, &v); err != nil {

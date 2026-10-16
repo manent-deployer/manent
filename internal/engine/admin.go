@@ -18,13 +18,12 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// workflowNames sono tutti i workflow registrati da manent.
+// workflowNames are all the workflows registered by manent.
 var workflowNames = []string{workflowName, scheduledWorkflowName, approvalWorkflowName, passWorkflowName, gateWorkflowName, afterWorkflowName, releaseWorkflowName, retireWorkflowName}
 
-// Admin raccoglie le operazioni della piattaforma: stato degli executor, recovery dei
-// workflow di un nodo perso, migrazione a una nuova versione dei workflow e retention dello
-// storico. Lavora sul database di sistema: non passa da API e permessi, è riservato agli
-// operatori della piattaforma.
+// Admin groups the platform operations: executor state, recovery of a lost node's workflows,
+// migration to a new workflow version and history retention. It works on the system
+// database: it bypasses API and permissions and is reserved to platform operators.
 type Admin struct {
 	client   dbos.Client
 	registry cluster.Registry
@@ -33,25 +32,25 @@ type Admin struct {
 	logger   *slog.Logger
 	now      func() time.Time
 
-	// countsMu protegge i conteggi dei workflow conclusi, letti al più ogni finishedCountsTTL.
+	// countsMu guards the counts of finished workflows, read at most every finishedCountsTTL.
 	countsMu       sync.Mutex
 	finishedCounts []telemetry.WorkflowCount
 	finishedAt     time.Time
 }
 
-// AdminOptions configura Admin.
+// AdminOptions configures Admin.
 type AdminOptions struct {
 	Client dbos.Client
-	// Registry è il registro degli executor; senza, la recovery richiede sempre Force.
+	// Registry is the executor registry; without it recovery always requires Force.
 	Registry cluster.Registry
-	// Version è la versione corrente dei workflow (app.version).
+	// Version is the current workflow version (app.version).
 	Version string
-	// Audit, se presente, registra recovery e retention.
+	// Audit, if set, records recoveries and retention.
 	Audit  audit.Recorder
 	Logger *slog.Logger
 }
 
-// NewAdmin crea Admin.
+// NewAdmin creates Admin.
 func NewAdmin(opts AdminOptions) *Admin {
 	return &Admin{
 		client: opts.Client, registry: opts.Registry, version: opts.Version, audit: opts.Audit,
@@ -59,19 +58,19 @@ func NewAdmin(opts AdminOptions) *Admin {
 	}
 }
 
-// ExecutorStatus è lo stato di un executor: quello registrato più i workflow in sospeso
-// (PENDING) assegnati, che solo lui o una recovery possono riprendere.
+// ExecutorStatus is the state of an executor: the registered one plus the assigned pending
+// (PENDING) workflows, which only it or a recovery can resume.
 type ExecutorStatus struct {
 	cluster.Executor
-	// Registered è false per un executor che ha workflow in sospeso ma non è nel registro.
+	// Registered is false for an executor with pending workflows that is not in the registry.
 	Registered bool `json:"registered"`
 	Alive      bool `json:"alive"`
-	// Pending conta i workflow in sospeso per versione dei workflow.
+	// Pending counts the pending workflows per workflow version.
 	Pending map[string]int64 `json:"pending,omitempty"`
 }
 
-// Executors elenca gli executor registrati e quelli con workflow in sospeso. staleAfter è il
-// ritardo di heartbeat oltre il quale un executor è considerato perso.
+// Executors lists the registered executors and those with pending workflows. staleAfter is
+// the heartbeat delay beyond which an executor is considered lost.
 func (a *Admin) Executors(ctx context.Context, staleAfter time.Duration) ([]ExecutorStatus, error) {
 	byID := map[string]*ExecutorStatus{}
 	if a.registry != nil {
@@ -112,7 +111,7 @@ func (a *Admin) Executors(ctx context.Context, staleAfter time.Duration) ([]Exec
 	return out, nil
 }
 
-// group legge una colonna di raggruppamento di un aggregato DBOS.
+// group reads a grouping column of a DBOS aggregate.
 func group(g map[string]*string, key string) string {
 	if v := g[key]; v != nil {
 		return *v
@@ -120,29 +119,29 @@ func group(g map[string]*string, key string) string {
 	return ""
 }
 
-// RecoverOptions seleziona i workflow da recuperare e dice come.
+// RecoverOptions selects the workflows to recover and says how.
 type RecoverOptions struct {
-	// Executor seleziona i workflow in sospeso (PENDING) di un executor perso.
+	// Executor selects the pending (PENDING) workflows of a lost executor.
 	Executor string `json:"executor,omitempty"`
-	// FromVersion seleziona i workflow in sospeso o in coda (ENQUEUED) di una versione dei
-	// workflow non più eseguita da alcun worker, ad esempio dopo un aggiornamento.
+	// FromVersion selects the pending or queued (ENQUEUED) workflows of a workflow version no
+	// worker runs any more, for example after an upgrade.
 	FromVersion string `json:"from_version,omitempty"`
-	// ToVersion è la versione con cui riprenderli (default la versione corrente).
+	// ToVersion is the version to resume them with (default the current version).
 	ToVersion string `json:"to_version,omitempty"`
-	// FromStart riesegue i workflow dall'inizio invece che dall'ultimo step concluso.
+	// FromStart runs the workflows again from the beginning instead of from the last finished step.
 	FromStart bool `json:"from_start,omitempty"`
-	// StaleAfter è il ritardo di heartbeat oltre il quale l'executor è considerato perso.
+	// StaleAfter is the heartbeat delay beyond which the executor is considered lost.
 	StaleAfter time.Duration `json:"-"`
-	// Force salta le verifiche su executor attivi, sconosciuti o già recuperati.
+	// Force skips the checks on live, unknown or already recovered executors.
 	Force bool `json:"force,omitempty"`
-	// SameVersionOnly lascia in sospeso i workflow di un'altra versione (recovery automatica).
+	// SameVersionOnly leaves the workflows of another version pending (automatic recovery).
 	SameVersionOnly bool `json:"-"`
 	DryRun          bool `json:"dry_run,omitempty"`
-	// By è chi esegue la recovery (utente o executor), registrato nel registro e nell'audit.
+	// By is who runs the recovery (user or executor), recorded in the registry and the audit.
 	By string `json:"by,omitempty"`
 }
 
-// Azioni della recovery su un workflow.
+// Recovery actions on a workflow.
 const (
 	RecoverResumed = "resumed"
 	RecoverRewound = "rewound"
@@ -150,7 +149,7 @@ const (
 	RecoverFailed  = "failed"
 )
 
-// RecoveredWorkflow è l'esito della recovery di un workflow.
+// RecoveredWorkflow is the recovery outcome of a workflow.
 type RecoveredWorkflow struct {
 	ID       string `json:"id"`
 	Workflow string `json:"workflow"`
@@ -158,31 +157,31 @@ type RecoveredWorkflow struct {
 	Executor string `json:"executor,omitempty"`
 	Version  string `json:"version"`
 	Action   string `json:"action"`
-	// FromStep è lo step da cui il workflow riprende, per un workflow riportato a un'altra versione.
+	// FromStep is the step the workflow resumes from, for a workflow moved to another version.
 	FromStep int    `json:"from_step,omitempty"`
 	Note     string `json:"note,omitempty"`
 }
 
-// RecoverReport è l'esito di una recovery.
+// RecoverReport is the outcome of a recovery.
 type RecoverReport struct {
 	DryRun    bool                `json:"dry_run,omitempty"`
 	ToVersion string              `json:"to_version"`
 	Workflows []RecoveredWorkflow `json:"workflows"`
 }
 
-// ErrExecutorAlive indica che l'executor da recuperare risulta ancora attivo.
+// ErrExecutorAlive means the executor to recover still looks alive.
 var ErrExecutorAlive = errors.New("executor attivo")
 
-// Recover rimette in esecuzione i workflow selezionati, su qualsiasi worker.
+// Recover runs the selected workflows again, on any worker.
 //
-//   - Stessa versione: il workflow viene ripreso (ResumeWorkflow) sulla sua coda e partizione,
-//     dall'ultimo step concluso. Lo step in corso al momento della perdita viene rieseguito:
-//     per questo Deploy e Rollback dei plugin devono essere idempotenti.
-//   - Altra versione: il workflow viene annullato e riportato (RewindWorkflow) alla nuova
-//     versione con lo stesso ID, mantenendo gli step conclusi (o da zero con FromStart).
+//   - Same version: the workflow is resumed (ResumeWorkflow) on its queue and partition, from
+//     the last finished step. The step running when the node was lost runs again: this is
+//     why plugin Deploy and Rollback must be idempotent.
+//   - Another version: the workflow is cancelled and moved (RewindWorkflow) to the new
+//     version with the same ID, keeping the finished steps (or from scratch with FromStart).
 //
-// Se il registro è disponibile, l'executor viene rivendicato: due recovery dello stesso
-// executor non possono sovrapporsi, né con il suo riavvio.
+// If the registry is available, the executor is claimed: two recoveries of the same executor
+// cannot overlap, nor with its restart.
 func (a *Admin) Recover(ctx context.Context, o RecoverOptions) (*RecoverReport, error) {
 	if o.Executor == "" && o.FromVersion == "" {
 		return nil, fmt.Errorf("%w: indicare l'executor o la versione dei workflow da recuperare", ErrInvalidRequest)
@@ -224,7 +223,7 @@ func (a *Admin) Recover(ctx context.Context, o RecoverOptions) (*RecoverReport, 
 	return rep, nil
 }
 
-// checkRecover verifica, salvo Force, che i workflow da recuperare non siano in esecuzione.
+// checkRecover checks, unless Force, that the workflows to recover are not running.
 func (a *Admin) checkRecover(ctx context.Context, o RecoverOptions) error {
 	if o.Force {
 		return nil
@@ -256,8 +255,8 @@ func (a *Admin) checkRecover(ctx context.Context, o RecoverOptions) error {
 	return nil
 }
 
-// selectWorkflows elenca i workflow da recuperare: in sospeso e, per una migrazione di
-// versione, anche in coda. I workflow DELAYED restano dove sono: andrebbero ripianificati.
+// selectWorkflows lists the workflows to recover: pending and, for a version migration, also
+// queued. DELAYED workflows stay where they are: they would need rescheduling.
 func (a *Admin) selectWorkflows(o RecoverOptions) ([]dbos.WorkflowStatus, error) {
 	status := []dbos.WorkflowStatusType{dbos.WorkflowStatusPending}
 	if o.FromVersion != "" {
@@ -276,7 +275,7 @@ func (a *Admin) selectWorkflows(o RecoverOptions) ([]dbos.WorkflowStatus, error)
 	return dbos.ListWorkflows(a.client, opts...)
 }
 
-// recoverOne recupera un workflow.
+// recoverOne recovers one workflow.
 func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWorkflow {
 	r := RecoveredWorkflow{ID: w.ID, Workflow: w.Name, State: string(w.Status), Executor: w.ExecutorID, Version: w.ApplicationVersion}
 	log := a.logger.With("workflow", w.ID, "name", w.Name, "executor", w.ExecutorID, "version", w.ApplicationVersion)
@@ -295,7 +294,7 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 		}
 		var opts []dbos.ResumeWorkflowOption
 		if w.QueueName != "" {
-			// Stessa coda: la partizione resta quella registrata, quindi vale ancora il limite per ambiente.
+			// Same queue: the partition stays the recorded one, so the per-environment limit still applies.
 			opts = append(opts, dbos.WithResumeQueue(w.QueueName))
 		}
 		if _, err := dbos.ResumeWorkflow[any](a.client, w.ID, opts...); err != nil {
@@ -347,10 +346,10 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 	return r
 }
 
-// ActionAdminRecover è l'azione di audit di una recovery.
+// ActionAdminRecover is the audit action of a recovery.
 const ActionAdminRecover = "admin.recover"
 
-// recordRecover registra la recovery nell'audit.
+// recordRecover records the recovery in the audit.
 func (a *Admin) recordRecover(ctx context.Context, o RecoverOptions, rep *RecoverReport) {
 	counts := map[string]int{}
 	for _, w := range rep.Workflows {
@@ -371,17 +370,16 @@ func (a *Admin) recordRecover(ctx context.Context, o RecoverOptions, rep *Recove
 	})
 }
 
-// Stati dei workflow non conclusi, contati a ogni lettura delle metriche.
+// States of unfinished workflows, counted at every metrics read.
 var activeStatuses = []dbos.WorkflowStatusType{
 	dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed,
 }
 
-// finishedCountsTTL è l'intervallo di aggiornamento dei conteggi dei workflow conclusi: il
-// loro raggruppamento scorre tutto lo storico, mentre quello dei non conclusi usa gli indici
-// parziali di DBOS ed è economico.
+// finishedCountsTTL is the refresh interval of the finished workflow counts: grouping them
+// scans the whole history, while the unfinished ones use DBOS partial indexes and are cheap.
 const finishedCountsTTL = 5 * time.Minute
 
-// WorkflowCounts implementa telemetry.StateSource: i workflow di manent per nome, stato e coda.
+// WorkflowCounts implements telemetry.StateSource: manent workflows by name, state and queue.
 func (a *Admin) WorkflowCounts(_ context.Context) ([]telemetry.WorkflowCount, error) {
 	out, err := a.workflowCounts(activeStatuses)
 	if err != nil {
@@ -402,7 +400,7 @@ func (a *Admin) WorkflowCounts(_ context.Context) ([]telemetry.WorkflowCount, er
 	return append(out, a.finishedCounts...), nil
 }
 
-// workflowCounts conta i workflow di manent negli stati indicati, per nome, stato e coda.
+// workflowCounts counts manent workflows in the given states, by name, state and queue.
 func (a *Admin) workflowCounts(status []dbos.WorkflowStatusType) ([]telemetry.WorkflowCount, error) {
 	rows, err := dbos.GetWorkflowAggregates(a.client, dbos.GetWorkflowAggregatesInput{
 		GroupByName: true, GroupByStatus: true, GroupByQueueName: true, SelectCount: true, Name: workflowNames, Status: status,
@@ -421,7 +419,7 @@ func (a *Admin) workflowCounts(status []dbos.WorkflowStatusType) ([]telemetry.Wo
 	return out, nil
 }
 
-// ExecutorList implementa telemetry.StateSource.
+// ExecutorList implements telemetry.StateSource.
 func (a *Admin) ExecutorList(ctx context.Context) ([]cluster.Executor, error) {
 	if a.registry == nil {
 		return nil, nil

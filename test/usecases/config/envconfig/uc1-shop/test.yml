@@ -1,5 +1,5 @@
-# UC1: un target in una AZ.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC1: one target in one AZ.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: remote-copy
 targets:
   - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
@@ -9,7 +9,7 @@ params:
   keep_releases: "3"
   ssh_key_secret: deploy-key
   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
-  # Guasti simulati dai casi d'uso: $HOME/fault/uc1-shop.sleep (attesa) e .fail (errore).
+  # Faults simulated by the use cases: $HOME/fault/uc1-shop.sleep (wait) and .fail (error).
   post_command: 'f=$HOME/fault/uc1-shop; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
   rollback_command: "true"
 secrets:

@@ -20,27 +20,27 @@ import (
 	"sync"
 )
 
-// Client parla con l'API HTTP di management di JBoss EAP / WildFly (operazioni DMR in JSON
-// su /management, caricamento dei contenuti su /management/add-content).
+// Client talks to the HTTP management API of JBoss EAP / WildFly (DMR operations in JSON on
+// /management, content upload on /management/add-content).
 type Client interface {
-	// Execute esegue un'operazione e ne restituisce il risultato.
+	// Execute runs an operation and returns its result.
 	Execute(ctx context.Context, op Operation) (json.RawMessage, error)
-	// Upload carica un file nel repository dei contenuti e ne restituisce l'hash.
+	// Upload uploads a file to the content repository and returns its hash.
 	Upload(ctx context.Context, path string) (string, error)
 }
 
-// Connector apre un Client verso un'istanza (o un domain controller).
+// Connector opens a Client to an instance (or a domain controller).
 type Connector interface {
 	Connect(ctx context.Context, baseURL, username, password string) (Client, error)
 }
 
-// Operation è un'operazione DMR: nome, indirizzo e parametri.
+// Operation is a DMR operation: name, address and parameters.
 type Operation map[string]any
 
-// Address è l'indirizzo DMR di una risorsa, come coppie tipo/nome.
+// Address is the DMR address of a resource, as type/name pairs.
 type Address [][2]string
 
-// MarshalJSON serializza l'indirizzo come lista di oggetti a una chiave.
+// MarshalJSON serializes the address as a list of single-key objects.
 func (a Address) MarshalJSON() ([]byte, error) {
 	out := make([]map[string]string, len(a))
 	for i, p := range a {
@@ -49,7 +49,7 @@ func (a Address) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// op costruisce un'operazione sull'indirizzo indicato.
+// op builds an operation on the given address.
 func op(name string, addr Address, params ...any) Operation {
 	o := Operation{"operation": name, "address": addr}
 	for i := 0; i+1 < len(params); i += 2 {
@@ -58,7 +58,7 @@ func op(name string, addr Address, params ...any) Operation {
 	return o
 }
 
-// OperationError è un'operazione fallita nel server.
+// OperationError is an operation that failed in the server.
 type OperationError struct {
 	Operation   string
 	Description string
@@ -68,7 +68,7 @@ func (e *OperationError) Error() string {
 	return fmt.Sprintf("operazione %s fallita: %s", e.Operation, e.Description)
 }
 
-// response è la risposta DMR.
+// response is the DMR response.
 type response struct {
 	Outcome string          `json:"outcome"`
 	Result  json.RawMessage `json:"result"`
@@ -83,13 +83,13 @@ func (r response) failure() string {
 	return string(r.Failure)
 }
 
-// HTTPConnector è il Connector reale, con autenticazione digest (default dei realm di
-// management) o basic, secondo la sfida del server.
+// HTTPConnector is the real Connector, with digest authentication (the management realms'
+// default) or basic, depending on the server challenge.
 type HTTPConnector struct {
 	HTTP *http.Client
 }
 
-// Connect implementa Connector; la connessione è aperta dalla prima operazione.
+// Connect implements Connector; the connection is opened by the first operation.
 func (c HTTPConnector) Connect(_ context.Context, baseURL, username, password string) (Client, error) {
 	hc := c.HTTP
 	if hc == nil {
@@ -117,8 +117,8 @@ func (c *httpClient) Execute(ctx context.Context, o Operation) (json.RawMessage,
 }
 
 func (c *httpClient) Upload(ctx context.Context, path string) (string, error) {
-	// Il corpo multipart è prodotto in streaming dal file, riaperto a ogni tentativo: un EAR
-	// può pesare centinaia di MB.
+	// The multipart body is streamed from the file, reopened at every attempt: an EAR can weigh
+	// hundreds of MB.
 	newBody := func() (io.ReadCloser, string, error) {
 		f, err := os.Open(path)
 		if err != nil {
@@ -152,7 +152,7 @@ func (c *httpClient) Upload(ctx context.Context, path string) (string, error) {
 	return h.Bytes, nil
 }
 
-// send invia la richiesta; a una sfida 401 risponde una volta con le nuove credenziali.
+// send sends the request; it answers a 401 challenge once with the new credentials.
 func (c *httpClient) send(ctx context.Context, path, name string, newBody func() (io.ReadCloser, string, error)) (json.RawMessage, error) {
 	for attempt := 0; ; attempt++ {
 		body, ctype, err := newBody()
@@ -195,9 +195,9 @@ func (c *httpClient) send(ctx context.Context, path, name string, newBody func()
 	}
 }
 
-// digestAuth calcola l'intestazione Authorization (RFC 7616: MD5 o SHA-256, qop auth), o
-// basic se il server la chiede. La sfida è riusata con il contatore nc finché il server non
-// ne invia una nuova.
+// digestAuth computes the Authorization header (RFC 7616: MD5 or SHA-256, qop auth), or basic
+// if the server asks for it. The challenge is reused with the nc counter until the server
+// sends a new one.
 type digestAuth struct {
 	user, pass string
 
@@ -207,7 +207,7 @@ type digestAuth struct {
 	nc                              int
 }
 
-// challenge legge le sfide di una risposta 401; false se nessuna è supportata.
+// challenge reads the challenges of a 401 response; false if none is supported.
 func (d *digestAuth) challenge(values []string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -280,7 +280,7 @@ func (d *digestAuth) header(method, uri string) string {
 	return out
 }
 
-// parseParams legge i parametri chiave=valore (anche tra virgolette) di una sfida.
+// parseParams reads the key=value parameters (quoted too) of a challenge.
 func parseParams(s string) map[string]string {
 	out := map[string]string{}
 	for s = strings.TrimSpace(s); s != ""; s = strings.TrimSpace(s) {

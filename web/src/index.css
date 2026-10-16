@@ -8,19 +8,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Palette: canali RGB, così Tailwind può applicare l'opacità (bg-accent/10).
-   Contrasto verificato WCAG AA per testo normale su bg e surface in entrambi i temi. */
+/* Palette: RGB channels, so Tailwind can apply opacity (bg-accent/10).
+   Contrast checked WCAG AA for normal text on bg and surface in both themes. */
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: 10 14 23;          /* #0a0e17, come il sito */
+  --bg: 10 14 23;          /* #0a0e17, like the site */
   --surface: 15 22 38;     /* #0f1626 */
   --raised: 21 30 50;
   --border: 51 65 85;
   --fg: 226 232 240;       /* #e2e8f0 */
   --muted: 148 163 184;    /* #94a3b8 */
-  --accent: 34 211 238;    /* ciano #22d3ee */
-  --accent-fg: 4 18 26;    /* testo su sfondo accent */
+  --accent: 34 211 238;    /* cyan #22d3ee */
+  --accent-fg: 4 18 26;    /* text on accent background */
   --violet: 167 139 250;   /* #a78bfa */
   --ok: 52 211 153;
   --warn: 251 191 36;
@@ -37,7 +37,7 @@
   --border: 203 213 225;
   --fg: 15 23 42;
   --muted: 71 85 105;
-  --accent: 14 116 144;    /* cyan-700: 5.4:1 su bianco */
+  --accent: 14 116 144;    /* cyan-700: 5.4:1 on white */
   --accent-fg: 255 255 255;
   --violet: 109 40 217;
   --ok: 4 120 87;

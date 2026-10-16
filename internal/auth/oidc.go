@@ -14,30 +14,30 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// OIDCConfig configura la verifica dei token JWT emessi da un identity provider OIDC
+// OIDCConfig configures the verification of JWTs issued by an OIDC identity provider
 // (Keycloak, Entra ID, Okta, ...).
 type OIDCConfig struct {
-	// Issuer è l'URL dell'issuer: da qui si leggono discovery e chiavi di firma (JWKS).
+	// Issuer is the issuer URL: discovery and signing keys (JWKS) are read from here.
 	Issuer string
-	// Audience è il valore atteso nel claim aud (tipicamente il client ID di manent).
+	// Audience is the value expected in the aud claim (typically manent's client ID).
 	Audience string
-	// UsernameClaim è il claim con il nome dell'utente (default preferred_username, poi sub).
+	// UsernameClaim is the claim with the user name (default preferred_username, then sub).
 	UsernameClaim string
-	// GroupsClaim è il claim con i gruppi (default groups).
+	// GroupsClaim is the claim with the groups (default groups).
 	GroupsClaim string
-	// CAFile è un bundle di CA aggiuntive per raggiungere l'issuer.
+	// CAFile is a bundle of extra CAs to reach the issuer.
 	CAFile string
 }
 
-// OIDC verifica firma, issuer, audience e scadenza dei token bearer.
+// OIDC verifies signature, issuer, audience and expiry of bearer tokens.
 type OIDC struct {
 	verifier      *oidc.IDTokenVerifier
 	usernameClaim string
 	groupsClaim   string
 }
 
-// NewOIDC esegue la discovery dell'issuer. Le chiavi di firma vengono rilette automaticamente
-// quando cambiano (rotazione).
+// NewOIDC runs the issuer discovery. Signing keys are reloaded automatically when they
+// change (rotation).
 func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 	if cfg.Issuer == "" || cfg.Audience == "" {
 		return nil, errors.New("oidc: issuer e audience obbligatori")
@@ -57,7 +57,7 @@ func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 		}
 		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}
 	}
-	// Il client va nel context anche dopo la discovery: go-oidc lo usa per rileggere le chiavi.
+	// The client stays in the context after discovery too: go-oidc uses it to reload the keys.
 	ctx = oidc.ClientContext(context.WithoutCancel(ctx), client)
 	provider, err := oidc.NewProvider(ctx, cfg.Issuer)
 	if err != nil {
@@ -77,8 +77,8 @@ func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 	return o, nil
 }
 
-// Authenticate verifica il token e ne estrae utente e gruppi. Un valore che non è un JWT
-// (es. un token statico non riconosciuto) vale ErrUnauthenticated.
+// Authenticate verifies the token and extracts user and groups. A value that is not a JWT
+// (e.g. an unknown static token) yields ErrUnauthenticated.
 func (o *OIDC) Authenticate(ctx context.Context, token string) (*Principal, error) {
 	if strings.Count(token, ".") != 2 {
 		return nil, ErrUnauthenticated

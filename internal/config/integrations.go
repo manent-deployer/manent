@@ -9,140 +9,139 @@ import (
 	"time"
 )
 
-// Integrations configura notifiche in chat (Slack, Microsoft Teams), approvazioni da Slack e
-// ticket di change management (ServiceNow, Jira).
+// Integrations configures chat notifications (Slack, Microsoft Teams), approvals from Slack
+// and change management tickets (ServiceNow, Jira).
 type Integrations struct {
-	// PublicURL è l'indirizzo dell'interfaccia web, usato nei link dei messaggi
-	// (es. https://manent.example.com).
+	// PublicURL is the address of the web interface, used in message links
+	// (e.g. https://manent.example.com).
 	PublicURL string `yaml:"public_url"`
-	// Language dei messaggi: en (default) o it.
+	// Language of the messages: en (default) or it.
 	Language string `yaml:"language"`
-	// Timeout delle chiamate verso Slack, Teams e gli ITSM (default 15s).
+	// Timeout of calls to Slack, Teams and the ITSMs (default 15s).
 	Timeout       time.Duration  `yaml:"timeout"`
 	Slack         SlackSettings  `yaml:"slack"`
 	Notifications []Notification `yaml:"notifications"`
 	Change        ChangeSettings `yaml:"change"`
 }
 
-// SlackSettings configura l'app Slack: il bot token serve per i messaggi aggiornabili e per
-// le approvazioni, il signing secret per verificare le richieste dei pulsanti.
+// SlackSettings configures the Slack app: the bot token is for updatable messages and
+// approvals, the signing secret to verify button requests.
 type SlackSettings struct {
 	BotTokenRef      string `yaml:"bot_token_ref"`
 	SigningSecretRef string `yaml:"signing_secret_ref"`
-	// Identities associa gli utenti Slack (ID, es. U024BE7LH) alle identità di manent: le
-	// approvazioni da Slack valgono come quelle dell'identità associata.
+	// Identities maps Slack users (ID, e.g. U024BE7LH) to manent identities: approvals from Slack
+	// count as those of the mapped identity.
 	Identities map[string]SlackIdentity `yaml:"identities"`
-	// EmailIdentity, se indicato, ricava l'identità degli utenti non elencati dalla loro email
-	// su Slack (scope users:read.email), es. "oidc:{email}".
+	// EmailIdentity, if set, derives the identity of unlisted users from their Slack email
+	// (scope users:read.email), e.g. "oidc:{email}".
 	EmailIdentity string `yaml:"email_identity"`
-	// APIURL sostituisce https://slack.com/api (test).
+	// APIURL replaces https://slack.com/api (tests).
 	APIURL string `yaml:"api_url"`
 }
 
-// SlackIdentity è l'identità di manent di un utente Slack.
+// SlackIdentity is the manent identity of a Slack user.
 type SlackIdentity struct {
 	Subject string   `yaml:"subject"`
 	Groups  []string `yaml:"groups"`
 }
 
-// Notification è una destinazione dei messaggi per un insieme di applicazioni e ambienti.
+// Notification is a message destination for a set of applications and environments.
 type Notification struct {
-	// Name identifica la destinazione: compare nei nomi degli step DBOS (notify:<name>:<evento>).
+	// Name identifies the destination: it appears in DBOS step names (notify:<name>:<event>).
 	Name         string   `yaml:"name"`
 	Applications []string `yaml:"applications"`
 	Environments []string `yaml:"environments"`
-	// Events: deployment (avvio ed esito) e approval (richieste ed esiti). Default entrambi.
+	// Events: deployment (start and outcome) and approval (requests and outcomes). Default both.
 	Events []string `yaml:"events"`
-	// DryRun include i dry-run (default no).
+	// DryRun includes dry-runs (default no).
 	DryRun bool `yaml:"dry_run"`
-	// Slack: canale con il bot token (messaggi aggiornati e pulsanti di approvazione) oppure
-	// un incoming webhook (solo notifiche).
+	// Slack: channel with the bot token (updated messages and approval buttons) or an incoming
+	// webhook (notifications only).
 	Slack *SlackTarget `yaml:"slack"`
-	// Teams: webhook di un flusso di Workflows (Power Automate) o di un canale.
+	// Teams: webhook of a Workflows flow (Power Automate) or of a channel.
 	Teams *TeamsTarget `yaml:"teams"`
 }
 
-// SlackTarget è un canale Slack.
+// SlackTarget is a Slack channel.
 type SlackTarget struct {
 	Channel    string `yaml:"channel"`
 	WebhookRef string `yaml:"webhook_ref"`
 }
 
-// TeamsTarget è un webhook di Microsoft Teams.
+// TeamsTarget is a Microsoft Teams webhook.
 type TeamsTarget struct {
 	WebhookRef string `yaml:"webhook_ref"`
 }
 
-// Eventi delle notifiche.
+// Notification events.
 const (
 	NotifyDeployment = "deployment"
 	NotifyApproval   = "approval"
 )
 
-// Fornitori di change management.
+// Change management vendors.
 const (
 	ChangeServiceNow = "servicenow"
 	ChangeJira       = "jira"
 )
 
-// ChangeSettings configura il sistema di change management. Le regole che lo usano sono in
+// ChangeSettings configures the change management system. The rules that use it are in
 // governance.rules[].change.
 type ChangeSettings struct {
 	Provider string `yaml:"provider"`
-	// PollInterval è l'intervallo iniziale di lettura dello stato di approvazione, raddoppiato
-	// fino a 5 minuti (default 1m).
+	// PollInterval is the initial interval for reading the approval state, doubled up to 5
+	// minutes (default 1m).
 	PollInterval time.Duration      `yaml:"poll_interval"`
 	ServiceNow   ServiceNowSettings `yaml:"servicenow"`
 	Jira         JiraSettings       `yaml:"jira"`
 }
 
-// ServiceNowSettings configura la Table API di ServiceNow.
+// ServiceNowSettings configures the ServiceNow Table API.
 type ServiceNowSettings struct {
 	URL      string `yaml:"url"`
 	Username string `yaml:"username"`
-	// PasswordRef (con username, basic) oppure TokenRef (bearer OAuth).
+	// PasswordRef (with username, basic) or TokenRef (OAuth bearer).
 	PasswordRef string `yaml:"password_ref"`
 	TokenRef    string `yaml:"token_ref"`
-	// Table delle richieste di change (default change_request).
+	// Table of change requests (default change_request).
 	Table string `yaml:"table"`
-	// Fields sono campi aggiuntivi del ticket; i valori accettano {application}, {environment},
-	// {version}, {artifact}, {deployment}, {requested_by}.
+	// Fields are extra ticket fields; values accept {application}, {environment}, {version},
+	// {artifact}, {deployment}, {requested_by}.
 	Fields map[string]string `yaml:"fields"`
-	// StartState è lo stato impostato all'avvio del deploy (default -1, Implement); vuoto
-	// per non cambiarlo.
+	// StartState is the state set when the deploy starts (default -1, Implement); empty to leave
+	// it unchanged.
 	StartState *string `yaml:"start_state"`
-	// CloseStates sono gli stati impostati in ordine alla fine (default -1→0→3: Review, Closed).
+	// CloseStates are the states set in order at the end (default -1→0→3: Review, Closed).
 	CloseStates []string `yaml:"close_states"`
-	// CloseCodes sono i close_code per esito: success (default "successful"), failure
+	// CloseCodes are the close_code per outcome: success (default "successful"), failure
 	// (default "unsuccessful").
 	CloseCodes map[string]string `yaml:"close_codes"`
 }
 
-// JiraSettings configura Jira (Cloud o Data Center) con l'API REST v2.
+// JiraSettings configures Jira (Cloud or Data Center) with the REST API v2.
 type JiraSettings struct {
 	URL string `yaml:"url"`
-	// Username (con TokenRef): basic, per Jira Cloud (email e API token). Senza username il
-	// token è un personal access token (bearer), per Jira Data Center.
+	// Username (with TokenRef): basic, for Jira Cloud (email and API token). Without username the
+	// token is a personal access token (bearer), for Jira Data Center.
 	Username  string `yaml:"username"`
 	TokenRef  string `yaml:"token_ref"`
 	Project   string `yaml:"project"`
 	IssueType string `yaml:"issue_type"`
-	// Fields sono campi aggiuntivi, con valori JSON e gli stessi segnaposto di ServiceNow.
+	// Fields are extra fields, with JSON values and the same placeholders as ServiceNow.
 	Fields map[string]any `yaml:"fields"`
-	// ApprovedStatuses e RejectedStatuses sono gli stati del ticket che approvano o respingono
-	// il change.
+	// ApprovedStatuses and RejectedStatuses are the ticket statuses that approve or reject the change.
 	ApprovedStatuses []string `yaml:"approved_statuses"`
 	RejectedStatuses []string `yaml:"rejected_statuses"`
-	// Transitions per nome: start (avvio del deploy), success e failure (fine).
+	// Transitions by name: start (deploy start), success and failure (end).
 	Transitions map[string]string `yaml:"transitions"`
 }
 
-// ChangeRule è la parte di una regola di governance dedicata al change management.
+// ChangeRule is the part of a governance rule about change management.
 type ChangeRule struct {
-	// Approval: il deploy attende che il change sia approvato nell'ITSM (oltre alle
-	// approvazioni di manent, se richieste).
+	// Approval: the deploy waits for the change to be approved in the ITSM (besides manent
+	// approvals, if required).
 	Approval bool `yaml:"approval"`
-	// Timeout dell'attesa dell'approvazione (default 72h).
+	// Timeout of the approval wait (default 72h).
 	Timeout time.Duration `yaml:"timeout"`
 }
 
@@ -151,10 +150,10 @@ var (
 	subjectRe          = regexp.MustCompile(`^[a-z]+:.+$`)
 )
 
-// HasChange indica se è configurato un sistema di change management.
+// HasChange reports whether a change management system is configured.
 func (i Integrations) HasChange() bool { return i.Change.Provider != "" }
 
-// validateIntegrations verifica notifiche, Slack e change management.
+// validateIntegrations checks notifications, Slack and change management.
 func (c *Config) validateIntegrations() []error {
 	in := c.Integrations
 	var errs []error

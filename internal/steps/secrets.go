@@ -1,4 +1,4 @@
-// Package steps contiene le implementazioni standard degli step della pipeline.
+// Package steps holds the standard implementations of the pipeline steps.
 package steps
 
 import (
@@ -11,18 +11,18 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Secrets verifica che tutti i segreti dichiarati siano risolvibili.
-// I valori non vengono restituiti: i plugin li leggono al momento dell'uso tramite SecretResolver.
+// Secrets checks that all declared secrets can be resolved.
+// Values are not returned: plugins read them at use time through SecretResolver.
 type Secrets struct {
 	Provider secrets.Provider
 	Logger   *slog.Logger
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (Secrets) Name() string { return "secrets" }
 
-// Run risolve ogni riferimento per verificarne la disponibilità e controlla che i segreti
-// usati dall'autenticazione dei callback siano dichiarati.
+// Run resolves every reference to check it is available and checks that the secrets used by
+// callback authentication are declared.
 func (s Secrets) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	for i, cb := range in.Descriptor.Callbacks {
 		if cb.Auth == nil {
@@ -41,7 +41,7 @@ func (s Secrets) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, e
 	return pipeline.Output{"count": strconv.Itoa(len(in.Descriptor.Secrets))}, nil
 }
 
-// DryRun coincide con Run: la verifica dei segreti non ha effetti.
+// DryRun is the same as Run: checking secrets has no effects.
 func (s Secrets) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	return s.Run(ctx, in)
 }

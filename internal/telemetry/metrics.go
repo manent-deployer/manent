@@ -1,4 +1,4 @@
-// Package telemetry espone le metriche Prometheus e il tracing OpenTelemetry di manent.
+// Package telemetry exposes manent's Prometheus metrics and OpenTelemetry tracing.
 package telemetry
 
 import (
@@ -15,27 +15,27 @@ import (
 	"github.com/joeg-ita/manent/internal/cluster"
 )
 
-// BuildInfo identifica il binario in esecuzione.
+// BuildInfo identifies the running binary.
 type BuildInfo struct {
 	Version string
 	Commit  string
-	// WorkflowVersion è la versione applicativa dei workflow DBOS (app.version).
+	// WorkflowVersion is the application version of the DBOS workflows (app.version).
 	WorkflowVersion string
 }
 
-// Recorder registra le metriche prodotte da worker e API.
+// Recorder records the metrics produced by workers and API.
 type Recorder interface {
-	// DeploymentFinished registra la conclusione di un deploy eseguito da questo processo.
+	// DeploymentFinished records the end of a deploy run by this process.
 	DeploymentFinished(application, environment, kind, outcome string, dryRun bool, d time.Duration)
-	// StepAttempt registra un tentativo di esecuzione di uno step.
+	// StepAttempt records an attempt to run a step.
 	StepAttempt(step, outcome string, d time.Duration)
-	// HTTPRequest registra una richiesta all'API; route è il modello del percorso, non l'URL.
+	// HTTPRequest records an API request; route is the path template, not the URL.
 	HTTPRequest(method, route string, status int, d time.Duration)
-	// PassFinished registra l'esito di un passo di un rollout a ondate.
+	// PassFinished records the outcome of a wave rollout pass.
 	PassFinished(application, environment, region, az, outcome string)
 }
 
-// Noop è il Recorder senza metriche.
+// Noop is the Recorder without metrics.
 type Noop struct{}
 
 func (Noop) DeploymentFinished(string, string, string, string, bool, time.Duration) {}
@@ -43,7 +43,7 @@ func (Noop) StepAttempt(string, string, time.Duration)                          
 func (Noop) HTTPRequest(string, string, int, time.Duration)                         {}
 func (Noop) PassFinished(string, string, string, string, string)                    {}
 
-// Metrics è il Recorder Prometheus, con un registry proprio.
+// Metrics is the Prometheus Recorder, with its own registry.
 type Metrics struct {
 	reg         *prometheus.Registry
 	deployments *prometheus.CounterVec
@@ -55,7 +55,7 @@ type Metrics struct {
 
 var _ Recorder = (*Metrics)(nil)
 
-// NewMetrics crea le metriche, comprese quelle del runtime Go e del processo.
+// NewMetrics creates the metrics, including the Go runtime and process ones.
 func NewMetrics(b BuildInfo) *Metrics {
 	m := &Metrics{
 		reg: prometheus.NewRegistry(),
@@ -94,7 +94,7 @@ func NewMetrics(b BuildInfo) *Metrics {
 	return m
 }
 
-// DeploymentFinished implementa Recorder.
+// DeploymentFinished implements Recorder.
 func (m *Metrics) DeploymentFinished(application, environment, kind, outcome string, dryRun bool, d time.Duration) {
 	m.deployments.WithLabelValues(application, environment, kind, outcome, strconv.FormatBool(dryRun)).Inc()
 	if !dryRun && d > 0 {
@@ -102,30 +102,30 @@ func (m *Metrics) DeploymentFinished(application, environment, kind, outcome str
 	}
 }
 
-// StepAttempt implementa Recorder.
+// StepAttempt implements Recorder.
 func (m *Metrics) StepAttempt(step, outcome string, d time.Duration) {
 	m.steps.WithLabelValues(step, outcome).Observe(d.Seconds())
 }
 
-// HTTPRequest implementa Recorder.
+// HTTPRequest implements Recorder.
 func (m *Metrics) HTTPRequest(method, route string, status int, d time.Duration) {
 	m.http.WithLabelValues(method, route, strconv.Itoa(status)).Observe(d.Seconds())
 }
 
-// PassFinished implementa Recorder.
+// PassFinished implements Recorder.
 func (m *Metrics) PassFinished(application, environment, region, az, outcome string) {
 	m.passes.WithLabelValues(application, environment, region, az, outcome).Inc()
 }
 
-// Register aggiunge un collector (es. StateCollector).
+// Register adds a collector (e.g. StateCollector).
 func (m *Metrics) Register(c prometheus.Collector) error { return m.reg.Register(c) }
 
-// Handler serve le metriche in formato Prometheus.
+// Handler serves the metrics in Prometheus format.
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.reg, promhttp.HandlerOpts{Registry: m.reg})
 }
 
-// WorkflowCount è il numero di workflow di un tipo in uno stato.
+// WorkflowCount is the number of workflows of a kind in a state.
 type WorkflowCount struct {
 	Workflow string
 	Status   string
@@ -133,19 +133,19 @@ type WorkflowCount struct {
 	Count    int64
 }
 
-// StateSource fornisce lo stato condiviso del cluster, letto dal database a ogni raccolta.
+// StateSource provides the shared cluster state, read from the database at every collection.
 type StateSource interface {
 	WorkflowCounts(ctx context.Context) ([]WorkflowCount, error)
 	ExecutorList(ctx context.Context) ([]cluster.Executor, error)
 }
 
-// StateCollector espone code, workflow per stato ed executor. I valori sono globali: ogni
-// istanza di manent riporta gli stessi, quindi vanno aggregati con max, non con sum.
+// StateCollector exposes queues, workflows per state and executors. Values are global: every
+// manent instance reports the same ones, so aggregate them with max, not sum.
 type StateCollector struct {
 	Source StateSource
-	// StaleAfter è il ritardo di heartbeat oltre il quale un executor è considerato perso.
+	// StaleAfter is the heartbeat delay beyond which an executor is considered lost.
 	StaleAfter time.Duration
-	// TTL evita di interrogare il database a ogni scrape (default 15s).
+	// TTL avoids querying the database at every scrape (default 15s).
 	TTL time.Duration
 
 	mu      sync.Mutex
@@ -164,7 +164,7 @@ var (
 		"1 se l'ultima lettura dello stato dal database è fallita.", nil, nil)
 )
 
-// Describe implementa prometheus.Collector.
+// Describe implements prometheus.Collector.
 func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descWorkflows
 	ch <- descHeartbeat
@@ -172,7 +172,7 @@ func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descScrapeError
 }
 
-// Collect implementa prometheus.Collector.
+// Collect implements prometheus.Collector.
 func (c *StateCollector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

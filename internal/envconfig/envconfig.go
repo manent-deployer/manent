@@ -1,5 +1,5 @@
-// Package envconfig recupera da un sistema di gestione delle configurazioni (es. Consul)
-// la configurazione di deploy di un'applicazione in un ambiente e la fonde con il descrittore.
+// Package envconfig fetches from a configuration management system (e.g. Consul) the deploy
+// configuration of an application in an environment and merges it with the descriptor.
 package envconfig
 
 import (
@@ -19,44 +19,44 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// ErrNotFound indica che per l'applicazione/ambiente non esiste configurazione.
+// ErrNotFound means the application/environment has no configuration.
 var ErrNotFound = errors.New("configurazione di ambiente non trovata")
 
-// EnvConfig è la configurazione di deploy di un ambiente: plugin, target e parametri del plugin.
-// Non deve contenere valori segreti, solo riferimenti: viene persistita da DBOS come output di step.
+// EnvConfig is the deploy configuration of an environment: plugin, targets and plugin
+// parameters. It must not contain secret values, only references: DBOS persists it as step output.
 type EnvConfig struct {
 	Policy  string                 `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Plugin  string                 `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Targets []descriptor.Target    `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string      `json:"params,omitempty" yaml:"params,omitempty"`
 	Secrets []descriptor.SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
-	// Rollback impone il rollback automatico dell'ambiente (es. sempre attivo in produzione),
-	// nei limiti della policy del tipo di artefatto.
+	// Rollback imposes the environment's automatic rollback (e.g. always on in production),
+	// within the artifact type policy.
 	Rollback *descriptor.Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
-	// Rollout è la strategia di rilascio a ondate dell'ambiente.
+	// Rollout is the environment's wave release strategy.
 	Rollout *descriptor.Rollout `json:"rollout,omitempty" yaml:"rollout,omitempty"`
-	// StepParams sono i parametri degli step personalizzati, per step.
+	// StepParams are the parameters of custom steps, per step.
 	StepParams map[string]map[string]string `json:"step_params,omitempty" yaml:"step_params,omitempty"`
-	// Traffic è l'integrazione con load balancer e router: svuotamento dei target e
-	// spostamento del traffico tra gli slot.
+	// Traffic is the integration with load balancers and routers: target draining and traffic
+	// shifting between slots.
 	Traffic *descriptor.TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
 }
 
-// Document è una configurazione letta dal provider, con i metadati per l'audit.
+// Document is a configuration read from the provider, with the metadata for the audit.
 type Document struct {
 	Config EnvConfig
-	// Source identifica la configurazione nel provider (es. chiave Consul).
+	// Source identifies the configuration in the provider (e.g. Consul key).
 	Source string
-	// Revision è la versione della configurazione (es. ModifyIndex di Consul), se disponibile.
+	// Revision is the configuration version (e.g. Consul ModifyIndex), if available.
 	Revision string
 }
 
-// Provider legge la configurazione di un'applicazione in un ambiente.
+// Provider reads the configuration of an application in an environment.
 type Provider interface {
 	Get(ctx context.Context, application, environment string) (*Document, error)
 }
 
-// Parse decodifica una configurazione YAML o JSON, rifiutando campi sconosciuti.
+// Parse decodes a YAML or JSON configuration, rejecting unknown fields.
 func Parse(data []byte) (EnvConfig, error) {
 	var c EnvConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -67,14 +67,15 @@ func Parse(data []byte) (EnvConfig, error) {
 	return c, nil
 }
 
-// expandKey sostituisce {application} e {environment} nel modello di chiave o percorso.
+// expandKey replaces {application} and {environment} in the key or path template.
 func expandKey(tmpl, application, environment string) string {
 	return strings.NewReplacer("{application}", application, "{environment}", environment).Replace(tmpl)
 }
 
-// Merge applica la configurazione di ambiente al descrittore e restituisce il descrittore effettivo.
-// La configurazione di ambiente è autorevole: il descrittore può solo aggiungere ciò che non vi è
-// definito. Un valore definito in entrambi con contenuto diverso è un errore, mai una sovrascrittura.
+// Merge applies the environment configuration to the descriptor and returns the effective
+// descriptor. The environment configuration is authoritative: the descriptor can only add
+// what is not defined there. A value defined in both with different content is an error,
+// never an override.
 func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) {
 	var errs []error
 	pick := func(field, env, desc string) string {
@@ -161,14 +162,14 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	}
 
 	if c.Rollout != nil {
-		// La strategia dell'ambiente è autorevole: il descrittore può solo ripeterla identica.
+		// The environment strategy is authoritative: the descriptor can only repeat it unchanged.
 		if d.Rollout != nil && !reflect.DeepEqual(*d.Rollout, *c.Rollout) {
 			errs = append(errs, errors.New("rollout definito sia nella configurazione di ambiente sia nel descrittore"))
 		}
 		r := *c.Rollout
 		d.Rollout = &r
 	}
-	// Load balancer e router sono infrastruttura: solo la configurazione di ambiente li definisce.
+	// Load balancers and routers are infrastructure: only the environment configuration defines them.
 	if d.Traffic != nil {
 		errs = append(errs, errors.New("traffic si configura solo nella configurazione di ambiente, non nel descrittore"))
 	}
@@ -189,18 +190,18 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	return d, nil
 }
 
-// Resolver produce il descrittore effettivo usando il provider configurato.
+// Resolver produces the effective descriptor using the configured provider.
 type Resolver struct {
-	// Provider è nil quando nessun sistema di configurazione è configurato.
+	// Provider is nil when no configuration system is configured.
 	Provider Provider
-	// Required fa fallire il deploy se per l'ambiente non esiste configurazione.
+	// Required fails the deploy if the environment has no configuration.
 	Required bool
-	// Policy, se presente, limita ciò che il descrittore può aggiungere.
+	// Policy, if set, limits what the descriptor can add.
 	Policy *DescriptorPolicy
 }
 
-// Resolve legge la configurazione di ambiente e la fonde con il descrittore.
-// Restituisce anche i metadati (source, revision) da registrare nel risultato del deploy.
+// Resolve reads the environment configuration and merges it with the descriptor.
+// It also returns the metadata (source, revision) to record in the deploy result.
 func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
 	meta := map[string]string{"source": "descriptor"}
 	cfg := EnvConfig{}
@@ -219,8 +220,7 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			}
 		}
 	}
-	// Policy e fusione dipendono solo da descrittore e configurazione: un nuovo tentativo
-	// darebbe lo stesso errore.
+	// Policy and merge depend only on descriptor and configuration: a retry would give the same error.
 	if err := r.Policy.Check(d, cfg); err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}

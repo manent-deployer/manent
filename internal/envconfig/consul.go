@@ -12,27 +12,27 @@ import (
 	"strings"
 )
 
-// ConsulProvider legge la configurazione dal KV store di Consul tramite l'API HTTP.
+// ConsulProvider reads the configuration from the Consul KV store through the HTTP API.
 type ConsulProvider struct {
-	// Address è l'URL dell'agent Consul (es. http://127.0.0.1:8500).
+	// Address is the URL of the Consul agent (e.g. http://127.0.0.1:8500).
 	Address string
-	// Token ACL inviato nell'header X-Consul-Token (vuoto se le ACL sono disabilitate).
+	// Token is the ACL token sent in the X-Consul-Token header (empty if ACLs are disabled).
 	Token string
-	// Datacenter opzionale.
+	// Datacenter is optional.
 	Datacenter string
-	// KeyTemplate è il modello della chiave, con segnaposto {application} e {environment}.
+	// KeyTemplate is the key template, with {application} and {environment} placeholders.
 	KeyTemplate string
 	Client      *http.Client
 }
 
-// consulKV è un elemento della risposta di GET /v1/kv/<key>.
+// consulKV is an element of the GET /v1/kv/<key> response.
 type consulKV struct {
 	Key         string
 	Value       string // base64
 	ModifyIndex uint64
 }
 
-// Get legge e decodifica la chiave dell'applicazione/ambiente; la revisione è il ModifyIndex.
+// Get reads and decodes the application/environment key; the revision is the ModifyIndex.
 func (p *ConsulProvider) Get(ctx context.Context, application, environment string) (*Document, error) {
 	key := expandKey(p.KeyTemplate, application, environment)
 	u, err := url.Parse(strings.TrimRight(p.Address, "/") + "/v1/kv/" + strings.TrimLeft(key, "/"))

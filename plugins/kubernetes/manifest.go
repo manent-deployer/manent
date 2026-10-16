@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Object è un oggetto Kubernetes non tipizzato.
+// Object is an untyped Kubernetes object.
 type Object map[string]any
 
 func (o Object) str(keys ...string) string {
@@ -33,13 +33,13 @@ func (o Object) str(keys ...string) string {
 	return s
 }
 
-// APIVersion, Kind, Name e Namespace leggono i campi di identità dell'oggetto.
+// APIVersion, Kind, Name and Namespace read the identity fields of the object.
 func (o Object) APIVersion() string { return o.str("apiVersion") }
 func (o Object) Kind() string       { return o.str("kind") }
 func (o Object) Name() string       { return o.str("metadata", "name") }
 func (o Object) Namespace() string  { return o.str("metadata", "namespace") }
 
-// Ref descrive l'oggetto nei messaggi: Kind/namespace/nome.
+// Ref describes the object in messages: Kind/namespace/name.
 func (o Object) Ref() string {
 	if ns := o.Namespace(); ns != "" {
 		return o.Kind() + "/" + ns + "/" + o.Name()
@@ -47,7 +47,7 @@ func (o Object) Ref() string {
 	return o.Kind() + "/" + o.Name()
 }
 
-// metadata restituisce (creandola) la mappa metadata.
+// metadata returns (creating it) the metadata map.
 func (o Object) metadata() map[string]any {
 	m, ok := o["metadata"].(map[string]any)
 	if !ok {
@@ -57,7 +57,7 @@ func (o Object) metadata() map[string]any {
 	return m
 }
 
-// setMap imposta chiave/valore in metadata.<field> (labels o annotations).
+// setMap sets key/value in metadata.<field> (labels or annotations).
 func (o Object) setMap(field, key, value string) {
 	md := o.metadata()
 	m, ok := md[field].(map[string]any)
@@ -68,7 +68,7 @@ func (o Object) setMap(field, key, value string) {
 	m[key] = value
 }
 
-// ObjectRef identifica un oggetto applicato, per la pulizia degli oggetti rimossi.
+// ObjectRef identifies an applied object, for the cleanup of removed objects.
 type ObjectRef struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -84,8 +84,8 @@ func refOf(o Object) ObjectRef {
 	return ObjectRef{APIVersion: o.APIVersion(), Kind: o.Kind(), Namespace: o.Namespace(), Name: o.Name()}
 }
 
-// loadManifests legge i manifest dell'artefatto: un file YAML o JSON (anche con più documenti)
-// oppure un archivio .tar.gz/.tgz di file .yaml, .yml e .json, letti in ordine di nome.
+// loadManifests reads the artifact manifests: a YAML or JSON file (also multi-document) or a
+// .tar.gz/.tgz archive of .yaml, .yml and .json files, read in name order.
 func loadManifests(file string) ([]byte, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
@@ -143,8 +143,8 @@ func fromArchive(data []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// render sostituisce le variabili ${NOME} note (quelle di manent e i parametri var.NOME);
-// le altre restano invariate, perché i manifest possono contenere script con variabili proprie.
+// render replaces the known ${NAME} variables (manent's and the var.NAME parameters); the
+// others stay unchanged, because manifests can contain scripts with their own variables.
 func render(src []byte, vars map[string]string) []byte {
 	pairs := make([]string, 0, len(vars)*2)
 	for _, k := range slices.Sorted(maps.Keys(vars)) {
@@ -153,8 +153,8 @@ func render(src []byte, vars map[string]string) []byte {
 	return []byte(strings.NewReplacer(pairs...).Replace(string(src)))
 }
 
-// parseObjects divide i documenti YAML in oggetti; i documenti vuoti sono ignorati e le liste
-// (kind: List) espanse.
+// parseObjects splits the YAML documents into objects; empty documents are ignored and lists
+// (kind: List) expanded.
 func parseObjects(data []byte) ([]Object, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var out []Object
@@ -195,8 +195,8 @@ func parseObjects(data []byte) ([]Object, error) {
 	return out, nil
 }
 
-// kindOrder applica prima gli oggetti da cui dipendono gli altri (namespace, CRD, permessi,
-// configurazione), poi i workload.
+// kindOrder applies first the objects others depend on (namespaces, CRDs, permissions,
+// configuration), then the workloads.
 var kindOrder = []string{
 	"Namespace", "CustomResourceDefinition", "PriorityClass", "StorageClass",
 	"ServiceAccount", "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding",
@@ -215,7 +215,7 @@ func sortObjects(objs []Object) {
 	sort.SliceStable(objs, func(i, j int) bool { return order(objs[i].Kind()) < order(objs[j].Kind()) })
 }
 
-// podSpec restituisce lo spec del pod di un workload, o nil.
+// podSpec returns the pod spec of a workload, or nil.
 func podSpec(o Object) map[string]any {
 	spec, _ := o["spec"].(map[string]any)
 	switch o.Kind() {
@@ -231,7 +231,7 @@ func podSpec(o Object) map[string]any {
 	return ps
 }
 
-// images restituisce le immagini dei container di un workload.
+// images returns the container images of a workload.
 func images(o Object) []string {
 	ps := podSpec(o)
 	var out []string
@@ -247,7 +247,7 @@ func images(o Object) []string {
 	return out
 }
 
-// workload indica gli oggetti di cui attendere il completamento del rollout.
+// workload reports the objects whose rollout must be waited for.
 func workload(o Object) bool {
 	if !strings.HasPrefix(o.APIVersion(), "apps/") {
 		return false

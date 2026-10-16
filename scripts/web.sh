@@ -1,7 +1,7 @@
 #!/bin/sh
-# Esegue npm nella cartella web/: con Node >= 20 installato usa quello locale, altrimenti
-# un container node:22 (serve solo Docker). Esempi: scripts/web.sh ci; scripts/web.sh run build.
-# WEB_PORT=5173 pubblica la porta del server di sviluppo quando si usa il container.
+# Runs npm in the web/ folder: with Node >= 20 installed it uses the local one, otherwise
+# a node:22 container (only Docker is needed). Examples: scripts/web.sh ci; scripts/web.sh run build.
+# WEB_PORT=5173 publishes the development server port when using the container.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 image=node:22.11.0-bookworm-slim

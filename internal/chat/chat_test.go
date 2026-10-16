@@ -29,7 +29,7 @@ func (m mapSecrets) Resolve(_ context.Context, ref string) (string, error) {
 	return "", fmt.Errorf("segreto %s assente", ref)
 }
 
-// fakeSlack emula l'API Web di Slack, un incoming webhook, un webhook di Teams e response_url.
+// fakeSlack emulates the Slack Web API, an incoming webhook, a Teams webhook and response_url.
 type fakeSlack struct {
 	mu       sync.Mutex
 	posts    []map[string]any
@@ -137,7 +137,7 @@ func TestSlackETeams(t *testing.T) {
 		}
 	}
 
-	// Richiesta di approvazione: pulsanti Approva e Respingi con l'ID del deploy.
+	// Approval request: Approve and Reject buttons with the deploy ID.
 	req := message(EventApprovalRequested)
 	req.Approval = &Approval{Required: 2, Decisions: []Decision{{Approver: "oidc:bob", Approve: true}}, ExpiresAt: time.Now().Add(time.Hour), Change: true}
 	if _, err := n.Send(ctx, "prod", req, nil); err != nil {
@@ -150,7 +150,7 @@ func TestSlackETeams(t *testing.T) {
 		}
 	}
 
-	// Webhook di Slack: nessun pulsante di approvazione (non c'è l'app che riceve i clic).
+	// Slack webhook: no approval buttons (there is no app receiving the clicks).
 	if ref, err := n.Send(ctx, "audit", message(EventSucceeded), nil); err != nil || ref != nil {
 		t.Fatalf("webhook Slack: %+v, %v", ref, err)
 	}
@@ -159,7 +159,7 @@ func TestSlackETeams(t *testing.T) {
 		t.Errorf("webhook Slack: %v", hook)
 	}
 
-	// Teams: Adaptive Card con il link per decidere nell'interfaccia web.
+	// Teams: Adaptive Card with the link to decide in the web interface.
 	if _, err := n.Send(ctx, "teams", req, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestErroriDiInvio(t *testing.T) {
 	}
 }
 
-// fakeDecider registra le decisioni con l'identità nel context.
+// fakeDecider records the decisions with the identity in the context.
 type fakeDecider struct {
 	mu        sync.Mutex
 	decisions []string
@@ -245,7 +245,7 @@ func TestPulsantiSlack(t *testing.T) {
 	if code := signed(t, h, "s3cr3t", now, click("U9", ActionApprove, respond)); code != http.StatusOK {
 		t.Fatalf("clic firmato: %d", code)
 	}
-	// La firma sbagliata o scaduta è rifiutata senza decidere nulla.
+	// A wrong or expired signature is rejected without deciding anything.
 	if code := signed(t, h, "altro", now, click("U1", ActionApprove, respond)); code != http.StatusUnauthorized {
 		t.Errorf("firma errata: %d", code)
 	}
@@ -270,7 +270,7 @@ func TestPulsantiSlack(t *testing.T) {
 		}
 	}
 
-	// Un rifiuto del servizio (es. auto-approvazione) arriva a chi ha cliccato.
+	// A refusal by the service (e.g. self-approval) reaches whoever clicked.
 	dec.mu.Lock()
 	dec.err = errors.New("forbidden: oidc:bob ha richiesto il deploy")
 	dec.mu.Unlock()
@@ -281,13 +281,13 @@ func TestPulsantiSlack(t *testing.T) {
 		return len(f.replies) == 4 && strings.Contains(f.replies[3], "not recorded: forbidden")
 	})
 
-	// response_url verso un host diverso da Slack non riceve nulla.
+	// A response_url to a host other than Slack receives nothing.
 	if err := h.respond(context.Background(), "https://evil.example.com/x", "ciao"); err == nil {
 		t.Error("response_url esterno accettato")
 	}
 }
 
-// rawJSON serializza senza l'escape di <, > e &, per confrontare il markup di Slack.
+// rawJSON serializes without escaping <, > and &, to compare Slack markup.
 func rawJSON(v any) string {
 	var b strings.Builder
 	enc := json.NewEncoder(&b)

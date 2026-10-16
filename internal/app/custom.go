@@ -14,9 +14,8 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// NewSpecKeys risolve le chiavi che firmano le specifiche degli step personalizzati. Le
-// usano sia chi accoda (firma nel piano) sia il worker (verifica), quindi vanno lette
-// all'avvio da entrambi.
+// NewSpecKeys resolves the keys that sign custom step specs. Both the submitter (signature in
+// the plan) and the worker (verification) use them, so both read them at startup.
 func NewSpecKeys(cfg *config.Config, sp secrets.Provider) (customspec.Keys, error) {
 	var keys customspec.Keys
 	for i, ref := range cfg.Pipeline.Custom.SpecKeyRefs {
@@ -32,7 +31,7 @@ func NewSpecKeys(cfg *config.Config, sp secrets.Provider) (customspec.Keys, erro
 	return keys, nil
 }
 
-// NewCustomSteps crea il costruttore degli step personalizzati del worker.
+// NewCustomSteps creates the worker's custom step builder.
 func NewCustomSteps(cfg *config.Config, sp secrets.Provider, keys customspec.Keys, rec audit.Recorder, gov *governance.Policy, log *slog.Logger) *customstep.Builder {
 	c := cfg.Pipeline.Custom
 	return &customstep.Builder{

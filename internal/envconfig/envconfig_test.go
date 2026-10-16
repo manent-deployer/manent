@@ -83,7 +83,7 @@ func TestMerge(t *testing.T) {
 	})
 }
 
-// fakeConsul simula l'API KV di Consul per una singola chiave.
+// fakeConsul simulates the Consul KV API for a single key.
 func fakeConsul(t *testing.T, key, value string, wantToken, wantDC string) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +181,7 @@ func TestMergeRollback(t *testing.T) {
 	on, off := true, false
 	base := descriptor.Descriptor{Deploy: descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}}}
 
-	// L'ambiente impone il rollback; il descrittore aggiunge gli step.
+	// The environment imposes rollback; the descriptor adds steps.
 	d := base
 	d.Rollback = &descriptor.Rollback{On: []string{"post-test"}}
 	eff, err := Merge(d, EnvConfig{Rollback: &descriptor.Rollback{Enabled: &on, Locator: "cmdb"}})
@@ -192,13 +192,13 @@ func TestMergeRollback(t *testing.T) {
 		t.Errorf("rollback effettivo inatteso: %+v", eff.Rollback)
 	}
 
-	// Il descrittore non può disattivare un rollback imposto dall'ambiente.
+	// The descriptor cannot disable a rollback imposed by the environment.
 	d.Rollback = &descriptor.Rollback{Enabled: &off}
 	if _, err := Merge(d, EnvConfig{Rollback: &descriptor.Rollback{Enabled: &on}}); err == nil {
 		t.Error("atteso conflitto su rollback.enabled")
 	}
 
-	// Senza rollback nell'ambiente il descrittore resta invariato.
+	// Without rollback in the environment the descriptor stays unchanged.
 	eff, err = Merge(d, EnvConfig{})
 	if err != nil || eff.Rollback.IsEnabled() {
 		t.Errorf("rollback inatteso: %+v %v", eff.Rollback, err)
@@ -219,7 +219,7 @@ func TestDescriptorPolicy(t *testing.T) {
 		t.Fatalf("descrittore ammesso rifiutato: %v", err)
 	}
 
-	// Comandi, segreti di altre applicazioni e target: non ammessi dal descrittore.
+	// Commands, other applications' secrets and targets: not allowed from the descriptor.
 	d.Deploy.Params["post_command"] = "rm -rf /"
 	d.Secrets = append(d.Secrets, descriptor.SecretRef{Name: "altro", Ref: "vault:secret/data/other/prod#ssh"}, descriptor.SecretRef{Name: "env", Ref: "env:CONSUL_HTTP_TOKEN"})
 	d.Deploy.Targets = []descriptor.Target{{Host: "evil"}}
@@ -230,7 +230,7 @@ func TestDescriptorPolicy(t *testing.T) {
 		}
 	}
 
-	// Ciò che la configurazione di ambiente definisce non è soggetto alla policy.
+	// What the environment configuration defines is not subject to the policy.
 	env = EnvConfig{
 		Params:  map[string]string{"post_command": "rm -rf /"},
 		Secrets: []descriptor.SecretRef{{Name: "altro", Ref: "vault:secret/data/other/prod#ssh"}, {Name: "env", Ref: "env:CONSUL_HTTP_TOKEN"}},
@@ -240,7 +240,7 @@ func TestDescriptorPolicy(t *testing.T) {
 		t.Errorf("valori della configurazione di ambiente rifiutati: %v", err)
 	}
 
-	// Policy assente: nessun limite.
+	// No policy: no limits.
 	if err := (*DescriptorPolicy)(nil).Check(d, EnvConfig{}); err != nil {
 		t.Error(err)
 	}
@@ -266,7 +266,7 @@ rollout:
 	if got.Rollout == nil || got.Rollout.Waves[0].Bake != "5m" || got.Deploy.Targets[0].Labels["az"] != "eu-1a" {
 		t.Fatalf("fusione: %+v", got)
 	}
-	// Lo stesso rollout ripetuto nel descrittore è ammesso, uno diverso no.
+	// The same rollout repeated in the descriptor is allowed, a different one is not.
 	d.Rollout = c.Rollout
 	if _, err := Merge(d, c); err != nil {
 		t.Fatalf("rollout identico rifiutato: %v", err)
@@ -277,7 +277,7 @@ rollout:
 	if _, err := Merge(d, c); err == nil {
 		t.Fatal("rollout diverso dal descrittore accettato")
 	}
-	// Target con etichette diverse: conflitto.
+	// Targets with different labels: conflict.
 	d.Rollout = nil
 	d.Deploy.Targets = []descriptor.Target{{Host: "h1", Labels: map[string]string{"region": "us-1"}}}
 	if _, err := Merge(d, c); err == nil {
@@ -312,7 +312,7 @@ step_params:
 		t.Errorf("conflitto non rilevato: %v", err)
 	}
 
-	// Il descrittore imposta solo i parametri ammessi dalla policy; quelli dell'ambiente no.
+	// The descriptor sets only the parameters allowed by the policy; the environment's are not.
 	pol := &DescriptorPolicy{StepParams: map[string][]string{"db-migrate": {"mode"}}}
 	d.StepParams = map[string]map[string]string{"db-migrate": {"database": "shop", "mode": "safe"}}
 	if err := pol.Check(d, c); err != nil {
@@ -338,7 +338,7 @@ func TestMergeTraffic(t *testing.T) {
 	if err != nil || eff.Traffic == nil || eff.Traffic.Pool.Provider != "haproxy" {
 		t.Fatalf("fusione: %+v %v", eff.Traffic, err)
 	}
-	// Il descrittore non può definire load balancer e router.
+	// The descriptor cannot define load balancers and routers.
 	d.Traffic = &descriptor.TrafficConfig{Pool: &descriptor.PoolConfig{Provider: "haproxy"}}
 	if _, err := Merge(d, cfg); err == nil || !strings.Contains(err.Error(), "solo nella configurazione di ambiente") {
 		t.Errorf("traffic nel descrittore: %v", err)

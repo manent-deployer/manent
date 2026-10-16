@@ -13,16 +13,16 @@ import (
 	"strings"
 )
 
-// Impostazioni del provider haproxy (Data Plane API).
+// Settings of the haproxy provider (Data Plane API).
 const (
-	settingDataplaneURLs = "dataplane_urls"     // URL della Data Plane API di ogni istanza attiva, separati da virgola
-	settingBackend       = "backend"            // backend di HAProxy con i membri
-	settingCredentials   = "credentials_secret" // segreto "utente:password" della Data Plane API
-	settingAPIVersion    = "api_version"        // v3 (default) o v2
+	settingDataplaneURLs = "dataplane_urls"     // Data Plane API URL of every active instance, comma separated
+	settingBackend       = "backend"            // HAProxy backend with the members
+	settingCredentials   = "credentials_secret" // "user:password" secret of the Data Plane API
+	settingAPIVersion    = "api_version"        // v3 (default) or v2
 )
 
-// haproxyPool svuota i server di un backend con la Data Plane API di ogni istanza di HAProxy:
-// un membro è svuotato solo quando lo è su tutte.
+// haproxyPool drains the servers of a backend with the Data Plane API of every HAProxy
+// instance: a member is drained only when it is drained on all of them.
 type haproxyPool struct {
 	urls    []string
 	backend string
@@ -51,7 +51,7 @@ func validateHAProxy(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewHAProxyPool costruisce il pool haproxy.
+// NewHAProxyPool builds the haproxy pool.
 func NewHAProxyPool(ctx context.Context, env Env) (Pool, error) {
 	if err := validateHAProxy(env.Settings); err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func NewHAProxyPool(ctx context.Context, env Env) (Pool, error) {
 	return p, nil
 }
 
-// haproxyServer è un server del backend nello stato a runtime.
+// haproxyServer is a backend server in its runtime state.
 type haproxyServer struct {
 	Name             string `json:"name"`
 	AdminState       string `json:"admin_state"`
@@ -94,7 +94,7 @@ func (p *haproxyPool) serversPath(name string) string {
 	return path
 }
 
-// Members implementa Pool: un membro è attivo e sano solo se lo è su tutte le istanze.
+// Members implements Pool: a member is active and healthy only if it is on all instances.
 func (p *haproxyPool) Members(ctx context.Context) ([]Member, error) {
 	byName := map[string]*Member{}
 	var order []string
@@ -140,17 +140,17 @@ func (p *haproxyPool) setState(ctx context.Context, members []string, state stri
 	return nil
 }
 
-// Drain implementa Pool.
+// Drain implements Pool.
 func (p *haproxyPool) Drain(ctx context.Context, members []string) error {
 	return p.setState(ctx, members, "drain")
 }
 
-// Restore implementa Pool.
+// Restore implements Pool.
 func (p *haproxyPool) Restore(ctx context.Context, members []string) error {
 	return p.setState(ctx, members, "ready")
 }
 
-// Connections implementa Pool: somma le sessioni correnti (scur) di tutte le istanze.
+// Connections implements Pool: it sums the current sessions (scur) of all instances.
 func (p *haproxyPool) Connections(ctx context.Context, members []string) (map[string]int, error) {
 	out := map[string]int{}
 	for _, base := range p.urls {
@@ -170,8 +170,8 @@ func (p *haproxyPool) Connections(ctx context.Context, members []string) (map[st
 	return out, nil
 }
 
-// haproxySessions legge scur dalle statistiche native: un oggetto (v3) o una lista di
-// oggetti, uno per processo (v2).
+// haproxySessions reads scur from the native stats: an object (v3) or a list of objects,
+// one per process (v2).
 func haproxySessions(raw json.RawMessage, name string) (int, error) {
 	type entry struct {
 		Name  string `json:"name"`
@@ -206,7 +206,7 @@ func haproxySessions(raw json.RawMessage, name string) (int, error) {
 	return total, nil
 }
 
-// Healthy implementa Pool.
+// Healthy implements Pool.
 func (p *haproxyPool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	all, err := p.Members(ctx)
 	if err != nil {
@@ -228,8 +228,8 @@ func (p *haproxyPool) do(ctx context.Context, method, u string, body []byte, out
 	})
 }
 
-// doJSON esegue una richiesta JSON: uno stato fuori da 2xx è un errore con un estratto della
-// risposta, mai le credenziali.
+// doJSON runs a JSON request: a status outside 2xx is an error with an excerpt of the
+// response, never the credentials.
 func doJSON(ctx context.Context, c *http.Client, method, u string, body []byte, out any, auth func(*http.Request)) error {
 	var rd io.Reader
 	if body != nil {
@@ -268,7 +268,7 @@ func doJSON(ctx context.Context, c *http.Client, method, u string, body []byte, 
 	return json.Unmarshal(data, out)
 }
 
-// StatusError è una risposta HTTP non riuscita di un'API di gestione.
+// StatusError is a failed HTTP response of a management API.
 type StatusError struct {
 	Method, Path string
 	Status       int
@@ -279,7 +279,7 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("%s %s: stato %d: %s", e.Method, e.Path, e.Status, e.Body)
 }
 
-// redactURL toglie credenziali e query da un URL per i messaggi.
+// redactURL strips credentials and query from a URL for messages.
 func redactURL(u string) string {
 	p, err := url.Parse(u)
 	if err != nil {

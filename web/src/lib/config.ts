@@ -2,8 +2,8 @@ import type { components } from "@/api/schema";
 
 export type UIConfig = components["schemas"]["UIConfig"];
 
-// loadConfig legge la configurazione pubblica della UI (modalità di login, client OIDC),
-// servita da manent-server senza autenticazione.
+// loadConfig reads the public UI configuration (login mode, OIDC client), served by
+// manent-server without authentication.
 export async function loadConfig(): Promise<UIConfig> {
   const res = await fetch("/ui/config.json", { headers: { Accept: "application/json" } });
   if (!res.ok) {

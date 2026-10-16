@@ -19,49 +19,49 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// SSHAuth sono le credenziali risolte al momento della connessione.
+// SSHAuth holds the credentials resolved at connection time.
 type SSHAuth struct {
 	PrivateKey string
 	Password   string
 }
 
-// Dialer apre connessioni verso i target; astratto per i test.
+// Dialer opens connections to the targets; abstracted for tests.
 type Dialer interface {
 	Dial(ctx context.Context, t descriptor.Target, user string, auth SSHAuth) (Conn, error)
 }
 
-// Conn esegue comandi su un target.
+// Conn runs commands on a target.
 type Conn interface {
-	// Exec esegue cmd con la shell di login del target e restituisce il codice di uscita.
-	// L'errore indica un problema di trasporto o un comando terminato senza codice.
+	// Exec runs cmd with the target's login shell and returns the exit code.
+	// The error means a transport problem or a command ended without a code.
 	Exec(ctx context.Context, cmd string, stdin io.Reader, stdout, stderr io.Writer) (int, error)
 	Close() error
 }
 
-// Codici di uscita con un significato per manent.
+// Exit codes with a meaning for manent.
 const (
-	// ExitTempFail (EX_TEMPFAIL) chiede un nuovo tentativo.
+	// ExitTempFail (EX_TEMPFAIL) asks for a retry.
 	ExitTempFail = 75
-	// exitTimeout è il codice di timeout(1) allo scadere del tempo.
+	// exitTimeout is the code of timeout(1) when time runs out.
 	exitTimeout = 124
 )
 
-// Limiti del file degli output.
+// Limits of the outputs file.
 const maxOutputFile = 16 << 10
 
-// script esegue il comando sul target. Riceve la directory del tentativo e gli argomenti come
-// parametri posizionali, quindi nessun valore passa per l'interpretazione della shell; carica
-// le variabili MANENT_* dal file d'ambiente (non dalla riga di comando, visibile con ps) e, se
-// disponibile, limita la durata con timeout(1), così il processo non sopravvive allo step.
-// Un'interruzione rimuove la directory dei segreti.
+// script runs the command on the target. It receives the attempt directory and the arguments
+// as positional parameters, so no value goes through shell interpretation; it loads the
+// MANENT_* variables from the environment file (not from the command line, visible with ps)
+// and, if available, limits the duration with timeout(1), so the process does not outlive the
+// step. An interruption removes the secrets directory.
 const script = `d=$1; shift
 trap 'rm -rf -- "$d"; exit 143' HUP INT TERM
 set -a; . "$d/env"; set +a
 : > "$d/output"
 if command -v timeout >/dev/null 2>&1; then timeout -k 10 %d "$@"; else "$@"; fi`
 
-// command esegue il comando su ogni target del deploy (o del lotto), in sequenza, o sul
-// primo con run_once. Restituisce gli output dell'ultimo target.
+// command runs the command on every target of the deploy (or of the batch), in sequence, or
+// on the first one with run_once. It returns the outputs of the last target.
 func (r *run) command(ctx context.Context) (map[string]string, error) {
 	targets := slices.Clone(r.d.Deploy.Targets)
 	if len(targets) == 0 {
@@ -74,7 +74,7 @@ func (r *run) command(ctx context.Context) (map[string]string, error) {
 	for i, a := range r.action.Command {
 		v, err := renderArg(i, a, r.data)
 		if err != nil {
-			// La specifica e i valori non cambiano tra un tentativo e l'altro.
+			// Spec and values do not change between attempts.
 			return nil, permanent("%w", err)
 		}
 		args[i] = v
@@ -112,8 +112,8 @@ func (r *run) sshAuth(ctx context.Context) (SSHAuth, error) {
 	return a, nil
 }
 
-// onTarget esegue il protocollo su un target: directory del tentativo, file d'ambiente e
-// segreti, verifica del binario, comando, lettura degli output e pulizia.
+// onTarget runs the protocol on a target: attempt directory, environment and secrets files,
+// binary check, command, output reading and cleanup.
 func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, auth SSHAuth, budget *logBudget) (map[string]string, error) {
 	user := t.User
 	if r.s.doc.SSH.User != "" {
@@ -130,7 +130,7 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 
 	base := path.Join(r.s.b.SecretsDir, pathSafe(r.in.DeploymentID), r.s.ps.Name)
 	dir := path.Join(base, nonce())
-	// I tentativi precedenti (anche interrotti da un crash) vengono rimossi prima di iniziare.
+	// Previous attempts (even those interrupted by a crash) are removed before starting.
 	defer func() {
 		c, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
@@ -197,8 +197,8 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	return parseOutputs(buf.String())
 }
 
-// exec esegue un comando di servizio; un codice diverso da zero è un errore permanente con
-// la descrizione indicata (ad esempio secrets_dir non scrivibile).
+// exec runs a service command; a non-zero code is a permanent error with the given
+// description (for example secrets_dir not writable).
 func (r *run) exec(ctx context.Context, conn Conn, cmd string, stdin io.Reader, what string) error {
 	var stderr bytes.Buffer
 	code, err := conn.Exec(ctx, cmd, stdin, io.Discard, &limitedWriter{w: &stderr, left: 2048})
@@ -211,7 +211,7 @@ func (r *run) exec(ctx context.Context, conn Conn, cmd string, stdin io.Reader, 
 	return nil
 }
 
-// verifyBinary confronta lo sha256 del binario sul target con quello della specifica.
+// verifyBinary compares the sha256 of the binary on the target with the spec's.
 func (r *run) verifyBinary(ctx context.Context, conn Conn, bin, want string) error {
 	var out bytes.Buffer
 	q := Quote(bin)
@@ -227,7 +227,7 @@ func (r *run) verifyBinary(ctx context.Context, conn Conn, bin, want string) err
 	return nil
 }
 
-// envFile produce le variabili MANENT_* nel formato di un file letto da sh.
+// envFile produces the MANENT_* variables in the format of a file read by sh.
 func (r *run) envFile(t descriptor.Target, dir string) string {
 	vars := map[string]string{
 		"MANENT_DEPLOYMENT_ID":   r.in.DeploymentID,
@@ -261,10 +261,10 @@ func (r *run) envFile(t descriptor.Target, dir string) string {
 
 var envUnsafe = regexp.MustCompile(`[^A-Z0-9]+`)
 
-// envName trasforma un nome in una parte di nome di variabile (post-test → POST_TEST).
+// envName turns a name into part of a variable name (post-test → POST_TEST).
 func envName(s string) string { return envUnsafe.ReplaceAllString(strings.ToUpper(s), "_") }
 
-// pathSafe rende un ID utilizzabile come componente di un percorso.
+// pathSafe makes an ID usable as a path component.
 func pathSafe(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r == '/' || r == '\\' || r == 0 {
@@ -274,12 +274,12 @@ func pathSafe(s string) string {
 	}, strings.TrimLeft(s, "."))
 }
 
-// Quote quota un argomento per una shell POSIX: tra apici singoli, con ' come '\”.
+// Quote quotes an argument for a POSIX shell: in single quotes, with ' as '\”.
 func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// parseOutputs legge le righe chiave=valore del file degli output.
+// parseOutputs reads the key=value lines of the outputs file.
 func parseOutputs(s string) (map[string]string, error) {
 	out := map[string]string{}
 	for _, line := range strings.Split(s, "\n") {
@@ -299,7 +299,7 @@ func parseOutputs(s string) (map[string]string, error) {
 	return out, nil
 }
 
-// limitedWriter scarta ciò che supera il limite.
+// limitedWriter discards whatever exceeds the limit.
 type limitedWriter struct {
 	w    io.Writer
 	left int
@@ -320,7 +320,7 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// nonce distingue la directory di un tentativo.
+// nonce tells apart the directory of an attempt.
 func nonce() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {

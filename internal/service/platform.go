@@ -5,71 +5,71 @@ import (
 	"time"
 )
 
-// PlatformService espone lo stato della piattaforma: i worker registrati con il lavoro che
-// stanno svolgendo e i deploy attivi (in corso, in coda, pianificati, in attesa di approvazione).
+// PlatformService exposes the platform state: the registered workers with the work they are
+// doing and the active deploys (running, queued, scheduled, awaiting approval).
 type PlatformService interface {
-	// Workers elenca i worker registrati e quelli con workflow in sospeso.
+	// Workers lists the registered workers and those with pending workflows.
 	Workers(ctx context.Context) ([]WorkerInfo, error)
-	// Activity restituisce i deploy non ancora conclusi, raggruppati per stato.
+	// Activity returns the deploys not yet ended, grouped by state.
 	Activity(ctx context.Context, f ActivityFilter) (*Activity, error)
 }
 
-// Stati di un worker.
+// Worker states.
 const (
-	// WorkerAlive indica un worker che invia heartbeat.
+	// WorkerAlive is a worker that sends heartbeats.
 	WorkerAlive = "alive"
-	// WorkerStale indica un worker che non invia heartbeat: è caduto o irraggiungibile.
+	// WorkerStale is a worker that sends no heartbeats: it crashed or is unreachable.
 	WorkerStale = "stale"
-	// WorkerStopped indica un worker arrestato in modo ordinato.
+	// WorkerStopped is a worker stopped in an orderly way.
 	WorkerStopped = "stopped"
-	// WorkerUnregistered indica un executor con workflow in sospeso ma assente dal registro.
+	// WorkerUnregistered is an executor with pending workflows but missing from the registry.
 	WorkerUnregistered = "unregistered"
 )
 
-// WorkerInfo è un worker (executor DBOS) con il lavoro assegnato.
+// WorkerInfo is a worker (DBOS executor) with the assigned work.
 type WorkerInfo struct {
 	ID string `json:"id"`
-	// State è alive, stale, stopped o unregistered.
+	// State is alive, stale, stopped or unregistered.
 	State string `json:"state"`
-	// Version è la versione dei workflow (app.version): un worker riprende solo i propri.
+	// Version is the workflow version (app.version): a worker resumes only its own.
 	Version  string `json:"version,omitempty"`
 	Build    string `json:"build,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
-	// Region è la region del worker (dbos.region), se configurata.
+	// Region is the worker's region (dbos.region), if configured.
 	Region      string     `json:"region,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	HeartbeatAt *time.Time `json:"heartbeat_at,omitempty"`
 	StoppedAt   *time.Time `json:"stopped_at,omitempty"`
-	// RecoveredBy è chi ha ripreso i workflow del worker dopo la sua perdita.
+	// RecoveredBy is who resumed the worker's workflows after it was lost.
 	RecoveredBy string     `json:"recovered_by,omitempty"`
 	RecoveredAt *time.Time `json:"recovered_at,omitempty"`
-	// Pending conta i workflow in sospeso del worker per versione dei workflow.
+	// Pending counts the worker's pending workflows per workflow version.
 	Pending map[string]int64 `json:"pending,omitempty"`
-	// Tasks sono i workflow in esecuzione sul worker che l'identità può leggere.
+	// Tasks are the workflows running on the worker that the identity can read.
 	Tasks []WorkerTask `json:"tasks"`
-	// HiddenTasks conta i workflow in esecuzione di applicazioni/ambienti non leggibili.
+	// HiddenTasks counts the running workflows of unreadable applications/environments.
 	HiddenTasks int `json:"hidden_tasks,omitempty"`
 }
 
-// Tipi di lavoro di un worker.
+// Kinds of worker work.
 const (
 	TaskDeploy   = "deploy"
 	TaskPass     = "pass"
 	TaskGate     = "gate"
 	TaskApproval = "approval"
 	TaskSchedule = "schedule"
-	// TaskAfter è l'attesa delle dipendenze di un deploy; TaskRelease una release composta.
+	// TaskAfter is a deploy's dependency wait; TaskRelease a composite release.
 	TaskAfter   = "after"
 	TaskRelease = "release"
 )
 
-// WorkerTask è un workflow in esecuzione su un worker.
+// WorkerTask is a workflow running on a worker.
 type WorkerTask struct {
-	// ID è l'ID del workflow; DeploymentID il deploy a cui appartiene.
+	// ID is the workflow ID; DeploymentID the deploy it belongs to.
 	ID           string `json:"id"`
 	DeploymentID string `json:"deployment_id"`
-	// Kind è deploy, pass (passo di un rollout in una region), gate, approval, schedule, after
-	// (attesa delle dipendenze) o release.
+	// Kind is deploy, pass (rollout pass in a region), gate, approval, schedule, after
+	// (dependency wait) or release.
 	Kind        string     `json:"kind"`
 	Application string     `json:"application,omitempty"`
 	Environment string     `json:"environment,omitempty"`
@@ -77,31 +77,31 @@ type WorkerTask struct {
 	Version     string     `json:"version,omitempty"`
 	Queue       string     `json:"queue,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
-	// Attempts è il numero di esecuzioni del workflow: più di 1 dopo una recovery.
+	// Attempts is the number of runs of the workflow: more than 1 after a recovery.
 	Attempts int `json:"attempts,omitempty"`
 }
 
-// ActivityFilter filtra i deploy attivi.
+// ActivityFilter filters the active deploys.
 type ActivityFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
-	// Match, se presente, è un filtro aggiuntivo (es. i permessi), applicato prima di leggere
-	// i dettagli dei deploy in esecuzione.
+	// Match, if set, is an extra filter (e.g. permissions), applied before reading the details
+	// of running deploys.
 	Match func(Status) bool `json:"-"`
 }
 
-// Activity sono i deploy non conclusi, dal più recente.
+// Activity are the unfinished deploys, from the most recent.
 type Activity struct {
-	// Running sono i deploy in esecuzione, con worker e ultimo step registrato.
+	// Running are the running deploys, with worker and last recorded step.
 	Running []Status `json:"running"`
-	// AwaitingApproval sono i deploy in attesa di una decisione, prima del deploy o tra due ondate.
+	// AwaitingApproval are the deploys waiting for a decision, before the deploy or between two waves.
 	AwaitingApproval []Status `json:"awaiting_approval"`
-	// WaitingDependency sono i deploy in attesa che riescano i deploy da cui dipendono.
+	// WaitingDependency are the deploys waiting for the deploys they depend on to succeed.
 	WaitingDependency []Status `json:"waiting_dependency"`
-	// Queued sono i deploy in coda, in attesa di uno slot libero.
+	// Queued are the queued deploys, waiting for a free slot.
 	Queued []Status `json:"queued"`
-	// Delayed sono i deploy pianificati con schedule.at.
+	// Delayed are the deploys scheduled with schedule.at.
 	Delayed []Status `json:"delayed"`
-	// Truncated indica che i deploy attivi erano più di quelli esaminati.
+	// Truncated means there were more active deploys than examined.
 	Truncated bool `json:"truncated,omitempty"`
 }

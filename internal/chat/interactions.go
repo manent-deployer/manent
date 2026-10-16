@@ -20,40 +20,40 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// Identity è l'identità di manent di un utente Slack.
+// Identity is the manent identity of a Slack user.
 type Identity struct {
-	// Principal è "<metodo>:<nome>", es. "oidc:alice".
+	// Principal is "<method>:<name>", e.g. "oidc:alice".
 	Principal string
 	Groups    []string
 }
 
-// Decider registra una decisione su un deploy: è il servizio con i permessi (authz.Guard),
-// che verifica il ruolo dell'identità e il divieto di auto-approvazione.
+// Decider records a decision on a deploy: it is the service with permissions (authz.Guard),
+// which checks the identity's role and the self-approval ban.
 type Decider interface {
 	Decide(ctx context.Context, id string, r service.DecisionRequest) error
 }
 
-// Interactions riceve i clic sui pulsanti dei messaggi Slack (Interactivity Request URL
-// dell'app) e li trasforma in decisioni con l'identità associata all'utente.
+// Interactions receives the clicks on Slack message buttons (the app's Interactivity Request
+// URL) and turns them into decisions with the identity bound to the user.
 type Interactions struct {
 	SigningSecretRef string
 	Secrets          secrets.Provider
-	// Identities associa gli ID degli utenti Slack alle identità di manent.
+	// Identities maps Slack user IDs to manent identities.
 	Identities map[string]Identity
-	// EmailIdentity ricava l'identità dall'email dell'utente (es. "oidc:{email}"); richiede API.
+	// EmailIdentity derives the identity from the user's email (e.g. "oidc:{email}"); it requires API.
 	EmailIdentity string
 	API           *SlackAPI
 	Decider       Decider
 	Language      string
-	// Client invia le risposte a response_url.
+	// Client sends the responses to response_url.
 	Client HTTPDoer
-	// ResponseHosts sono gli host ammessi per response_url (default hooks.slack.com).
+	// ResponseHosts are the hosts allowed for response_url (default hooks.slack.com).
 	ResponseHosts []string
 	Logger        *slog.Logger
 	Now           func() time.Time
 }
 
-// slackPayload è la parte usata del payload di un'interazione block_actions.
+// slackPayload is the used part of a block_actions interaction payload.
 type slackPayload struct {
 	Type string `json:"type"`
 	User struct {
@@ -70,9 +70,9 @@ type slackPayload struct {
 	} `json:"actions"`
 }
 
-// ServeHTTP verifica la firma, risolve l'identità e registra la decisione. Risponde subito a
-// Slack (entro i 3 secondi richiesti) e comunica l'esito a chi ha cliccato con un messaggio
-// visibile solo a lui; il messaggio del canale viene aggiornato dal workflow di approvazione.
+// ServeHTTP verifies the signature, resolves the identity and records the decision. It answers
+// Slack immediately (within the required 3 seconds) and tells whoever clicked the outcome with
+// a message visible only to them; the channel message is updated by the approval workflow.
 func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
@@ -112,7 +112,7 @@ func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if a.ActionID != ActionApprove && a.ActionID != ActionReject {
 		return
 	}
-	// La decisione continua dopo la risposta a Slack: il context della richiesta non va usato.
+	// The decision continues after the answer to Slack: the request context must not be used.
 	go h.decide(context.WithoutCancel(r.Context()), p, a.ActionID == ActionApprove, a.Value)
 }
 
@@ -150,8 +150,8 @@ func (h *Interactions) decide(ctx context.Context, p slackPayload, approve bool,
 	reply(t.decisionDone(id, approve))
 }
 
-// identity risolve l'identità di manent dell'utente Slack: prima l'elenco esplicito, poi
-// l'email, se configurata.
+// identity resolves the manent identity of the Slack user: first the explicit list, then the
+// email, if configured.
 func (h *Interactions) identity(ctx context.Context, user string) (Identity, error) {
 	if id, ok := h.Identities[user]; ok {
 		return id, nil
@@ -166,7 +166,7 @@ func (h *Interactions) identity(ctx context.Context, user string) (Identity, err
 	return Identity{Principal: strings.ReplaceAll(h.EmailIdentity, "{email}", strings.ToLower(email))}, nil
 }
 
-// respond invia un messaggio effimero a response_url, solo verso gli host di Slack.
+// respond sends an ephemeral message to response_url, only towards Slack hosts.
 func (h *Interactions) respond(ctx context.Context, responseURL, text string) error {
 	u, err := url.Parse(responseURL)
 	if err != nil || u.Scheme != "https" && !(len(h.ResponseHosts) > 0 && u.Scheme == "http") {

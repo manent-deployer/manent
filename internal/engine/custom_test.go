@@ -34,7 +34,7 @@ func (s staticSecrets) Resolve(_ context.Context, ref string) (string, error) {
 	return "", fmt.Errorf("segreto %s assente", ref)
 }
 
-// shellDialer esegue i comandi degli step personalizzati con la shell locale.
+// shellDialer runs the custom step commands with the local shell.
 type shellDialer struct {
 	mu    sync.Mutex
 	hosts []string
@@ -121,7 +121,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	d.StepParams = map[string]map[string]string{"db-migrate": {"database": "shop"}}
 	d.Callbacks = []descriptor.Callback{{URL: "https://hooks.example.com/manent"}}
 
-	// Client e API vedono tipo e hash della specifica, mai comandi e URL.
+	// Client and API see type and hash of the spec, never commands and URLs.
 	v, err := e.Validate(alice, d)
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	}
 	notifier.mu.Unlock()
 
-	// Parametri obbligatori e segreti mancanti sono rifiutati all'accodamento.
+	// Missing required parameters and secrets are rejected at submission.
 	bad := appDescriptor("prod", "1.4.1")
 	bad.Deploy.Targets = d.Deploy.Targets
 	if _, err := e.Submit(alice, bad); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), `parametro "database" obbligatorio`) || !strings.Contains(err.Error(), `segreto "ssh-key"`) {
@@ -172,7 +172,7 @@ func TestStepPersonalizzati(t *testing.T) {
 		t.Error("valore non conforme accettato")
 	}
 
-	// Una specifica revocata non viene più eseguita, anche se già fotografata nel piano.
+	// A revoked spec no longer runs, even if already captured in the plan.
 	opts.Custom.(*customstep.Builder).Revoked = []string{customspec.Hash(mustPlan(t, planner, d)[1].Spec)}
 	d2 := *d
 	d2.Artifact.Version = "1.4.2"
@@ -184,7 +184,7 @@ func TestStepPersonalizzati(t *testing.T) {
 		t.Errorf("specifica revocata eseguita: %v", err)
 	}
 
-	// admin specs trova i deploy non ancora eseguiti e le schedule con la specifica revocata.
+	// admin specs finds the deploys not yet run and the schedules with the revoked spec.
 	at := time.Now().Add(time.Hour)
 	later := *d
 	later.ID, later.Artifact.Version, later.Schedule = "migrazione-notturna", "1.5.0", &descriptor.Schedule{At: &at}
@@ -216,7 +216,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all.Uses) != 4 { // db-migrate e cdn-purge, nel deploy pianificato e nella schedule
+	if len(all.Uses) != 4 { // db-migrate and cdn-purge, in the scheduled deploy and in the schedule
 		t.Errorf("tutte le specifiche: %+v", all.Uses)
 	}
 }
@@ -265,7 +265,7 @@ func TestStepPersonalizzatoPerLotto(t *testing.T) {
 	if _, err := e.Wait(alice, sub.ID); err != nil {
 		t.Fatal(err)
 	}
-	// Tra deploy e activation lo step gira per ogni lotto, sui soli target del lotto.
+	// Between deploy and activation the step runs for every batch, only on the batch targets.
 	if got := strings.Join(dialer.hosts, ","); got != "eu-1a,eu-1b,eu-2a,us-1a,eu-2b,us-1b" {
 		t.Errorf("target dello step personalizzato: %s", got)
 	}

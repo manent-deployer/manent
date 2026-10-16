@@ -1,8 +1,8 @@
-# UC8: interfaccia web. manent-server serve la UI incorporata; il login passa dall'identity
-# provider di prova (oidc, utenti ci, cab, admin, viewer). Controlli HTTP sulla UI e sui nuovi
-# endpoint, poi i test di Playwright (web/e2e) nel container ufficiale, sulla rete del laboratorio:
-# login, navigazione e accessibilità (axe), dettaglio con log in tempo reale, promozione con
-# dry-run, divieto di auto-approvazione, approvazione da un altro utente, tastiera e lingua.
+# UC8: web interface. manent-server serves the embedded UI; login goes through the test
+# identity provider (oidc, users ci, cab, admin, viewer). HTTP checks on the UI and the new
+# endpoints, then the Playwright tests (web/e2e) in the official container, on the lab network:
+# login, navigation and accessibility (axe), detail with live logs, promotion with dry-run,
+# self-approval ban, approval by another user, keyboard and language.
 APP=uc8-web
 PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.49.1-noble
 log "UC8 · interfaccia web"
@@ -43,7 +43,7 @@ docker run --rm --network manent-uc_core --ipc=host -v "$repo":/repo -w /repo/we
   -e DEP_ID="$id" "$PLAYWRIGHT_IMAGE" npx playwright test >"$WORK/playwright.log" 2>&1
 results="$repo/web/test-results/results.json"
 if [ -s "$results" ]; then
-  # Una verifica della suite per ogni test di Playwright, con l'errore se fallisce.
+  # One suite check for every Playwright test, with the error if it fails.
   jq -r '.. | objects | select(has("specs")) | .specs[] | "\(.tests[0].results[-1].status)\t\(.title)\t\(.tests[0].results[-1].error.message // "" | gsub("\n"; " ") | .[0:300])"' "$results" |
     while IFS="$(printf '\t')" read -r status title err; do
       if [ "$status" = passed ]; then printf 'P\t%s\n' "$title"; else printf 'F\t%s\t%s (%s)\n' "$title" "$err" "$status"; fi

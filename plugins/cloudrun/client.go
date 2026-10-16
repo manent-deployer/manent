@@ -18,25 +18,25 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// DefaultEndpoint è l'endpoint dell'Admin API v2 di Cloud Run.
+// DefaultEndpoint is the endpoint of the Cloud Run Admin API v2.
 const DefaultEndpoint = "https://run.googleapis.com"
 
-// scope è l'ambito OAuth richiesto dall'API.
+// scope is the OAuth scope the API requires.
 const scope = "https://www.googleapis.com/auth/cloud-platform"
 
-// HTTPConnector parla con l'API REST di Cloud Run. Le credenziali sono la chiave del service
-// account nel segreto credentials_secret o, in sua assenza, le Application Default Credentials
-// (GOOGLE_APPLICATION_CREDENTIALS, workload identity, metadata server), lette una volta.
+// HTTPConnector talks to the Cloud Run REST API. Credentials are the service account key in
+// the credentials_secret secret or, without it, the Application Default Credentials
+// (GOOGLE_APPLICATION_CREDENTIALS, workload identity, metadata server), read once.
 type HTTPConnector struct {
 	Endpoint string
-	// Client è il client HTTP (default: timeout di 60s).
+	// Client is the HTTP client (default: 60s timeout).
 	Client *http.Client
 
 	mu  sync.Mutex
 	adc oauth2.TokenSource
 }
 
-// Connect costruisce il client con le credenziali della richiesta.
+// Connect builds the client with the request's credentials.
 func (c *HTTPConnector) Connect(ctx context.Context, req *plugin.Request) (API, error) {
 	ts, err := c.tokenSource(ctx, req)
 	if err != nil {
@@ -50,16 +50,16 @@ func (c *HTTPConnector) Connect(ctx context.Context, req *plugin.Request) (API, 
 }
 
 func (c *HTTPConnector) tokenSource(ctx context.Context, req *plugin.Request) (oauth2.TokenSource, error) {
-	// Le credenziali sono costruite fuori dal context della richiesta: il token source le
-	// riusa per rinnovare il token anche dopo la fine dello step.
+	// Credentials are built outside the request context: the token source reuses them to renew
+	// the token even after the step ends.
 	base := context.WithoutCancel(ctx)
 	if name := req.Params[ParamCredentialsSecret]; name != "" {
 		key, err := req.Secrets.Secret(ctx, name)
 		if err != nil {
 			return nil, err
 		}
-		// Solo chiavi di service account: altri tipi di credenziali (es. external account)
-		// farebbero chiamare a manent URL scelti da chi scrive il segreto.
+		// Service account keys only: other credential types (e.g. external account) would make manent
+		// call URLs chosen by whoever writes the secret.
 		creds, err := google.CredentialsFromJSONWithType(base, []byte(key), google.ServiceAccount, scope)
 		if err != nil {
 			return nil, fmt.Errorf("credenziali nel segreto %s: %w", name, err)
@@ -84,7 +84,7 @@ type httpAPI struct {
 	client   *http.Client
 }
 
-// apiError è l'errore restituito dalle API Google.
+// apiError is the error returned by Google APIs.
 type apiError struct {
 	Error struct {
 		Code    int    `json:"code"`

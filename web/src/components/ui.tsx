@@ -24,7 +24,7 @@ import { ApiError } from "@/api/client";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
 
-// --- Pulsanti --------------------------------------------------------------------------------
+// --- Buttons ----------------------------------------------------------------------------------
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -66,7 +66,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-// --- Intestazione di pagina -------------------------------------------------------------------
+// --- Page header ------------------------------------------------------------------------------
 
 export function PageHeader({ title, lead, actions }: { title: string; lead?: string; actions?: ReactNode }) {
   return (
@@ -101,7 +101,7 @@ export function Section({ title, children, id, actions }: { title: string; child
   );
 }
 
-// --- Stati -----------------------------------------------------------------------------------
+// --- States -----------------------------------------------------------------------------------
 
 type Tone = "ok" | "bad" | "warn" | "info" | "muted" | "violet";
 
@@ -139,7 +139,7 @@ const stateStyle: Record<string, { tone: Tone; icon: LucideIcon; spin?: boolean 
   DEPENDENCY_FAILED: { tone: "bad", icon: Unlink },
 };
 
-/** StatusBadge mostra lo stato di un deploy con icona e testo: il colore non è mai l'unico segnale. */
+/** StatusBadge shows a deploy state with icon and text: color is never the only signal. */
 export function StatusBadge({ state }: { state: string }) {
   const { t } = useI18n();
   const s = stateStyle[state] ?? { tone: "muted" as Tone, icon: CircleDashed };
@@ -175,7 +175,7 @@ export function StageBadge({ state, prefix = "stage" }: { state: string; prefix?
   );
 }
 
-// --- Caricamento, errori, vuoto -----------------------------------------------------------
+// --- Loading, errors, empty -------------------------------------------------------------------
 
 export function Loading({ label }: { label?: string }) {
   const { t } = useI18n();
@@ -208,7 +208,7 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <p className="rounded-xl border border-dashed border-border p-6 text-center text-muted">{children}</p>;
 }
 
-// --- Campi ---------------------------------------------------------------------------------
+// --- Fields -----------------------------------------------------------------------------------
 
 interface FieldProps {
   label: string;
@@ -217,7 +217,7 @@ interface FieldProps {
   children: (props: { id: string; "aria-describedby"?: string; "aria-invalid"?: boolean }) => ReactNode;
 }
 
-/** Field collega etichetta, suggerimento ed errore al controllo con id e aria-describedby. */
+/** Field binds label, hint and error to the control with id and aria-describedby. */
 export function Field({ label, hint, error, children }: FieldProps) {
   const id = useId();
   const hintId = hint ? `${id}-hint` : undefined;
@@ -246,7 +246,7 @@ export function Field({ label, hint, error, children }: FieldProps) {
 export const inputClass =
   "h-10 w-full rounded-lg border border-border bg-bg/60 px-3 text-sm text-fg placeholder:text-muted/80 aria-[invalid=true]:border-bad";
 
-// --- Copia --------------------------------------------------------------------------------
+// --- Copy -------------------------------------------------------------------------------------
 
 export function CopyButton({ value, label }: { value: string; label: string }) {
   const { t } = useI18n();
@@ -271,9 +271,9 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-// --- Dialoghi -------------------------------------------------------------------------------
+// --- Dialogs ----------------------------------------------------------------------------------
 
-/** Dialog modale accessibile (Radix): focus intrappolato, Esc per chiudere, titolo annunciato. */
+/** Accessible modal Dialog (Radix): trapped focus, Esc to close, announced title. */
 export function Dialog({
   open,
   onOpenChange,

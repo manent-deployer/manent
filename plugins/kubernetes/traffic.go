@@ -13,23 +13,23 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Parametri dei rilasci per percentuale (rollout con strategy: traffic).
+// Parameters of percentage rollouts (rollout with strategy: traffic).
 const (
-	ParamTrafficRouter         = "traffic_router"          // gateway-api (default) o istio
-	ParamTrafficRoute          = "traffic_route"           // HTTPRoute (o GRPCRoute) o VirtualService che divide il traffico
-	ParamTrafficRouteKind      = "traffic_route_kind"      // gateway-api: HTTPRoute (default) o GRPCRoute
-	ParamTrafficRouteNamespace = "traffic_route_namespace" // namespace della route (default: namespace)
-	ParamTrafficService        = "traffic_service"         // gateway-api: nome base dei Service degli slot (<nome>-a, <nome>-b)
-	ParamTrafficRename         = "traffic_rename"          // "false": il chart dà già i nomi per slot (manent.slot), manent aggiunge solo le etichette
+	ParamTrafficRouter         = "traffic_router"          // gateway-api (default) or istio
+	ParamTrafficRoute          = "traffic_route"           // HTTPRoute (or GRPCRoute) or VirtualService that splits the traffic
+	ParamTrafficRouteKind      = "traffic_route_kind"      // gateway-api: HTTPRoute (default) or GRPCRoute
+	ParamTrafficRouteNamespace = "traffic_route_namespace" // route namespace (default: namespace)
+	ParamTrafficService        = "traffic_service"         // gateway-api: base name of the slots' Services (<name>-a, <name>-b)
+	ParamTrafficRename         = "traffic_rename"          // "false": the chart already names objects per slot (manent.slot), manent only adds labels
 )
 
-// Router supportati.
+// Supported routers.
 const (
 	RouterGatewayAPI = "gateway-api"
 	RouterIstio      = "istio"
 )
 
-// LabelTrack è l'etichetta dello slot sugli oggetti e sui pod.
+// LabelTrack is the slot label on objects and pods.
 const LabelTrack = "manent.io/track"
 
 const (
@@ -37,7 +37,7 @@ const (
 	istioAPIVersion   = "networking.istio.io/v1"
 )
 
-// Chiavi dello stato registrato da PrepareSlots, per cluster ("<chiave>@<host>").
+// Keys of the state recorded by PrepareSlots, per cluster ("<key>@<host>").
 const (
 	stateStable        = "stable"
 	stateStableVersion = "stable_version"
@@ -46,7 +46,7 @@ const (
 
 func stateKey(k string, t plugin.Target) string { return k + "@" + t.Host }
 
-// slotted sono i tipi di oggetto duplicati per slot, con il suffisso del nome.
+// slotted are the object kinds duplicated per slot, with the name suffix.
 var slotted = []string{"Deployment", "StatefulSet", "DaemonSet", "Service", "HorizontalPodAutoscaler", "PodDisruptionBudget"}
 
 func validateTraffic(req *plugin.Request) []error {
@@ -89,9 +89,9 @@ func routeNamespace(req *plugin.Request) string {
 	return namespace(req)
 }
 
-// slotObjects duplica gli oggetti per lo slot: suffisso -<slot> ai nomi di workload, Service,
-// HPA e PDB, etichetta manent.io/track su oggetti, selettori e pod. Con Istio i Service restano
-// comuni ai due slot (il router sceglie il subset dall'etichetta dei pod).
+// slotObjects duplicates the objects for the slot: -<slot> suffix to the names of workloads,
+// Services, HPAs and PDBs, manent.io/track label on objects, selectors and pods. With Istio
+// the Services stay shared by both slots (the router picks the subset from the pod label).
 func slotObjects(objs []Object, slot string, services, rename bool) ([]Object, error) {
 	renamed := map[string]bool{}
 	for _, o := range objs {
@@ -124,7 +124,7 @@ func slotObjects(objs []Object, slot string, services, rename bool) ([]Object, e
 				spec["serviceName"] = sn + suffix
 			}
 		case "Service":
-			// Con Istio il Service è comune ai due slot: il selettore non cambia.
+			// With Istio the Service is shared by both slots: the selector does not change.
 			if sel, ok := spec["selector"].(map[string]any); ok && len(sel) > 0 && services {
 				sel[LabelTrack] = slot
 			}
@@ -141,7 +141,7 @@ func slotObjects(objs []Object, slot string, services, rename bool) ([]Object, e
 	return objs, errors.Join(errs...)
 }
 
-// setPath imposta un valore in mappe annidate, creandole se mancano.
+// setPath sets a value in nested maps, creating them if missing.
 func setPath(m map[string]any, value any, keys ...string) {
 	for _, k := range keys[:len(keys)-1] {
 		next, ok := m[k].(map[string]any)
@@ -154,7 +154,7 @@ func setPath(m map[string]any, value any, keys ...string) {
 	m[keys[len(keys)-1]] = value
 }
 
-// PrepareSlots implementa plugin.SlotDeployer: legge da ogni cluster lo slot in esercizio.
+// PrepareSlots implements plugin.SlotDeployer: it reads from every cluster the slot in service.
 func (p *Plugin) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	state := map[string]string{}
 	stables, cands := map[string]bool{}, map[string]bool{}
@@ -197,7 +197,7 @@ func otherSlot(s string) string {
 	return "a"
 }
 
-// slots restituisce slot stabile e candidato di un cluster dallo stato registrato.
+// slots returns the stable and candidate slots of a cluster from the recorded state.
 func slots(req *plugin.Request, t plugin.Target) (string, string, error) {
 	if req.Traffic == nil {
 		return "", "", errors.New("rilascio per percentuale senza stato degli slot")
@@ -209,8 +209,8 @@ func slots(req *plugin.Request, t plugin.Target) (string, string, error) {
 	return req.Traffic.State[stateKey(stateStable, t)], cand, nil
 }
 
-// DeployCandidate implementa plugin.SlotDeployer: applica gli oggetti dello slot candidato e
-// ne attende il rollout, senza toccare la route né la release in esercizio.
+// DeployCandidate implements plugin.SlotDeployer: it applies the objects of the candidate
+// slot and waits for their rollout, without touching the route or the release in service.
 func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	for _, t := range req.Targets {
@@ -234,7 +234,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	if err != nil {
 		return nil, err
 	}
-	// Un chart Helm riceve lo slot in .Values.manent.slot, per usarlo nei nomi se serve.
+	// A Helm chart receives the slot in .Values.manent.slot, to use it in names if needed.
 	sreq := *req
 	sreq.Params = maps.Clone(req.Params)
 	sreq.Params[ParamHelmValuePrefix+"manent.slot"] = cand
@@ -280,7 +280,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	return details, nil
 }
 
-// SetCandidateWeight implementa plugin.TrafficRouter.
+// SetCandidateWeight implements plugin.TrafficRouter.
 func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
 	for _, t := range req.Targets {
 		stable, cand, err := slots(req, t)
@@ -299,7 +299,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 	return nil
 }
 
-// CandidateWeight implementa plugin.TrafficRouter: -1 se i cluster non sono concordi.
+// CandidateWeight implements plugin.TrafficRouter: -1 if the clusters disagree.
 func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
 	weight := -2
 	for _, t := range req.Targets {
@@ -327,8 +327,8 @@ func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 	return max(weight, 0), nil
 }
 
-// RouteTesters implementa plugin.TesterRouter: la regola della route per l'header dei tester
-// porta alla candidata.
+// RouteTesters implements plugin.TesterRouter: the route rule for the testers' header leads
+// to the candidate.
 func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	if req.Traffic == nil || req.Traffic.TesterHeader == "" {
 		return nil, errors.New("rollout.traffic.testers.header obbligatorio con il plugin kubernetes")
@@ -362,8 +362,8 @@ func (p *Plugin) routeTesters(ctx context.Context, t plugin.Target, req *plugin.
 	return err
 }
 
-// PromoteCandidate implementa plugin.SlotDeployer: tutto il traffico alla candidata e
-// storico aggiornato, con la release sostituita per un eventuale ritorno.
+// PromoteCandidate implements plugin.SlotDeployer: all traffic to the candidate and history
+// updated, with the replaced release for a possible return.
 func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
 	for _, t := range req.Targets {
 		stable, cand, err := slots(req, t)
@@ -398,9 +398,9 @@ func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) erro
 	return nil
 }
 
-// RevertCandidate implementa plugin.SlotDeployer: traffico e storico tornano alla versione
-// stabile e la candidata viene ridimensionata a zero. Senza una versione stabile (primo
-// rilascio) non c'è nulla a cui tornare e la candidata resta com'è.
+// RevertCandidate implements plugin.SlotDeployer: traffic and history go back to the stable
+// version and the candidate is scaled to zero. Without a stable version (first release) there
+// is nothing to go back to and the candidate stays as is.
 func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error {
 	var errs []error
 	for _, t := range req.Targets {
@@ -438,7 +438,7 @@ func (p *Plugin) revertTarget(ctx context.Context, t plugin.Target, req *plugin.
 		return err
 	}
 	if cur != nil && cur.version == req.Artifact.Version && cur.slot == cand {
-		// Già promossa: lo storico torna alla release stabile.
+		// Already promoted: the history goes back to the stable release.
 		if err := writePointerData(ctx, api, ns, n, req, req.Traffic.State[stateKey(stateStableVersion, t)], map[string]any{dataSlot: stable}); err != nil {
 			return err
 		}
@@ -450,8 +450,8 @@ func (p *Plugin) revertTarget(ctx context.Context, t plugin.Target, req *plugin.
 	return nil
 }
 
-// RetirePrevious implementa plugin.SlotDeployer: ridimensiona a zero lo slot sostituito, solo se
-// la release in esercizio è ancora quella promossa da questo rilascio.
+// RetirePrevious implements plugin.SlotDeployer: it scales the replaced slot to zero, only if
+// the release in service is still the one promoted by this rollout.
 func (p *Plugin) RetirePrevious(ctx context.Context, req *plugin.Request) error {
 	for _, t := range req.Targets {
 		stable, cand, err := slots(req, t)
@@ -481,9 +481,9 @@ func (p *Plugin) RetirePrevious(ctx context.Context, req *plugin.Request) error 
 	return nil
 }
 
-// scaleRelease porta a zero le repliche dei workload della release nello slot indicato ed
-// elimina i suoi HPA, che altrimenti le riporterebbero su. Gli oggetti restano: il prossimo
-// rilascio nello slot li riapplica.
+// scaleRelease brings to zero the replicas of the release's workloads in the given slot and
+// deletes its HPAs, which would otherwise scale them back up. Objects stay: the next release
+// in the slot applies them again.
 func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request, version, slot string) error {
 	if version == "" || slot == "" {
 		return nil
@@ -495,7 +495,7 @@ func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request,
 	if err != nil {
 		return err
 	}
-	// La release è stata applicata nello slot: tutti i suoi workload appartengono allo slot.
+	// The release was applied in the slot: all its workloads belong to the slot.
 	for _, r := range rel.objects {
 		switch r.Kind {
 		case "Deployment", "StatefulSet":
@@ -511,11 +511,11 @@ func (p *Plugin) scaleRelease(ctx context.Context, api API, req *plugin.Request,
 	return nil
 }
 
-// AnnotationReplicas conserva le repliche dei manifest di un workload avviato piccolo.
+// AnnotationReplicas keeps the manifest replicas of a workload started small.
 const AnnotationReplicas = "manent.io/replicas"
 
-// startSmall avvia con una replica i workload della candidata che non sono gestiti da un HPA,
-// annotando le repliche dei manifest: ScaleCandidate le raggiunge in proporzione al traffico.
+// startSmall starts with one replica the candidate's workloads not managed by an HPA,
+// annotating the manifest replicas: ScaleCandidate reaches them in proportion to traffic.
 func startSmall(objs []Object) {
 	scaled := map[string]bool{}
 	for _, o := range objs {
@@ -538,8 +538,8 @@ func startSmall(objs []Object) {
 	}
 }
 
-// ScaleCandidate implementa plugin.SlotScaler: porta i workload della candidata avviati
-// piccoli a ceil(repliche × percent / 100) e ne attende la disponibilità.
+// ScaleCandidate implements plugin.SlotScaler: it brings the candidate's workloads started
+// small to ceil(replicas × percent / 100) and waits for their availability.
 func (p *Plugin) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
 	for _, t := range req.Targets {
 		if err := p.scaleCandidate(ctx, t, req, percent); err != nil {
@@ -584,7 +584,7 @@ func (p *Plugin) route(ctx context.Context, api API, req *plugin.Request) (Objec
 	return o, err
 }
 
-// setWeights aggiorna i pesi della route: percent alla candidata, il resto alla stabile.
+// setWeights updates the route weights: percent to the candidate, the rest to the stable.
 func (p *Plugin) setWeights(ctx context.Context, api API, req *plugin.Request, stable, cand string, percent int) error {
 	route, err := p.route(ctx, api, req)
 	if err != nil {
@@ -598,7 +598,7 @@ func (p *Plugin) setWeights(ctx context.Context, api API, req *plugin.Request, s
 	return err
 }
 
-// routeEditor legge e cambia i pesi di un tipo di route.
+// routeEditor reads and changes the weights of a route kind.
 type routeEditor interface {
 	apiVersion() string
 	kind(req *plugin.Request) string
@@ -614,16 +614,16 @@ func (p *Plugin) editor(req *plugin.Request) routeEditor {
 	return gatewayEditor{service: req.Params[ParamTrafficService]}
 }
 
-// istioEditor lavora su un VirtualService di Istio: le route verso i subset a e b (definiti da
-// una DestinationRule sull'etichetta manent.io/track) hanno i loro pesi; la voce http con un
-// match sull'header dei tester porta solo alla candidata. I Service sono comuni ai due slot.
+// istioEditor works on an Istio VirtualService: the routes to subsets a and b (defined by a
+// DestinationRule on the manent.io/track label) have their weights; the http entry with a
+// match on the testers' header leads only to the candidate. Services are shared by both slots.
 type istioEditor struct{}
 
 func (istioEditor) apiVersion() string { return istioAPIVersion }
 
 func (istioEditor) kind(*plugin.Request) string { return "VirtualService" }
 
-// istioTester indica una voce http con un match sull'header dei tester.
+// istioTester reports an http entry with a match on the testers' header.
 func istioTester(entry map[string]any, header string) bool {
 	if header == "" {
 		return false
@@ -765,9 +765,9 @@ func (istioEditor) testers(vs Object, req *plugin.Request, slot string) (map[str
 	return routePatch(vs, "http", entries), nil
 }
 
-// gatewayEditor lavora su una HTTPRoute (o GRPCRoute) della Gateway API: le regole hanno i
-// backendRefs <service>-a e <service>-b con i loro pesi; la regola con un match sull'header
-// dei tester porta solo alla candidata.
+// gatewayEditor works on a Gateway API HTTPRoute (or GRPCRoute): the rules have the
+// <service>-a and <service>-b backendRefs with their weights; the rule with a match on the
+// testers' header leads only to the candidate.
 type gatewayEditor struct{ service string }
 
 func (gatewayEditor) apiVersion() string { return gatewayAPIVersion }
@@ -785,7 +785,7 @@ func rulesOf(route Object, key string) []any {
 	return rules
 }
 
-// testerRule indica una regola con un match sull'header dei tester.
+// testerRule reports a rule with a match on the testers' header.
 func testerRule(rule map[string]any, header string) bool {
 	if header == "" {
 		return false
@@ -887,7 +887,7 @@ func (g gatewayEditor) setWeights(route Object, req *plugin.Request, stable, can
 			case g.service + "-" + stable:
 				want = 100 - percent
 			case g.service + "-" + otherSlot(cand):
-				// Senza versione stabile lo slot libero non riceve traffico.
+				// Without a stable version the free slot receives no traffic.
 				want = 0
 			default:
 				continue
@@ -933,8 +933,8 @@ func (g gatewayEditor) testers(route Object, req *plugin.Request, slot string) (
 	return routePatch(route, "rules", rules), nil
 }
 
-// routePatch sostituisce la lista delle regole, con il resourceVersion letto: se la route è
-// cambiata nel frattempo il server rifiuta la patch e lo step viene ritentato.
+// routePatch replaces the rule list, with the resourceVersion read: if the route changed
+// meanwhile the server rejects the patch and the step is retried.
 func routePatch(route Object, key string, rules []any) map[string]any {
 	return map[string]any{
 		"metadata": map[string]any{"resourceVersion": route.str("metadata", "resourceVersion")},

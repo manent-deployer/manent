@@ -1,6 +1,6 @@
-// Package awsauth costruisce la configurazione dell'SDK AWS per i plugin ecs e lambda: region
-// del target, credenziali dai segreti di manent o dalla catena standard dell'SDK (variabili
-// d'ambiente, ruolo IRSA, ruolo del task ECS o dell'istanza EC2) ed eventuale assume role.
+// Package awsauth builds the AWS SDK configuration for the ecs and lambda plugins: target
+// region, credentials from manent secrets or from the SDK default chain (environment
+// variables, IRSA role, ECS task or EC2 instance role) and an optional assume role.
 package awsauth
 
 import (
@@ -19,13 +19,13 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Parametri del descrittore (deploy.params) comuni ai plugin AWS.
+// Descriptor parameters (deploy.params) shared by the AWS plugins.
 const (
-	ParamAccessKeySecret    = "access_key_id_secret"     // segreto con l'access key ID
-	ParamSecretKeySecret    = "secret_access_key_secret" // segreto con la secret access key
-	ParamSessionTokenSecret = "session_token_secret"     // segreto con il session token (credenziali temporanee)
-	ParamRoleARN            = "role_arn"                 // ruolo da assumere con STS
-	ParamExternalID         = "external_id"              // external ID richiesto dal ruolo
+	ParamAccessKeySecret    = "access_key_id_secret"     // secret with the access key ID
+	ParamSecretKeySecret    = "secret_access_key_secret" // secret with the secret access key
+	ParamSessionTokenSecret = "session_token_secret"     // secret with the session token (temporary credentials)
+	ParamRoleARN            = "role_arn"                 // role to assume with STS
+	ParamExternalID         = "external_id"              // external ID required by the role
 )
 
 var (
@@ -34,10 +34,10 @@ var (
 	sessionRe = regexp.MustCompile(`[^\w+=,.@-]`)
 )
 
-// ValidRegion indica se s è il nome di una region AWS (es. eu-west-1).
+// ValidRegion reports whether s is an AWS region name (e.g. eu-west-1).
 func ValidRegion(s string) bool { return regionRe.MatchString(s) }
 
-// Validate controlla i parametri delle credenziali.
+// Validate checks the credential parameters.
 func Validate(params map[string]string) error {
 	var errs []error
 	if (params[ParamAccessKeySecret] == "") != (params[ParamSecretKeySecret] == "") {
@@ -55,8 +55,8 @@ func Validate(params map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// Config restituisce la configurazione dell'SDK per la region. Le credenziali statiche sono
-// lette dai segreti solo qui, al momento dell'uso, e non vengono mai registrate.
+// Config returns the SDK configuration for the region. Static credentials are read from the
+// secrets only here, at use time, and are never logged.
 func Config(ctx context.Context, region string, req *plugin.Request) (aws.Config, error) {
 	opts := []func(*config.LoadOptions) error{config.WithRegion(region)}
 	if req.Params[ParamAccessKeySecret] != "" {
@@ -92,8 +92,8 @@ func Config(ctx context.Context, region string, req *plugin.Request) (aws.Config
 	return cfg, nil
 }
 
-// SessionName è il nome della sessione STS: riporta l'ID del deploy, così CloudTrail collega
-// le chiamate al deploy che le ha fatte.
+// SessionName is the STS session name: it carries the deploy ID, so CloudTrail ties the calls
+// to the deploy that made them.
 func SessionName(deploymentID string) string {
 	s := "manent-" + sessionRe.ReplaceAllString(deploymentID, "-")
 	if len(s) > 64 {
@@ -102,8 +102,8 @@ func SessionName(deploymentID string) string {
 	return s
 }
 
-// Endpoint restituisce l'endpoint alternativo dalla configurazione del plugin (es. LocalStack),
-// nil se non indicato.
+// Endpoint returns the alternative endpoint from the plugin configuration (e.g. LocalStack),
+// nil if not set.
 func Endpoint(cfg map[string]any) (*string, error) {
 	raw, ok := cfg["endpoint"]
 	if !ok {

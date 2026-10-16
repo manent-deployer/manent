@@ -32,7 +32,7 @@ export function useUIConfig(): UIConfig {
   return ctx.config;
 }
 
-/** useMe legge identità e permessi dell'utente (GET /api/v1/me). */
+/** useMe reads the user's identity and permissions (GET /api/v1/me). */
 export function useMe() {
   const api = useApi();
   return useQuery({

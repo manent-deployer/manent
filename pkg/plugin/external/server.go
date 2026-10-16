@@ -18,9 +18,10 @@ import (
 	pb "github.com/joeg-ita/manent/pkg/plugin/external/proto"
 )
 
-// Serve avvia il plugin e resta in ascolto finché manent non lo arresta. Va chiamata dal main
-// del binario. Lo stdout è riservato all'handshake di go-plugin: il plugin deve loggare solo
-// tramite il logger ricevuto dalla Factory, che scrive su stderr nel formato inoltrato a manent.
+// Serve starts the plugin and keeps listening until manent stops it. Call it from the
+// binary's main. Stdout is reserved to the go-plugin handshake: the plugin must log only
+// through the logger received by the Factory, which writes to stderr in the format forwarded
+// to manent.
 func Serve(f plugin.Factory) {
 	goplugin.Serve(&goplugin.ServeConfig{
 		HandshakeConfig: Handshake,
@@ -29,12 +30,12 @@ func Serve(f plugin.Factory) {
 	})
 }
 
-// logOutput è lo stderr originale del processo, catturato prima di Serve: go-plugin sostituisce
-// os.Stderr con un canale gRPC che manent non inoltra al log.
+// logOutput is the process's original stderr, captured before Serve: go-plugin replaces
+// os.Stderr with a gRPC channel that manent does not forward to the log.
 var logOutput = os.Stderr
 
-// Logger restituisce un logger che scrive su stderr in JSON compatibile con hclog: manent
-// lo inoltra al proprio log applicativo e quindi anche al SIEM.
+// Logger returns a logger that writes to stderr in hclog-compatible JSON: manent forwards it
+// to its application log and so to the SIEM too.
 func Logger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(logOutput, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -44,7 +45,7 @@ func Logger() *slog.Logger {
 			}
 			switch a.Key {
 			case slog.TimeKey:
-				// Formato atteso da go-plugin per @timestamp.
+				// Format go-plugin expects for @timestamp.
 				return slog.String("@timestamp", a.Value.Time().Format("2006-01-02T15:04:05.000000Z07:00"))
 			case slog.LevelKey:
 				return slog.String("@level", strings.ToLower(a.Value.String()))
@@ -56,7 +57,7 @@ func Logger() *slog.Logger {
 	}))
 }
 
-// server è il lato plugin del protocollo: delega al Deployer costruito dalla Factory.
+// server is the plugin side of the protocol: it delegates to the Deployer built by the Factory.
 type server struct {
 	pb.UnimplementedDeployerServer
 	factory plugin.Factory
@@ -83,7 +84,7 @@ func (s *server) Configure(_ context.Context, r *pb.ConfigureRequest) (*pb.Confi
 	return &pb.ConfigureResponse{Name: d.Name(), Capabilities: capabilities(d)}, nil
 }
 
-// get restituisce il deployer configurato.
+// get returns the configured deployer.
 func (s *server) get() (plugin.Deployer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -170,8 +171,8 @@ func (s *server) Rollback(ctx context.Context, r *pb.RollbackRequest) (*pb.Deplo
 	})
 }
 
-// slotCall esegue un'operazione dei rilasci per percentuale se il deployer implementa
-// l'interfaccia T, altrimenti restituisce UNIMPLEMENTED.
+// slotCall runs a percentage rollout operation if the deployer implements interface T,
+// otherwise it returns UNIMPLEMENTED.
 func slotCall[T any](s *server, ctx context.Context, r *pb.DeployRequest, fn func(T, context.Context, *plugin.Request) error) (*pb.Empty, error) {
 	d, err := s.get()
 	if err != nil {
@@ -261,7 +262,7 @@ func (s *server) ScaleCandidate(ctx context.Context, r *pb.WeightRequest) (*pb.E
 	})
 }
 
-// call collega il resolver dei segreti servito da manent ed esegue fn.
+// call binds the secret resolver served by manent and runs fn.
 func (s *server) call(ctx context.Context, r *pb.DeployRequest, fn func(context.Context, *plugin.Request) (*plugin.Result, error)) (*pb.DeployResponse, error) {
 	req := fromProtoRequest(r)
 	if id := r.GetSecretsBrokerId(); id != 0 {
@@ -282,12 +283,12 @@ func (s *server) call(ctx context.Context, r *pb.DeployRequest, fn func(context.
 	return toProtoResult(res), nil
 }
 
-// secretsClient implementa plugin.SecretResolver chiamando manent.
+// secretsClient implements plugin.SecretResolver by calling manent.
 type secretsClient struct {
 	rpc pb.SecretsClient
 }
 
-// secretTimeout limita la lettura di un segreto, che non deve bloccare il deploy.
+// secretTimeout limits reading a secret, which must not block the deploy.
 const secretTimeout = 30 * time.Second
 
 func (c secretsClient) Secret(ctx context.Context, name string) (string, error) {

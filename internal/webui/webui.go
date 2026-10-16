@@ -1,6 +1,6 @@
-// Package webui serve l'interfaccia web di manent, compilata da web/ (make web) e incorporata
-// nel binario con go:embed. Senza build (checkout pulito, go build senza Node) serve una
-// pagina che spiega come costruirla.
+// Package webui serves the manent web interface, built from web/ (make web) and embedded in
+// the binary with go:embed. Without a build (clean checkout, go build without Node) it serves
+// a page that explains how to build it.
 package webui
 
 import (
@@ -14,22 +14,21 @@ import (
 	"time"
 )
 
-// dist contiene la build di web/ (vite build scrive qui); .gitkeep tiene la directory nel
-// repository anche senza build.
+// dist holds the build of web/ (vite build writes here); .gitkeep keeps the directory in the
+// repository even without a build.
 //
 //go:embed all:dist
 var dist embed.FS
 
-// Options configura l'handler.
+// Options configures the handler.
 type Options struct {
-	// ConnectOrigins sono le origini aggiuntive che la pagina può contattare (es. l'issuer OIDC),
-	// oltre alla propria.
+	// ConnectOrigins are the extra origins the page can contact (e.g. the OIDC issuer), besides its own.
 	ConnectOrigins []string
 }
 
-// Handler serve i file statici della UI. I percorsi che non corrispondono a un file restituiscono
-// index.html, perché il routing è lato client. I file in assets/ hanno l'hash nel nome e sono
-// in cache per un anno; index.html non è mai in cache, così un aggiornamento arriva subito.
+// Handler serves the static files of the UI. Paths that match no file return index.html,
+// because routing is client-side. Files in assets/ have the hash in their name and are cached
+// for a year; index.html is never cached, so an update arrives at once.
 type Handler struct {
 	files  fs.FS
 	index  []byte
@@ -37,7 +36,7 @@ type Handler struct {
 	loaded time.Time
 }
 
-// New crea l'handler con la build incorporata.
+// New creates the handler with the embedded build.
 func New(o Options) *Handler {
 	sub, _ := fs.Sub(dist, "dist")
 	return newHandler(sub, o)
@@ -57,8 +56,8 @@ func newHandler(files fs.FS, o Options) *Handler {
 	h.csp = strings.Join([]string{
 		"default-src 'self'",
 		"script-src 'self'",
-		// Stili inline ammessi: i componenti dei dialoghi inseriscono un <style> per bloccare lo
-		// scroll della pagina. Gli script restano solo quelli della build.
+		// Inline styles allowed: dialog components insert a <style> to lock the page scroll. Scripts
+		// stay only those of the build.
 		"style-src 'self' 'unsafe-inline'",
 		"img-src 'self' data:",
 		"font-src 'self'",
@@ -72,10 +71,10 @@ func newHandler(files fs.FS, o Options) *Handler {
 	return h
 }
 
-// Built indica se la build della UI è incorporata.
+// Built reports whether the UI build is embedded.
 func (h *Handler) Built() bool { return h.index != nil }
 
-// ServeHTTP implementa http.Handler.
+// ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hd := w.Header()
 	hd.Set("Content-Security-Policy", h.csp)
@@ -106,7 +105,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.ServeFileFS(w, r, h.files, name)
 			return
 		}
-		// Un file con estensione che non esiste è un 404 vero, non una pagina dell'app.
+		// A file with an extension that does not exist is a real 404, not an app page.
 		if path.Ext(name) != "" {
 			http.NotFound(w, r)
 			return

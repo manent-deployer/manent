@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// text sono le frasi dei messaggi in una lingua.
+// text holds the message phrases in one language.
 type text struct {
 	lang                                                       string
 	started, succeeded, failed, dryRun                         string
@@ -49,7 +49,7 @@ func texts(lang string) text {
 	return languages["en"]
 }
 
-// title è il titolo dell'evento.
+// title is the event title.
 func (t text) title(event string) string {
 	switch event {
 	case EventStarted:
@@ -70,7 +70,7 @@ func (t text) title(event string) string {
 	return event
 }
 
-// emoji è il segno dell'esito nei messaggi Slack.
+// emoji is the outcome sign in Slack messages.
 func emoji(event string) string {
 	switch event {
 	case EventSucceeded, EventApprovalApproved:
@@ -85,7 +85,7 @@ func emoji(event string) string {
 	return ":rocket:"
 }
 
-// headline è la riga riassuntiva, usata come testo di notifica.
+// headline is the summary line, used as notification text.
 func headline(t text, m Message) string {
 	s := fmt.Sprintf("%s: %s %s → %s", t.title(m.Event), m.Application, m.Version, m.Environment)
 	if k := t.kinds[m.Kind]; k != "" {
@@ -97,7 +97,7 @@ func headline(t text, m Message) string {
 	return s
 }
 
-// facts sono le coppie etichetta/valore del messaggio, in ordine.
+// facts are the label/value pairs of the message, in order.
 func facts(t text, m Message) [][2]string {
 	f := [][2]string{
 		{t.application, m.Application}, {t.environment, m.Environment},
@@ -144,7 +144,7 @@ func approvedCount(a *Approval) int {
 	return n
 }
 
-// decisions descrive le decisioni già prese.
+// decisions describes the decisions already taken.
 func decisions(t text, a *Approval) []string {
 	if a == nil {
 		return nil
@@ -171,20 +171,20 @@ func truncate(s string, n int) string {
 	return string([]rune(s)[:n]) + "…"
 }
 
-// mrkdwnEscape protegge i caratteri speciali del markup di Slack.
+// mrkdwnEscape escapes the special characters of Slack markup.
 func mrkdwnEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }
 
-// Azioni dei pulsanti di approvazione nei messaggi Slack.
+// Actions of the approval buttons in Slack messages.
 const (
 	ActionApprove = "manent_approve"
 	ActionReject  = "manent_reject"
 )
 
-// slackBlocks costruisce il messaggio in Block Kit. Con interactive, una richiesta di
-// approvazione ha i pulsanti Approva e Respingi (serve l'app con il bot e l'URL delle
-// interazioni configurato); il link a manent c'è sempre, se noto.
+// slackBlocks builds the message in Block Kit. With interactive, an approval request has the
+// Approve and Reject buttons (it needs the app with the bot and the interactions URL
+// configured); the link to manent is always there, if known.
 func slackBlocks(t text, m Message, link string, interactive bool) []any {
 	title := emoji(m.Event) + " *" + mrkdwnEscape(headline(t, m)) + "*"
 	var fields []any
@@ -197,7 +197,7 @@ func slackBlocks(t text, m Message, link string, interactive bool) []any {
 	}
 	blocks := []any{map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": title}}}
 	for i := 0; i < len(fields); i += 10 {
-		// Slack ammette al più 10 campi per sezione.
+		// Slack allows at most 10 fields per section.
 		blocks = append(blocks, map[string]any{"type": "section", "fields": fields[i:min(i+10, len(fields))]})
 	}
 	if ds := decisions(t, m.Approval); len(ds) > 0 {
@@ -228,8 +228,8 @@ func slackBlocks(t text, m Message, link string, interactive bool) []any {
 	return blocks
 }
 
-// teamsCard costruisce il messaggio come Adaptive Card, nel formato accettato dai webhook dei
-// flussi di Workflows di Teams. Le approvazioni si decidono dall'interfaccia web.
+// teamsCard builds the message as an Adaptive Card, in the format accepted by Teams Workflows
+// webhooks. Approvals are decided from the web interface.
 func teamsCard(t text, m Message, link string) map[string]any {
 	color := "Default"
 	switch m.Event {

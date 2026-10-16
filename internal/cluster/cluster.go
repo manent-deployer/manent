@@ -1,9 +1,9 @@
-// Package cluster tiene il registro degli executor (worker) di manent: heartbeat, arresto,
-// rivendicazione dei workflow di un nodo perso e lease per le attività che un solo worker
-// alla volta deve svolgere (recovery automatica, retention).
+// Package cluster keeps the registry of manent executors (workers): heartbeats, shutdown,
+// claiming the workflows of a lost node and leases for the tasks only one worker at a time
+// must perform (automatic recovery, retention).
 //
-// Il registro sta nello stesso database di DBOS, in tabelle proprie: senza DBOS Conductor è
-// l'unico modo per sapere quali executor sono ancora attivi.
+// The registry lives in the DBOS database, in its own tables: without DBOS Conductor it is the
+// only way to know which executors are still alive.
 package cluster
 
 import (
@@ -14,70 +14,70 @@ import (
 	"strings"
 	"time"
 
-	// Driver database/sql per Postgres ("pgx") e SQLite ("sqlite").
+	// database/sql drivers for Postgres ("pgx") and SQLite ("sqlite").
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
-// Executor è un worker registrato.
+// Executor is a registered worker.
 type Executor struct {
 	ID string `json:"id"`
-	// Version è la versione applicativa dei workflow (app.version): un worker riprende solo
-	// i workflow della propria versione.
+	// Version is the application version of the workflows (app.version): a worker only resumes
+	// workflows of its own version.
 	Version string `json:"version"`
-	// Build è la versione del binario di manent.
+	// Build is the manent binary version.
 	Build    string `json:"build,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
-	// Region è la region del worker (dbos.region), se configurata.
+	// Region is the worker's region (dbos.region), if configured.
 	Region      string     `json:"region,omitempty"`
 	StartedAt   time.Time  `json:"started_at"`
 	HeartbeatAt time.Time  `json:"heartbeat_at"`
 	StoppedAt   *time.Time `json:"stopped_at,omitempty"`
-	// RecoveredBy è chi ha rivendicato i workflow dell'executor dopo la sua perdita.
+	// RecoveredBy is who claimed the executor's workflows after it was lost.
 	RecoveredBy string     `json:"recovered_by,omitempty"`
 	RecoveredAt *time.Time `json:"recovered_at,omitempty"`
 }
 
-// Stale indica un executor che non invia heartbeat da almeno after, o che si è arrestato.
+// Stale reports an executor that has sent no heartbeat for at least after, or that stopped.
 func (e Executor) Stale(now time.Time, after time.Duration) bool {
 	return e.StoppedAt != nil || now.Sub(e.HeartbeatAt) >= after
 }
 
-// Registry è il registro degli executor.
+// Registry is the executor registry.
 //
-// Registrazione all'avvio e rivendicazione si escludono a vicenda: Claim riesce solo su un
-// executor che non invia heartbeat, e Register attende che una recovery in corso dei suoi
-// workflow sia conclusa. Così un nodo che torna proprio mentre viene recuperato non riprende
-// (con il recovery di DBOS) workflow che un altro worker sta già rimettendo in coda.
+// Startup registration and claiming exclude each other: Claim succeeds only on an executor
+// that sends no heartbeat, and Register waits until a running recovery of its workflows ends.
+// So a node that comes back right while it is being recovered does not resume (through DBOS
+// recovery) workflows another worker is already re-enqueuing.
 type Registry interface {
-	// Register registra l'avvio dell'executor e azzera arresto e rivendicazione precedenti.
-	// Restituisce false se è in corso la recovery dei suoi workflow: va ripetuto più tardi.
-	// Restituisce *InUseError se lo stesso ID è registrato da un altro avvio che non si è
-	// arrestato e ha inviato un heartbeat da meno di staleAfter: due processi con lo stesso ID
-	// riprenderebbero l'uno i workflow dell'altro. Va chiamato prima di avviare DBOS.
+	// Register records the executor's startup and clears previous shutdown and claim.
+	// It returns false if a recovery of its workflows is running: retry later.
+	// It returns *InUseError if the same ID is registered by another startup that has not
+	// stopped and sent a heartbeat less than staleAfter ago: two processes with the same ID would
+	// resume each other's workflows. Call it before starting DBOS.
 	Register(ctx context.Context, e Executor, staleAfter time.Duration) (bool, error)
-	// Heartbeat aggiorna l'executor avviato a startedAt. Restituisce chi ne ha rivendicato i
-	// workflow, se è successo mentre era irraggiungibile, o ErrReplaced se un altro avvio si è
-	// registrato con lo stesso ID.
+	// Heartbeat updates the executor started at startedAt. It returns who claimed its workflows,
+	// if that happened while it was unreachable, or ErrReplaced if another startup registered
+	// with the same ID.
 	Heartbeat(ctx context.Context, id string, startedAt time.Time) (recoveredBy string, err error)
-	// Stopped registra l'arresto ordinato dell'executor avviato a startedAt.
+	// Stopped records the orderly shutdown of the executor started at startedAt.
 	Stopped(ctx context.Context, id string, startedAt time.Time) error
-	// List restituisce gli executor registrati, ordinati per ID.
+	// List returns the registered executors, ordered by ID.
 	List(ctx context.Context) ([]Executor, error)
-	// Claim rivendica i workflow di un executor perso: riesce solo se l'executor si è
-	// arrestato o non invia heartbeat da prima di staleBefore, e nessuno lo ha già
-	// rivendicato (o la rivendicazione è rimasta incompiuta oltre ClaimTimeout). Con force
-	// riesce comunque, anche su un executor mai registrato.
+	// Claim claims the workflows of a lost executor: it succeeds only if the executor stopped or
+	// has sent no heartbeat since before staleBefore, and nobody claimed it already (or the claim
+	// stayed unfinished beyond ClaimTimeout). With force it always succeeds, even on an executor
+	// never registered.
 	Claim(ctx context.Context, id, by string, staleBefore time.Time, force bool) (bool, error)
-	// ClaimDone segna conclusa la recovery dei workflow dell'executor.
+	// ClaimDone marks the recovery of the executor's workflows as done.
 	ClaimDone(ctx context.Context, id string) error
-	// Lease acquisisce o rinnova per ttl il lease name: riesce se è libero, scaduto o già
-	// di holder.
+	// Lease acquires or renews lease name for ttl: it succeeds if it is free, expired or already
+	// held by holder.
 	Lease(ctx context.Context, name, holder string, ttl time.Duration) (bool, error)
 	Close() error
 }
 
-// InUseError indica un executor_id già registrato da un altro processo attivo.
+// InUseError means an executor_id already registered by another live process.
 type InUseError struct {
 	ID, Hostname           string
 	StartedAt, HeartbeatAt time.Time
@@ -88,26 +88,26 @@ func (e *InUseError) Error() string {
 		e.ID, e.Hostname, e.StartedAt.Format(time.RFC3339), e.HeartbeatAt.Format(time.RFC3339))
 }
 
-// ErrReplaced indica che un altro avvio si è registrato con lo stesso executor_id.
+// ErrReplaced means another startup registered with the same executor_id.
 var ErrReplaced = errors.New("un altro processo si è registrato con lo stesso executor_id")
 
-// ClaimTimeout è il tempo dopo il quale una recovery non segnata come conclusa (es. per un
-// crash di chi la eseguiva) non blocca più la registrazione dell'executor.
+// ClaimTimeout is the time after which a recovery not marked as done (e.g. because whoever
+// ran it crashed) no longer blocks the executor's registration.
 const ClaimTimeout = 2 * time.Minute
 
-// SQL è il Registry su Postgres o SQLite.
+// SQL is the Registry on Postgres or SQLite.
 type SQL struct {
 	db *sql.DB
-	// executors e leases sono i nomi qualificati delle tabelle; exBare e leaseBare quelli
-	// usati per riferire la riga esistente in ON CONFLICT.
+	// executors and leases are the qualified table names; exBare and leaseBare the ones used to
+	// refer to the existing row in ON CONFLICT.
 	executors, leases, exBare, leaseBare string
 	now                                  func() time.Time
 }
 
 var _ Registry = (*SQL)(nil)
 
-// Open apre il registro sul database di DBOS (database_url) e crea le tabelle se mancano:
-// su Postgres nello schema "manent", su SQLite con il prefisso "manent_".
+// Open opens the registry on the DBOS database (database_url) and creates the tables if
+// missing: on Postgres in the "manent" schema, on SQLite with the "manent_" prefix.
 func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 	driver, dsn, postgres, err := dataSource(databaseURL)
 	if err != nil {
@@ -122,7 +122,7 @@ func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 		db.SetMaxOpenConns(4)
 		r.executors, r.leases, r.exBare, r.leaseBare = "manent.executors", "manent.leases", "executors", "leases"
 	} else {
-		// SQLite: una connessione, così le scritture non competono tra loro nel processo.
+		// SQLite: one connection, so writes do not compete within the process.
 		db.SetMaxOpenConns(1)
 		r.executors, r.leases = "manent_executors", "manent_leases"
 		r.exBare, r.leaseBare = r.executors, r.leases
@@ -134,7 +134,7 @@ func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 	return r, nil
 }
 
-// dataSource traduce l'URL di DBOS nel driver e nella DSN di database/sql.
+// dataSource maps the DBOS URL to the database/sql driver and DSN.
 func dataSource(url string) (driver, dsn string, postgres bool, err error) {
 	switch {
 	case strings.HasPrefix(url, "postgres://"), strings.HasPrefix(url, "postgresql://"), strings.Contains(url, "host="), strings.Contains(url, "dbname="):
@@ -151,14 +151,14 @@ func dataSource(url string) (driver, dsn string, postgres bool, err error) {
 		if strings.Contains(path, "?") {
 			sep = "&"
 		}
-		// Il file è condiviso con DBOS: si attende il lock invece di fallire subito.
+		// The file is shared with DBOS: wait for the lock instead of failing at once.
 		return "sqlite", path + sep + "_pragma=busy_timeout(10000)", false, nil
 	}
 	return "", "", false, fmt.Errorf("registro executor: database_url %q non supportato", url)
 }
 
-// migrate crea schema e tabelle. Più worker avviati insieme possono andare in conflitto sulla
-// creazione dello schema Postgres: si riprova.
+// migrate creates schema and tables. Several workers started together can conflict on
+// creating the Postgres schema: retry.
 func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS ` + r.executors + ` (
@@ -192,13 +192,13 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 	return fmt.Errorf("registro executor: creazione tabelle: %w", err)
 }
 
-// addColumns aggiunge le colonne introdotte dopo la prima versione del registro.
+// addColumns adds the columns introduced after the first registry version.
 func (r *SQL) addColumns(ctx context.Context, postgres bool) error {
 	if postgres {
 		_, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN IF NOT EXISTS region TEXT`)
 		return err
 	}
-	// SQLite non ha ADD COLUMN IF NOT EXISTS: si controlla prima lo schema.
+	// SQLite has no ADD COLUMN IF NOT EXISTS: check the schema first.
 	var n int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('`+r.executors+`') WHERE name = 'region'`).Scan(&n); err != nil || n > 0 {
 		return err
@@ -226,9 +226,9 @@ func fromMs(v sql.NullInt64) *time.Time {
 	return &t
 }
 
-// Register implementa Registry. La registrazione sostituisce la riga esistente solo se
-// appartiene allo stesso avvio letto prima (started_at): se nel frattempo un altro processo si è
-// registrato, si rilegge e si rivaluta.
+// Register implements Registry. Registration replaces the existing row only if it belongs to
+// the same startup read before (started_at): if another process registered meanwhile, read
+// again and reevaluate.
 func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration) (bool, error) {
 	t := r.exBare
 	for range 3 {
@@ -248,8 +248,8 @@ func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration
 			return false, err
 		default:
 			prev = started
-			// Un executor rivendicato è già stato dichiarato perso: anche se risponde ancora, la
-			// nuova registrazione segue le regole della recovery.
+			// A claimed executor has already been declared lost: even if it still answers, the new
+			// registration follows the recovery rules.
 			if !stopped.Valid && !recoveredBy.Valid && started != ms(e.StartedAt) && now.Sub(time.UnixMilli(heartbeat)) < staleAfter {
 				return false, &InUseError{ID: e.ID, Hostname: hostname, StartedAt: time.UnixMilli(started).UTC(), HeartbeatAt: time.UnixMilli(heartbeat).UTC()}
 			}
@@ -269,8 +269,8 @@ func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration
 		if n, err := res.RowsAffected(); err != nil || n == 1 {
 			return n == 1, err
 		}
-		// Nessuna riga aggiornata: recovery in corso (la riga è quella letta) o un altro avvio
-		// registrato nel frattempo (si rivaluta).
+		// No row updated: recovery running (the row is the one read) or another startup registered
+		// meanwhile (reevaluate).
 		var now2 int64
 		err = r.db.QueryRowContext(ctx, `SELECT started_at FROM `+r.executors+` WHERE executor_id = $1`, e.ID).Scan(&now2)
 		if err == nil && now2 == prev {
@@ -280,7 +280,7 @@ func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration
 	return false, fmt.Errorf("registro executor: registrazione di %q contesa da un altro processo", e.ID)
 }
 
-// Heartbeat implementa Registry.
+// Heartbeat implements Registry.
 func (r *SQL) Heartbeat(ctx context.Context, id string, startedAt time.Time) (string, error) {
 	if _, err := r.db.ExecContext(ctx, `UPDATE `+r.executors+` SET heartbeat_at = $3 WHERE executor_id = $1 AND started_at = $2`,
 		id, ms(startedAt), ms(r.now())); err != nil {
@@ -294,14 +294,14 @@ func (r *SQL) Heartbeat(ctx context.Context, id string, startedAt time.Time) (st
 	return by.String, err
 }
 
-// Stopped implementa Registry.
+// Stopped implements Registry.
 func (r *SQL) Stopped(ctx context.Context, id string, startedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE `+r.executors+` SET stopped_at = $3 WHERE executor_id = $1 AND started_at = $2`,
 		id, ms(startedAt), ms(r.now()))
 	return err
 }
 
-// List implementa Registry.
+// List implements Registry.
 func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT executor_id, version, build, hostname, started_at, heartbeat_at,
 		stopped_at, recovered_by, recovered_at, region FROM `+r.executors+` ORDER BY executor_id`)
@@ -328,7 +328,7 @@ func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 	return out, rows.Err()
 }
 
-// Claim implementa Registry. Un executor assente dal registro è rivendicabile solo con force.
+// Claim implements Registry. An executor missing from the registry can be claimed only with force.
 func (r *SQL) Claim(ctx context.Context, id, by string, staleBefore time.Time, force bool) (bool, error) {
 	f := 0
 	if force {
@@ -346,7 +346,7 @@ func (r *SQL) Claim(ctx context.Context, id, by string, staleBefore time.Time, f
 		return false, err
 	}
 	if n == 0 && force {
-		// Executor mai registrato (es. perso prima dell'introduzione del registro).
+		// Executor never registered (e.g. lost before the registry existed).
 		var exists int
 		err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+r.executors+` WHERE executor_id = $1`, id).Scan(&exists)
 		return err == nil && exists == 0, err
@@ -354,13 +354,13 @@ func (r *SQL) Claim(ctx context.Context, id, by string, staleBefore time.Time, f
 	return n == 1, nil
 }
 
-// ClaimDone implementa Registry.
+// ClaimDone implements Registry.
 func (r *SQL) ClaimDone(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE `+r.executors+` SET recovery_done_at = $2 WHERE executor_id = $1 AND recovered_by IS NOT NULL`, id, ms(r.now()))
 	return err
 }
 
-// Lease implementa Registry.
+// Lease implements Registry.
 func (r *SQL) Lease(ctx context.Context, name, holder string, ttl time.Duration) (bool, error) {
 	now := r.now()
 	t := r.leaseBare
@@ -374,5 +374,5 @@ func (r *SQL) Lease(ctx context.Context, name, holder string, ttl time.Duration)
 	return n == 1, err
 }
 
-// Close chiude la connessione.
+// Close closes the connection.
 func (r *SQL) Close() error { return r.db.Close() }

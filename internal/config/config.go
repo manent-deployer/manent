@@ -1,4 +1,4 @@
-// Package config gestisce la configurazione applicativa statica di manent.
+// Package config handles manent's static application configuration.
 package config
 
 import (
@@ -17,13 +17,13 @@ import (
 	"github.com/joeg-ita/manent/internal/customspec"
 )
 
-// Modalità di uno step nella pipeline.
+// Modes of a pipeline step.
 const (
 	ModeMandatory = "mandatory"
 	ModeOptional  = "optional"
 )
 
-// Config è la configurazione completa dell'applicazione.
+// Config is the complete application configuration.
 type Config struct {
 	App       App       `yaml:"app"`
 	DBOS      DBOS      `yaml:"dbos"`
@@ -37,7 +37,7 @@ type Config struct {
 	Auth      Auth      `yaml:"auth"`
 	RBAC      RBAC      `yaml:"rbac"`
 	Audit     Audit     `yaml:"audit"`
-	// DescriptorPolicy limita ciò che i descrittori possono aggiungere alla configurazione di ambiente.
+	// DescriptorPolicy limits what descriptors can add to the environment configuration.
 	DescriptorPolicy DescriptorPolicy          `yaml:"descriptor_policy"`
 	Secrets          Secrets                   `yaml:"secrets"`
 	Governance       Governance                `yaml:"governance"`
@@ -52,141 +52,140 @@ type Config struct {
 	Integrations     Integrations              `yaml:"integrations"`
 }
 
-// Observability configura metriche, tracing e sonde dei processi di lunga durata.
+// Observability configures metrics, tracing and probes of long-running processes.
 type Observability struct {
-	// Listen, se indicato, avvia su questo indirizzo un server con /metrics, /healthz e
-	// /readyz: serve al worker, che non ha l'API. Con serve le stesse rotte sono anche
-	// sull'indirizzo dell'API.
+	// Listen, if set, starts a server with /metrics, /healthz and /readyz on this address: it is
+	// for the worker, which has no API. With serve the same routes are also on the API address.
 	Listen string `yaml:"listen"`
-	// Metrics abilita le metriche Prometheus.
+	// Metrics enables Prometheus metrics.
 	Metrics bool    `yaml:"metrics"`
 	Tracing Tracing `yaml:"tracing"`
 }
 
-// Tracing configura l'esportazione delle tracce OpenTelemetry via OTLP/HTTP.
+// Tracing configures the export of OpenTelemetry traces over OTLP/HTTP.
 type Tracing struct {
 	Enabled bool `yaml:"enabled"`
-	// Endpoint del collector (es. otel-collector:4318); vuoto: OTEL_EXPORTER_OTLP_ENDPOINT.
+	// Endpoint of the collector (e.g. otel-collector:4318); empty: OTEL_EXPORTER_OTLP_ENDPOINT.
 	Endpoint string `yaml:"endpoint"`
-	// Insecure usa http invece di https.
+	// Insecure uses http instead of https.
 	Insecure bool `yaml:"insecure"`
-	// SampleRatio è la frazione delle tracce campionate (default 1).
+	// SampleRatio is the fraction of sampled traces (default 1).
 	SampleRatio float64 `yaml:"sample_ratio"`
 }
 
-// RolloutConfig configura l'health gate dei rollout a ondate.
+// RolloutConfig configures the health gate of wave rollouts.
 type RolloutConfig struct {
-	// PrometheusURL è l'API di Prometheus per le metriche dei gate (rollout.health.metrics).
+	// PrometheusURL is the Prometheus API for gate metrics (rollout.health.metrics).
 	PrometheusURL string `yaml:"prometheus_url"`
-	// AlertmanagerURL è l'API di Alertmanager per gli allarmi (rollout.health.alerts).
+	// AlertmanagerURL is the Alertmanager API for alerts (rollout.health.alerts).
 	AlertmanagerURL string `yaml:"alertmanager_url"`
-	// CheckTimeout limita ogni lettura dell'health gate.
+	// CheckTimeout limits every health gate read.
 	CheckTimeout time.Duration `yaml:"check_timeout"`
 }
 
-// Chains configura le dipendenze tra deploy (after) e le release composte.
+// Chains configures dependencies between deploys (after) and composite releases.
 type Chains struct {
-	// PollInterval è il primo intervallo di lettura dello stato dei deploy attesi; raddoppia a
-	// ogni lettura fino a 1 minuto.
+	// PollInterval is the first interval for reading the state of awaited deploys; it doubles at
+	// every read up to 1 minute.
 	PollInterval time.Duration `yaml:"poll_interval"`
 }
 
-// Recovery configura il registro dei worker e la ripresa dei workflow di un worker perso.
+// Recovery configures the worker registry and the resumption of a lost worker's workflows.
 type Recovery struct {
-	// HeartbeatInterval è ogni quanto un worker aggiorna il registro.
+	// HeartbeatInterval is how often a worker updates the registry.
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
-	// StaleAfter è il ritardo di heartbeat oltre il quale un worker è considerato perso.
+	// StaleAfter is the heartbeat delay beyond which a worker is considered lost.
 	StaleAfter time.Duration `yaml:"stale_after"`
-	// AutoRecoverAfter, se > 0, fa riprendere a un altro worker i workflow in sospeso di un
-	// worker della stessa versione arrestato o senza heartbeat da questo tempo. 0 = solo
-	// manuale (manent admin recover).
+	// AutoRecoverAfter, if > 0, makes another worker resume the pending workflows of a worker of
+	// the same version that stopped or sent no heartbeat for this long. 0 = manual only
+	// (manent admin recover).
 	AutoRecoverAfter time.Duration `yaml:"auto_recover_after"`
 }
 
-// Retention configura la pulizia dello storico dei workflow.
+// Retention configures the cleanup of the workflow history.
 type Retention struct {
-	// MaxAge: i workflow conclusi da più di MaxAge vengono eliminati (0 = mai).
+	// MaxAge: workflows ended more than MaxAge ago are deleted (0 = never).
 	MaxAge time.Duration `yaml:"max_age"`
-	// KeepReleases sono i deploy riusciti conservati comunque per applicazione e ambiente.
+	// KeepReleases are the successful deploys always kept per application and environment.
 	KeepReleases int `yaml:"keep_releases"`
-	// Interval è ogni quanto un worker esegue la pulizia.
+	// Interval is how often a worker runs the cleanup.
 	Interval time.Duration `yaml:"interval"`
 }
 
-// App identifica l'applicazione.
+// App identifies the application.
 type App struct {
 	Name    string `yaml:"name"`
 	Version string `yaml:"version"`
 }
 
-// DBOS configura il motore di workflow e la coda dei deploy.
+// DBOS configures the workflow engine and the deploy queue.
 type DBOS struct {
 	DatabaseURL string `yaml:"database_url"`
-	// ExecutorID identifica il worker: deve essere univoco tra i nodi e stabile tra i riavvii,
-	// perché all'avvio un worker recupera solo i workflow rimasti in sospeso con il proprio ID.
-	// Default: hostname. La variabile DBOS__VMID ha la precedenza.
+	// ExecutorID identifies the worker: it must be unique across nodes and stable across
+	// restarts, because at startup a worker only recovers the pending workflows with its own ID.
+	// Default: hostname. The DBOS__VMID variable takes precedence.
 	ExecutorID string `yaml:"executor_id"`
 	Queue      string `yaml:"queue"`
-	// Concurrency è il numero massimo di deploy in esecuzione su ogni worker.
+	// Concurrency is the maximum number of deploys running on each worker.
 	Concurrency int `yaml:"concurrency"`
-	// GlobalConcurrency è il numero massimo di deploy in esecuzione su tutti i worker (0 = nessun limite).
+	// GlobalConcurrency is the maximum number of deploys running on all workers (0 = no limit).
 	GlobalConcurrency int `yaml:"global_concurrency"`
-	// EnvironmentConcurrency è il numero massimo di deploy contemporanei della stessa
-	// application/environment su tutti i worker.
+	// EnvironmentConcurrency is the maximum number of concurrent deploys of the same
+	// application/environment on all workers.
 	EnvironmentConcurrency int `yaml:"environment_concurrency"`
-	// SchedulePollInterval è ogni quanto le modifiche alle schedule vengono rilette dal database.
+	// SchedulePollInterval is how often schedule changes are read again from the database.
 	SchedulePollInterval time.Duration `yaml:"schedule_poll_interval"`
-	// Region è la region del worker: con RegionRouting esegue i passi dei rollout a ondate
-	// sui target di questa region (coda <queue>.<region>).
+	// Region is the worker's region: with RegionRouting it runs the wave rollout passes on the
+	// targets of this region (queue <queue>.<region>).
 	Region string `yaml:"region"`
-	// RegionRouting fa eseguire i passi dei rollout ai worker della region dei target, come
-	// workflow figli; senza, l'orchestratore li esegue in linea.
+	// RegionRouting makes the workers of the targets' region run the rollout passes, as child
+	// workflows; without it, the orchestrator runs them inline.
 	RegionRouting bool `yaml:"region_routing"`
-	// DrainTimeout è il tempo massimo per cui un worker in arresto attende i deploy in corso,
-	// dopo aver smesso di prelevarne dalla coda (0 = non attende).
+	// DrainTimeout is how long a stopping worker waits for the running deploys after it stopped
+	// dequeuing (0 = no wait).
 	DrainTimeout time.Duration `yaml:"drain_timeout"`
 }
 
-// HTTP configura il web server API.
+// HTTP configures the API web server.
 type HTTP struct {
 	Listen string `yaml:"listen"`
 	UI     UI     `yaml:"ui"`
 }
 
-// UI configura l'interfaccia web servita dall'API.
+// UI configures the web interface served by the API.
 type UI struct {
-	// Enabled serve l'interfaccia su / (default true).
+	// Enabled serves the interface on / (default true).
 	Enabled *bool `yaml:"enabled"`
 }
 
-// IsEnabled indica se l'interfaccia web è attiva (default true).
+// IsEnabled reports whether the web interface is enabled (default true).
 func (u UI) IsEnabled() bool { return u.Enabled == nil || *u.Enabled }
 
-// Logging configura il log applicativo.
+// Logging configures the application log.
 type Logging struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
-// SIEM configura l'invio dei log strutturati: a un collettore RFC 5424 (udp, tcp), al socket
-// syslog locale (unixgram, es. /dev/log) o a journald con il protocollo nativo (journald).
+// SIEM configures sending structured logs: to an RFC 5424 collector (udp, tcp), to the local
+// syslog socket (unixgram, e.g. /dev/log) or to journald with the native protocol (journald).
 type SIEM struct {
 	Enabled bool   `yaml:"enabled"`
 	Network string `yaml:"network"`
 	Address string `yaml:"address"`
-	// Destinations sono destinazioni in aggiunta a network/address (es. il SIEM remoto e il
-	// journal locale insieme).
+	// Destinations are destinations besides network/address (e.g. the remote SIEM and the local
+	// journal together).
 	Destinations []SIEMDestination `yaml:"destinations"`
 }
 
-// SIEMDestination è una destinazione dei log strutturati. Per unixgram e journald address è il
-// percorso del socket (default /dev/log e /run/systemd/journal/socket).
+// SIEMDestination is a structured log destination. For unixgram and journald, address is the
+// socket path (default /dev/log and /run/systemd/journal/socket).
 type SIEMDestination struct {
 	Network string `yaml:"network"`
 	Address string `yaml:"address"`
 }
 
-// Targets restituisce le destinazioni attive: nessuna se l'invio è disattivato.
+// Targets returns the active destinations: none if sending is disabled.
 func (s SIEM) Targets() []SIEMDestination {
 	if !s.Enabled {
 		return nil
@@ -198,134 +197,133 @@ func (s SIEM) Targets() []SIEMDestination {
 	return append(out, s.Destinations...)
 }
 
-// Provider di configurazione di ambiente supportati.
+// Supported environment configuration providers.
 const (
 	EnvProviderNone   = "none"
 	EnvProviderConsul = "consul"
 	EnvProviderFile   = "file"
 )
 
-// EnvConfig configura il sistema da cui leggere la configurazione di deploy di ogni ambiente.
+// EnvConfig configures the system the deploy configuration of every environment is read from.
 type EnvConfig struct {
-	// Provider è none, consul o file.
+	// Provider is none, consul or file.
 	Provider string `yaml:"provider"`
-	// Required fa fallire il deploy se per l'ambiente non esiste configurazione.
+	// Required fails the deploy if the environment has no configuration.
 	Required bool `yaml:"required"`
-	// MaxRetries sono i tentativi aggiuntivi in caso di errore di lettura.
+	// MaxRetries are the extra attempts on a read error.
 	MaxRetries int          `yaml:"max_retries"`
 	Consul     ConsulConfig `yaml:"consul"`
 	File       FileConfig   `yaml:"file"`
 }
 
-// ConsulConfig configura la lettura dal KV store di Consul.
-// Il token ACL non va scritto nel file: si legge da CONSUL_HTTP_TOKEN o da token_file.
+// ConsulConfig configures reading from the Consul KV store.
+// The ACL token must not be written in the file: it is read from CONSUL_HTTP_TOKEN or token_file.
 type ConsulConfig struct {
-	// Address dell'agent (default CONSUL_HTTP_ADDR o http://127.0.0.1:8500).
+	// Address of the agent (default CONSUL_HTTP_ADDR or http://127.0.0.1:8500).
 	Address    string `yaml:"address"`
 	Datacenter string `yaml:"datacenter"`
-	// Key è il modello di chiave, con {application} e {environment}.
+	// Key is the key template, with {application} and {environment}.
 	Key       string `yaml:"key"`
 	TokenFile string `yaml:"token_file"`
 }
 
-// FileConfig configura la lettura da file locali.
+// FileConfig configures reading from local files.
 type FileConfig struct {
-	// Path è il modello di percorso, con {application} e {environment}.
+	// Path is the path template, with {application} and {environment}.
 	Path string `yaml:"path"`
 }
 
-// Callbacks configura l'invio degli eventi ai callback indicati nei descrittori.
+// Callbacks configures sending events to the callbacks named in descriptors.
 type Callbacks struct {
-	// Timeout di ogni chiamata.
+	// Timeout of every call.
 	Timeout time.Duration `yaml:"timeout"`
-	// MaxRetries sono i tentativi aggiuntivi di ogni invio.
+	// MaxRetries are the extra attempts of every send.
 	MaxRetries int `yaml:"max_retries"`
-	// AllowHTTP ammette callback http; di default solo https.
+	// AllowHTTP allows http callbacks; by default https only.
 	AllowHTTP bool `yaml:"allow_http"`
-	// AllowedHosts limita gli host dei callback (anche "*.dominio"); vuoto = tutti.
+	// AllowedHosts limits the callback hosts (also "*.domain"); empty = all.
 	AllowedHosts []string `yaml:"allowed_hosts"`
 }
 
-// Rollback configura le policy di rollback automatico.
+// Rollback configures the automatic rollback policies.
 type Rollback struct {
-	// Locator è la strategia di default per individuare la release a cui tornare.
+	// Locator is the default strategy to find the release to go back to.
 	Locator string `yaml:"locator"`
-	// ArtifactTypes è la policy per tipo di artefatto. Per i tipi non elencati il rollback
-	// non è ammesso.
+	// ArtifactTypes is the policy per artifact type. Unlisted types do not allow rollback.
 	ArtifactTypes map[string]RollbackType `yaml:"artifact_types"`
 }
 
-// RollbackType è la policy di rollback di un tipo di artefatto.
+// RollbackType is the rollback policy of an artifact type.
 type RollbackType struct {
-	// Allowed indica se il rollback è possibile per questo tipo (es. no per le migration di database).
+	// Allowed reports whether rollback is possible for this type (e.g. not for database migrations).
 	Allowed bool `yaml:"allowed"`
-	// Enabled è il default, sovrascrivibile da descrittore e configurazione di ambiente.
+	// Enabled is the default, which descriptor and environment configuration can override.
 	Enabled bool `yaml:"enabled"`
-	// On elenca gli step il cui fallimento avvia il rollback (default: DefaultRollbackOn).
+	// On lists the steps whose failure starts the rollback (default: DefaultRollbackOn).
 	On []string `yaml:"on"`
-	// Locator sovrascrive il locator di default per questo tipo.
+	// Locator overrides the default locator for this type.
 	Locator string `yaml:"locator"`
 }
 
-// DefaultRollbackOn sono gli step che di default avviano il rollback: quelli successivi
-// alla prima modifica degli ambienti.
+// DefaultRollbackOn are the steps that start the rollback by default: those after the first
+// change to the environments.
 var DefaultRollbackOn = []string{"deploy", "post-test", "activation"}
 
-// Modalità di autenticazione.
+// Authentication modes.
 const (
-	// AuthModeNone disattiva autenticazione e permessi: solo per sviluppo.
+	// AuthModeNone disables authentication and permissions: development only.
 	AuthModeNone    = "none"
 	AuthModeEnabled = "enabled"
 )
 
-// Auth configura l'autenticazione dell'API.
+// Auth configures the API authentication.
 type Auth struct {
-	// Mode è none (default) o enabled.
+	// Mode is none (default) or enabled.
 	Mode   string     `yaml:"mode"`
 	OIDC   *OIDC      `yaml:"oidc"`
 	Tokens []APIToken `yaml:"tokens"`
-	// TokensFile è un file YAML con altri token (chiave tokens), riletto quando cambia:
-	// permette di aggiungere e revocare token senza riavviare.
+	// TokensFile is a YAML file with more tokens (tokens key), reloaded when it changes: tokens
+	// can be added and revoked without restarting.
 	TokensFile string `yaml:"tokens_file"`
 }
 
-// OIDC configura la verifica dei token di un identity provider OIDC.
+// OIDC configures the verification of tokens of an OIDC identity provider.
 type OIDC struct {
 	Issuer        string `yaml:"issuer"`
 	Audience      string `yaml:"audience"`
 	UsernameClaim string `yaml:"username_claim"`
 	GroupsClaim   string `yaml:"groups_claim"`
 	CAFile        string `yaml:"ca_file"`
-	// UI è il client OIDC pubblico (Authorization Code + PKCE) dell'interfaccia web: i suoi
-	// access token devono avere l'audience e il claim dei gruppi verificati qui sopra.
+	// UI is the public OIDC client (Authorization Code + PKCE) of the web interface: its access
+	// tokens must have the audience and the groups claim verified above.
 	UI *OIDCUI `yaml:"ui"`
 }
 
-// OIDCUI è il client OIDC dell'interfaccia web.
+// OIDCUI is the OIDC client of the web interface.
 type OIDCUI struct {
 	ClientID string   `yaml:"client_id"`
 	Scopes   []string `yaml:"scopes"`
-	// RedirectPath è il percorso di ritorno dopo il login (default /auth/callback).
+	// RedirectPath is the return path after login (default /auth/callback).
 	RedirectPath string `yaml:"redirect_path"`
 }
 
-// APIToken è un token statico per sistemi automatici: in configurazione c'è solo lo sha256.
+// APIToken is a static token for automated systems: the configuration holds only its sha256.
 type APIToken struct {
 	Name   string   `yaml:"name"`
 	SHA256 string   `yaml:"sha256"`
 	Groups []string `yaml:"groups"`
-	// ExpiresAt, se indicato, è la scadenza del token.
+	// ExpiresAt, if set, is the token expiry.
 	ExpiresAt time.Time `yaml:"expires_at"`
 }
 
-// RBAC assegna i ruoli per applicazione e ambiente.
+// RBAC assigns roles per application and environment.
 type RBAC struct {
-	// Roles definisce ruoli aggiuntivi a quelli predefiniti (viewer, tester, deployer, operator, admin).
+	// Roles defines roles in addition to the predefined ones (viewer, tester, deployer, operator, admin).
 	Roles    map[string][]string `yaml:"roles"`
 	Bindings []RBACBinding       `yaml:"bindings"`
 }
 
-// RBACBinding assegna un ruolo a utenti o gruppi su applicazioni e ambienti (pattern con "*").
+// RBACBinding assigns a role to users or groups on applications and environments ("*" patterns).
 type RBACBinding struct {
 	Subjects     []string `yaml:"subjects"`
 	Groups       []string `yaml:"groups"`
@@ -334,48 +332,48 @@ type RBACBinding struct {
 	Environments []string `yaml:"environments"`
 }
 
-// Audit configura la registrazione delle azioni.
+// Audit configures the recording of actions.
 type Audit struct {
-	// File, se indicato, riceve le voci di audit in JSON Lines (oltre al log e al SIEM),
-	// concatenate da un hash che rende rilevabili modifiche e cancellazioni.
+	// File, if set, receives the audit entries as JSON Lines (besides the log and the SIEM),
+	// chained by a hash that makes changes and deletions detectable.
 	File string `yaml:"file"`
-	// MaxSizeMB è la dimensione oltre cui il file viene ruotato (0 = nessuna rotazione).
+	// MaxSizeMB is the size beyond which the file is rotated (0 = no rotation).
 	MaxSizeMB int `yaml:"max_size_mb"`
-	// HMACKeyRef è il riferimento a una chiave segreta: con la chiave la catena è un HMAC e
-	// non può essere ricalcolata da chi modifica il file.
+	// HMACKeyRef references a secret key: with the key the chain is an HMAC and cannot be
+	// recomputed by whoever edits the file.
 	HMACKeyRef string `yaml:"hmac_key_ref"`
 }
 
-// Governance configura le regole di rilascio: promozione, approvazioni e freeze.
+// Governance configures the release rules: promotion, approvals and freezes.
 type Governance struct {
-	// Rules si applicano per applicazione e ambiente: vale la prima che corrisponde.
+	// Rules apply per application and environment: the first match wins.
 	Rules   []GovernanceRule `yaml:"rules"`
 	Freezes []FreezeWindow   `yaml:"freezes"`
 }
 
-// GovernanceRule sono le regole di rilascio di applicazioni e ambienti (pattern con "*").
+// GovernanceRule are the release rules of applications and environments ("*" patterns).
 type GovernanceRule struct {
 	Name         string   `yaml:"name"`
 	Applications []string `yaml:"applications"`
 	Environments []string `yaml:"environments"`
-	// Requires elenca gli ambienti in cui lo stesso artefatto deve essere già stato rilasciato.
+	// Requires lists the environments where the same artifact must already have been released.
 	Requires  []string          `yaml:"requires"`
 	Approvals *ApprovalSettings `yaml:"approvals"`
-	// Change apre un ticket di change management per ogni deploy (integrations.change).
+	// Change opens a change management ticket for every deploy (integrations.change).
 	Change *ChangeRule `yaml:"change"`
 }
 
-// ApprovalSettings configura le approvazioni richieste prima del deploy.
+// ApprovalSettings configures the approvals required before the deploy.
 type ApprovalSettings struct {
 	Required  int           `yaml:"required"`
 	AllowSelf bool          `yaml:"allow_self"`
 	Timeout   time.Duration `yaml:"timeout"`
-	// When: before (default) o rollout, per chiederle nei punti di approvazione del rollout.
+	// When: before (default) or rollout, to ask for them at the rollout's approval points.
 	When string `yaml:"when"`
 }
 
-// FreezeWindow è una finestra in cui i deploy sono bloccati: assoluta (from/to) o
-// ricorrente (cron a 5 campi per duration).
+// FreezeWindow is a window in which deploys are blocked: absolute (from/to) or recurring
+// (5-field cron for duration).
 type FreezeWindow struct {
 	Name         string        `yaml:"name"`
 	Reason       string        `yaml:"reason"`
@@ -389,33 +387,33 @@ type FreezeWindow struct {
 	Timezone     string        `yaml:"timezone"`
 }
 
-// DescriptorPolicy limita ciò che un descrittore può aggiungere alla configurazione di ambiente.
-// I campi assenti valgono "nessun limite", per compatibilità: in produzione vanno impostati.
+// DescriptorPolicy limits what a descriptor can add to the environment configuration.
+// Missing fields mean "no limit", for compatibility: set them in production.
 type DescriptorPolicy struct {
-	// Params elenca per plugin ("*" = tutti) i pattern dei parametri impostabili dal descrittore.
+	// Params lists per plugin ("*" = all) the patterns of the parameters a descriptor can set.
 	Params map[string][]string `yaml:"params"`
-	// SecretRefs sono i pattern dei riferimenti ai segreti dichiarabili dal descrittore,
-	// con {application} e {environment}.
+	// SecretRefs are the patterns of the secret references a descriptor can declare, with
+	// {application} and {environment}.
 	SecretRefs []string `yaml:"secret_refs"`
-	// Targets ammette target indicati dal descrittore.
+	// Targets allows targets given by the descriptor.
 	Targets *bool `yaml:"targets"`
-	// StepParams elenca per step personalizzato i pattern dei parametri impostabili dal
-	// descrittore. Default: nessuno, i parametri arrivano dalla configurazione di ambiente.
+	// StepParams lists per custom step the patterns of the parameters a descriptor can set.
+	// Default: none, parameters come from the environment configuration.
 	StepParams map[string][]string `yaml:"step_params"`
 }
 
-// Secrets configura i provider di segreti aggiuntivi a env: e file:.
+// Secrets configures the secret providers besides env: and file:.
 type Secrets struct {
 	Vault Vault `yaml:"vault"`
 }
 
-// Vault configura lo schema "vault:".
+// Vault configures the "vault:" scheme.
 type Vault struct {
 	Enabled bool `yaml:"enabled"`
-	// Address default VAULT_ADDR.
+	// Address defaults to VAULT_ADDR.
 	Address   string `yaml:"address"`
 	Namespace string `yaml:"namespace"`
-	// Auth è token (default), approle o kubernetes.
+	// Auth is token (default), approle or kubernetes.
 	Auth       string        `yaml:"auth"`
 	TokenFile  string        `yaml:"token_file"`
 	AppRole    VaultAppRole  `yaml:"approle"`
@@ -424,39 +422,39 @@ type Vault struct {
 	Timeout    time.Duration `yaml:"timeout"`
 }
 
-// VaultAppRole configura il login AppRole.
+// VaultAppRole configures the AppRole login.
 type VaultAppRole struct {
 	RoleID       string `yaml:"role_id"`
 	SecretIDFile string `yaml:"secret_id_file"`
 	Mount        string `yaml:"mount"`
 }
 
-// VaultK8s configura il login con il service account Kubernetes.
+// VaultK8s configures the login with the Kubernetes service account.
 type VaultK8s struct {
 	Role    string `yaml:"role"`
 	JWTFile string `yaml:"jwt_file"`
 	Mount   string `yaml:"mount"`
 }
 
-// Artifacts configura il download degli artefatti.
+// Artifacts configures artifact downloads.
 type Artifacts struct {
-	// Timeout di un download (default 30m).
+	// Timeout of a download (default 30m).
 	Timeout time.Duration `yaml:"timeout"`
-	// AllowUnlisted ammette sorgenti non elencate in Sources (default true).
+	// AllowUnlisted allows sources not listed in Sources (default true).
 	AllowUnlisted *bool            `yaml:"allow_unlisted"`
 	Sources       []ArtifactSource `yaml:"sources"`
 }
 
-// ArtifactSource è una sorgente di artefatti, con eventuali credenziali.
+// ArtifactSource is an artifact source, with optional credentials.
 type ArtifactSource struct {
-	// Prefix dell'URL (https://, http:// o file:///).
+	// Prefix of the URL (https://, http:// or file:///).
 	Prefix string        `yaml:"prefix"`
 	Auth   *ArtifactAuth `yaml:"auth"`
 	CAFile string        `yaml:"ca_file"`
 }
 
-// ArtifactAuth sono le credenziali di una sorgente: SecretRef è un riferimento del secret
-// provider (es. vault:...), mai il valore.
+// ArtifactAuth are the credentials of a source: SecretRef is a secret provider reference
+// (e.g. vault:...), never the value.
 type ArtifactAuth struct {
 	Type      string `yaml:"type"`
 	Username  string `yaml:"username"`
@@ -464,25 +462,25 @@ type ArtifactAuth struct {
 	SecretRef string `yaml:"secret_ref"`
 }
 
-// Pipeline elenca gli step disponibili nell'ordine di esecuzione.
+// Pipeline lists the available steps in execution order.
 type Pipeline struct {
 	Steps []Step `yaml:"steps"`
-	// Custom configura gli step personalizzati (step con type).
+	// Custom configures custom steps (steps with type).
 	Custom CustomSteps `yaml:"custom"`
 }
 
-// Step definisce la configurazione statica di uno step.
+// Step defines the static configuration of a step.
 type Step struct {
 	Name string `yaml:"name"`
 	Mode string `yaml:"mode"`
-	// Enabled è il default per gli step opzionali, sovrascrivibile dal descrittore.
+	// Enabled is the default for optional steps, which the descriptor can override.
 	Enabled    bool `yaml:"enabled"`
 	MaxRetries int  `yaml:"max_retries"`
-	// Spec, con type, definisce uno step personalizzato (internal/customspec).
+	// Spec, with type, defines a custom step (internal/customspec).
 	customspec.Spec `yaml:",inline"`
 }
 
-// Default restituisce una configurazione funzionante per lo sviluppo locale.
+// Default returns a working configuration for local development.
 func Default() *Config {
 	return &Config{
 		App: App{Name: "manent", Version: "0.1.0"},
@@ -501,8 +499,8 @@ func Default() *Config {
 			File:       FileConfig{Path: "./envconfig/{application}/{environment}.yml"},
 		},
 		Callbacks: Callbacks{Timeout: 10 * time.Second, MaxRetries: 3},
-		// Il rollback è ammesso ma disattivato per le applicazioni; mai per le migration,
-		// che di norma non sono reversibili.
+		// Rollback is allowed but disabled for applications; never for migrations, which usually
+		// cannot be reversed.
 		Rollback: Rollback{Locator: "plugin", ArtifactTypes: map[string]RollbackType{
 			"application": {Allowed: true},
 			"container":   {Allowed: true},
@@ -533,8 +531,8 @@ func Default() *Config {
 	}
 }
 
-// applyDefaults completa le sezioni il cui default non può stare in Default(): YAML
-// fonderebbe le mappe configurate con quelle di default invece di sostituirle.
+// applyDefaults completes the sections whose default cannot live in Default(): YAML would
+// merge the configured maps with the default ones instead of replacing them.
 func (c *Config) applyDefaults() {
 	dp := &c.DescriptorPolicy
 	if dp.Params == nil {
@@ -554,7 +552,7 @@ func (c *Config) applyDefaults() {
 	c.Pipeline.applyDefaults()
 }
 
-// SecurityWarnings elenca le impostazioni adatte solo allo sviluppo.
+// SecurityWarnings lists the settings fit only for development.
 func (c *Config) SecurityWarnings() []string {
 	var w []string
 	if c.Auth.Mode == AuthModeNone {
@@ -577,7 +575,7 @@ func (c *Config) SecurityWarnings() []string {
 	return w
 }
 
-// Load legge il file YAML (se indicato) sopra i default e applica le variabili d'ambiente.
+// Load reads the YAML file (if given) on top of the defaults and applies environment variables.
 func Load(path string) (*Config, error) {
 	cfg := Default()
 	if path != "" {
@@ -605,7 +603,7 @@ func Load(path string) (*Config, error) {
 	return cfg, cfg.Validate()
 }
 
-// Validate verifica la coerenza della configurazione.
+// Validate checks the consistency of the configuration.
 func (c *Config) Validate() error {
 	var errs []error
 	if c.DBOS.DatabaseURL == "" {
@@ -658,8 +656,8 @@ func (c *Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-// validateOperations verifica drain, recovery, retention e osservabilità.
-// validateSIEM verifica le destinazioni dei log strutturati.
+// validateOperations checks drain, recovery, retention and observability.
+// validateSIEM checks the structured log destinations.
 func (c *Config) validateSIEM() []error {
 	if !c.SIEM.Enabled {
 		return nil
@@ -716,13 +714,13 @@ func (c *Config) validateOperations() []error {
 	return errs
 }
 
-// regionRe sono i nomi di region ammessi (come i nomi di ambiente).
+// regionRe are the allowed region names (like environment names).
 var regionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
 
-// tokenHashRe è uno sha256 esadecimale.
+// tokenHashRe is a hexadecimal sha256.
 var tokenHashRe = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 
-// validateSecurity verifica autenticazione, segreti e sorgenti degli artefatti.
+// validateSecurity checks authentication, secrets and artifact sources.
 func (c *Config) validateSecurity() []error {
 	var errs []error
 	switch c.Auth.Mode {

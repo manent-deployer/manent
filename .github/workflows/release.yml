@@ -1,5 +1,5 @@
-# Rilascio su tag vX.Y.Z: binari, archivi con SBOM, checksum firmati (Sigstore keyless),
-# immagine multi-architettura firmata su ghcr.io. Le note sono la sezione del tag in CHANGELOG.md.
+# Release on tag vX.Y.Z: binaries, archives with SBOM, signed checksums (Sigstore keyless),
+# signed multi-architecture image on ghcr.io. The notes are the tag's section in CHANGELOG.md.
 name: release
 
 on:
@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
-  id-token: write # firma keyless con cosign
+  id-token: write # keyless signing with cosign
 
 jobs:
   release:

@@ -16,13 +16,13 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// SDKConnector apre l'accesso a ECS con l'SDK AWS.
+// SDKConnector opens access to ECS with the AWS SDK.
 type SDKConnector struct {
-	// Endpoint, se indicato, sostituisce quello di ECS (es. LocalStack).
+	// Endpoint, if set, replaces the ECS one (e.g. LocalStack).
 	Endpoint *string
 }
 
-// Connect costruisce il client ECS per la region con le credenziali della richiesta.
+// Connect builds the ECS client for the region with the request's credentials.
 func (c SDKConnector) Connect(ctx context.Context, region string, req *plugin.Request) (API, error) {
 	cfg, err := awsauth.Config(ctx, region, req)
 	if err != nil {
@@ -103,8 +103,8 @@ func convert(td *types.TaskDefinition, tags []types.Tag) *TaskDefinition {
 	return out
 }
 
-// RegisterRevision copia nella nuova revisione tutti i campi registrabili della base: cambia
-// solo l'immagine del container indicato.
+// RegisterRevision copies into the new revision all registrable fields of the base: only the
+// image of the given container changes.
 func (a sdkAPI) RegisterRevision(ctx context.Context, base *TaskDefinition, container, image string, tags map[string]string) (*TaskDefinition, error) {
 	td, ok := base.Base.(*types.TaskDefinition)
 	if !ok {
@@ -121,7 +121,7 @@ func (a sdkAPI) RegisterRevision(ctx context.Context, base *TaskDefinition, cont
 	var tagList []types.Tag
 	for _, k := range slices.Sorted(maps.Keys(all)) {
 		if strings.HasPrefix(k, "aws:") {
-			// I tag riservati di AWS non si possono scrivere.
+			// AWS reserved tags cannot be written.
 			continue
 		}
 		tagList = append(tagList, types.Tag{Key: aws.String(k), Value: aws.String(all[k])})
@@ -170,7 +170,7 @@ func (a sdkAPI) ListRevisions(ctx context.Context, family string, limit int) ([]
 			return nil, err
 		}
 		for _, arn := range out.TaskDefinitionArns {
-			// FamilyPrefix è un prefisso: "shop" troverebbe anche "shop-api".
+			// FamilyPrefix is a prefix: "shop" would also find "shop-api".
 			if strings.HasSuffix(arn[:strings.LastIndexByte(arn, ':')], "/"+family) && len(arns) < limit {
 				arns = append(arns, arn)
 			}

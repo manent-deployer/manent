@@ -5,25 +5,25 @@ import (
 	"sync"
 )
 
-// scopeKey è la chiave del context per deploymentScope.
+// scopeKey is the context key of deploymentScope.
 type scopeKey struct{}
 
-// deploymentScope ricorda applicazione e ambiente dei deploy già letti con Status nello stesso
-// context. Applicazione e ambiente di un deploy non cambiano: le letture successive (log) dello
-// stesso deploy verificano il permesso senza rileggere lo stato dal database.
+// deploymentScope remembers application and environment of the deploys already read with
+// Status in the same context. A deploy's application and environment never change: later
+// reads (logs) of the same deploy check the permission without reading the status again.
 type deploymentScope struct {
 	mu sync.Mutex
 	m  map[string]target
 }
 
-// WithDeploymentScope restituisce un context in cui il Guard ricorda i deploy letti. Serve a
-// chi legge ripetutamente lo stesso deploy, come lo stream SSE: il permesso viene comunque
-// verificato a ogni lettura, sulla policy corrente.
+// WithDeploymentScope returns a context in which the Guard remembers the deploys read. It is
+// for whoever reads the same deploy repeatedly, like the SSE stream: the permission is still
+// checked at every read, against the current policy.
 func WithDeploymentScope(ctx context.Context) context.Context {
 	return context.WithValue(ctx, scopeKey{}, &deploymentScope{m: map[string]target{}})
 }
 
-// remember registra il deploy letto, se il context ha uno scope.
+// remember records the deploy read, if the context has a scope.
 func remember(ctx context.Context, id, application, environment string) {
 	if s, ok := ctx.Value(scopeKey{}).(*deploymentScope); ok {
 		s.mu.Lock()
@@ -32,7 +32,7 @@ func remember(ctx context.Context, id, application, environment string) {
 	}
 }
 
-// recall restituisce il deploy già letto nello scope del context.
+// recall returns the deploy already read in the context's scope.
 func recall(ctx context.Context, id string) (target, bool) {
 	s, ok := ctx.Value(scopeKey{}).(*deploymentScope)
 	if !ok {

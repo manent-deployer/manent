@@ -5,84 +5,84 @@ import (
 	"errors"
 )
 
-// TrafficRequest sono i dati di un rilascio per percentuale di traffico (rollout con strategy:
-// traffic): la nuova versione, la candidata, viene rilasciata accanto a quella in esercizio,
-// la stabile, e il traffico si sposta per gradini.
+// TrafficRequest is the data of a traffic percentage rollout (rollout with strategy:
+// traffic): the new version, the candidate, is released next to the one in service, the
+// stable, and traffic shifts in steps.
 type TrafficRequest struct {
-	// State è lo stato registrato da PrepareSlots prima del rilascio (es. slot o versione
-	// stabile di ogni target): ogni chiamata successiva lo riceve identico, anche dopo una
-	// recovery. Non deve contenere segreti.
+	// State is the state recorded by PrepareSlots before the rollout (e.g. slot or stable version
+	// of every target): every later call receives it unchanged, even after a recovery. It must not
+	// contain secrets.
 	State map[string]string `json:"state,omitempty"`
-	// TesterHeader è l'header ("nome: valore") delle richieste dei tester.
+	// TesterHeader is the header ("name: value") of the testers' requests.
 	TesterHeader string `json:"tester_header,omitempty"`
-	// TesterTag è l'etichetta della candidata per i router che danno un URL ai tester.
+	// TesterTag is the candidate's label for routers that give testers a URL.
 	TesterTag string `json:"tester_tag,omitempty"`
-	// ProportionalReplicas chiede una candidata piccola, dimensionata da ScaleCandidate in
-	// proporzione alla quota di traffico (rollout.traffic.replicas: proportional).
+	// ProportionalReplicas asks for a small candidate, sized by ScaleCandidate in proportion to
+	// its traffic share (rollout.traffic.replicas: proportional).
 	ProportionalReplicas bool `json:"proportional_replicas,omitempty"`
 }
 
-// StateHasStable è la chiave di TrafficRequest.State che PrepareSlots imposta a "true" se esiste
-// una versione stabile; senza, il primo rilascio va direttamente al 100%.
+// StateHasStable is the TrafficRequest.State key that PrepareSlots sets to "true" if a stable
+// version exists; without it, the first release goes straight to 100%.
 const StateHasStable = "has_stable"
 
-// SlotDeployer è un'interfaccia opzionale del Deployer: rilascia la nuova versione accanto a
-// quella in esercizio, senza traffico, e la promuove o la ritira. Tutti i metodi devono essere
-// idempotenti: possono essere rieseguiti da retry e recovery.
+// SlotDeployer is an optional interface of the Deployer: it releases the new version next to
+// the one in service, without traffic, and promotes or retires it. All methods must be
+// idempotent: retries and recoveries can run them again.
 type SlotDeployer interface {
-	// PrepareSlots legge lo stato dei target prima del rilascio (versione stabile, slot
-	// libero). Non deve modificare nulla. L'esito arriva in Request.Traffic.State.
+	// PrepareSlots reads the state of the targets before the rollout (stable version, free slot).
+	// It must change nothing. The result arrives in Request.Traffic.State.
 	PrepareSlots(ctx context.Context, req *Request) (map[string]string, error)
-	// DeployCandidate rilascia la candidata senza spostare il traffico.
+	// DeployCandidate releases the candidate without shifting traffic.
 	DeployCandidate(ctx context.Context, req *Request) (*Result, error)
-	// PromoteCandidate rende la candidata la release in esercizio (tutto il traffico e storico).
+	// PromoteCandidate makes the candidate the release in service (all traffic and history).
 	PromoteCandidate(ctx context.Context, req *Request) error
-	// RevertCandidate riporta tutto il traffico e lo storico alla versione stabile e ritira la
-	// candidata, anche se era già stata promossa.
+	// RevertCandidate brings all traffic and history back to the stable version and retires the
+	// candidate, even if it had already been promoted.
 	RevertCandidate(ctx context.Context, req *Request) error
-	// RetirePrevious ridimensiona la versione sostituita, dopo la promozione. Non deve toccare
-	// la versione in esercizio, anche se nel frattempo un altro rilascio l'ha cambiata.
+	// RetirePrevious scales down the replaced version, after the promotion. It must not touch
+	// the version in service, even if another release changed it meanwhile.
 	RetirePrevious(ctx context.Context, req *Request) error
 }
 
-// TrafficRouter è un'interfaccia opzionale del Deployer: sposta il traffico tra la versione
-// stabile e la candidata.
+// TrafficRouter is an optional interface of the Deployer: it shifts traffic between the
+// stable version and the candidate.
 type TrafficRouter interface {
-	// SetCandidateWeight manda alla candidata percent% del traffico, il resto alla stabile.
+	// SetCandidateWeight sends percent% of the traffic to the candidate, the rest to the stable.
 	SetCandidateWeight(ctx context.Context, req *Request, percent int) error
-	// CandidateWeight legge la quota della candidata; -1 se i target non sono concordi.
+	// CandidateWeight reads the candidate's share; -1 if the targets disagree.
 	CandidateWeight(ctx context.Context, req *Request) (int, error)
 }
 
-// TesterRouter è un'interfaccia opzionale del TrafficRouter: instrada verso la candidata le
-// sole richieste dei tester. Restituisce i dettagli da mostrare (es. l'URL dei tester).
+// TesterRouter is an optional interface of the TrafficRouter: it routes only the testers'
+// requests to the candidate. It returns the details to show (e.g. the testers' URL).
 type TesterRouter interface {
 	RouteTesters(ctx context.Context, req *Request) (map[string]string, error)
 }
 
-// SlotScaler è un'interfaccia opzionale dello SlotDeployer: dimensiona la candidata in
-// proporzione alla quota di traffico (rollout.traffic.replicas: proportional).
+// SlotScaler is an optional interface of the SlotDeployer: it sizes the candidate in
+// proportion to its traffic share (rollout.traffic.replicas: proportional).
 type SlotScaler interface {
 	ScaleCandidate(ctx context.Context, req *Request, percent int) error
 }
 
-// TrafficSupport sono le interfacce dei rilasci per percentuale supportate da un plugin.
+// TrafficSupport are the percentage rollout interfaces supported by a plugin.
 type TrafficSupport struct {
 	Slots, Router, Testers, Scale bool
 }
 
-// TrafficChecker è implementato dai Deployer che conoscono il supporto ai rilasci per
-// percentuale solo a runtime (es. un plugin esterno, che lo dichiara all'avvio del processo).
-// I loro metodi di SlotDeployer, TrafficRouter, TesterRouter e SlotScaler restituiscono
-// ErrTrafficUnsupported se il plugin non li implementa.
+// TrafficChecker is implemented by Deployers that know percentage rollout support only at
+// runtime (e.g. an external plugin, which declares it when the process starts). Their
+// SlotDeployer, TrafficRouter, TesterRouter and SlotScaler methods return
+// ErrTrafficUnsupported if the plugin does not implement them.
 type TrafficChecker interface {
 	TrafficSupported(ctx context.Context) (TrafficSupport, error)
 }
 
-// ErrTrafficUnsupported indica un plugin che non supporta un'operazione dei rilasci per percentuale.
+// ErrTrafficUnsupported means a plugin that does not support a percentage rollout operation.
 var ErrTrafficUnsupported = errors.New("operazione dei rilasci per percentuale non supportata dal plugin")
 
-// SupportsTraffic indica le interfacce dei rilasci per percentuale supportate dal Deployer.
+// SupportsTraffic reports the percentage rollout interfaces supported by the Deployer.
 func SupportsTraffic(ctx context.Context, d Deployer) (TrafficSupport, error) {
 	if c, ok := d.(TrafficChecker); ok {
 		return c.TrafficSupported(ctx)

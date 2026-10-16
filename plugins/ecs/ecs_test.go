@@ -21,8 +21,8 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// fakeECS emula il protocollo JSON di ECS per le operazioni usate dal plugin. Un deployment
-// diventa COMPLETED alla seconda lettura del servizio, FAILED se l'immagine contiene "broken".
+// fakeECS emulates the ECS JSON protocol for the operations used by the plugin. A deployment
+// becomes COMPLETED at the second service read, FAILED if the image contains "broken".
 type fakeECS struct {
 	mu        sync.Mutex
 	t         *testing.T
@@ -38,7 +38,7 @@ type fakeService struct {
 	taskDef     string
 	deployments []map[string]any
 	reads       int
-	// config è la deploymentConfiguration del servizio (strategia nativa).
+	// config is the service's deploymentConfiguration (native strategy).
 	config map[string]any
 }
 
@@ -181,7 +181,7 @@ func (m mapSecrets) Secret(_ context.Context, name string) (string, error) {
 	return v, nil
 }
 
-// isolateAWS evita che i test leggano configurazione e credenziali AWS dell'utente.
+// isolateAWS keeps the tests from reading the user's AWS configuration and credentials.
 func isolateAWS(t *testing.T) {
 	dir := t.TempDir()
 	for k, v := range map[string]string{
@@ -257,7 +257,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Errorf("tag: %v", got)
 	}
 
-	// Rieseguire lo stesso deploy non registra una nuova revisione.
+	// Running the same deploy again does not register a new revision.
 	if _, err := p.Deploy(ctx, req); err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Fatalf("release in esercizio: %+v, %v", rel, err)
 	}
 
-	// La 2.0.0 fallisce per il circuit breaker; il rollback torna alla revisione della 1.0.0.
+	// 2.0.0 fails because of the circuit breaker; the rollback goes back to 1.0.0's revision.
 	req2 := request(t, "2.0.0", "123456789012.dkr.ecr.eu-west-1.amazonaws.com/shop-broken@"+digest)
 	res, err = p.Deploy(ctx, req2)
 	if err == nil || !strings.Contains(err.Error(), "circuit breaker") || res.Targets[0].Status != plugin.StatusFailed {
@@ -283,7 +283,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Fatalf("dopo il rollback il servizio usa %s, atteso %s", f.current(), first)
 	}
 
-	// Senza i dettagli la revisione si cerca per tag (la famiglia shop-api è esclusa).
+	// Without details the revision is searched by tag (the shop-api family is excluded).
 	f.mu.Lock()
 	f.services["prod/shop"].taskDef = "arn:aws:ecs:eu-west-1:123456789012:task-definition/shop:2"
 	f.mu.Unlock()

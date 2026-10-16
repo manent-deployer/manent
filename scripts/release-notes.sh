@@ -1,6 +1,6 @@
 #!/bin/sh
-# Stampa la sezione di CHANGELOG.md della versione indicata (es. 0.2.0).
-# Fallisce se la sezione manca: ogni rilascio deve avere le sue note.
+# Prints the CHANGELOG.md section of the given version (e.g. 0.2.0).
+# Fails if the section is missing: every release must have its notes.
 set -eu
 version=$1
 awk -v v="$version" '

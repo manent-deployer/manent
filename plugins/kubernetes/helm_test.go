@@ -15,7 +15,7 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// writeChart impacchetta un chart come "helm package": un .tgz con <nome>/... .
+// writeChart packages a chart like "helm package": a .tgz with <name>/... .
 func writeChart(t *testing.T, files map[string]string) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "shop-1.0.0.tgz")
@@ -41,8 +41,8 @@ func writeChart(t *testing.T, files map[string]string) string {
 	return p
 }
 
-// shopChart è un chart minimo: un Deployment con immagine e repliche dai values, un
-// ConfigMap solo se il cluster serve monitoring.coreos.com/v1, un hook e un test.
+// shopChart is a minimal chart: a Deployment with image and replicas from the values, a
+// ConfigMap only if the cluster serves monitoring.coreos.com/v1, a hook and a test.
 var shopChart = map[string]string{
 	"shop/Chart.yaml":       "apiVersion: v2\nname: shop\nversion: 1.0.0\n",
 	"shop/values.yaml":      "replicas: 2\nimage: {repository: registry/shop, tag: dev}\n",
@@ -125,7 +125,7 @@ func TestHelmReale(t *testing.T) {
 		t.Errorf("hook saltati: %q", got)
 	}
 
-	// Il rollback riapplica gli oggetti salvati nello storico, senza Helm.
+	// The rollback applies again the objects saved in the history, without Helm.
 	rel, err := p.CurrentRelease(ctx, req)
 	if err != nil || rel == nil {
 		t.Fatalf("release: %+v, %v", rel, err)
@@ -142,7 +142,7 @@ func TestHelmReale(t *testing.T) {
 		t.Errorf("dopo il rollback: %s", img)
 	}
 
-	// Con helm_hooks: apply gli hook (non i test) sono oggetti normali.
+	// With helm_hooks: apply the hooks (not the tests) are normal objects.
 	p.helm.Command = ""
 	req3 := helmRequest(t, server, "3.0.0", chart)
 	req3.Params[ParamHelmHooks] = "apply"
@@ -153,7 +153,7 @@ func TestHelmReale(t *testing.T) {
 		t.Error("helm_hooks: apply")
 	}
 
-	// Un template con errori riporta il messaggio di Helm.
+	// A template with errors reports Helm's message.
 	broken := map[string]string{}
 	for k, v := range shopChart {
 		broken[k] = v
@@ -164,8 +164,8 @@ func TestHelmReale(t *testing.T) {
 	}
 }
 
-// fakeHelm scrive uno script che registra gli argomenti e i values ricevuti e stampa manifest
-// fissi: verifica la riga di comando senza dipendere da Helm.
+// fakeHelm writes a script that records the received arguments and values and prints fixed
+// manifests: it checks the command line without depending on Helm.
 func fakeHelm(t *testing.T) (string, string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("script di shell")
@@ -262,7 +262,7 @@ func TestHelmValuesEValidazione(t *testing.T) {
 		t.Errorf("errori di validazione: %v", errs)
 	}
 
-	// Un archivio di manifest non è un chart; un chart con percorsi esterni è rifiutato.
+	// A manifest archive is not a chart; a chart with external paths is rejected.
 	manifests := writeChart(t, map[string]string{"deploy/app.yaml": "kind: ConfigMap"})
 	if ok, err := isChart(manifests); ok || err != nil {
 		t.Errorf("archivio di manifest riconosciuto come chart: %v", err)
@@ -286,7 +286,7 @@ func TestHelmSlot(t *testing.T) {
 	if _, err := p.DeployCandidate(context.Background(), req); err != nil {
 		t.Fatal(err)
 	}
-	// Il chart riceve lo slot in .Values.manent.slot.
+	// The chart receives the slot in .Values.manent.slot.
 	if vals, _ := os.ReadFile(log + ".values"); !strings.Contains(string(vals), "slot: b") {
 		t.Errorf("values: %s", vals)
 	}

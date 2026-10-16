@@ -23,8 +23,8 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// fakeServer imita l'API HTTP di management di WildFly: autenticazione digest MD5,
-// add-content, deployment, operazioni composite atomiche e server group.
+// fakeServer imitates the WildFly HTTP management API: MD5 digest authentication,
+// add-content, deployments, atomic composite operations and server groups.
 type fakeServer struct {
 	t      *testing.T
 	domain bool
@@ -35,7 +35,7 @@ type fakeServer struct {
 	deps     map[string]*fakeDep
 	ops      []string
 	uploads  int
-	failNext string // operazione da far fallire una volta (es. "deploy")
+	failNext string // operation to fail once (e.g. "deploy")
 	nonce    int
 }
 
@@ -114,7 +114,7 @@ func (f *fakeServer) addContent(r *http.Request) (any, error) {
 	return map[string]string{"BYTES_VALUE": h}, nil
 }
 
-// addr legge l'indirizzo DMR come mappa tipo → nome.
+// addr reads the DMR address as a type → name map.
 func addr(o map[string]any) map[string]string {
 	out := map[string]string{}
 	list, _ := o["address"].([]any)
@@ -245,7 +245,7 @@ func (f *fakeServer) exec(o map[string]any, top bool) (any, error) {
 		delete(f.deps, dn)
 		return nil, nil
 	case "composite":
-		// Atomicità: si lavora su una copia e la si applica solo se tutti i passi riescono.
+		// Atomicity: work on a copy and apply it only if all steps succeed.
 		saved := f.snapshot()
 		for _, st := range o["steps"].([]any) {
 			sm := st.(map[string]any)
@@ -266,7 +266,7 @@ func (f *fakeServer) exec(o map[string]any, top bool) (any, error) {
 	return nil, fmt.Errorf("operazione %s non gestita", name)
 }
 
-// unique rifiuta due deployment attivi con lo stesso runtime-name, come il server.
+// unique rejects two active deployments with the same runtime-name, as the server does.
 func (f *fakeServer) unique(d *fakeDep, group string) error {
 	for n, x := range f.deps {
 		if x == d || x.runtime != d.runtime {
@@ -338,8 +338,7 @@ func testPlugin() *Plugin {
 	return p
 }
 
-// request prepara una richiesta per la versione indicata, con un war dal contenuto diverso
-// per ogni versione.
+// request prepares a request for the given version, with a war of different content per version.
 func request(t *testing.T, srv *httptest.Server, version string, params map[string]string) *plugin.Request {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "shop.war")
@@ -373,7 +372,7 @@ func TestStandaloneDeployRollbackEPulizia(t *testing.T) {
 	f, srv := newFake(t, false)
 	p, ctx := testPlugin(), context.Background()
 
-	// Primo rilascio con suspend e reload: il reload rimette in servizio il server.
+	// First release with suspend and reload: the reload puts the server back in service.
 	res, err := p.Deploy(ctx, request(t, srv, "1.0", map[string]string{ParamSuspend: "true", ParamReload: "true", ParamKeepReleases: "2"}))
 	if err != nil {
 		t.Fatal(err)
@@ -384,7 +383,7 @@ func TestStandaloneDeployRollbackEPulizia(t *testing.T) {
 		t.Errorf("dettagli: %v", d)
 	}
 
-	// Secondo rilascio con suspend e senza reload: resume esplicito.
+	// Second release with suspend and without reload: explicit resume.
 	req2 := request(t, srv, "2.0", map[string]string{ParamSuspend: "true", ParamKeepReleases: "2"})
 	if _, err := p.Deploy(ctx, req2); err != nil {
 		t.Fatal(err)
@@ -397,21 +396,21 @@ func TestStandaloneDeployRollbackEPulizia(t *testing.T) {
 		t.Fatalf("release in esercizio: %+v %v", rel, err)
 	}
 
-	// Ripetere lo stesso deploy (retry o recovery) non tocca il server.
+	// Repeating the same deploy (retry or recovery) does not touch the server.
 	res, err = p.Deploy(ctx, req2)
 	if err != nil || res.Targets[0].Details["unchanged"] != "true" {
 		t.Fatalf("deploy ripetuto: %+v %v", res, err)
 	}
 	eq(t, "operazioni ripetute", f.takeOps(), []string(nil))
 
-	// Rollback alla 1.0: riattivazione senza caricamenti.
+	// Rollback to 1.0: reactivation without uploads.
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "1.0", Details: map[string]string{DetailDeployment: "shop-1.0.war"}}); err != nil {
 		t.Fatal(err)
 	}
 	eq(t, "operazioni rollback", f.takeOps(), []string{"suspend", "composite", "  undeploy shop-2.0.war", "  deploy shop-1.0.war", "resume"})
 	eq(t, "stato rollback", f.state(), map[string]string{"shop-1.0.war": "on", "shop-2.0.war": "off"})
 
-	// Con keep_releases=2 il rilascio della 3.0 conserva solo la precedente (1.0).
+	// With keep_releases=2 the 3.0 release keeps only the previous one (1.0).
 	if _, err := p.Deploy(ctx, request(t, srv, "3.0", map[string]string{ParamKeepReleases: "2"})); err != nil {
 		t.Fatal(err)
 	}
@@ -440,12 +439,12 @@ func TestCambioFallitoRiprendeIlServer(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "WFLYCTL0080") || res.Targets[0].Status != plugin.StatusFailed {
 		t.Fatalf("atteso errore del cambio: %v", err)
 	}
-	// La composite è annullata dal server, la 1.0 resta attiva e il server torna in servizio
-	// senza reload.
+	// The server rolls the composite back, 1.0 stays active and the server goes back in service
+	// without reload.
 	eq(t, "operazioni", f.takeOps(), []string{"add-content", "add shop-2.0.war", "suspend", "composite", "  undeploy shop-1.0.war", "  deploy shop-2.0.war", "resume"})
 	eq(t, "stato", f.state(), map[string]string{"shop-1.0.war": "on", "shop-2.0.war": "off"})
 
-	// Il nuovo tentativo riusa il deployment già caricato.
+	// The retry reuses the already uploaded deployment.
 	if _, err := p.Deploy(ctx, request(t, srv, "2.0", nil)); err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +493,7 @@ func TestDomainMode(t *testing.T) {
 		t.Fatalf("release: %+v %v", rel, err)
 	}
 
-	// Server group mancante o assente.
+	// Missing or nonexistent server group.
 	if _, err := p.Deploy(ctx, request(t, srv, "3.0", nil)); err == nil || !strings.Contains(err.Error(), ParamServerGroups) {
 		t.Errorf("atteso errore senza server_groups: %v", err)
 	}

@@ -21,7 +21,7 @@ export type Worker = components["schemas"]["Worker"];
 export type AfterState = components["schemas"]["AfterState"];
 export type ReleaseStatus = components["schemas"]["ReleaseStatus"];
 
-/** Errore dell'API con lo stato HTTP e il messaggio del server. */
+/** API error with the HTTP status and the server message. */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -56,7 +56,7 @@ export function createApi(auth: AuthHooks) {
 
 export type Api = ReturnType<typeof createApi>;
 
-/** unwrap restituisce i dati di una risposta o lancia ApiError con il messaggio del server. */
+/** unwrap returns the data of a response or throws ApiError with the server message. */
 export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }): T {
   if (r.error !== undefined || !r.response.ok) {
     const msg =
@@ -66,5 +66,5 @@ export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }):
   return r.data as T;
 }
 
-/** Stati in cui un deploy non cambierà più. */
+/** States in which a deploy will not change any more. */
 export const TERMINAL = new Set(["SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED", "DEPENDENCY_FAILED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"]);

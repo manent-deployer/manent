@@ -1,12 +1,12 @@
-// Package ecs rilascia un'immagine di container su un servizio Amazon ECS (Fargate o EC2):
-// registra una nuova revisione della task definition in esercizio con la sola immagine
-// cambiata, aggiorna il servizio e attende che il deployment di ECS sia completato.
+// Package ecs releases a container image to an Amazon ECS service (Fargate or EC2): it
+// registers a new revision of the task definition in service with only the image changed,
+// updates the service and waits for the ECS deployment to complete.
 //
-// L'artefatto è un'immagine di un registry (sorgente oci://registry/repository:tag), sempre
-// avviata fissata al digest. Servizio, cluster, rete, ruoli e il resto della task definition
-// restano di chi gestisce l'infrastruttura (Terraform, CloudFormation): il plugin cambia solo
-// l'immagine e scrive versione e deploy nei tag della revisione, da cui legge la release in
-// esercizio e torna alla precedente. Ogni target è una region, con il cluster.
+// The artifact is a registry image (source oci://registry/repository:tag), always run pinned
+// to the digest. Service, cluster, network, roles and the rest of the task definition belong to
+// whoever manages the infrastructure (Terraform, CloudFormation): the plugin changes only the
+// image and writes version and deploy in the revision tags, from which it reads the release in
+// service and goes back to the previous one. Every target is a region, with the cluster.
 package ecs
 
 import (
@@ -26,23 +26,22 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "ecs"
 
-// Parametri del descrittore (deploy.params) letti dal plugin, oltre a quelli delle
-// credenziali di awsauth.
+// Descriptor parameters (deploy.params) read by the plugin, besides the awsauth credential ones.
 const (
-	ParamCluster        = "cluster"         // cluster ECS (default "default"); il target può indicarlo come region/cluster
-	ParamService        = "service"         // servizio ECS (default: nome dell'applicazione)
-	ParamContainer      = "container"       // container a cui cambiare l'immagine (default: l'unico, o quello col nome dell'applicazione)
-	ParamWaitTimeout    = "wait_timeout"    // attesa del deployment (default 15m)
-	ParamSearchRevision = "search_revision" // revisioni esaminate per trovare quella di una versione (default 100)
+	ParamCluster        = "cluster"         // ECS cluster (default "default"); the target can give it as region/cluster
+	ParamService        = "service"         // ECS service (default: application name)
+	ParamContainer      = "container"       // container whose image changes (default: the only one, or the one named after the application)
+	ParamWaitTimeout    = "wait_timeout"    // deployment wait (default 15m)
+	ParamSearchRevision = "search_revision" // revisions examined to find a version's one (default 100)
 	defaultCluster      = "default"
 	defaultWaitTimeout  = 15 * time.Minute
 	defaultSearch       = 100
 )
 
-// Tag scritti sulla revisione della task definition.
+// Tags written on the task definition revision.
 const (
 	TagApplication = "manent.application"
 	TagEnvironment = "manent.environment"
@@ -50,43 +49,43 @@ const (
 	TagDeployment  = "manent.deployment"
 )
 
-// DetailTaskDefinition è il prefisso delle chiavi di Release.Details con la task definition
-// della release su ciascun target ("task_definition@<target>").
+// DetailTaskDefinition is the prefix of the Release.Details keys with the release task
+// definition on each target ("task_definition@<target>").
 const DetailTaskDefinition = "task_definition"
 
-// ErrNotFound indica un servizio o una task definition inesistente.
+// ErrNotFound means a service or task definition that does not exist.
 var ErrNotFound = errors.New("non trovato")
 
-// Service è lo stato di un servizio ECS.
+// Service is the state of an ECS service.
 type Service struct {
 	Name           string
 	Status         string
 	TaskDefinition string
 	DesiredCount   int32
 	RunningCount   int32
-	// Controller è il tipo di deployment controller: ECS, CODE_DEPLOY o EXTERNAL.
+	// Controller is the deployment controller type: ECS, CODE_DEPLOY or EXTERNAL.
 	Controller  string
 	Deployments []Deployment
-	// Strategy è la strategia nativa del controller ECS: ROLLING (default), BLUE_GREEN,
-	// LINEAR o CANARY. Con le ultime tre ECS sposta il traffico da solo (modalità delegata).
+	// Strategy is the native strategy of the ECS controller: ROLLING (default), BLUE_GREEN,
+	// LINEAR or CANARY. With the last three ECS shifts traffic by itself (delegated mode).
 	Strategy string
-	// Native sono i tempi della strategia nativa.
+	// Native are the native strategy times.
 	Native NativeStrategy
 }
 
-// NativeStrategy sono i tempi di una strategia nativa di ECS, per stimarne la durata.
+// NativeStrategy are the times of an ECS native strategy, to estimate its duration.
 type NativeStrategy struct {
-	// BakeMinutes è l'attesa dopo che tutto il traffico è passato alla nuova revisione.
+	// BakeMinutes is the wait after all traffic has moved to the new revision.
 	BakeMinutes int32
-	// StepPercent e StepBakeMinutes sono gradino e attesa della strategia LINEAR.
+	// StepPercent and StepBakeMinutes are step and wait of the LINEAR strategy.
 	StepPercent     float64
 	StepBakeMinutes int32
-	// CanaryPercent e CanaryBakeMinutes sono quota e attesa della strategia CANARY.
+	// CanaryPercent and CanaryBakeMinutes are share and wait of the CANARY strategy.
 	CanaryPercent     float64
 	CanaryBakeMinutes int32
 }
 
-// nativeDuration stima la durata dello spostamento del traffico di una strategia nativa.
+// nativeDuration estimates how long a native strategy takes to shift traffic.
 func (s *Service) nativeDuration() time.Duration {
 	n := s.Native
 	minutes := float64(n.BakeMinutes)
@@ -101,12 +100,12 @@ func (s *Service) nativeDuration() time.Duration {
 	return time.Duration(minutes * float64(time.Minute))
 }
 
-// delegated indica una strategia nativa che sposta il traffico (blue/green, lineare, canary).
+// delegated reports a native strategy that shifts traffic (blue/green, linear, canary).
 func (s *Service) delegated() bool {
 	return s.Strategy == "BLUE_GREEN" || s.Strategy == "LINEAR" || s.Strategy == "CANARY"
 }
 
-// Deployment è un deployment di ECS in corso o concluso sul servizio.
+// Deployment is a running or ended ECS deployment on the service.
 type Deployment struct {
 	ID             string
 	Status         string // PRIMARY, ACTIVE, INACTIVE
@@ -119,8 +118,8 @@ type Deployment struct {
 	Failed         int32
 }
 
-// TaskDefinition è una revisione di task definition. Base conserva la definizione completa
-// letta dall'API, da cui il client registra la revisione successiva.
+// TaskDefinition is a task definition revision. Base keeps the full definition read from the
+// API, from which the client registers the next revision.
 type TaskDefinition struct {
 	ARN        string
 	Family     string
@@ -130,30 +129,30 @@ type TaskDefinition struct {
 	Base       any
 }
 
-// Container è un container della task definition.
+// Container is a container of the task definition.
 type Container struct {
 	Name  string
 	Image string
 }
 
-// API sono le operazioni su ECS usate dal plugin, in una region.
+// API are the ECS operations used by the plugin, in a region.
 type API interface {
 	DescribeService(ctx context.Context, cluster, service string) (*Service, error)
 	DescribeTaskDefinition(ctx context.Context, arn string) (*TaskDefinition, error)
-	// RegisterRevision registra una nuova revisione di base con l'immagine del container
-	// cambiata e i tag aggiunti a quelli esistenti.
+	// RegisterRevision registers a new revision of base with the container image changed and the
+	// tags added to the existing ones.
 	RegisterRevision(ctx context.Context, base *TaskDefinition, container, image string, tags map[string]string) (*TaskDefinition, error)
 	UpdateService(ctx context.Context, cluster, service, taskDefinition string) error
-	// ListRevisions restituisce gli ARN delle revisioni attive della famiglia, dalla più recente.
+	// ListRevisions returns the ARNs of the family's active revisions, most recent first.
 	ListRevisions(ctx context.Context, family string, limit int) ([]string, error)
 }
 
-// Connector apre l'accesso a ECS in una region con le credenziali della richiesta.
+// Connector opens access to ECS in a region with the request's credentials.
 type Connector interface {
 	Connect(ctx context.Context, region string, req *plugin.Request) (API, error)
 }
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	connector Connector
 	types     []string
@@ -161,14 +160,14 @@ type Plugin struct {
 	poll      time.Duration
 }
 
-// New crea il plugin con il connettore indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given connector and supported artifact types.
 func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{connector: c, types: types, logger: logger, poll: 5 * time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - endpoint: endpoint alternativo dell'API ECS (es. LocalStack)
-//   - artifact_types: tipi supportati (default ["ecs"])
+// Factory builds the plugin from the application configuration:
+//   - endpoint: alternative ECS API endpoint (e.g. LocalStack)
+//   - artifact_types: supported types (default ["ecs"])
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	types, err := pluginutil.ArtifactTypes(cfg, Name)
 	if err != nil {
@@ -181,20 +180,20 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return New(SDKConnector{Endpoint: endpoint}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
-// target è un target interpretato: region e cluster.
+// target is a parsed target: region and cluster.
 type target struct {
 	host    string
 	region  string
 	cluster string
 }
 
-// parseTarget interpreta l'host del target: "region" oppure "region/cluster".
+// parseTarget parses the target host: "region" or "region/cluster".
 func parseTarget(t plugin.Target, req *plugin.Request) (target, error) {
 	region, cluster, ok := strings.Cut(t.Host, "/")
 	if !ok || cluster == "" {
@@ -216,7 +215,7 @@ func serviceName(req *plugin.Request) string {
 	return req.Application
 }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
@@ -260,7 +259,7 @@ func searchLimit(req *plugin.Request) (int, error) {
 	return n, nil
 }
 
-// chooseContainer sceglie il container a cui cambiare l'immagine.
+// chooseContainer chooses the container whose image changes.
 func chooseContainer(td *TaskDefinition, req *plugin.Request) (string, error) {
 	names := make([]string, len(td.Containers))
 	for i, c := range td.Containers {
@@ -289,7 +288,7 @@ func (td *TaskDefinition) image(container string) string {
 	return ""
 }
 
-// state è lo stato di un target letto prima di deploy, dry-run e rollback.
+// state is the state of a target read before deploy, dry-run and rollback.
 type state struct {
 	target    target
 	api       API
@@ -298,7 +297,7 @@ type state struct {
 	container string
 }
 
-// read apre l'accesso alla region e legge servizio e task definition in esercizio.
+// read opens access to the region and reads service and task definition in service.
 func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request) (*state, error) {
 	tg, err := parseTarget(t, req)
 	if err != nil {
@@ -340,9 +339,9 @@ func (s *state) details(req *plugin.Request) map[string]string {
 	return d
 }
 
-// Deploy rilascia l'immagine su ogni target in sequenza; si ferma al primo errore. È
-// idempotente: se il servizio usa già la revisione registrata da questo deploy, si limita ad
-// attendere il completamento.
+// Deploy releases the image to every target in sequence; it stops at the first error. It is
+// idempotent: if the service already uses the revision registered by this deploy, it only
+// waits for completion.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, err := plugin.ImageReference(req.Artifact)
 	if err != nil {
@@ -383,8 +382,8 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	}
 	details[DetailTaskDefinition] = td.ARN
 	if s.service.delegated() {
-		// Modalità delegata: i gradini, il bake e il ritorno sui CloudWatch alarm li gestisce
-		// ECS. manent attende la fine con un tempo che copre la durata prevista.
+		// Delegated mode: ECS handles steps, bake and the return on CloudWatch alarms. manent waits
+		// for the end with a time covering the expected duration.
 		details["strategy"] = s.service.Strategy
 		log.InfoContext(ctx, "strategia nativa di ECS: lo spostamento del traffico è delegato al servizio", "strategy", s.service.Strategy, "expected", s.service.nativeDuration())
 	}
@@ -395,8 +394,8 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	return details, nil
 }
 
-// wait attende che il deployment del servizio con la task definition arn sia completato.
-// Un deployment FAILED (circuit breaker di ECS) è un errore immediato.
+// wait waits until the service deployment with task definition arn completes.
+// A FAILED deployment (ECS circuit breaker) is an immediate error.
 func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Request, log *slog.Logger) error {
 	timeout, _ := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout)
 	if s.service != nil && s.service.delegated() {
@@ -433,7 +432,7 @@ func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Req
 	}
 }
 
-// completed dice se il deployment della task definition arn è concluso con successo.
+// completed says whether the deployment of task definition arn ended successfully.
 func completed(svc *Service, arn string) (bool, string, error) {
 	var d *Deployment
 	for i := range svc.Deployments {
@@ -454,8 +453,8 @@ func completed(svc *Service, arn string) (bool, string, error) {
 	case "COMPLETED":
 		return true, progress, nil
 	case "":
-		// Servizi senza stato del rollout: completato quando resta il solo deployment primario
-		// con tutti i task in esecuzione.
+		// Services without rollout state: completed when only the primary deployment remains with
+		// all tasks running.
 		if len(svc.Deployments) == 1 && d.Running == d.Desired {
 			return true, progress, nil
 		}
@@ -466,9 +465,9 @@ func completed(svc *Service, arn string) (bool, string, error) {
 	return false, progress, nil
 }
 
-// CurrentRelease legge su ogni target la versione dai tag della task definition in esercizio.
-// Un servizio la cui task definition non ha il tag (mai rilasciato da manent) non ha release;
-// versioni diverse tra i target sono un errore.
+// CurrentRelease reads on every target the version from the tags of the task definition in
+// service. A service whose task definition lacks the tag (never released by manent) has no
+// release; different versions across targets are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
 	details := map[string]string{"source": "tag della task definition"}
@@ -500,9 +499,9 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	return nil, fmt.Errorf("versioni diverse sui target: %s", strings.Join(desc, "; "))
 }
 
-// Rollback riporta ogni servizio alla task definition della release indicata: quella
-// registrata nei dettagli della release o, in mancanza, la più recente della famiglia con il
-// tag della versione. Prosegue anche se un target fallisce. È idempotente.
+// Rollback brings every service back to the task definition of the given release: the one
+// recorded in the release details or, failing that, the family's most recent one with the
+// version tag. It continues even if a target fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("versione %q non valida", previous.Version)
@@ -547,7 +546,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	return details, nil
 }
 
-// findRevision cerca, tra le revisioni più recenti della famiglia, quella con il tag della versione.
+// findRevision looks, among the family's most recent revisions, for the one with the version tag.
 func (p *Plugin) findRevision(ctx context.Context, s *state, req *plugin.Request, version string) (string, error) {
 	limit, _ := searchLimit(req)
 	arns, err := s.api.ListRevisions(ctx, s.current.Family, limit)
@@ -566,8 +565,8 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, req *plugin.Request
 	return "", fmt.Errorf("nessuna revisione di %s con %s=%s tra le ultime %d", s.current.Family, TagVersion, version, limit)
 }
 
-// DryRun verifica su ogni target, senza modificarlo, che servizio, task definition e
-// container esistano e che le credenziali permettano di leggerli.
+// DryRun checks on every target, without changing it, that service, task definition and
+// container exist and that the credentials can read them.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	var errs []error

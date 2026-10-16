@@ -13,11 +13,11 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Router sui load balancer tradizionali: gli slot sono i server con l'etichetta slot dello
-// stesso backend (o pool, o upstream), e la quota di traffico di uno slot si ottiene con i pesi
-// dei suoi server. Un peso 0 non manda nuove richieste al server.
+// Routers on traditional load balancers: the slots are the servers with the slot label of the
+// same backend (or pool, or upstream), and a slot's traffic share is obtained with the
+// weights of its servers. A weight of 0 sends no new requests to the server.
 
-// slotMembers raggruppa per slot i membri dei target.
+// slotMembers groups the target members by slot.
 func slotMembers(env Env) (map[string][]string, error) {
 	out := map[string][]string{}
 	for _, t := range env.Targets {
@@ -30,8 +30,8 @@ func slotMembers(env Env) (map[string][]string, error) {
 	return out, nil
 }
 
-// memberWeights traduce le quote degli slot in pesi dei server: la somma dei pesi dei server di
-// uno slot è proporzionale alla sua quota. maxWeight è il peso massimo del load balancer.
+// memberWeights turns slot shares into server weights: the sum of the weights of a slot's
+// servers is proportional to its share. maxWeight is the load balancer's maximum weight.
 func memberWeights(shares map[string]int, members map[string][]string, maxWeight int) map[string]int {
 	raw := map[string]float64{}
 	top := 0.0
@@ -57,7 +57,7 @@ func memberWeights(shares map[string]int, members map[string][]string, maxWeight
 	return out
 }
 
-// slotShares ricava le quote degli slot dai pesi dei server.
+// slotShares derives the slot shares from the server weights.
 func slotShares(weights map[string]int, members map[string][]string) map[string]int {
 	sums, total := map[string]int{}, 0
 	for slot, ms := range members {
@@ -75,7 +75,7 @@ func slotShares(weights map[string]int, members map[string][]string) map[string]
 	return out
 }
 
-// memberRouter è un Router che legge e imposta i pesi dei singoli server.
+// memberRouter is a Router that reads and sets the weights of individual servers.
 type memberRouter struct {
 	members   map[string][]string
 	maxWeight int
@@ -109,10 +109,10 @@ func (r *memberRouter) SetWeights(ctx context.Context, shares map[string]int) er
 	return nil
 }
 
-// --- HAProxy: peso dei server con l'API di configurazione della Data Plane API ---
+// --- HAProxy: server weights through the configuration API of the Data Plane API ---
 
-// NewHAProxyRouter costruisce il router haproxy: i pesi (0-256) dei server del backend, su
-// ogni istanza, con l'API di configurazione (applicati a runtime quando possibile).
+// NewHAProxyRouter builds the haproxy router: the weights (0-256) of the backend servers, on
+// every instance, through the configuration API (applied at runtime when possible).
 func NewHAProxyRouter(ctx context.Context, env Env) (Router, error) {
 	pool, err := NewHAProxyPool(ctx, env)
 	if err != nil {
@@ -158,10 +158,10 @@ func NewHAProxyRouter(ctx context.Context, env Env) (Router, error) {
 	}, nil
 }
 
-// --- F5 BIG-IP: ratio dei membri del pool (load balancing ratio-member) ---
+// --- F5 BIG-IP: ratio of the pool members (ratio-member load balancing) ---
 
-// NewF5Router costruisce il router f5: il ratio (1-100) dei membri del pool, che deve usare un
-// metodo di bilanciamento ratio; un peso 0 disabilita il membro (session user-disabled).
+// NewF5Router builds the f5 router: the ratio (1-100) of the pool members, which must use a
+// ratio load balancing method; a weight of 0 disables the member (session user-disabled).
 func NewF5Router(ctx context.Context, env Env) (Router, error) {
 	pool, err := NewF5Pool(ctx, env)
 	if err != nil {
@@ -199,10 +199,10 @@ func NewF5Router(ctx context.Context, env Env) (Router, error) {
 	}, nil
 }
 
-// --- NGINX Plus: peso dei server dell'upstream ---
+// --- NGINX Plus: weight of the upstream servers ---
 
-// NewNginxPlusRouter costruisce il router nginx-plus: il peso dei server dell'upstream su ogni
-// istanza; un peso 0 mette il server in drain.
+// NewNginxPlusRouter builds the nginx-plus router: the weight of the upstream servers on
+// every instance; a weight of 0 puts the server in drain.
 func NewNginxPlusRouter(ctx context.Context, env Env) (Router, error) {
 	pool, err := NewNginxPlusPool(ctx, env)
 	if err != nil {

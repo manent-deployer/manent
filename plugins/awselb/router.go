@@ -12,17 +12,17 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// Impostazioni del router aws-alb, oltre a region e credenziali.
+// Settings of the aws-alb router, besides region and credentials.
 const (
-	SettingForwardARN    = "forward_arn"     // listener o regola con l'azione forward pesata
-	SettingTargetGroupA  = "target_group_a"  // target group dello slot a
-	SettingTargetGroupB  = "target_group_b"  // target group dello slot b
-	SettingTesterRuleARN = "tester_rule_arn" // regola (es. con una condizione su un header) che porta i tester alla candidata
+	SettingForwardARN    = "forward_arn"     // listener or rule with the weighted forward action
+	SettingTargetGroupA  = "target_group_a"  // target group of slot a
+	SettingTargetGroupB  = "target_group_b"  // target group of slot b
+	SettingTesterRuleARN = "tester_rule_arn" // rule (e.g. with a header condition) that leads testers to the candidate
 )
 
 var forwardARNRe = regexp.MustCompile(`^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:listener(-rule)?/app/[A-Za-z0-9-]+/[0-9a-f]+/[0-9a-f]+(/[0-9a-f]+)?$`)
 
-// ValidateRouter verifica le impostazioni del router aws-alb.
+// ValidateRouter checks the settings of the aws-alb router.
 func ValidateRouter(s map[string]string) error {
 	var errs []error
 	if !awsauth.ValidRegion(s[SettingRegion]) {
@@ -46,8 +46,8 @@ func ValidateRouter(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewRouter restituisce il costruttore del router aws-alb: i pesi dei target group dei due slot
-// nell'azione forward di un listener o di una regola dell'ALB.
+// NewRouter returns the constructor of the aws-alb router: the weights of the two slots'
+// target groups in the forward action of an ALB listener or rule.
 func NewRouter(c Connector) traffic.RouterFactory {
 	return func(ctx context.Context, env traffic.Env) (traffic.Router, error) {
 		if err := ValidateRouter(env.Settings); err != nil {
@@ -68,7 +68,7 @@ type router struct {
 	tg  map[string]string
 }
 
-// Weights implementa traffic.Router.
+// Weights implements traffic.Router.
 func (r *router) Weights(ctx context.Context) (map[string]int, error) {
 	w, err := r.api.ForwardWeights(ctx, r.s[SettingForwardARN])
 	if err != nil {
@@ -87,7 +87,7 @@ func (r *router) Weights(ctx context.Context) (map[string]int, error) {
 	return out, nil
 }
 
-// SetWeights implementa traffic.Router: l'azione forward contiene sempre i due target group.
+// SetWeights implements traffic.Router: the forward action always holds both target groups.
 func (r *router) SetWeights(ctx context.Context, weights map[string]int) error {
 	w := map[string]int32{}
 	for _, slot := range descriptor.Slots {
@@ -96,7 +96,7 @@ func (r *router) SetWeights(ctx context.Context, weights map[string]int) error {
 	return r.api.SetForwardWeights(ctx, r.s[SettingForwardARN], w)
 }
 
-// RouteTesters implementa traffic.TesterRouter: la regola dei tester porta solo allo slot.
+// RouteTesters implements traffic.TesterRouter: the testers' rule leads only to the slot.
 func (r *router) RouteTesters(ctx context.Context, slot string) (map[string]string, error) {
 	rule := r.s[SettingTesterRuleARN]
 	if rule == "" {

@@ -14,29 +14,29 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TracingConfig configura l'esportazione delle tracce via OTLP/HTTP.
+// TracingConfig configures the export of traces over OTLP/HTTP.
 type TracingConfig struct {
 	Enabled bool
-	// Endpoint del collector, es. otel-collector:4318 o https://otel.example.com:4318.
-	// Vuoto: OTEL_EXPORTER_OTLP_ENDPOINT o OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+	// Endpoint of the collector, e.g. otel-collector:4318 or https://otel.example.com:4318.
+	// Empty: OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
 	Endpoint string
-	// Insecure usa http invece di https (solo con un endpoint senza schema).
+	// Insecure uses http instead of https (only with an endpoint without scheme).
 	Insecure bool
-	// SampleRatio è la frazione delle tracce campionate (0..1), se la richiesta non ne
-	// porta già una decisione.
+	// SampleRatio is the fraction of sampled traces (0..1), if the request does not already carry
+	// a decision.
 	SampleRatio float64
 	Service     string
 	Version     string
-	// Instance identifica il processo (es. executor_id).
+	// Instance identifies the process (e.g. executor_id).
 	Instance string
 }
 
-// propagator è il formato W3C Trace Context, usato anche per passare la traccia dalla
-// richiesta all'API al workflow eseguito dal worker.
+// propagator is the W3C Trace Context format, also used to pass the trace from the API
+// request to the workflow run by the worker.
 var propagator = propagation.TraceContext{}
 
-// SetupTracing configura il tracer globale. Senza tracing abilitato le span sono no-op.
-// Restituisce la funzione che esporta le span rimaste e arresta il provider.
+// SetupTracing configures the global tracer. Without tracing enabled spans are no-ops.
+// It returns the function that exports the remaining spans and stops the provider.
 func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(propagator)
 	if !cfg.Enabled {
@@ -77,17 +77,17 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	return tp.Shutdown, nil
 }
 
-// Tracer restituisce il tracer di manent.
+// Tracer returns manent's tracer.
 func Tracer() trace.Tracer { return otel.Tracer("github.com/joeg-ita/manent") }
 
-// TraceParent restituisce l'intestazione traceparent della span corrente, o "".
+// TraceParent returns the traceparent header of the current span, or "".
 func TraceParent(ctx context.Context) string {
 	c := propagation.MapCarrier{}
 	propagator.Inject(ctx, c)
 	return c.Get("traceparent")
 }
 
-// WithTraceParent restituisce ctx con la span remota indicata da traceparent come genitore.
+// WithTraceParent returns ctx with the remote span given by traceparent as parent.
 func WithTraceParent(ctx context.Context, traceparent string) context.Context {
 	if traceparent == "" {
 		return ctx
@@ -95,7 +95,7 @@ func WithTraceParent(ctx context.Context, traceparent string) context.Context {
 	return propagator.Extract(ctx, propagation.MapCarrier{"traceparent": traceparent})
 }
 
-// Extract legge la traccia dalle intestazioni di una richiesta HTTP.
+// Extract reads the trace from the headers of an HTTP request.
 func Extract(ctx context.Context, h propagation.TextMapCarrier) context.Context {
 	return propagator.Extract(ctx, h)
 }

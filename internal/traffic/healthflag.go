@@ -16,26 +16,26 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Impostazioni del provider health-flag.
+// Settings of the health-flag provider.
 const (
-	settingMode          = "mode"                // http (default) o file
-	settingDrainURL      = "drain_url"           // http: URL che mette il target in svuotamento ({host}, {port}, {label.<nome>})
-	settingDrainMethod   = "drain_method"        // http: metodo per svuotare (default PUT)
-	settingRestoreMethod = "restore_method"      // http: metodo per rientrare, sullo stesso URL (default DELETE)
-	settingTokenSecret   = "token_secret"        // http: segreto con il bearer token
-	settingFlagPath      = "path"                // file: file flag sul target, via SSH
-	settingSSHUser       = "ssh_user"            // file: utente SSH (default: quello del target)
-	settingSSHKey        = "ssh_key_secret"      // file: segreto con la chiave privata
-	settingSSHPassword   = "ssh_password_secret" // file: in alternativa, segreto con la password
+	settingMode          = "mode"                // http (default) or file
+	settingDrainURL      = "drain_url"           // http: URL that puts the target into draining ({host}, {port}, {label.<name>})
+	settingDrainMethod   = "drain_method"        // http: method to drain (default PUT)
+	settingRestoreMethod = "restore_method"      // http: method to restore, on the same URL (default DELETE)
+	settingTokenSecret   = "token_secret"        // http: secret with the bearer token
+	settingFlagPath      = "path"                // file: flag file on the target, over SSH
+	settingSSHUser       = "ssh_user"            // file: SSH user (default: the target's)
+	settingSSHKey        = "ssh_key_secret"      // file: secret with the private key
+	settingSSHPassword   = "ssh_password_secret" // file: alternatively, secret with the password
 	settingKnownHosts    = "known_hosts"         // file: known_hosts (default ~/.ssh/known_hosts)
-	settingHealthURL     = "health_url"          // sonda dello stato di salute visto dal load balancer
-	settingDrainDelay    = "drain_delay"         // attesa perché il load balancer veda il target fuori servizio (default 30s)
+	settingHealthURL     = "health_url"          // probe of the health state seen by the load balancer
+	settingDrainDelay    = "drain_delay"         // wait for the load balancer to see the target out of service (default 30s)
 	defaultDrainDelay    = 30 * time.Second
 )
 
-// healthFlagPool funziona con qualunque load balancer: il target risponde 503 al proprio
-// health check (per una chiamata HTTP o per un file flag) e il load balancer smette di
-// mandargli traffico. Non conta le connessioni: si attende drain_delay.
+// healthFlagPool works with any load balancer: the target answers 503 to its own health check
+// (through an HTTP call or a flag file) and the load balancer stops sending it traffic. It
+// does not count connections: it waits drain_delay.
 type healthFlagPool struct {
 	s       map[string]string
 	targets map[string]descriptor.Target
@@ -45,7 +45,7 @@ type healthFlagPool struct {
 	delay   time.Duration
 }
 
-// Dialer apre le sessioni SSH verso i target.
+// Dialer opens the SSH sessions to the targets.
 type Dialer = customstep.Dialer
 
 func validateHealthFlag(s map[string]string) error {
@@ -78,7 +78,7 @@ func validateHealthFlag(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewHealthFlagPool costruisce il pool health-flag.
+// NewHealthFlagPool builds the health-flag pool.
 func NewHealthFlagPool(_ context.Context, env Env) (Pool, error) {
 	if err := validateHealthFlag(env.Settings); err != nil {
 		return nil, err
@@ -103,13 +103,13 @@ func NewHealthFlagPool(_ context.Context, env Env) (Pool, error) {
 	return p, nil
 }
 
-// DrainDelay implementa DrainDelayer.
+// DrainDelay implements DrainDelayer.
 func (p *healthFlagPool) DrainDelay() time.Duration { return p.delay }
 
-// Members implementa Pool: il provider non conosce gli altri membri del pool.
+// Members implements Pool: the provider does not know the other pool members.
 func (p *healthFlagPool) Members(context.Context) ([]Member, error) { return nil, nil }
 
-// Connections implementa Pool: le connessioni non sono note, l'attesa è drain_delay.
+// Connections implements Pool: connections are unknown, the wait is drain_delay.
 func (p *healthFlagPool) Connections(_ context.Context, members []string) (map[string]int, error) {
 	out := map[string]int{}
 	for _, m := range members {
@@ -118,12 +118,12 @@ func (p *healthFlagPool) Connections(_ context.Context, members []string) (map[s
 	return out, nil
 }
 
-// Drain implementa Pool.
+// Drain implements Pool.
 func (p *healthFlagPool) Drain(ctx context.Context, members []string) error {
 	return p.each(ctx, members, true)
 }
 
-// Restore implementa Pool.
+// Restore implements Pool.
 func (p *healthFlagPool) Restore(ctx context.Context, members []string) error {
 	return p.each(ctx, members, false)
 }
@@ -170,7 +170,7 @@ func (p *healthFlagPool) flagHTTP(ctx context.Context, t descriptor.Target, drai
 			r.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
 		}
 	})
-	// Rientrare da un target mai svuotato non è un errore.
+	// Restoring a target never drained is not an error.
 	if se, ok := errors.AsType[*StatusError](err); ok && !drain && se.Status == http.StatusNotFound {
 		return nil
 	}
@@ -212,7 +212,7 @@ func (p *healthFlagPool) flagFile(ctx context.Context, t descriptor.Target, drai
 	return nil
 }
 
-// Healthy implementa Pool: senza health_url un target rientrato è considerato sano.
+// Healthy implements Pool: without health_url a restored target counts as healthy.
 func (p *healthFlagPool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, m := range members {
@@ -240,7 +240,7 @@ func (p *healthFlagPool) Healthy(ctx context.Context, members []string) (map[str
 	return out, nil
 }
 
-// expandURL sostituisce i dati del target in un URL, codificandoli.
+// expandURL replaces the target data in a URL, encoding it.
 func expandURL(tmpl string, t descriptor.Target) string {
 	esc := t
 	esc.Labels = map[string]string{}

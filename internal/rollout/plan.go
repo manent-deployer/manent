@@ -1,5 +1,5 @@
-// Package rollout calcola il piano di un rilascio a ondate e verifica la salute dei target tra
-// un passo e l'altro. L'esecuzione è del worker (internal/engine).
+// Package rollout computes the plan of a wave release and checks target health between
+// passes. Execution belongs to the worker (internal/engine).
 package rollout
 
 import (
@@ -15,37 +15,37 @@ import (
 	"github.com/joeg-ita/manent/internal/labels"
 )
 
-// Plan è la sequenza degli stadi di un rollout. Gli stadi sono eseguiti uno dopo l'altro, con
-// il tempo di osservazione e l'health gate dopo ciascuno.
+// Plan is the sequence of a rollout's stages. Stages run one after the other, with the
+// observation time and the health gate after each.
 type Plan struct {
 	Stages []Stage `json:"stages"`
 }
 
-// Stage è un gruppo di passi eseguiti insieme (region diverse della stessa ondata).
+// Stage is a group of passes run together (different regions of the same wave).
 type Stage struct {
-	// Name identifica lo stadio, es. "eu-1/eu-1a" o "resto/eu-2a+us-1a".
+	// Name identifies the stage, e.g. "eu-1/eu-1a" or "rest/eu-2a+us-1a".
 	Name   string `json:"name"`
 	Wave   string `json:"wave"`
 	Passes []Pass `json:"passes"`
-	// Bake è il tempo di osservazione dopo lo stadio.
+	// Bake is the observation time after the stage.
 	Bake time.Duration `json:"bake"`
-	// LastOfWave indica l'ultimo stadio dell'ondata (dopo il quale può servire un'approvazione).
+	// LastOfWave marks the last stage of the wave (after which an approval may be needed).
 	LastOfWave bool `json:"last_of_wave,omitempty"`
 }
 
-// Pass è il lavoro su una region (e, con by: az, su un'AZ) dentro uno stadio.
+// Pass is the work on a region (and, with by: az, on an AZ) within a stage.
 type Pass struct {
-	// Name è univoco nel rollout: <ondata>/<region>[/<az>].
+	// Name is unique in the rollout: <wave>/<region>[/<az>].
 	Name    string              `json:"name"`
 	Wave    string              `json:"wave"`
 	Region  string              `json:"region,omitempty"`
 	AZ      string              `json:"az,omitempty"`
 	Targets []descriptor.Target `json:"targets"`
-	// Batches divide i target in gruppi aggiornati insieme (max_unavailable).
+	// Batches splits the targets into groups updated together (max_unavailable).
 	Batches [][]descriptor.Target `json:"batches"`
 }
 
-// Hosts restituisce gli host del passo, con la porta se indicata.
+// Hosts returns the hosts of the pass, with the port if given.
 func (p Pass) Hosts() []string {
 	out := make([]string, len(p.Targets))
 	for i, t := range p.Targets {
@@ -57,7 +57,7 @@ func (p Pass) Hosts() []string {
 	return out
 }
 
-// Regions restituisce le region dello stadio.
+// Regions returns the regions of the stage.
 func (s Stage) Regions() []string {
 	var out []string
 	for _, p := range s.Passes {
@@ -68,7 +68,7 @@ func (s Stage) Regions() []string {
 	return out
 }
 
-// TotalPasses conta i passi del piano.
+// TotalPasses counts the passes of the plan.
 func (p Plan) TotalPasses() int {
 	n := 0
 	for _, s := range p.Stages {
@@ -77,10 +77,10 @@ func (p Plan) TotalPasses() int {
 	return n
 }
 
-// Build calcola il piano. Ogni target deve appartenere a una sola ondata, ogni ondata deve
-// selezionare almeno un target; con la divisione per region o AZ i target devono avere le
-// etichette region e az. Il risultato dipende solo dagli argomenti: il worker lo ricalcola
-// identico dopo una recovery.
+// Build computes the plan. Every target must belong to exactly one wave, every wave must
+// select at least one target; with a split by region or AZ the targets must have the region
+// and az labels. The result depends only on the arguments: the worker recomputes it
+// identically after a recovery.
 func Build(targets []descriptor.Target, r *descriptor.Rollout) (Plan, error) {
 	if err := r.Validate(); err != nil {
 		return Plan{}, err
@@ -128,9 +128,9 @@ func Build(targets []descriptor.Target, r *descriptor.Rollout) (Plan, error) {
 	return plan, nil
 }
 
-// waveStages divide un'ondata in stadi. Con by: az ogni region è divisa in AZ (in ordine
-// alfabetico) e lo stadio k contiene l'AZ k di parallelRegions region; con by: region ogni
-// stadio contiene parallelRegions region intere; senza divisione l'ondata è un solo stadio.
+// waveStages splits a wave into stages. With by: az every region is split into AZs (in
+// alphabetical order) and stage k holds AZ k of parallelRegions regions; with by: region every
+// stage holds parallelRegions whole regions; without a split the wave is a single stage.
 func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout) ([]Stage, error) {
 	bake := w.BakeDuration()
 	if w.By == descriptor.ByNone {
@@ -158,7 +158,7 @@ func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout
 			stages = append(stages, st)
 			continue
 		}
-		// by: az — le AZ di ogni region del gruppo, una per stadio.
+		// by: az — the AZs of every region of the group, one per stage.
 		azs := map[string][]string{}
 		depth := 0
 		for _, reg := range group {
@@ -196,7 +196,7 @@ func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout
 	return stages, nil
 }
 
-// orderRegions mette prima le region nell'ordine di Rollout.Regions, poi le altre in ordine alfabetico.
+// orderRegions puts first the regions in Rollout.Regions order, then the others alphabetically.
 func orderRegions(found, order []string) []string {
 	slices.Sort(found)
 	out := make([]string, 0, len(found))
@@ -223,7 +223,7 @@ func pass(wave, region, az string, ts []descriptor.Target, r *descriptor.Rollout
 	}
 	p := Pass{Name: name, Wave: wave, Region: region, AZ: az, Targets: ts}
 	if region == "" && len(ts) > 0 {
-		// Ondata senza divisione: la region è nota se tutti i target ne hanno una sola.
+		// Wave without a split: the region is known if all targets share a single one.
 		p.Region = common(ts, labels.Region)
 		p.AZ = common(ts, labels.AZ)
 	}
@@ -234,7 +234,7 @@ func pass(wave, region, az string, ts []descriptor.Target, r *descriptor.Rollout
 	return p
 }
 
-// common restituisce il valore dell'etichetta se è lo stesso per tutti i target, altrimenti "".
+// common returns the label value if it is the same for all targets, otherwise "".
 func common(ts []descriptor.Target, key string) string {
 	v := ts[0].Labels[key]
 	for _, t := range ts[1:] {

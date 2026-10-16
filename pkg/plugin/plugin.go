@@ -1,5 +1,5 @@
-// Package plugin definisce il contratto pubblico che ogni plugin di deploy deve rispettare.
-// I team che sviluppano nuovi plugin dipendono solo da questo package.
+// Package plugin defines the public contract every deploy plugin must honor.
+// Teams writing new plugins depend only on this package.
 package plugin
 
 import (
@@ -8,39 +8,39 @@ import (
 	"log/slog"
 )
 
-// Deployer è l'interfaccia che ogni plugin di deploy deve implementare.
+// Deployer is the interface every deploy plugin must implement.
 type Deployer interface {
-	// Name restituisce il nome univoco del plugin (es. "remote-copy").
+	// Name returns the unique name of the plugin (e.g. "remote-copy").
 	Name() string
-	// Supports indica se il plugin gestisce il tipo di artefatto indicato.
+	// Supports reports whether the plugin handles the given artifact type.
 	Supports(artifactType string) bool
-	// Validate verifica la richiesta prima del deploy, senza effetti collaterali.
+	// Validate checks the request before the deploy, without side effects.
 	Validate(req *Request) error
-	// Deploy esegue il deploy. Deve essere idempotente: in caso di recovery può essere rieseguito.
+	// Deploy runs the deploy. It must be idempotent: on recovery it can run again.
 	Deploy(ctx context.Context, req *Request) (*Result, error)
 }
 
-// DryRunner è un'interfaccia opzionale del Deployer: in modalità dry-run il plugin verifica
-// che il deploy sia eseguibile (raggiungibilità dei target, credenziali, permessi) senza
-// modificare nulla. Se il plugin non la implementa, in dry-run viene chiamato solo Validate.
+// DryRunner is an optional interface of the Deployer: in dry-run mode the plugin checks that
+// the deploy can run (target reachability, credentials, permissions) without changing
+// anything. If the plugin does not implement it, in dry-run only Validate is called.
 type DryRunner interface {
 	DryRun(ctx context.Context, req *Request) (*Result, error)
 }
 
-// ErrDryRunUnsupported può essere restituito da DryRun quando il supporto si scopre solo a
-// runtime (es. un plugin esterno): manent lo tratta come un plugin senza DryRunner.
+// ErrDryRunUnsupported can be returned by DryRun when support is known only at runtime (e.g.
+// an external plugin): manent treats it as a plugin without DryRunner.
 var ErrDryRunUnsupported = errors.New("dry-run non supportato dal plugin")
 
-// Factory costruisce un Deployer a partire dalla sua configurazione applicativa.
+// Factory builds a Deployer from its application configuration.
 type Factory func(cfg map[string]any, logger *slog.Logger) (Deployer, error)
 
-// SecretResolver permette al plugin di leggere un segreto per nome solo quando serve,
-// così il valore non viene mai persistito negli output degli step.
+// SecretResolver lets the plugin read a secret by name only when needed, so the value is never
+// persisted in step outputs.
 type SecretResolver interface {
 	Secret(ctx context.Context, name string) (string, error)
 }
 
-// Artifact descrive l'artefatto già recuperato e disponibile in locale.
+// Artifact describes the artifact already fetched and available locally.
 type Artifact struct {
 	Type      string `json:"type"`
 	Name      string `json:"name"`
@@ -49,46 +49,46 @@ type Artifact struct {
 	SHA256    string `json:"sha256"`
 }
 
-// Target identifica una destinazione del deploy.
+// Target identifies a deploy destination.
 type Target struct {
 	Host string `json:"host"`
 	Port int    `json:"port,omitempty"`
 	User string `json:"user,omitempty"`
 }
 
-// Request contiene tutto ciò che serve al plugin per eseguire il deploy.
+// Request holds everything the plugin needs to run the deploy.
 type Request struct {
 	DeploymentID string
 	Application  string
 	Environment  string
 	Artifact     Artifact
 	Targets      []Target
-	// Params sono parametri specifici del plugin, presi dal descrittore.
+	// Params are plugin-specific parameters, taken from the descriptor.
 	Params  map[string]string
 	Secrets SecretResolver
-	// Traffic è presente solo nei rilasci per percentuale di traffico (SlotDeployer).
+	// Traffic is set only in traffic percentage rollouts (SlotDeployer).
 	Traffic *TrafficRequest
 }
 
-// TargetResult è l'esito del deploy su un singolo target.
+// TargetResult is the deploy outcome on a single target.
 type TargetResult struct {
 	Host    string            `json:"host"`
 	Status  string            `json:"status"`
 	Details map[string]string `json:"details,omitempty"`
 }
 
-// Result è l'esito complessivo restituito dal plugin. Deve essere serializzabile in JSON.
+// Result is the overall outcome returned by the plugin. It must be JSON serializable.
 type Result struct {
 	Plugin  string         `json:"plugin"`
 	Targets []TargetResult `json:"targets"`
 }
 
-// Stati possibili di un TargetResult.
+// Possible states of a TargetResult.
 const (
 	StatusDeployed = "deployed"
 	StatusFailed   = "failed"
-	// StatusReady indica, in dry-run, un target su cui il deploy risulta eseguibile.
+	// StatusReady means, in dry-run, a target on which the deploy can run.
 	StatusReady = "ready"
-	// StatusRolledBack indica un target riportato alla release precedente.
+	// StatusRolledBack means a target brought back to the previous release.
 	StatusRolledBack = "rolled_back"
 )

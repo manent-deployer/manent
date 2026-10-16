@@ -137,7 +137,7 @@ Flusso: client `manent` (`internal/clientcli`, YAML → JSON via `internal/apicl
 
 - Ogni servizio va definito tramite interfacce, per facilitare mock e test.
 - Ogni componente deve loggare sia a livello applicativo sia inviando i log al SIEM come `rfc5424.Message`.
-- Commenti nel codice **in italiano**, descrittivi ma sintetici.
+- Commenti nel codice **in inglese**, concisi ma completi (Go, TypeScript, script, YAML, Makefile). Messaggi di errore, log e testi restano in italiano.
 
 ## Comandi
 

@@ -14,7 +14,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// concurrencyStep misura quanti deploy sono in esecuzione insieme, in totale e per ambiente.
+// concurrencyStep measures how many deploys run together, in total and per environment.
 type concurrencyStep struct {
 	mu      sync.Mutex
 	running map[string]int
@@ -46,8 +46,8 @@ func (s *concurrencyStep) Run(_ context.Context, in pipeline.Input) (pipeline.Ou
 	return pipeline.Output{}, nil
 }
 
-// blockOnceStep si blocca alla prima esecuzione (ignorando il contesto, come un processo
-// che muore a metà step) e termina subito dalla seconda, cioè dopo la recovery.
+// blockOnceStep blocks on its first run (ignoring the context, like a process dying halfway
+// through a step) and ends at once from the second, i.e. after the recovery.
 type blockOnceStep struct {
 	calls   atomic.Int32
 	started chan struct{}
@@ -73,7 +73,7 @@ func TestClientNonEseguePrimaDelWorker(t *testing.T) {
 	reg, planner := testRegistry(t, countStep{&n})
 	db := testdb.URL(t)
 
-	// Il worker crea lo schema del database ma non è ancora avviato.
+	// The worker creates the database schema but is not started yet.
 	w, err := NewWorker(workerOpts(db, "w1", reg))
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestDueWorkerSerializzanoPerAmbiente(t *testing.T) {
 	reg, planner := testRegistry(t, step)
 	db := testdb.URL(t)
 
-	// Un deploy alla volta per worker: due ambienti in parallelo richiedono due worker.
+	// One deploy at a time per worker: two environments in parallel need two workers.
 	opts1, opts2 := workerOpts(db, "w1", reg), workerOpts(db, "w2", reg)
 	opts1.Queue.WorkerConcurrency, opts2.Queue.WorkerConcurrency = 1, 1
 	w1 := startWorker(t, opts1)
@@ -121,8 +121,8 @@ func TestDueWorkerSerializzanoPerAmbiente(t *testing.T) {
 	svc := NewService(ServiceOptions{Client: w1.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
 
 	ctx := context.Background()
-	// Prima tutti i prod e poi tutti i test: senza partizioni i due worker
-	// prenderebbero due prod insieme (la coda è FIFO).
+	// All prod first and then all test: without partitions the two workers would take two prod
+	// ones together (the queue is FIFO).
 	var ids []string
 	for _, env := range []string{"prod", "test"} {
 		for range 3 {
@@ -167,7 +167,7 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 	db := testdb.URL(t)
 	ctx := context.Background()
 
-	// w1 avvia il deploy e "muore" a metà step.
+	// w1 starts the deploy and "dies" halfway through the step.
 	w1, err := NewWorker(workerOpts(db, "w1", reg))
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 	<-step.started
 	_ = w1.Shutdown(100 * time.Millisecond)
 
-	// Un altro worker non deve riprendere il deploy di w1, che è ancora assegnato a w1.
+	// Another worker must not resume w1's deploy, which is still assigned to w1.
 	w2 := startWorker(t, workerOpts(db, "w2", reg))
 	svc2 := NewService(ServiceOptions{Client: w2.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
 	time.Sleep(1500 * time.Millisecond)
@@ -191,7 +191,7 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 		t.Fatalf("w2 non doveva riprendere il deploy: stato %s, esecuzioni %d", st.State, step.calls.Load())
 	}
 
-	// Al riavvio con lo stesso ExecutorID, w1 recupera il deploy e lo completa.
+	// On restart with the same ExecutorID, w1 recovers the deploy and completes it.
 	startWorker(t, workerOpts(db, "w1", reg))
 	if _, err := svc2.Wait(ctx, sub.ID); err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestRecoverySoloDelProprioExecutor(t *testing.T) {
 	}
 }
 
-// idStep conta le esecuzioni di ogni deploy.
+// idStep counts the runs of every deploy.
 type idStep struct {
 	mu   sync.Mutex
 	runs map[string]int
@@ -232,7 +232,7 @@ func TestScheduleConDueWorkerUnDeployPerTick(t *testing.T) {
 	if err := svc.DeleteSchedule(ctx, "tick"); err != nil {
 		t.Fatal(err)
 	}
-	// Un tick già partito può accodare il suo deploy anche dopo la cancellazione della schedule.
+	// A tick already started can enqueue its deploy even after the schedule is deleted.
 	time.Sleep(2 * time.Second)
 	deps, err := svc.List(ctx, ListFilter{Schedule: "tick"})
 	if err != nil {

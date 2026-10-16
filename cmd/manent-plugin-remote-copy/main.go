@@ -1,6 +1,6 @@
-// Command manent-plugin-remote-copy è il plugin remote-copy distribuito come binario esterno.
-// Mostra che la stessa plugin.Factory può essere compilata dentro manent o servita come processo
-// separato. Configurazione:
+// Command manent-plugin-remote-copy is the remote-copy plugin shipped as an external binary.
+// It shows that the same plugin.Factory can be compiled into manent or served as a separate
+// process. Configuration:
 //
 //	plugins:
 //	  remote-copy-ext:

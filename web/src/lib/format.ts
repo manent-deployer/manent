@@ -1,4 +1,4 @@
-// Formattazione di date e durate secondo la lingua dell'interfaccia.
+// Formatting of dates and durations in the interface language.
 
 export function formatDateTime(iso: string | undefined, locale: string): string {
   if (!iso) return "—";
@@ -17,7 +17,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["second", 1],
 ];
 
-/** formatRelative dice quanto tempo fa (o tra quanto) cade l'istante, es. "3 min fa". */
+/** formatRelative says how long ago (or how far ahead) the instant is, e.g. "3 min ago". */
 export function formatRelative(iso: string | undefined, locale: string, now = Date.now()): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
@@ -32,7 +32,7 @@ export function formatRelative(iso: string | undefined, locale: string, now = Da
   return "—";
 }
 
-/** formatDuration rende una durata in millisecondi, es. "2 min 5 s" o "450 ms". */
+/** formatDuration renders a duration in milliseconds, e.g. "2 min 5 s" or "450 ms". */
 export function formatDuration(ms: number | undefined): string {
   if (ms === undefined || ms < 0 || Number.isNaN(ms)) return "—";
   if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -45,7 +45,7 @@ export function formatDuration(ms: number | undefined): string {
   return `${sec} s`;
 }
 
-/** durationBetween restituisce i millisecondi tra due istanti ISO (fino ad ora se manca la fine). */
+/** durationBetween returns the milliseconds between two ISO instants (up to now if the end is missing). */
 export function durationBetween(start?: string, end?: string, now = Date.now()): number | undefined {
   if (!start) return undefined;
   const a = new Date(start).getTime();

@@ -1,6 +1,6 @@
-// Package extplugin avvia e gestisce i plugin di deploy esterni: binari separati che parlano
-// con manent via gRPC (pkg/plugin/external) e che appaiono al resto del motore come un normale
-// plugin.Deployer. Si attivano con la chiave "external" in plugins.<nome> della configurazione.
+// Package extplugin starts and manages external deploy plugins: separate binaries that talk to
+// manent over gRPC (pkg/plugin/external) and look like a normal plugin.Deployer to the rest of
+// the engine. They are enabled with the "external" key in plugins.<name> of the configuration.
 package extplugin
 
 import (
@@ -29,39 +29,39 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin/external"
 )
 
-// Key è la chiave che, in plugins.<nome>, identifica un plugin esterno.
+// Key is the key that, in plugins.<name>, identifies an external plugin.
 const Key = "external"
 
-// Config è la sezione external di un plugin.
+// Config is the external section of a plugin.
 type Config struct {
-	// Command è il percorso del binario del plugin.
+	// Command is the path of the plugin binary.
 	Command string   `yaml:"command"`
 	Args    []string `yaml:"args"`
-	// SHA256 del binario: verificato all'attivazione e a ogni avvio del processo.
+	// SHA256 of the binary: verified at activation and at every process start.
 	SHA256 string `yaml:"sha256"`
-	// Env sono le variabili passate al plugin. Le variabili del worker non vengono ereditate,
-	// salvo quelle di sistema in inheritedEnv: possono contenere segreti (es. riferimenti env:).
+	// Env are the variables passed to the plugin. The worker's variables are not inherited,
+	// except the system ones in inheritedEnv: they may contain secrets (e.g. env: references).
 	Env map[string]string `yaml:"env"`
-	// StartTimeout è il tempo massimo per l'avvio del processo (default 1m).
+	// StartTimeout is the maximum time for the process to start (default 1m).
 	StartTimeout time.Duration `yaml:"start_timeout"`
 }
 
-// inheritedEnv sono le sole variabili del worker passate al plugin.
+// inheritedEnv are the only worker variables passed to the plugin.
 var inheritedEnv = []string{"PATH", "HOME", "TMPDIR", "TZ", "LANG"}
 
-// callTimeout limita Configure all'avvio del processo.
+// callTimeout limits Configure at process start.
 const callTimeout = 30 * time.Second
 
-// IsExternal indica se la configurazione di un plugin descrive un plugin esterno.
+// IsExternal reports whether a plugin configuration describes an external plugin.
 func IsExternal(cfg map[string]any) bool {
 	_, ok := cfg[Key]
 	return ok
 }
 
-// NewFactory restituisce la factory del plugin esterno registrato con il nome indicato.
-// L'attivazione verifica configurazione e binario ma non avvia il processo: viene avviato al
-// primo utilizzo, così i comandi CLI (che attivano i plugin solo per calcolare il piano) non
-// eseguono mai il binario.
+// NewFactory returns the factory of the external plugin registered with the given name.
+// Activation checks configuration and binary but does not start the process: it is started
+// on first use, so CLI commands (which activate plugins only to compute the plan) never run
+// the binary.
 func NewFactory(name string) plugin.Factory {
 	return func(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 		c, err := parseConfig(cfg[Key])
@@ -115,7 +115,7 @@ func parseConfig(raw any) (Config, error) {
 	return c, nil
 }
 
-// checkBinary verifica che il binario esista, sia eseguibile e, se indicato, il suo sha256.
+// checkBinary checks that the binary exists, is executable and, if given, its sha256.
 func (c Config) checkBinary() error {
 	fi, err := os.Stat(c.Command)
 	if err != nil {
@@ -142,11 +142,11 @@ func (c Config) checkBinary() error {
 	return nil
 }
 
-// Process è un plugin esterno: implementa plugin.Deployer e le interfacce opzionali
-// (DryRunner, ReleaseInspector, Rollbacker) inoltrando le chiamate al processo, che viene
-// avviato al primo uso e riavviato se termina. Le interfacce opzionali che il plugin non
-// implementa restituiscono un errore: il supporto effettivo al rollback si verifica con
-// RollbackSupported, dalle capacità dichiarate dal plugin all'avvio.
+// Process is an external plugin: it implements plugin.Deployer and the optional interfaces
+// (DryRunner, ReleaseInspector, Rollbacker) by forwarding calls to the process, which is
+// started on first use and restarted if it exits. Optional interfaces the plugin does not
+// implement return an error: actual rollback support is checked with RollbackSupported, from
+// the capabilities the plugin declares at startup.
 type Process struct {
 	name       string
 	cfg        Config
@@ -160,10 +160,10 @@ type Process struct {
 	closed bool
 }
 
-// Name restituisce il nome con cui il plugin è configurato in manent.
+// Name returns the name the plugin is configured with in manent.
 func (p *Process) Name() string { return p.name }
 
-// Supports interroga il plugin; se il processo non è disponibile il tipo risulta non supportato.
+// Supports asks the plugin; if the process is unavailable the type is unsupported.
 func (p *Process) Supports(artifactType string) bool {
 	c, err := p.conn()
 	if err != nil {
@@ -173,7 +173,7 @@ func (p *Process) Supports(artifactType string) bool {
 	return c.Supports(artifactType)
 }
 
-// Validate valida la richiesta nel processo del plugin.
+// Validate validates the request in the plugin process.
 func (p *Process) Validate(req *plugin.Request) error {
 	c, err := p.conn()
 	if err != nil {
@@ -182,7 +182,7 @@ func (p *Process) Validate(req *plugin.Request) error {
 	return c.Validate(req)
 }
 
-// Deploy esegue il deploy nel processo del plugin.
+// Deploy runs the deploy in the plugin process.
 func (p *Process) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -191,8 +191,8 @@ func (p *Process) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resu
 	return c.Deploy(ctx, req)
 }
 
-// DryRun esegue il dry-run nel processo del plugin; restituisce plugin.ErrDryRunUnsupported
-// se il plugin non lo implementa.
+// DryRun runs the dry-run in the plugin process; it returns plugin.ErrDryRunUnsupported if the
+// plugin does not implement it.
 func (p *Process) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -201,7 +201,7 @@ func (p *Process) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resu
 	return c.DryRun(ctx, req)
 }
 
-// CurrentRelease legge la release in esercizio tramite il processo del plugin.
+// CurrentRelease reads the release in service through the plugin process.
 func (p *Process) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -210,7 +210,7 @@ func (p *Process) CurrentRelease(ctx context.Context, req *plugin.Request) (*plu
 	return c.CurrentRelease(ctx, req)
 }
 
-// Rollback esegue il rollback nel processo del plugin.
+// Rollback runs the rollback in the plugin process.
 func (p *Process) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -219,8 +219,8 @@ func (p *Process) Rollback(ctx context.Context, req *plugin.Request, previous pl
 	return c.Rollback(ctx, req, previous)
 }
 
-// RollbackSupported avvia il processo, se necessario, e verifica che il plugin abbia
-// dichiarato il supporto al rollback.
+// RollbackSupported starts the process, if needed, and checks that the plugin declared
+// rollback support.
 func (p *Process) RollbackSupported(context.Context) (bool, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -229,8 +229,8 @@ func (p *Process) RollbackSupported(context.Context) (bool, error) {
 	return c.Has(external.CapabilityRollback), nil
 }
 
-// TrafficSupported implementa plugin.TrafficChecker: avvia il processo, se necessario, e
-// legge le capacità dichiarate per i rilasci per percentuale.
+// TrafficSupported implements plugin.TrafficChecker: it starts the process, if needed, and
+// reads the capabilities declared for percentage rollouts.
 func (p *Process) TrafficSupported(ctx context.Context) (plugin.TrafficSupport, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -239,7 +239,7 @@ func (p *Process) TrafficSupported(ctx context.Context) (plugin.TrafficSupport, 
 	return c.TrafficSupported(ctx)
 }
 
-// PrepareSlots inoltra plugin.SlotDeployer.PrepareSlots al processo.
+// PrepareSlots forwards plugin.SlotDeployer.PrepareSlots to the process.
 func (p *Process) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -248,7 +248,7 @@ func (p *Process) PrepareSlots(ctx context.Context, req *plugin.Request) (map[st
 	return c.PrepareSlots(ctx, req)
 }
 
-// DeployCandidate inoltra plugin.SlotDeployer.DeployCandidate al processo.
+// DeployCandidate forwards plugin.SlotDeployer.DeployCandidate to the process.
 func (p *Process) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -257,27 +257,27 @@ func (p *Process) DeployCandidate(ctx context.Context, req *plugin.Request) (*pl
 	return c.DeployCandidate(ctx, req)
 }
 
-// PromoteCandidate inoltra plugin.SlotDeployer.PromoteCandidate al processo.
+// PromoteCandidate forwards plugin.SlotDeployer.PromoteCandidate to the process.
 func (p *Process) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
 	return p.with(func(c *external.Client) error { return c.PromoteCandidate(ctx, req) })
 }
 
-// RevertCandidate inoltra plugin.SlotDeployer.RevertCandidate al processo.
+// RevertCandidate forwards plugin.SlotDeployer.RevertCandidate to the process.
 func (p *Process) RevertCandidate(ctx context.Context, req *plugin.Request) error {
 	return p.with(func(c *external.Client) error { return c.RevertCandidate(ctx, req) })
 }
 
-// RetirePrevious inoltra plugin.SlotDeployer.RetirePrevious al processo.
+// RetirePrevious forwards plugin.SlotDeployer.RetirePrevious to the process.
 func (p *Process) RetirePrevious(ctx context.Context, req *plugin.Request) error {
 	return p.with(func(c *external.Client) error { return c.RetirePrevious(ctx, req) })
 }
 
-// SetCandidateWeight inoltra plugin.TrafficRouter.SetCandidateWeight al processo.
+// SetCandidateWeight forwards plugin.TrafficRouter.SetCandidateWeight to the process.
 func (p *Process) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
 	return p.with(func(c *external.Client) error { return c.SetCandidateWeight(ctx, req, percent) })
 }
 
-// CandidateWeight inoltra plugin.TrafficRouter.CandidateWeight al processo.
+// CandidateWeight forwards plugin.TrafficRouter.CandidateWeight to the process.
 func (p *Process) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -286,7 +286,7 @@ func (p *Process) CandidateWeight(ctx context.Context, req *plugin.Request) (int
 	return c.CandidateWeight(ctx, req)
 }
 
-// RouteTesters inoltra plugin.TesterRouter.RouteTesters al processo.
+// RouteTesters forwards plugin.TesterRouter.RouteTesters to the process.
 func (p *Process) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	c, err := p.conn()
 	if err != nil {
@@ -295,7 +295,7 @@ func (p *Process) RouteTesters(ctx context.Context, req *plugin.Request) (map[st
 	return c.RouteTesters(ctx, req)
 }
 
-// ScaleCandidate inoltra plugin.SlotScaler.ScaleCandidate al processo.
+// ScaleCandidate forwards plugin.SlotScaler.ScaleCandidate to the process.
 func (p *Process) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
 	return p.with(func(c *external.Client) error { return c.ScaleCandidate(ctx, req, percent) })
 }
@@ -308,7 +308,7 @@ func (p *Process) with(fn func(*external.Client) error) error {
 	return fn(c)
 }
 
-// Close arresta il processo del plugin (go-plugin attende la chiusura e poi lo termina).
+// Close stops the plugin process (go-plugin waits for it to close and then kills it).
 func (p *Process) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -320,7 +320,7 @@ func (p *Process) Close() error {
 	return nil
 }
 
-// conn restituisce il client verso il processo, avviandolo o riavviandolo se necessario.
+// conn returns the client to the process, starting or restarting it if needed.
 func (p *Process) conn() (*external.Client, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -338,14 +338,14 @@ func (p *Process) conn() (*external.Client, error) {
 	return p.start()
 }
 
-// alive verifica la connessione: subito dopo un crash il processo può non risultare ancora
-// terminato (Exited), ma la connessione è già chiusa.
+// alive checks the connection: right after a crash the process may not look exited yet
+// (Exited), but the connection is already closed.
 func (p *Process) alive() bool {
 	proto, err := p.client.Client()
 	return err == nil && proto.Ping() == nil
 }
 
-// start avvia il processo, esegue l'handshake e invia la configurazione.
+// start starts the process, runs the handshake and sends the configuration.
 func (p *Process) start() (*external.Client, error) {
 	cmd := exec.Command(p.cfg.Command, p.cfg.Args...)
 	cmd.Env = p.env()
@@ -397,7 +397,7 @@ func (p *Process) handshake(client *goplugin.Client) (*external.Client, error) {
 	return rpc, nil
 }
 
-// env costruisce l'ambiente del processo: solo variabili di sistema e quelle configurate.
+// env builds the process environment: only system variables and the configured ones.
 func (p *Process) env() []string {
 	var env []string
 	for _, k := range inheritedEnv {
@@ -411,15 +411,15 @@ func (p *Process) env() []string {
 	return env
 }
 
-// newHCLogger crea il logger hclog richiesto da go-plugin, che inoltra a slog sia i log di
-// go-plugin sia quelli scritti dal plugin su stderr.
+// newHCLogger creates the hclog logger go-plugin requires, which forwards to slog both
+// go-plugin's logs and those the plugin writes to stderr.
 func newHCLogger(name string, log *slog.Logger) hclog.Logger {
 	l := hclog.NewInterceptLogger(&hclog.LoggerOptions{Name: name, Level: hclog.Trace, Output: io.Discard})
 	l.RegisterSink(slogSink{log: log.With("component", "plugin-process")})
 	return l
 }
 
-// slogSink converte i messaggi hclog in record slog.
+// slogSink converts hclog messages into slog records.
 type slogSink struct {
 	log *slog.Logger
 }

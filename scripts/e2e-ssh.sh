@@ -1,6 +1,6 @@
 #!/bin/sh
-# Test end-to-end del plugin remote-copy contro un server SSH reale in Docker.
-# Uso: scripts/e2e-ssh.sh  (richiede docker e ssh-keygen)
+# End-to-end test of the remote-copy plugin against a real SSH server in Docker.
+# Usage: scripts/e2e-ssh.sh  (requires docker and ssh-keygen)
 set -eu
 port=${MANENT_E2E_SSH_PORT:-2222}
 name=manent-e2e-sshd
@@ -13,7 +13,7 @@ docker build -q -t manent-e2e-sshd test/e2e/sshd >/dev/null
 docker rm -f "$name" >/dev/null 2>&1 || true
 docker run -d --name "$name" -p "127.0.0.1:$port:22" -e AUTHORIZED_KEY="$(cat "$dir/id.pub")" manent-e2e-sshd >/dev/null
 
-# Attende che sshd accetti connessioni.
+# Wait for sshd to accept connections.
 i=0
 until docker exec "$name" sh -c 'test -s /etc/ssh/ssh_host_ed25519_key.pub' 2>/dev/null && nc -z 127.0.0.1 "$port" 2>/dev/null; do
   i=$((i + 1)); [ "$i" -gt 30 ] && { docker logs "$name"; exit 1; }

@@ -28,7 +28,7 @@ func request() Request {
 	}
 }
 
-// fakeServiceNow emula la Table API su change_request.
+// fakeServiceNow emulates the Table API on change_request.
 type fakeServiceNow struct {
 	mu      sync.Mutex
 	records map[string]map[string]any
@@ -112,7 +112,7 @@ func TestServiceNow(t *testing.T) {
 		!strings.Contains(rec["short_description"].(string), "Promotion shop 1.4.0 to prod") || !strings.Contains(rec["description"].(string), "oidc:alice") {
 		t.Errorf("record creato: %v", rec)
 	}
-	// Open è idempotente: ritrova il ticket del deploy.
+	// Open is idempotent: it finds the deploy's ticket again.
 	if t2, err := sn.Open(ctx, request()); err != nil || t2.ID != "sys1" || f.creates != 1 {
 		t.Fatalf("seconda apertura: %+v, %v (%d creazioni)", t2, err, f.creates)
 	}
@@ -126,7 +126,7 @@ func TestServiceNow(t *testing.T) {
 	if err := sn.Close(ctx, t1, Outcome{Success: false, Message: "timeout", Rollback: "completed"}); err != nil {
 		t.Fatal(err)
 	}
-	// Una chiusura ripetuta non reimposta gli stati già raggiunti.
+	// A repeated close does not reset states already reached.
 	if err := sn.Close(ctx, t1, Outcome{Success: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestServiceNow(t *testing.T) {
 	}
 }
 
-// fakeJira emula l'API REST v2 di Jira; con cloud=false non ha /search/jql (Data Center).
+// fakeJira emulates the Jira REST API v2; with cloud=false it has no /search/jql (Data Center).
 type fakeJira struct {
 	mu          sync.Mutex
 	cloud       bool
@@ -249,7 +249,7 @@ func TestJira(t *testing.T) {
 			if fmt.Sprint(f.transitions) != "[11 21]" || len(f.comments) != 1 || !strings.Contains(f.comments[0], "completed successfully") {
 				t.Errorf("transizioni %v, commenti %v", f.transitions, f.comments)
 			}
-			// La transizione di fallimento non esiste: errore permanente.
+			// The failure transition does not exist: permanent error.
 			if err := j.Close(ctx, t1, Outcome{Success: false, Message: "x"}); !errors.Is(err, ErrPermanent) {
 				t.Errorf("transizione assente: %v", err)
 			}

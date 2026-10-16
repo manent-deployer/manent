@@ -15,7 +15,7 @@ const stageBorder: Record<string, string> = {
   pending: "border-border",
 };
 
-/** TrafficBar mostra la quota di traffico della versione candidata rispetto alla stabile. */
+/** TrafficBar shows the traffic share of the candidate version against the stable one. */
 function TrafficBar({ traffic }: { traffic: TrafficState }) {
   const { t } = useI18n();
   const w = Math.max(0, Math.min(100, traffic.weight));
@@ -44,8 +44,8 @@ function TrafficBar({ traffic }: { traffic: TrafficState }) {
 }
 
 /**
- * RolloutView disegna il piano a ondate: gli stadi in ordine di esecuzione (lista ordinata,
- * leggibile anche da uno screen reader) e, dentro ogni stadio, i passi per region e AZ.
+ * RolloutView draws the wave plan: the stages in execution order (ordered list, readable by
+ * screen readers too) and, inside every stage, the passes per region and AZ.
  */
 export function RolloutView({ rollout }: { rollout: RolloutState }) {
   const { t } = useI18n();

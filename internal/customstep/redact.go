@@ -14,15 +14,15 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// redactor sostituisce con *** i valori dei segreti, anche nelle forme codificate più comuni.
-// È una difesa aggiuntiva: non riconosce un segreto spezzato, troncato o trasformato.
+// redactor replaces secret values with ***, also in the most common encoded forms.
+// It is an extra defense: it does not recognize a split, truncated or transformed secret.
 type redactor struct {
 	values []string
 	repl   *strings.Replacer
 }
 
-// minRedact è la lunghezza minima di un valore da redigere: valori più corti
-// produrrebbero sostituzioni in testo qualunque.
+// minRedact is the minimum length of a value to redact: shorter values would cause
+// replacements in arbitrary text.
 const minRedact = 4
 
 func newRedactor(secrets []string) *redactor {
@@ -43,7 +43,7 @@ func newRedactor(secrets []string) *redactor {
 				add(string(b[1 : len(b)-1]))
 			}
 		}
-		// Le chiavi private e gli altri segreti su più righe compaiono spesso riga per riga.
+		// Private keys and other multi-line secrets often appear line by line.
 		for _, line := range strings.Split(s, "\n") {
 			if line = strings.TrimSpace(line); len(line) >= 8 && !strings.HasPrefix(line, "-----") {
 				set[line] = true
@@ -54,7 +54,7 @@ func newRedactor(secrets []string) *redactor {
 	for v := range set {
 		values = append(values, v)
 	}
-	// I valori più lunghi prima: un valore non deve lasciare in chiaro parte di uno più lungo.
+	// Longer values first: a value must not leave part of a longer one in clear.
 	slices.SortFunc(values, func(a, b string) int {
 		if len(a) != len(b) {
 			return len(b) - len(a)
@@ -84,7 +84,7 @@ func (r *redactor) contains(s string) bool {
 	return false
 }
 
-// err redige il messaggio di errore conservandone la natura (permanente o temporanea).
+// err redacts the error message keeping its nature (permanent or temporary).
 func (r *redactor) err(e error) error {
 	msg := r.apply(e.Error())
 	if msg == e.Error() {
@@ -97,22 +97,22 @@ func (r *redactor) err(e error) error {
 	return out
 }
 
-// Limiti dell'output dei comandi nel log del deploy.
+// Limits of command output in the deploy log.
 const (
-	maxLogBytes = 1 << 20 // per esecuzione, su tutti i target
+	maxLogBytes = 1 << 20 // per run, across all targets
 	maxLogLine  = 4 << 10
 )
 
-// logBudget è il limite di byte condiviso dagli stream di un'esecuzione, scritti in
-// parallelo da stdout e stderr.
+// logBudget is the byte limit shared by the streams of a run, written in parallel by stdout
+// and stderr.
 type logBudget struct {
 	mu        sync.Mutex
 	left      int
 	truncated bool
 }
 
-// lineWriter scrive l'output di un comando nel log del deploy, riga per riga, redatto e
-// limitato: un processo che scrive senza fine non riempie memoria né disco del worker.
+// lineWriter writes a command's output to the deploy log, line by line, redacted and limited:
+// a process that writes endlessly fills neither the worker's memory nor its disk.
 type lineWriter struct {
 	ctx    context.Context
 	log    *slog.Logger
@@ -150,14 +150,14 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		}
 		p = p[take:]
 		if len(w.buf) >= maxLogLine {
-			// Una riga troppo lunga prosegue nella successiva.
+			// A line that is too long continues on the next one.
 			w.flush()
 		}
 	}
 	return n, nil
 }
 
-// flush scrive la riga accumulata.
+// flush writes the accumulated line.
 func (w *lineWriter) flush() {
 	if len(w.buf) == 0 {
 		return

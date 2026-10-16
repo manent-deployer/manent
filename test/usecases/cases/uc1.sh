@@ -1,5 +1,5 @@
-# UC1: deploy pianificato (schedule.at) su un target in una AZ e su tre AZ di una region,
-# senza rollout: tutti i target nello stesso step. Fallimenti, rollback automatico e manuale.
+# UC1: scheduled deploy (schedule.at) on a target in one AZ and on three AZs of a region,
+# without rollout: all targets in the same step. Failures, automatic and manual rollback.
 APP=uc1-shop
 log "UC1 · deploy pianificato su una AZ e su più AZ di una region"
 
@@ -9,7 +9,7 @@ artifact $APP 1.2.0 broken >/dev/null
 artifact $APP 1.2.1 >/dev/null
 artifact $APP 1.3.0 >/dev/null
 
-# Post-test sull'endpoint dell'applicazione e rollback automatico richiesto dal descrittore.
+# Post-test on the application endpoint and automatic rollback requested by the descriptor.
 checks_test='steps: {post-test: true}
 postTest:
   http:

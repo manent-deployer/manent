@@ -1,10 +1,10 @@
 #!/bin/sh
-# Casi d'uso end-to-end di manent su Docker Compose: server API, worker, client e target SSH.
+# manent end-to-end use cases on Docker Compose: API server, workers, client and SSH targets.
 #
-# Uso: test/usecases/run.sh [--keep] [uc1 uc2 ...]   (default: tutti i casi, in ordine)
-#   --keep   lascia il laboratorio attivo alla fine (docker compose -f test/usecases/compose.yml down -v)
+# Usage: test/usecases/run.sh [--keep] [uc1 uc2 ...]   (default: all cases, in order)
+#   --keep   leaves the lab running at the end (docker compose -f test/usecases/compose.yml down -v)
 #
-# Richiede docker (compose v2), go, jq e ssh-keygen.
+# Requires docker (compose v2), go, jq and ssh-keygen.
 set -eu
 cd "$(dirname "$0")"
 . ./lib.sh
@@ -34,7 +34,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config" "$WORK/k3s"
 arch=$(docker info --format '{{.Architecture}}')
 case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) goarch=$arch ;; esac
-# Interfaccia web incorporata in manent-server (UC8): Node >= 20 locale o un container.
+# Web interface embedded in manent-server (UC8): local Node >= 20 or a container.
 (cd ../.. && { [ -f web/node_modules/.package-lock.json ] || scripts/web.sh ci --no-audit --no-fund >/dev/null; } && scripts/web.sh run build >/dev/null 2>&1) ||
   { echo "build dell'interfaccia web fallita (make web)" >&2; exit 1; }
 info "interfaccia web compilata"
@@ -42,16 +42,16 @@ info "interfaccia web compilata"
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc)
 info "binari linux/$goarch compilati"
 
-# Chiave SSH del laboratorio: leggibile dall'utente nonroot dei container di manent.
+# Lab SSH key: readable by the nonroot user of the manent containers.
 ssh-keygen -q -t ed25519 -N '' -C manent-uc -f "$WORK/keys/id"
 chmod 644 "$WORK/keys/id"
 
-# Varianti della configurazione per i worker di region (UC5).
+# Configuration variants for the region workers (UC5).
 region_config() {
   awk -v region="$2" '{ print } /^dbos:/ { if (region != "") print "  region: " region; print "  region_routing: true" }' \
     config/manent.yml >"$WORK/config/$1.yml"
 }
-# Credenziali del cluster k3s (UC7): token statico con i permessi di amministratore del cluster.
+# k3s cluster credentials (UC7): static token with cluster administrator permissions.
 printf 'uc-k8s-token\n' >"$WORK/k3s/token"
 printf 'uc-k8s-token,manent,manent,system:masters\n' >"$WORK/k3s/tokens.csv"
 
@@ -69,7 +69,7 @@ until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do
 done
 info "laboratorio avviato: $(dc ps --format '{{.Service}}' | sort | tr '\n' ' ')"
 
-# Nei casi un comando fallito non interrompe la suite: contano le verifiche (pass/fail).
+# In the cases a failed command does not stop the suite: what counts are the checks (pass/fail).
 set +e
 for c in $cases; do
   CASE=$c

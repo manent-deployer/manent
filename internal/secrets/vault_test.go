@@ -12,11 +12,11 @@ import (
 	"testing"
 )
 
-// fakeVault simula un Vault con un mount KV v2 ("secret"), uno KV v1 ("kv") e il login AppRole.
+// fakeVault simulates a Vault with a KV v2 mount ("secret"), a KV v1 one ("kv") and AppRole login.
 type fakeVault struct {
 	srv    *httptest.Server
 	logins atomic.Int32
-	// revoked fa rifiutare il token corrente una volta, come dopo una revoca.
+	// revoked makes the current token be rejected once, as after a revocation.
 	revoked atomic.Bool
 }
 
@@ -106,7 +106,7 @@ func TestVaultAppRole(t *testing.T) {
 	if n := f.logins.Load(); n != 1 {
 		t.Errorf("il token va riusato: %d login", n)
 	}
-	// Token revocato: un nuovo login e la lettura riesce.
+	// Token revoked: a new login and the read succeeds.
 	f.revoked.Store(true)
 	if got, err := v.Resolve(ctx, "kv/myapp#password"); err != nil || got != "pw" {
 		t.Fatalf("lettura dopo revoca fallita: %q %v", got, err)

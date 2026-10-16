@@ -17,7 +17,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// versionStep fallisce per la versione "bad" e scrive nel log del deploy.
+// versionStep fails for version "bad" and writes to the deploy log.
 type versionStep struct{ log *slog.Logger }
 
 func (versionStep) Name() string { return "work" }
@@ -25,7 +25,7 @@ func (versionStep) Name() string { return "work" }
 func (s versionStep) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	s.log.InfoContext(ctx, "copia sul target", "host", "h1", "version", in.Descriptor.Artifact.Version)
 	s.log.DebugContext(ctx, "dettaglio non riportato")
-	// Un context derivato (es. con timeout) resta collegato al deploy.
+	// A derived context (e.g. with a timeout) stays bound to the deploy.
 	sub, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	s.log.WarnContext(sub, "target lento")
@@ -44,7 +44,7 @@ func release(id, env, version string) *descriptor.Descriptor {
 
 func newInsightEngine(t *testing.T, metrics telemetry.Recorder) (*Engine, *Worker) {
 	t.Helper()
-	// Il log applicativo è a livello warn: il log del deploy raccoglie comunque da INFO.
+	// The application log is at warn level: the deploy log still collects from INFO.
 	log := slog.New(deploylog.NewHandler(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	reg, planner := testRegistry(t, versionStep{log: log})
 	opts := workerOpts(testdb.URL(t), "w1", reg)
@@ -53,7 +53,7 @@ func newInsightEngine(t *testing.T, metrics telemetry.Recorder) (*Engine, *Worke
 	return NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard}), w
 }
 
-// run accoda un deploy e ne attende la fine, ignorando l'esito.
+// run enqueues a deploy and waits for it to end, ignoring the outcome.
 func run(t *testing.T, e *Engine, d *descriptor.Descriptor) {
 	t.Helper()
 	ctx := context.Background()
@@ -157,7 +157,7 @@ func TestDORA(t *testing.T) {
 	if rep.Total.DeploymentsPerDay != 0.1 {
 		t.Errorf("frequenza inattesa (3 riusciti in 30 giorni): %v", rep.Total.DeploymentsPerDay)
 	}
-	// Il periodo esclude i deploy precedenti.
+	// The period excludes earlier deploys.
 	rep, _ = e.DORA(ctx, DORAFilter{Since: time.Now().Add(time.Hour)})
 	if rep.Total.Deployments != 0 {
 		t.Errorf("deploy fuori dal periodo conteggiati: %+v", rep.Total)
@@ -194,7 +194,8 @@ func TestRetention(t *testing.T) {
 	for _, s := range list {
 		ids[s.ID] = true
 	}
-	// Restano gli ultimi 2 riusciti in test e l'unico in prod; via il più vecchio e il fallito.
+	// The last 2 successful ones in test and the only one in prod remain; the oldest and the
+	// failed one are gone.
 	if len(ids) != 3 || !ids["r2"] || !ids["r4"] || !ids["altro"] {
 		t.Fatalf("deploy rimasti inattesi: %v", ids)
 	}
@@ -202,7 +203,7 @@ func TestRetention(t *testing.T) {
 	if len(inv) != 2 {
 		t.Errorf("inventario perso dopo la retention: %+v", inv)
 	}
-	// Con una retention che non scade, nulla viene eliminato.
+	// With a retention that never expires, nothing is deleted.
 	adm.now = time.Now
 	if rep, _ := adm.Prune(ctx, o); rep.Deleted != 0 {
 		t.Errorf("eliminati deploy recenti: %+v", rep)

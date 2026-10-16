@@ -23,7 +23,7 @@ func TestApply(t *testing.T) {
 	p := testPolicy()
 	p.Types["application"] = config.RollbackType{Allowed: true, Enabled: true}
 
-	// Default del tipo: attivo, con gli step e il locator di default.
+	// Type default: enabled, with the default steps and locator.
 	d, err := p.Apply(descriptorOf("application", nil))
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestApply(t *testing.T) {
 		t.Errorf("decisione inattesa: %+v", d.Rollback)
 	}
 
-	// Il descrittore può disattivarlo o restringere gli step e scegliere il locator.
+	// The descriptor can disable it or narrow the steps and choose the locator.
 	d, err = p.Apply(descriptorOf("application", &descriptor.Rollback{Enabled: ptr(false)}))
 	if err != nil || d.Rollback.IsEnabled() {
 		t.Errorf("atteso rollback disattivato: %+v %v", d.Rollback, err)
@@ -45,14 +45,14 @@ func TestApply(t *testing.T) {
 
 func TestApplyNonAmmesso(t *testing.T) {
 	p := testPolicy()
-	// migration è esclusa di default: chiedere il rollback è un errore, non chiederlo no.
+	// migration is excluded by default: requesting rollback is an error, not requesting it is not.
 	if _, err := p.Apply(descriptorOf("migration", &descriptor.Rollback{Enabled: ptr(true)})); err == nil || !strings.Contains(err.Error(), "non ammesso") {
 		t.Errorf("atteso rollback non ammesso, ricevuto %v", err)
 	}
 	if d, err := p.Apply(descriptorOf("migration", nil)); err != nil || d.Rollback.IsEnabled() {
 		t.Errorf("atteso rollback disattivato senza errore: %+v %v", d.Rollback, err)
 	}
-	// Tipo non elencato: non ammesso.
+	// Unlisted type: not allowed.
 	if _, err := p.Apply(descriptorOf("firmware", &descriptor.Rollback{Enabled: ptr(true)})); err == nil {
 		t.Error("atteso errore per un tipo non elencato")
 	}

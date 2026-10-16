@@ -22,7 +22,7 @@ func (m mapSecrets) Secret(_ context.Context, name string) (string, error) {
 	return "", errors.New("segreto assente")
 }
 
-// fakeDataplane emula la Data Plane API v3 di un'istanza di HAProxy.
+// fakeDataplane emulates the Data Plane API v3 of an HAProxy instance.
 type fakeDataplane struct {
 	mu      sync.Mutex
 	servers map[string]map[string]any
@@ -89,13 +89,13 @@ func TestHAProxyPool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Un server giù su una sola istanza non è sano per il pool.
+	// A server down on a single instance is not healthy for the pool.
 	f2.servers["web3"]["operational_state"] = "down"
 	all, err := p.Members(ctx)
 	if err != nil || len(all) != 3 || all[2].InService() {
 		t.Fatalf("membri: %+v %v", all, err)
 	}
-	// Con web3 fuori servizio, svuotare web1 lascerebbe un solo membro sano su 3.
+	// With web3 out of service, draining web1 would leave a single healthy member out of 3.
 	if err := Capacity(all, []string{"web1"}, 2); err == nil {
 		t.Error("capacità insufficiente non rilevata")
 	}
@@ -121,7 +121,7 @@ func TestHAProxyPool(t *testing.T) {
 	if strings.Join(f1.puts, ",") != "web1=drain,web1=ready" {
 		t.Errorf("chiamate: %v", f1.puts)
 	}
-	// Le statistiche della v2 sono una lista, una per processo.
+	// v2 statistics are a list, one per process.
 	n, err := haproxySessions([]byte(`[{"stats":[{"name":"web1","type":"server","stats":{"scur":4}}]},{"stats":[{"name":"web1","type":"server","stats":{"scur":1}}]}]`), "web1")
 	if err != nil || n != 5 {
 		t.Errorf("statistiche v2: %d %v", n, err)

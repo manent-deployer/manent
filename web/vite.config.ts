@@ -2,8 +2,8 @@ import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// La build finisce in internal/webui/dist, incorporata in manent-server con go:embed.
-// In sviluppo (npm run dev) le chiamate all'API vanno a un manent locale (MANENT_DEV_API).
+// The build ends up in internal/webui/dist, embedded in manent-server with go:embed.
+// In development (npm run dev) API calls go to a local manent (MANENT_DEV_API).
 const api = process.env.MANENT_DEV_API ?? "http://127.0.0.1:8080";
 
 export default defineConfig({

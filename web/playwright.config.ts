@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Test end-to-end dell'interfaccia web contro il laboratorio dei casi d'uso (UC8): la UI servita
-// da manent-server, l'API e l'identity provider di prova. Eseguiti da test/usecases/cases/uc8.sh
-// nel container di Playwright sulla rete del laboratorio. La UI si apre su localhost (inoltrato
-// verso api:8080), perché il login con PKCE richiede un contesto sicuro.
+// End-to-end tests of the web interface against the use case lab (UC8): the UI served by
+// manent-server, the API and the test identity provider. Run by test/usecases/cases/uc8.sh
+// in the Playwright container on the lab network. The UI opens on localhost (forwarded to
+// api:8080), because the PKCE login requires a secure context.
 export default defineConfig({
   testDir: "./e2e",
   timeout: 90_000,

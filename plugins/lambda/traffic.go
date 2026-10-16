@@ -11,20 +11,20 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Rilasci per percentuale: le versioni pubblicate sono gli slot e l'alias con un peso
-// aggiuntivo (AdditionalVersionWeights) divide il traffico tra la versione stabile e la
-// candidata. Chi invoca l'alias riceve la stabile o la candidata secondo il peso.
+// Percentage rollouts: published versions are the slots and the alias with an additional
+// weight (AdditionalVersionWeights) splits traffic between the stable version and the
+// candidate. Whoever invokes the alias gets the stable or the candidate according to the weight.
 
-// Chiavi dello stato registrato da PrepareSlots, per region ("<chiave>@<region>").
+// Keys of the state recorded by PrepareSlots, per region ("<key>@<region>").
 const (
-	stateStable     = "stable"      // versione della funzione stabile
-	stateStableDesc = "stable_desc" // descrizione dell'alias stabile (versione e deploy)
+	stateStable     = "stable"      // stable function version
+	stateStableDesc = "stable_desc" // description of the stable alias (version and deploy)
 )
 
 func stateKey(k string, t plugin.Target) string { return k + "@" + t.Host }
 
-// PrepareSlots implementa plugin.SlotDeployer: registra la versione della funzione puntata
-// dall'alias in ogni region.
+// PrepareSlots implements plugin.SlotDeployer: it records the function version the alias
+// points to in every region.
 func (p *Plugin) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	state := map[string]string{}
 	has := false
@@ -46,8 +46,8 @@ func (p *Plugin) PrepareSlots(ctx context.Context, req *plugin.Request) (map[str
 	return state, nil
 }
 
-// DeployCandidate implementa plugin.SlotDeployer: aggiorna il codice e pubblica la versione,
-// senza spostare l'alias.
+// DeployCandidate implements plugin.SlotDeployer: it updates the code and publishes the
+// version, without moving the alias.
 func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	for _, t := range req.Targets {
@@ -72,7 +72,7 @@ func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plu
 	return res, nil
 }
 
-// candidate restituisce la versione della funzione pubblicata da questo rilascio.
+// candidate returns the function version published by this rollout.
 func (p *Plugin) candidate(ctx context.Context, s *state, req *plugin.Request) (string, error) {
 	v, dep, err := p.findVersion(ctx, s.api, functionName(req), req.Artifact.Version)
 	if err != nil {
@@ -84,7 +84,7 @@ func (p *Plugin) candidate(ctx context.Context, s *state, req *plugin.Request) (
 	return v, nil
 }
 
-// SetCandidateWeight implementa plugin.TrafficRouter.
+// SetCandidateWeight implements plugin.TrafficRouter.
 func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
 	for _, t := range req.Targets {
 		if err := p.setWeight(ctx, t, req, percent); err != nil {
@@ -110,7 +110,7 @@ func (p *Plugin) setWeight(ctx context.Context, t plugin.Target, req *plugin.Req
 	}
 	switch {
 	case stable == "" || percent >= 100 || stable == cand:
-		// Tutto il traffico alla candidata: l'alias la punta, senza pesi.
+		// All traffic to the candidate: the alias points to it, without weights.
 		if s.alias != nil && s.alias.FunctionVersion == cand && len(s.alias.Weights) == 0 {
 			return nil
 		}
@@ -127,7 +127,7 @@ func (p *Plugin) setWeight(ctx context.Context, t plugin.Target, req *plugin.Req
 	return nil
 }
 
-// CandidateWeight implementa plugin.TrafficRouter.
+// CandidateWeight implements plugin.TrafficRouter.
 func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
 	weight := -2
 	for _, t := range req.Targets {
@@ -155,8 +155,8 @@ func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 	return max(weight, 0), nil
 }
 
-// RouteTesters implementa plugin.TesterRouter: i tester invocano direttamente la versione
-// candidata (ARN qualificato con il numero di versione), che ha già ricevuto il codice.
+// RouteTesters implements plugin.TesterRouter: testers invoke the candidate version directly
+// (ARN qualified with the version number), which already has the code.
 func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	out := map[string]string{}
 	for _, t := range req.Targets {
@@ -173,13 +173,13 @@ func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[str
 	return out, nil
 }
 
-// PromoteCandidate implementa plugin.SlotDeployer: l'alias punta alla candidata.
+// PromoteCandidate implements plugin.SlotDeployer: the alias points to the candidate.
 func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
 	return p.SetCandidateWeight(ctx, req, 100)
 }
 
-// RevertCandidate implementa plugin.SlotDeployer: l'alias torna alla versione stabile, senza
-// pesi. Senza versione stabile (primo rilascio) non c'è nulla a cui tornare.
+// RevertCandidate implements plugin.SlotDeployer: the alias goes back to the stable version,
+// without weights. Without a stable version (first release) there is nothing to go back to.
 func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error {
 	var errs []error
 	for _, t := range req.Targets {
@@ -193,6 +193,6 @@ func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error
 	return errors.Join(errs...)
 }
 
-// RetirePrevious implementa plugin.SlotDeployer: le versioni non puntate dall'alias non
-// consumano risorse, quindi non c'è nulla da ridimensionare.
+// RetirePrevious implements plugin.SlotDeployer: versions the alias does not point to use no
+// resources, so there is nothing to scale down.
 func (p *Plugin) RetirePrevious(context.Context, *plugin.Request) error { return nil }

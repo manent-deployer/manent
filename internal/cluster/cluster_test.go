@@ -42,7 +42,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if !register(Executor{ID: "w1", Version: "1", Build: "dev", Hostname: "h1", StartedAt: start}) {
 		t.Fatal("prima registrazione rifiutata")
 	}
-	// Executor attivo: non rivendicabile.
+	// Live executor: cannot be claimed.
 	if ok, err := r.Claim(ctx, "w1", "w2", now.Add(-time.Minute), false); err != nil || ok {
 		t.Fatalf("claim di un executor attivo: ok=%v err=%v", ok, err)
 	}
@@ -50,7 +50,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if ok, err := r.Claim(ctx, "w1", "w2", now.Add(-time.Minute), false); err != nil || !ok {
 		t.Fatalf("claim di un executor perso: ok=%v err=%v", ok, err)
 	}
-	// Già rivendicato: un secondo worker non lo riprende.
+	// Already claimed: a second worker does not resume it.
 	if ok, _ := r.Claim(ctx, "w1", "w3", now.Add(-time.Minute), false); ok {
 		t.Fatal("doppia rivendicazione")
 	}
@@ -58,18 +58,18 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if err != nil || len(es) != 1 || es[0].RecoveredBy != "w2" || es[0].Hostname != "h1" {
 		t.Fatalf("registro inatteso: %+v %v", es, err)
 	}
-	// Il processo che torna a rispondere scopre di essere stato recuperato.
+	// The process that answers again finds out it has been recovered.
 	if by, err := r.Heartbeat(ctx, "w1", start); err != nil || by != "w2" {
 		t.Fatalf("heartbeat: by=%q err=%v", by, err)
 	}
-	// Un nuovo avvio attende la fine della recovery in corso...
+	// A new startup waits for the running recovery to end...
 	if register(Executor{ID: "w1", Version: "2", StartedAt: now}) {
 		t.Fatal("registrazione accettata durante la recovery")
 	}
 	if err := r.ClaimDone(ctx, "w1"); err != nil {
 		t.Fatal(err)
 	}
-	// ...poi azzera la rivendicazione.
+	// ...then clears the claim.
 	if !register(Executor{ID: "w1", Version: "2", StartedAt: now}) {
 		t.Fatal("registrazione rifiutata dopo la recovery")
 	}
@@ -77,7 +77,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if es[0].RecoveredBy != "" || es[0].Version != "2" || es[0].Stale(now, time.Minute) {
 		t.Fatalf("nuovo avvio non registrato: %+v", es[0])
 	}
-	// Il vecchio processo non aggiorna più la riga e scopre di essere stato sostituito.
+	// The old process no longer updates the row and finds out it has been replaced.
 	if by, err := r.Heartbeat(ctx, "w1", start); by != "" || !errors.Is(err, ErrReplaced) {
 		t.Fatalf("heartbeat di un avvio superato: %q %v", by, err)
 	}
@@ -91,7 +91,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if ok, _ := r.Claim(ctx, "w1", "w2", now.Add(-time.Hour), false); !ok {
 		t.Fatal("un executor arrestato è rivendicabile subito")
 	}
-	// Una rivendicazione abbandonata (chi recuperava è caduto) si può riprendere dopo ClaimTimeout.
+	// An abandoned claim (the recovering worker crashed) can be taken over after ClaimTimeout.
 	if ok, _ := r.Claim(ctx, "w1", "w3", now, false); ok {
 		t.Fatal("rivendicazione in corso sottratta")
 	}
@@ -99,7 +99,7 @@ func TestRegistrazioneEClaim(t *testing.T) {
 	if ok, _ := r.Claim(ctx, "w1", "w3", now, false); !ok {
 		t.Fatal("rivendicazione abbandonata non ripresa")
 	}
-	// Executor sconosciuto: solo con force.
+	// Unknown executor: only with force.
 	if ok, _ := r.Claim(ctx, "vecchio", "admin", now, false); ok {
 		t.Fatal("executor sconosciuto rivendicato senza force")
 	}
@@ -153,12 +153,12 @@ func TestRegionERegistroPrecedente(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Registro creato da una versione precedente, senza la colonna region.
+	// Registry created by an earlier version, without the region column.
 	if _, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` DROP COLUMN region`); err != nil {
 		t.Fatal(err)
 	}
 	_ = r.Close()
-	for range 2 { // la migrazione è ripetibile
+	for range 2 { // the migration can be repeated
 		if r, err = Open(ctx, url); err != nil {
 			t.Fatal(err)
 		}
@@ -174,8 +174,8 @@ func TestRegionERegistroPrecedente(t *testing.T) {
 	}
 }
 
-// Due processi con lo stesso executor_id: il secondo viene rifiutato finché il primo invia
-// heartbeat; dopo un arresto ordinato o senza heartbeat da staleAfter la registrazione riesce.
+// Two processes with the same executor_id: the second is rejected while the first sends
+// heartbeats; after an orderly shutdown or no heartbeat for staleAfter the registration succeeds.
 func TestExecutorIDInUso(t *testing.T) {
 	r := openTest(t)
 	ctx := context.Background()
@@ -192,20 +192,20 @@ func TestExecutorIDInUso(t *testing.T) {
 	if !errors.As(err, &inUse) || inUse.Hostname != "host1" {
 		t.Fatalf("seconda istanza con lo stesso ID accettata: %v", err)
 	}
-	// La prima istanza resta registrata e il suo arresto non riguarda altri.
+	// The first instance stays registered and its shutdown does not affect others.
 	if _, err := r.Heartbeat(ctx, "host1", first.StartedAt); err != nil {
 		t.Fatalf("heartbeat della prima istanza: %v", err)
 	}
-	// Riavvio della stessa istanza (stesso avvio): ammesso.
+	// Restart of the same instance (same startup): allowed.
 	if ok, err := r.Register(ctx, first, time.Minute); err != nil || !ok {
 		t.Fatalf("ripetizione della registrazione: %v %v", ok, err)
 	}
-	// Crash della prima: senza heartbeat da staleAfter la seconda subentra.
+	// The first crashes: with no heartbeat for staleAfter the second takes over.
 	now = now.Add(2 * time.Minute)
 	if ok, err := r.Register(ctx, second, time.Minute); err != nil || !ok {
 		t.Fatalf("subentro dopo il crash: %v %v", ok, err)
 	}
-	// Arresto ordinato: il successivo avvio subentra subito.
+	// Orderly shutdown: the next startup takes over at once.
 	if err := r.Stopped(ctx, "host1", second.StartedAt); err != nil {
 		t.Fatal(err)
 	}

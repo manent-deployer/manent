@@ -14,7 +14,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// crashRegistry simula un crash: l'arresto non viene registrato, come per un nodo che muore.
+// crashRegistry simulates a crash: the shutdown is not recorded, as for a node that dies.
 type crashRegistry struct{ cluster.Registry }
 
 func (crashRegistry) Stopped(context.Context, string, time.Time) error { return nil }
@@ -29,11 +29,11 @@ func openRegistry(t *testing.T, db string) *cluster.SQL {
 	return r
 }
 
-// fastMaintenance sono tempi brevi per i test: un worker è perso dopo 300ms senza heartbeat.
+// fastMaintenance are short times for tests: a worker is lost after 300ms without heartbeats.
 var fastMaintenance = MaintenanceOptions{HeartbeatInterval: 100 * time.Millisecond, StaleAfter: 300 * time.Millisecond}
 
-// crashWorker avvia un worker con un deploy bloccato a metà step e lo fa "morire" senza
-// registrare l'arresto. Restituisce l'ID del deploy rimasto in sospeso.
+// crashWorker starts a worker with a deploy blocked halfway through a step and makes it "die"
+// without recording the shutdown. It returns the ID of the deploy left pending.
 func crashWorker(t *testing.T, opts WorkerOptions, planner pipeline.Planner, step *blockOnceStep) string {
 	t.Helper()
 	w, err := NewWorker(opts)
@@ -63,7 +63,7 @@ func TestRecoveryAutomaticaDiUnNodoPerso(t *testing.T) {
 	o1.Registry, o1.Maintenance = crashRegistry{openRegistry(t, db)}, fastMaintenance
 	id := crashWorker(t, o1, planner, step)
 
-	// w2 riprende da solo il deploy di w1 quando w1 smette di inviare heartbeat.
+	// w2 resumes w1's deploy by itself when w1 stops sending heartbeats.
 	r2 := openRegistry(t, db)
 	o2 := workerOpts(db, "w2", reg)
 	o2.Registry, o2.Maintenance = r2, fastMaintenance
@@ -83,7 +83,7 @@ func TestRecoveryAutomaticaDiUnNodoPerso(t *testing.T) {
 		t.Fatalf("registro inatteso: %+v", es)
 	}
 
-	// Al riavvio w1 si registra di nuovo e non riesegue il deploy già concluso.
+	// On restart w1 registers again and does not run the already ended deploy again.
 	o1.Registry = openRegistry(t, db)
 	startWorker(t, o1)
 	time.Sleep(500 * time.Millisecond)
@@ -111,7 +111,7 @@ func TestRecoveryManuale(t *testing.T) {
 	adm := w2.Admin()
 	ctx := context.Background()
 
-	// w1 ha inviato l'ultimo heartbeat da poco: risulta attivo.
+	// w1 sent its last heartbeat recently: it looks alive.
 	if _, err := adm.Recover(ctx, RecoverOptions{Executor: "w1", StaleAfter: time.Minute, By: "cli:test"}); !errors.Is(err, ErrExecutorAlive) {
 		t.Fatalf("atteso ErrExecutorAlive, ricevuto %v", err)
 	}
@@ -143,13 +143,13 @@ func TestRecoveryManuale(t *testing.T) {
 	if _, err := svc.Wait(wctx, id); err != nil {
 		t.Fatal(err)
 	}
-	// Un executor già recuperato non viene recuperato di nuovo.
+	// An already recovered executor is not recovered again.
 	if _, err := adm.Recover(ctx, opts); !errors.Is(err, ErrExecutorAlive) {
 		t.Fatalf("seconda recovery: atteso rifiuto, ricevuto %v", err)
 	}
 }
 
-// countingStep conta le esecuzioni.
+// countingStep counts runs.
 type countingStep struct {
 	name string
 	n    *atomic.Int32
@@ -173,7 +173,7 @@ func TestMigrazioneDeiWorkflowAUnaNuovaVersione(t *testing.T) {
 	o1.AppVersion, o1.Registry, o1.Maintenance = "v1", crashRegistry{openRegistry(t, db)}, fastMaintenance
 	id := crashWorker(t, o1, planner, step)
 
-	// Un deploy accodato dalla versione v1 e mai partito.
+	// A deploy enqueued by version v1 and never started.
 	o2 := workerOpts(db, "w2", reg)
 	o2.AppVersion, o2.Registry, o2.Maintenance = "v2", openRegistry(t, db), fastMaintenance
 	w2 := startWorker(t, o2)
@@ -186,7 +186,7 @@ func TestMigrazioneDeiWorkflowAUnaNuovaVersione(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Il worker v2 non esegue workflow v1.
+	// The v2 worker does not run v1 workflows.
 	time.Sleep(time.Second)
 	svc := NewService(ServiceOptions{Client: w2.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
 	if st, _ := svc.Status(ctx, "accodato-v1"); st.State != string(dbos.WorkflowStatusEnqueued) {
@@ -215,7 +215,7 @@ func TestMigrazioneDeiWorkflowAUnaNuovaVersione(t *testing.T) {
 			t.Fatalf("%s: %v", wid, err)
 		}
 	}
-	// "prepare" era già concluso per il deploy interrotto: viene eseguito solo dal secondo.
+	// "prepare" had already ended for the interrupted deploy: only the second one runs it.
 	if first.Load() != 2 || step.calls.Load() != 3 {
 		t.Errorf("esecuzioni inattese: prepare=%d block=%d", first.Load(), step.calls.Load())
 	}
@@ -246,7 +246,7 @@ func TestDrain(t *testing.T) {
 	if st, _ := svc.Status(ctx, sub.ID); st.State != string(dbos.WorkflowStatusSuccess) {
 		t.Fatalf("deploy non concluso durante il drain: %s", st.State)
 	}
-	// Dopo il drain il worker non preleva altri deploy.
+	// After the drain the worker dequeues no more deploys.
 	if _, err := svc.Submit(ctx, testDescriptor("drain-2")); err != nil {
 		t.Fatal(err)
 	}
@@ -256,9 +256,9 @@ func TestDrain(t *testing.T) {
 	}
 }
 
-// Un secondo worker con l'executor_id di uno attivo (es. due processi sulla stessa macchina con
-// l'hostname come ID) non parte: riprenderebbe i deploy in corso dell'altro. Il primo resta
-// registrato come attivo.
+// A second worker with the executor_id of a live one (e.g. two processes on the same machine
+// with the hostname as ID) does not start: it would resume the other's running deploys. The
+// first stays registered as alive.
 func TestExecutorIDDuplicato(t *testing.T) {
 	reg, _ := testRegistry(t, artifactStep{})
 	db := testdb.URL(t)

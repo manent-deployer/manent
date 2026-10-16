@@ -17,7 +17,7 @@ func TestStoreEnsureECleanup(t *testing.T) {
 	if err := os.WriteFile(src, []byte("contenuto"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Due worker con directory di lavoro diverse, come due nodi distinti.
+	// Two workers with different working directories, like two separate nodes.
 	w1 := &Store{Fetcher: DefaultFetcher{}, WorkDir: t.TempDir()}
 	w2 := &Store{Fetcher: DefaultFetcher{}, WorkDir: t.TempDir()}
 
@@ -37,7 +37,7 @@ func TestStoreEnsureECleanup(t *testing.T) {
 		t.Fatalf("artefatto riscaricato mancante: %v", err)
 	}
 
-	// Se la sorgente cambia dopo lo step artifacts, il deploy deve fallire.
+	// If the source changes after the artifacts step, the deploy must fail.
 	if err := os.WriteFile(src, []byte("modificato"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestStoreEnsureECleanup(t *testing.T) {
 	}
 }
 
-// mapProvider è un secrets.Provider in memoria.
+// mapProvider is an in-memory secrets.Provider.
 type mapProvider map[string]string
 
 func (m mapProvider) Resolve(_ context.Context, ref string) (string, error) {
@@ -93,14 +93,14 @@ func TestSorgentiConCredenziali(t *testing.T) {
 	if want := "Basic " + base64.StdEncoding.EncodeToString([]byte("manent:pw")); gotAuth != want {
 		t.Errorf("Authorization = %q, atteso %q", gotAuth, want)
 	}
-	// Vince il prefisso più lungo.
+	// The longest prefix wins.
 	if _, err := f.Fetch(context.Background(), srv.URL+"/releases/special/app.tgz", dir); err != nil {
 		t.Fatal(err)
 	}
 	if gotKey != "k" || gotAuth != "" {
 		t.Errorf("credenziali inattese: auth=%q key=%q", gotAuth, gotKey)
 	}
-	// Sorgenti non elencate: rifiutate, sia URL sia percorsi locali.
+	// Unlisted sources: rejected, both URLs and local paths.
 	for _, src := range []string{srv.URL + "/altro/app.tgz", "/etc/passwd", "file:///etc/passwd"} {
 		if err := srcs.Check(src); err == nil {
 			t.Errorf("%s: sorgente non elencata ammessa", src)

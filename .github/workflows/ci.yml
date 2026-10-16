@@ -1,5 +1,5 @@
-# Verifiche su ogni push e pull request: lint, test su SQLite e Postgres, test end-to-end
-# del plugin SSH, carico e caos, interfaccia web, sito della documentazione, chart Helm e immagine.
+# Checks on every push and pull request: lint, tests on SQLite and Postgres, end-to-end tests
+# of the SSH plugin, load and chaos, web interface, documentation site, Helm chart and image.
 name: ci
 
 on:

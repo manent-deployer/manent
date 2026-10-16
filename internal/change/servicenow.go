@@ -12,27 +12,27 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// ServiceNow usa la Table API sulla tabella delle richieste di change. Il ticket del deploy è
-// quello con correlation_id uguale all'ID del deploy.
+// ServiceNow uses the Table API on the change request table. The deploy's ticket is the one
+// whose correlation_id equals the deploy ID.
 type ServiceNow struct {
 	URL      string
 	Username string
-	// PasswordRef (con Username) oppure TokenRef: riferimenti ai segreti, letti a ogni uso.
+	// PasswordRef (with Username) or TokenRef: secret references, read at every use.
 	PasswordRef string
 	TokenRef    string
 	Table       string
 	Fields      map[string]string
-	// StartState è lo stato impostato da Start ("" = nessun cambio).
+	// StartState is the state set by Start ("" = no change).
 	StartState string
-	// CloseStates sono gli stati impostati in ordine da Close.
+	// CloseStates are the states set in order by Close.
 	CloseStates []string
-	// CloseCodes per esito: "success" e "failure".
+	// CloseCodes per outcome: "success" and "failure".
 	CloseCodes map[string]string
 	Secrets    secrets.Provider
 	Client     HTTPDoer
 }
 
-// Valori predefiniti del modello di stato standard di ServiceNow.
+// Default values of the standard ServiceNow state model.
 const (
 	SNStateImplement = "-1"
 	SNStateReview    = "0"
@@ -40,7 +40,7 @@ const (
 	SNStateCanceled  = "4"
 )
 
-// Name restituisce il nome del sistema.
+// Name returns the system name.
 func (s *ServiceNow) Name() string { return "servicenow" }
 
 func (s *ServiceNow) table() string {
@@ -70,7 +70,7 @@ func (s *ServiceNow) auth(ctx context.Context) (func(*http.Request), error) {
 	return func(r *http.Request) { r.SetBasicAuth(s.Username, pw) }, nil
 }
 
-// snRecord è un record della Table API (sysparm_display_value=false: valori grezzi).
+// snRecord is a Table API record (sysparm_display_value=false: raw values).
 type snRecord struct {
 	SysID    string `json:"sys_id"`
 	Number   string `json:"number"`
@@ -92,7 +92,7 @@ func (s *ServiceNow) ticket(r snRecord) Ticket {
 
 const snFields = "sys_id,number,state,approval"
 
-// Open cerca il change con correlation_id uguale all'ID del deploy e, se manca, lo crea.
+// Open looks for the change whose correlation_id equals the deploy ID and creates it if missing.
 func (s *ServiceNow) Open(ctx context.Context, r Request) (Ticket, error) {
 	auth, err := s.auth(ctx)
 	if err != nil {
@@ -129,7 +129,7 @@ func (s *ServiceNow) Open(ctx context.Context, r Request) (Ticket, error) {
 	return s.ticket(created.Result), nil
 }
 
-// Refresh rilegge stato e approvazione.
+// Refresh reads state and approval again.
 func (s *ServiceNow) Refresh(ctx context.Context, t Ticket) (Ticket, error) {
 	auth, err := s.auth(ctx)
 	if err != nil {
@@ -153,7 +153,7 @@ func (s *ServiceNow) patch(ctx context.Context, t Ticket, body map[string]any) e
 	return err
 }
 
-// Start porta il change nello stato di implementazione.
+// Start moves the change to the implementation state.
 func (s *ServiceNow) Start(ctx context.Context, t Ticket) error {
 	if s.StartState == "" || t.State == s.StartState {
 		return nil
@@ -164,8 +164,8 @@ func (s *ServiceNow) Start(ctx context.Context, t Ticket) error {
 	return nil
 }
 
-// Close registra l'esito (close_code, close_notes) e porta il change negli stati di chiusura,
-// in ordine. Uno stato già raggiunto non viene reimpostato, così la chiusura è ripetibile.
+// Close records the outcome (close_code, close_notes) and moves the change through the
+// closing states, in order. A state already reached is not set again, so closing can be repeated.
 func (s *ServiceNow) Close(ctx context.Context, t Ticket, o Outcome) error {
 	code := s.CloseCodes["success"]
 	if !o.Success {

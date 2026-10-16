@@ -9,7 +9,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// Un'API avviata prima dei worker su un database nuovo crea lo schema DBOS invece di fallire.
+// An API started before the workers on a new database creates the DBOS schema instead of failing.
 func TestNewClientSuDatabaseNuovo(t *testing.T) {
 	cfg := config.Default()
 	cfg.DBOS.DatabaseURL = testdb.URL(t)

@@ -22,8 +22,8 @@ import (
 	"github.com/joeg-ita/manent/internal/traffic"
 )
 
-// trafficResolver simula la configurazione di ambiente: aggiunge al descrittore la sezione
-// traffic, che il descrittore non può definire.
+// trafficResolver simulates the environment configuration: it adds to the descriptor the
+// traffic section, which the descriptor cannot define.
 type trafficResolver struct{ cfg *descriptor.TrafficConfig }
 
 func (r trafficResolver) Resolve(_ context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
@@ -31,8 +31,8 @@ func (r trafficResolver) Resolve(_ context.Context, d descriptor.Descriptor) (de
 	return d, map[string]string{"source": "test"}, nil
 }
 
-// fakePool è un pool finto: registra svuotamenti e rientri, ha una connessione residua alla
-// prima lettura e i membri in unhealthy restano fuori servizio per le prime letture.
+// fakePool is a fake pool: it records drains and restores, has one remaining connection at
+// the first read, and members in unhealthy stay out of service for the first reads.
 type fakePool struct {
 	log       *waveLog
 	hosts     []string
@@ -93,7 +93,7 @@ func TestPoolSvuotaILotti(t *testing.T) {
 		"fake": {New: func(context.Context, traffic.Env) (traffic.Pool, error) { return fp, nil }},
 	}}
 	pool := steps.Pool{Providers: providers, Logger: discard}
-	// Il piano contiene solo deploy e activation: drain e restore li inserisce il motore.
+	// The plan contains only deploy and activation: the engine inserts drain and restore.
 	_, planner := testRegistry(t, waveStep{name: "deploy", worker: "w1", log: l, slog: sl}, waveStep{name: "activation", worker: "w1", log: l, slog: sl})
 	reg2, err := pipeline.NewRegistry(waveStep{name: "deploy", worker: "w1", log: l, slog: sl}, waveStep{name: "activation", worker: "w1", log: l, slog: sl},
 		steps.Drain{Pool: pool}, steps.Restore{Pool: pool})
@@ -131,8 +131,8 @@ func TestPoolSvuotaILotti(t *testing.T) {
 	if got := l.get(); !slices.Equal(got, want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
 	}
-	// Con web3 non sano lo svuotamento di web1 lascerebbe un solo membro: il primo tentativo
-	// viene rimandato e ripetuto (drain@...#0.1).
+	// With web3 unhealthy, draining web1 would leave a single member: the first attempt is
+	// postponed and repeated (drain@...#0.1).
 	var names []string
 	for _, s := range res.Steps {
 		names = append(names, s.Name)
@@ -148,7 +148,7 @@ func TestPoolSvuotaILotti(t *testing.T) {
 		t.Errorf("membri ancora svuotati: %+v", st.Rollout.Stages[0].Passes[0])
 	}
 
-	// Un pool senza rilascio a lotti è rifiutato: svuoterebbe tutti i target insieme.
+	// A pool without batched rollout is rejected: it would drain all targets together.
 	d2 := testDescriptor("pool-2")
 	d2.Artifact, d2.Deploy.Targets = d.Artifact, d.Deploy.Targets
 	sub, err = e.Submit(ctx, d2)
@@ -160,14 +160,14 @@ func TestPoolSvuotaILotti(t *testing.T) {
 	}
 }
 
-// fakeOps simula le operazioni sul router: registra le chiamate e tiene il peso corrente.
+// fakeOps simulates the router operations: it records the calls and keeps the current weight.
 type fakeOps struct {
 	mu  sync.Mutex
 	log *waveLog
-	// weight è la quota della candidata per passo (primo target del passo).
+	// weight is the candidate's share per pass (first target of the pass).
 	weight    map[string]int
 	hasStable bool
-	// drift, se diverso da -1, è il peso letto al gradino indicato da driftAt (modifica esterna).
+	// drift, if not -1, is the weight read at the step given by driftAt (external change).
 	driftAt, drift int
 	retired        chan struct{}
 	retireOnce     sync.Once
@@ -231,7 +231,7 @@ func (f *fakeOps) Retire(context.Context, pipeline.Input) (pipeline.Output, erro
 	return pipeline.Output{}, nil
 }
 
-// stageChecker è rosso negli stadi indicati.
+// stageChecker is red in the given stages.
 type stageChecker struct {
 	mu   sync.Mutex
 	red  string
@@ -300,7 +300,7 @@ func TestRilascioPerPercentuale(t *testing.T) {
 	if got := env.log.get(); !slices.Equal(got, want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
 	}
-	// Gate dopo ogni gradino, con le tracce per i confronti tra candidata e stabile.
+	// Gate after every step, with the tracks for candidate vs stable comparisons.
 	if len(env.ch.seen) < 3 || env.ch.seen[0].Stage != "traffic@10" || env.ch.seen[0].Track != "b" || env.ch.seen[0].StableTrack != "a" {
 		t.Errorf("gate: %+v", env.ch.seen)
 	}
@@ -347,7 +347,7 @@ func TestRilascioPerPercentualeDerivaEApprovazioni(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Prima pausa: approvazione dopo i test a peso 0.
+	// First pause: approval after the tests at weight 0.
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
 	if st.Rollout.Paused != "approvazione dopo i test a peso 0" {
 		t.Fatalf("pausa: %+v", st.Rollout)
@@ -355,7 +355,7 @@ func TestRilascioPerPercentualeDerivaEApprovazioni(t *testing.T) {
 	if err := env.e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
 		t.Fatal(err)
 	}
-	// Seconda pausa: qualcuno ha portato la candidata al 30% fuori da manent.
+	// Second pause: someone moved the candidate to 30% outside manent.
 	st = waitRollout(t, env.e, sub.ID, service.RolloutPausedDrift)
 	if st.State != StateAwaitingApproval || !strings.Contains(st.Rollout.Paused, "30%") {
 		t.Fatalf("deriva: %s %+v", st.State, st.Rollout)
@@ -382,7 +382,7 @@ func TestPrimoRilascioPerPercentuale(t *testing.T) {
 	if _, err := env.e.Wait(ctx, sub.ID); err != nil {
 		t.Fatal(err)
 	}
-	// Senza versione stabile niente tester né gradini intermedi, e niente da ridimensionare.
+	// Without a stable version no testers, no intermediate steps and nothing to scale down.
 	want := []string{"prepare", "deploy:w1:cluster-1", "weight:100", "promote", "activation:w1:cluster-1"}
 	if got := env.log.get(); !slices.Equal(got, want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)
@@ -403,7 +403,7 @@ func TestRilascioPerPercentualeAOndate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Dopo l'ondata eu il rilascio attende l'approvazione prima del cluster successivo.
+	// After the eu wave the rollout waits for approval before the next cluster.
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
 	if st.Rollout.Paused != "approvazione dopo l'ondata eu" || st.Rollout.Traffic.Pass != "eu" || !st.Rollout.Traffic.Promoted {
 		t.Fatalf("pausa: %+v %+v", st.Rollout, st.Rollout.Traffic)
@@ -424,7 +424,7 @@ func TestRilascioPerPercentualeAOndate(t *testing.T) {
 	if len(st.Rollout.Stages) != 4 || st.Rollout.Stages[2].Name != "resto/50%" || st.Rollout.Stages[3].State != service.StageSucceeded {
 		t.Errorf("stadi: %+v", st.Rollout.Stages)
 	}
-	// Un ridimensionamento per passo.
+	// One scale-down per pass.
 	res, _ := env.e.Steps(context.Background(), sub.ID)
 	for _, s := range res {
 		if strings.HasPrefix(s.Name, "traffic:promote") && s.Name != "traffic:promote@eu" && s.Name != "traffic:promote@resto" {
@@ -450,7 +450,7 @@ func TestRilascioPerPercentualeAOndateRollbackAll(t *testing.T) {
 	if _, err := env.e.Wait(context.Background(), sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completato") {
 		t.Fatalf("atteso il ritorno: %v", err)
 	}
-	// Il ritorno riguarda prima il passo fallito, poi quello già promosso.
+	// The return concerns the failed pass first, then the already promoted one.
 	var reverts []string
 	res, _ := env.e.Steps(context.Background(), sub.ID)
 	for _, s := range res {
@@ -474,7 +474,7 @@ func TestRilascioPerPercentualeRepliche(t *testing.T) {
 	if _, err := env.e.Wait(context.Background(), sub.ID); err != nil {
 		t.Fatal(err)
 	}
-	// La candidata cresce prima di ricevere ogni quota di traffico.
+	// The candidate grows before receiving every traffic share.
 	want := []string{"prepare", "deploy:w1:cluster-1", "scale:10", "weight:10", "scale:50", "weight:50", "scale:100", "weight:100", "promote"}
 	if got := env.log.get(); len(got) < len(want) || !slices.Equal(got[:len(want)], want) {
 		t.Fatalf("esecuzioni:\n %v\natteso\n %v", got, want)

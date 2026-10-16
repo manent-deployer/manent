@@ -15,9 +15,9 @@ import (
 	"github.com/joeg-ita/manent/internal/governance"
 )
 
-// Inventory ricostruisce dallo storico dei deploy la release in esercizio in ogni
-// applicazione/ambiente. Non considera i dry-run. Lo stato è tenuto in una cache del processo
-// (inventoryCache): ogni chiamata legge solo i workflow nuovi e quelli non ancora conclusi.
+// Inventory rebuilds from the deploy history the release in service in every
+// application/environment. It ignores dry-runs. The state is kept in a process cache
+// (inventoryCache): every call reads only new workflows and those not yet ended.
 func (e *Engine) Inventory(_ context.Context, f InventoryFilter) ([]InventoryEntry, error) {
 	e.inv.mu.Lock()
 	defer e.inv.mu.Unlock()
@@ -38,32 +38,32 @@ func (e *Engine) Inventory(_ context.Context, f InventoryFilter) ([]InventoryEnt
 	return out, nil
 }
 
-// inventoryRebuild è l'intervallo dopo il quale l'inventario viene ricostruito da zero: copre
-// ciò che la lettura incrementale non vede, come i workflow eliminati dalla retention.
+// inventoryRebuild is the interval after which the inventory is rebuilt from scratch: it
+// covers what the incremental read cannot see, like workflows deleted by retention.
 const inventoryRebuild = 10 * time.Minute
 
-// inventoryCache è l'inventario del processo. Si ricostruisce scorrendo lo storico (al più
-// maxListScan workflow) al primo uso e ogni inventoryRebuild; tra una ricostruzione e l'altra
-// legge i workflow creati dopo l'ultimo letto (indice di created_at) e rilegge per ID quelli
-// non ancora conclusi.
+// inventoryCache is the process inventory. It is rebuilt by scanning the history (at most
+// maxListScan workflows) on first use and every inventoryRebuild; in between it reads the
+// workflows created after the last one read (created_at index) and reads again by ID those
+// not yet ended.
 type inventoryCache struct {
 	mu      sync.Mutex
 	builtAt time.Time
 	entries map[string]*InventoryEntry
-	// mark è la data di creazione più recente letta; recent sono i workflow letti creati negli
-	// ultimi inventoryOverlap prima di mark, da non rileggere.
+	// mark is the most recent creation time read; recent are the workflows read that were
+	// created in the last inventoryOverlap before mark, not to be read again.
 	mark   time.Time
 	recent map[string]time.Time
-	// pending sono i workflow letti e non ancora conclusi.
+	// pending are the workflows read and not yet ended.
 	pending map[string]bool
 }
 
-// inventoryOverlap è il margine con cui si rileggono i workflow creati poco prima dell'ultimo
-// letto: created_at è assegnato all'inserimento, quindi una transazione più lenta può rendere
-// visibile un workflow con una data anteriore a quelli già letti.
+// inventoryOverlap is the margin for reading again the workflows created shortly before the
+// last one read: created_at is set on insert, so a slower transaction can make visible a
+// workflow with a time earlier than those already read.
 const inventoryOverlap = 5 * time.Second
 
-// refreshInventory aggiorna la cache; va chiamata con e.inv.mu bloccato.
+// refreshInventory updates the cache; call it with e.inv.mu locked.
 func (e *Engine) refreshInventory() error {
 	c := &e.inv
 	if c.entries == nil || time.Since(c.builtAt) >= inventoryRebuild {
@@ -102,7 +102,7 @@ func (e *Engine) refreshInventory() error {
 			break
 		}
 		if fresh == 0 {
-			// Una pagina intera già letta: si prosegue dal millisecondo successivo.
+			// A whole page already read: continue from the next millisecond.
 			from = from.Add(time.Millisecond)
 		}
 	}
@@ -114,7 +114,7 @@ func (e *Engine) refreshInventory() error {
 	return nil
 }
 
-// see registra un workflow letto per la lettura incrementale successiva.
+// see records a read workflow for the next incremental read.
 func (c *inventoryCache) see(w dbos.WorkflowStatus) {
 	if w.CreatedAt.After(c.mark) {
 		c.mark = w.CreatedAt
@@ -124,7 +124,7 @@ func (c *inventoryCache) see(w dbos.WorkflowStatus) {
 	}
 }
 
-// rebuildInventory ricostruisce la cache scorrendo lo storico dal più recente.
+// rebuildInventory rebuilds the cache by scanning the history from the most recent.
 func (e *Engine) rebuildInventory() error {
 	c := &e.inv
 	c.entries, c.pending, c.recent, c.mark = map[string]*InventoryEntry{}, map[string]bool{}, map[string]time.Time{}, time.Time{}
@@ -141,9 +141,9 @@ func (e *Engine) rebuildInventory() error {
 	return nil
 }
 
-// apply aggiorna l'inventario con un workflow letto: un deploy riuscito diventa la release in
-// esercizio se è il più recente; un deploy fallito o annullato è l'ultimo fallimento se è più
-// recente della release in esercizio. I workflow non conclusi restano da rileggere.
+// apply updates the inventory with a read workflow: a successful deploy becomes the release in
+// service if it is the most recent; a failed or cancelled deploy is the last failure if more
+// recent than the release in service. Unfinished workflows remain to be read again.
 func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 	delete(c.pending, w.ID)
 	if superseded(w) {
@@ -179,8 +179,8 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 	}
 }
 
-// findRelease restituisce il deploy più recente concluso con successo (non dry-run)
-// nell'applicazione/ambiente che soddisfa match, o nil.
+// findRelease returns the most recent successfully ended deploy (not dry-run) in the
+// application/environment that satisfies match, or nil.
 func (e *Engine) findRelease(_ context.Context, application, environment string, match func(Status) bool) (*Status, error) {
 	var found *Status
 	err := e.scan(nil, func(s Status) bool {
@@ -194,7 +194,7 @@ func (e *Engine) findRelease(_ context.Context, application, environment string,
 	return found, err
 }
 
-// loadRequest legge l'input di un deploy registrato.
+// loadRequest reads the input of a recorded deploy.
 func (e *Engine) loadRequest(id string) (Request, error) {
 	ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterLoadInput(true), dbos.WithFilterLoadOutput(false))
 	if err != nil {
@@ -210,20 +210,20 @@ func (e *Engine) loadRequest(id string) (Request, error) {
 	return req, nil
 }
 
-// applyRedeploy prepara il descrittore del nuovo deploy a partire da quello registrato.
+// applyRedeploy prepares the descriptor of the new deploy from the recorded one.
 func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 	d.ID, d.DryRun, d.FreezeOverride, d.Schedule = r.ID, r.DryRun, r.FreezeOverride, nil
-	// Le dipendenze valevano per il deploy di origine, già concluso.
+	// The dependencies applied to the source deploy, already ended.
 	d.After, d.AfterTimeout = nil, ""
 	if src.SHA256 != "" {
-		// Viene rilasciato esattamente l'artefatto già rilasciato: lo step qa lo verifica.
+		// Exactly the artifact already released is released: the qa step verifies it.
 		d.Artifact.SHA256 = src.SHA256
 	}
 }
 
-// Promote rilascia in To lo stesso artefatto (nome, versione e sha256) rilasciato in From, con
-// il descrittore del deploy di origine. I target sono propri di ogni ambiente e non vengono
-// copiati. La promozione è un deploy come gli altri: valgono policy, approvazioni e freeze.
+// Promote releases to To the same artifact (name, version and sha256) released to From, with
+// the descriptor of the source deploy. Targets belong to each environment and are not copied.
+// A promotion is a deploy like the others: policies, approvals and freezes apply.
 func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, error) {
 	if r.Application == "" || r.From == "" || r.To == "" || r.From == r.To {
 		return nil, fmt.Errorf("%w: application, from e to obbligatori, from diverso da to", ErrInvalidRequest)
@@ -253,14 +253,14 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 	return e.submit(ctx, &d, submitMeta{kind: KindPromotion, source: src.ID})
 }
 
-// Rollback rilascia di nuovo, con il suo descrittore, una versione già rilasciata con successo
-// nell'ambiente: di default la più recente diversa da quella in esercizio. È ammesso solo per
-// i tipi di artefatto per cui la policy di rollback lo consente (non per le migration).
+// Rollback releases again, with its descriptor, a version already successfully released to
+// the environment: by default the most recent one other than the one in service. It is
+// allowed only for artifact types whose rollback policy allows it (not for migrations).
 //
-// Se dopo l'ultimo deploy riuscito un deploy è fallito lasciando i target modificati (senza
-// rollback automatico completato, o con un rollout interrotto dopo il primo stadio), la
-// versione dell'ultimo deploy riuscito non è più garantita sui target: il rollback di default
-// la ripristina, e la si può indicare con --to.
+// If after the last successful deploy a deploy failed leaving the targets changed (without a
+// completed automatic rollback, or with a rollout interrupted after the first stage), the
+// version of the last successful deploy is no longer guaranteed on the targets: the default
+// rollback restores it, and it can be given with --to.
 func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, error) {
 	if r.Application == "" || r.Environment == "" {
 		return nil, fmt.Errorf("%w: application ed environment obbligatori", ErrInvalidRequest)
@@ -318,11 +318,11 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	return e.submit(ctx, &d, submitMeta{kind: KindRollback, source: target.ID})
 }
 
-// leftChanged dice se un deploy concluso senza successo può aver lasciato i target su una
-// release diversa da quella dell'ultimo deploy riuscito: fallito senza rollback automatico o
-// con un rollback fallito, oppure rollout interrotto dopo almeno uno stadio. Un rollback
-// skipped significa che non c'era nulla da compensare; un deploy annullato prima di partire
-// (es. pianificato) non conta.
+// leftChanged says whether a deploy ended without success may have left the targets on a
+// release other than the last successful deploy's: failed without automatic rollback or with
+// a failed rollback, or rollout interrupted after at least one stage. A skipped rollback means
+// there was nothing to compensate; a deploy cancelled before starting (e.g. scheduled) does
+// not count.
 func leftChanged(s Status) bool {
 	switch s.State {
 	case string(dbos.WorkflowStatusError), string(dbos.WorkflowStatusMaxRecoveryAttemptsExceeded):
@@ -333,7 +333,7 @@ func leftChanged(s Status) bool {
 	return false
 }
 
-// Freezes elenca le finestre di freeze attive e future per l'applicazione e l'ambiente.
+// Freezes lists the active and future freeze windows for the application and environment.
 func (e *Engine) Freezes(_ context.Context, application, environment string) ([]governance.WindowStatus, error) {
 	if e.governance == nil {
 		return []governance.WindowStatus{}, nil

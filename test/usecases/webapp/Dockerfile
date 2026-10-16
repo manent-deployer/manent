@@ -1,6 +1,6 @@
-# Applicazione di prova dei casi d'uso UC6 e UC7: busybox httpd su :8080 con /version e, se
-# HEALTHY=true, /healthz. Senza healthz l'HEALTHCHECK (Docker) e la readinessProbe
-# (Kubernetes) restano rossi: è la release difettosa.
+# Test application of use cases UC6 and UC7: busybox httpd on :8080 with /version and, if
+# HEALTHY=true, /healthz. Without healthz the HEALTHCHECK (Docker) and the readinessProbe
+# (Kubernetes) stay red: it is the faulty release.
 FROM busybox:1.36.1
 ARG VERSION=0.0.0
 ARG HEALTHY=true

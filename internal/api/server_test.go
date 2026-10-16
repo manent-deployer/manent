@@ -29,7 +29,7 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// mockService implementa engine.Service per i test degli handler.
+// mockService implements engine.Service for the handler tests.
 type mockService struct {
 	submitted *descriptor.Descriptor
 	filter    engine.ListFilter
@@ -341,7 +341,7 @@ func TestAutenticazioneEPermessi(t *testing.T) {
 	if w := req("ci-token", prod); w.Code != http.StatusForbidden {
 		t.Fatalf("atteso 403 in prod, ricevuto %d: %s", w.Code, w.Body)
 	}
-	// /healthz non richiede autenticazione.
+	// /healthz needs no authentication.
 	if w := do(r, http.MethodGet, "/healthz", ""); w.Code != http.StatusOK {
 		t.Errorf("healthz: %d", w.Code)
 	}

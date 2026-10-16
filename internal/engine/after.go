@@ -19,43 +19,43 @@ import (
 )
 
 const (
-	// afterWorkflowName è il workflow che attende le dipendenze di un deploy. Il nome non va
-	// cambiato: DBOS lo usa per il recovery.
+	// afterWorkflowName is the workflow that waits for a deploy's dependencies. The name must not
+	// change: DBOS uses it for recovery.
 	afterWorkflowName = "manent.after"
-	// afterSuffix distingue l'ID del workflow di attesa da quello del deploy.
+	// afterSuffix tells the wait workflow ID apart from the deploy's.
 	afterSuffix = ".after"
-	// afterEvent è la chiave dell'evento con lo stato dell'attesa.
+	// afterEvent is the key of the event with the wait state.
 	afterEvent = "after"
-	// attrAfter segna i workflow (attesa, approvazione, deploy) di un deploy con dipendenze.
+	// attrAfter marks the workflows (wait, approval, deploy) of a deploy with dependencies.
 	attrAfter = "after"
-	// attrRelease è la release composta a cui appartiene un deploy.
+	// attrRelease is the composite release a deploy belongs to.
 	attrRelease = "release"
-	// attrWaitsFor sono gli ID dei deploy seguiti da un'attesa o da una release, separati da
-	// spazi: un deploy che si conclude avvisa i workflow che lo seguono (notifyWaiters).
+	// attrWaitsFor are the IDs of the deploys followed by a wait or a release, space separated:
+	// a deploy that ends notifies the workflows following it (notifyWaiters).
 	attrWaitsFor = "waits_for"
-	// chainTopic è l'argomento dei messaggi con cui si sveglia un'attesa o una release.
+	// chainTopic is the topic of the messages that wake up a wait or a release.
 	chainTopic = "chain"
 )
 
-// Intervalli di lettura dello stato delle dipendenze e delle release: si parte da
-// chainPollMin e si raddoppia fino a chainPollMax. Di norma l'attesa è svegliata prima da un
-// messaggio di chi si conclude (notifyWaiters): la lettura periodica copre i casi senza
-// messaggio (workflow vecchi, MAX_RECOVERY_ATTEMPTS_EXCEEDED, retention).
+// Read intervals of the state of dependencies and releases: start at chainPollMin and double
+// up to chainPollMax. Normally the wait is woken earlier by a message from whoever ends
+// (notifyWaiters): periodic reads cover the cases without a message (old workflows,
+// MAX_RECOVERY_ATTEMPTS_EXCEEDED, retention).
 const (
 	defaultChainPoll = 5 * time.Second
 	chainPollMax     = 5 * time.Minute
 )
 
-// afterInput è l'input del workflow di attesa delle dipendenze.
+// afterInput is the input of the dependency wait workflow.
 type afterInput struct {
 	DeploymentID string  `json:"deployment_id"`
 	Request      Request `json:"request"`
-	// QueueName è la coda dei deploy.
+	// QueueName is the deploy queue.
 	QueueName string `json:"queue_name"`
 }
 
-// checkAfter verifica le dipendenze all'accodamento: devono esistere, non essere dry-run né
-// concluse senza successo. Restituisce true se sono già tutte riuscite e non serve attendere.
+// checkAfter checks the dependencies at submission: they must exist and be neither dry-runs
+// nor ended without success. It returns true if all have already succeeded and no wait is needed.
 func (e *Engine) checkAfter(ctx context.Context, d *descriptor.Descriptor) (bool, error) {
 	if _, err := d.AfterWait(); err != nil {
 		return false, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -80,8 +80,8 @@ func (e *Engine) checkAfter(ctx context.Context, d *descriptor.Descriptor) (bool
 	return done, nil
 }
 
-// enqueueAfter accoda l'attesa delle dipendenze del deploy id, sulla coda delle approvazioni:
-// come un'approvazione può durare a lungo e non deve occupare uno slot dell'ambiente.
+// enqueueAfter enqueues the dependency wait of deploy id on the approvals queue: like an
+// approval it can last long and must not take an environment slot.
 func enqueueAfter(client dbos.Client, deployQueue string, req Request, id string) error {
 	attrs := attributes(req)
 	attrs[attrWaitsFor] = strings.Join(req.Descriptor.After, " ")
@@ -97,9 +97,9 @@ func enqueueAfter(client dbos.Client, deployQueue string, req Request, id string
 	return err
 }
 
-// afterWorkflow attende che tutte le dipendenze riescano. Poi accoda l'approvazione, se la
-// regola la richiede, altrimenti il deploy, con l'ID già comunicato al richiedente. Se una
-// dipendenza non riesce o l'attesa scade il deploy non viene eseguito.
+// afterWorkflow waits for all dependencies to succeed. Then it enqueues the approval, if the
+// rule requires one, otherwise the deploy, with the ID already given to the requester. If a
+// dependency fails or the wait expires the deploy does not run.
 func (w *Worker) afterWorkflow(ctx dbos.Context, in afterInput) (AfterState, error) {
 	d := in.Request.Descriptor
 	wait, err := d.AfterWait()
@@ -151,15 +151,15 @@ func (w *Worker) afterWorkflow(ctx dbos.Context, in afterInput) (AfterState, err
 			return st, err
 		}
 	}
-	// L'esito si registra dopo l'accodamento: negli elenchi l'attesa soddisfatta è sostituita
-	// dall'approvazione o dal deploy.
+	// The outcome is recorded after enqueuing: in listings the satisfied wait is replaced by the
+	// approval or the deploy.
 	attrs := maps.Clone(attributes(in.Request))
 	attrs[attrOutcome] = st.Status
 	if err := dbos.SetWorkflowAttributes(ctx, in.DeploymentID+afterSuffix, attrs); err != nil {
 		return st, err
 	}
 	if st.Status != service.AfterSatisfied {
-		// Il deploy non verrà eseguito: chi lo attende può concludersi subito.
+		// The deploy will not run: whoever waits for it can end at once.
 		w.notifyWaiters(ctx, in.DeploymentID)
 	}
 	w.logger.Info("attesa delle dipendenze conclusa", "deployment", in.DeploymentID, "status", st.Status, "reason", st.Reason)
@@ -167,17 +167,17 @@ func (w *Worker) afterWorkflow(ctx dbos.Context, in afterInput) (AfterState, err
 	return st, nil
 }
 
-// afterCheck è il risultato di una lettura delle dipendenze, persistito come step.
+// afterCheck is the result of a dependency read, persisted as a step.
 type afterCheck struct {
 	Dependencies []DependencyState `json:"dependencies"`
 	Done         bool              `json:"done"`
-	// Failed spiega perché una dipendenza non potrà più riuscire.
+	// Failed explains why a dependency can no longer succeed.
 	Failed string    `json:"failed,omitempty"`
 	Now    time.Time `json:"now"`
 }
 
-// readDependencies legge lo stato delle dipendenze, con una sola query. Un errore di lettura
-// lascia le dipendenze in attesa: verranno rilette al giro successivo.
+// readDependencies reads the state of the dependencies with a single query. A read error
+// leaves the dependencies waiting: they are read again at the next round.
 func (w *Worker) readDependencies(_ context.Context, ids []string) afterCheck {
 	c := afterCheck{Done: true, Now: time.Now().UTC()}
 	states, err := w.reader.states(ids)
@@ -207,10 +207,10 @@ func (w *Worker) readDependencies(_ context.Context, ids []string) afterCheck {
 	return c
 }
 
-// states legge con una sola query lo stato essenziale dei deploy ids (senza risultato, rollout
-// né approvazioni): basta per seguire dipendenze e release. Un workflow che ha già registrato
-// l'esito (attributo outcome) è considerato concluso anche se DBOS non lo ha ancora segnato:
-// è il momento in cui avvisa chi lo attende. I deploy senza workflow mancano dalla mappa.
+// states reads with a single query the essential state of deploys ids (no result, rollout or
+// approvals): enough to follow dependencies and releases. A workflow that has already
+// recorded its outcome (outcome attribute) counts as ended even if DBOS has not marked it yet:
+// that is when it notifies its waiters. Deploys without a workflow are missing from the map.
 func (e *Engine) states(ids []string) (map[string]Status, error) {
 	all := make([]string, 0, 3*len(ids))
 	for _, id := range ids {
@@ -231,8 +231,8 @@ func (e *Engine) states(ids []string) (map[string]Status, error) {
 	return out, nil
 }
 
-// settled applica a un workflow ancora in esecuzione l'esito che ha già registrato negli
-// attributi (deploy, approvazione, attesa).
+// settled applies to a still running workflow the outcome it already recorded in its
+// attributes (deploy, approval, wait).
 func settled(w dbos.WorkflowStatus) dbos.WorkflowStatus {
 	outcome := attr(w, attrOutcome)
 	if w.Status != dbos.WorkflowStatusPending || outcome == "" {
@@ -250,7 +250,7 @@ func settled(w dbos.WorkflowStatus) dbos.WorkflowStatus {
 	return w
 }
 
-// waitChain attende un messaggio di chi si conclude (notifyWaiters) o lo scadere di d.
+// waitChain waits for a message from whoever ends (notifyWaiters) or for d to expire.
 func waitChain(ctx dbos.Context, d time.Duration) error {
 	_, err := dbos.Recv[string](ctx, chainTopic, d)
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -259,8 +259,8 @@ func waitChain(ctx dbos.Context, d time.Duration) error {
 	return err
 }
 
-// waitersOf restituisce gli ID dei workflow di attesa e di release non conclusi che seguono il
-// deploy id (attributo waits_for).
+// waitersOf returns the IDs of the unfinished wait and release workflows following deploy id
+// (waits_for attribute).
 func waitersOf(c dbos.Client, id string) ([]string, error) {
 	ws, err := dbos.ListWorkflows(c, dbos.WithFilterName(afterWorkflowName, releaseWorkflowName),
 		dbos.WithFilterStatus(dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued),
@@ -277,7 +277,7 @@ func waitersOf(c dbos.Client, id string) ([]string, error) {
 	return out, nil
 }
 
-// wakeMessages sono i messaggi che svegliano i workflow ids.
+// wakeMessages are the messages that wake up workflows ids.
 func wakeMessages(id string, ids []string) []dbos.SendMessage {
 	msgs := make([]dbos.SendMessage, len(ids))
 	for i, dst := range ids {
@@ -286,10 +286,10 @@ func wakeMessages(id string, ids []string) []dbos.SendMessage {
 	return msgs
 }
 
-// notifyWaiters sveglia, dal workflow di un deploy concluso, le attese e le release che lo
-// seguono. Va chiamato dopo aver registrato l'esito negli attributi, che chi viene svegliato
-// legge prima che DBOS segni il workflow come concluso. Un errore non ferma il workflow: chi
-// attende rilegge comunque lo stato a intervalli.
+// notifyWaiters wakes up, from the workflow of an ended deploy, the waits and releases
+// following it. Call it after recording the outcome in the attributes, which the woken
+// workflows read before DBOS marks the workflow as ended. An error does not stop the workflow:
+// waiters read the state periodically anyway.
 func (w *Worker) notifyWaiters(ctx dbos.Context, id string) {
 	ids, err := dbos.RunAsStep(ctx, func(context.Context) ([]string, error) {
 		return waitersOf(w.dbos, id)
@@ -302,7 +302,7 @@ func (w *Worker) notifyWaiters(ctx dbos.Context, id string) {
 	}
 }
 
-// notifyWaiters sveglia le attese e le release che seguono il deploy id, dopo un annullamento.
+// notifyWaiters wakes up the waits and releases following deploy id, after a cancellation.
 func (e *Engine) notifyWaiters(id string) {
 	ids, err := waitersOf(e.client, id)
 	if err == nil && len(ids) > 0 {
@@ -313,7 +313,7 @@ func (e *Engine) notifyWaiters(id string) {
 	}
 }
 
-// enqueueSatisfied accoda ciò che segue l'attesa: l'approvazione, se richiesta, o il deploy.
+// enqueueSatisfied enqueues what follows the wait: the approval, if required, or the deploy.
 func (w *Worker) enqueueSatisfied(ctx dbos.Context, in afterInput) error {
 	if needsApproval(in.Request) {
 		return enqueueApproval(ctx, in.QueueName, in.Request, in.DeploymentID)
@@ -321,7 +321,7 @@ func (w *Worker) enqueueSatisfied(ctx dbos.Context, in afterInput) error {
 	return w.enqueueApproved(ctx, approvalInput{DeploymentID: in.DeploymentID, Request: in.Request, QueueName: in.QueueName})
 }
 
-// recordAfter registra nell'audit l'esito dell'attesa, in uno step DBOS.
+// recordAfter records the wait outcome in the audit, in a DBOS step.
 func (w *Worker) recordAfter(ctx dbos.Context, in afterInput, st AfterState) {
 	if w.audit == nil {
 		return
@@ -339,17 +339,17 @@ func (w *Worker) recordAfter(ctx dbos.Context, in afterInput, st AfterState) {
 	}
 }
 
-// ActionAfterFinish è l'azione di audit con l'esito dell'attesa delle dipendenze.
+// ActionAfterFinish is the audit action with the outcome of the dependency wait.
 const ActionAfterFinish = "after.finish"
 
-// afterWorkflowState è lo stato esposto per un deploy che attende le dipendenze.
+// afterWorkflowState is the state shown for a deploy waiting for its dependencies.
 func afterWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 	switch st {
 	case dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusDelayed:
 		return StateWaitingDependency
 	case dbos.WorkflowStatusSuccess:
 		if outcome == service.AfterSatisfied {
-			// Approvazione o deploy stanno per essere accodati.
+			// Approval or deploy are about to be enqueued.
 			return string(dbos.WorkflowStatusEnqueued)
 		}
 		return StateDependencyFailed
@@ -357,8 +357,8 @@ func afterWorkflowState(st dbos.WorkflowStatusType, outcome string) string {
 	return string(st)
 }
 
-// afterState legge lo stato dell'attesa w (letta con l'output): il risultato se conclusa,
-// altrimenti l'ultimo evento pubblicato.
+// afterState reads the state of wait w (read with its output): the result if ended,
+// otherwise the last published event.
 func (e *Engine) afterState(w dbos.WorkflowStatus) *AfterState {
 	if w.Status == dbos.WorkflowStatusSuccess {
 		var a AfterState
@@ -373,9 +373,9 @@ func (e *Engine) afterState(w dbos.WorkflowStatus) *AfterState {
 	return &a
 }
 
-// pendingStatus restituisce lo stato di un deploy che non ha ancora un workflow: in attesa
-// delle dipendenze o di un'approvazione, oppure non eseguito per una delle due. Se esistono
-// entrambe, l'approvazione (accodata dopo l'attesa) rappresenta il deploy.
+// pendingStatus returns the state of a deploy that has no workflow yet: waiting for its
+// dependencies or an approval, or not run because of one of them. If both exist, the approval
+// (enqueued after the wait) represents the deploy.
 func (e *Engine) pendingStatus(id string, g deployWorkflows) (*Status, error) {
 	w := cmp.Or(g.approval, g.after)
 	if w == nil {
@@ -394,7 +394,7 @@ func (e *Engine) pendingStatus(id string, g deployWorkflows) (*Status, error) {
 	return &s, nil
 }
 
-// trimPendingSuffix restituisce l'ID del deploy da quello di un workflow di attesa o di approvazione.
+// trimPendingSuffix returns the deploy ID from that of a wait or approval workflow.
 func trimPendingSuffix(id string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(id, approvalSuffix), afterSuffix)
 }

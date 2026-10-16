@@ -21,10 +21,10 @@ var (
 	imageArgRe     = regexp.MustCompile(`'([^' ]+@sha256:[a-f0-9]{64})'`)
 )
 
-// fakeHost simula il runtime dei container di un target.
+// fakeHost simulates a target's container runtime.
 type fakeHost struct {
-	version, image string // container in esercizio ("" = assente)
-	state          string // risposta all'attesa (default "running||0")
+	version, image string // container in service ("" = none)
+	state          string // answer to the wait (default "running||0")
 	failPull       bool
 	commands       []string
 	stdin          []string
@@ -149,7 +149,7 @@ func TestDeploySostituisceIlContainer(t *testing.T) {
 		t.Errorf("comando di avvio inatteso: %s", run)
 	}
 
-	// Rieseguito (retry o recovery) non riavvia il container.
+	// Run again (retry or recovery) it does not restart the container.
 	runs := func() int {
 		n := 0
 		for _, c := range hosts["vm1"].commands {
@@ -165,7 +165,7 @@ func TestDeploySostituisceIlContainer(t *testing.T) {
 		t.Errorf("deploy non idempotente: %+v %v", res, err)
 	}
 
-	// La release in esercizio si legge dalle etichette, con l'immagine per il rollback.
+	// The release in service is read from the labels, with the image for the rollback.
 	rel, err := p.CurrentRelease(context.Background(), req)
 	if err != nil || rel.Version != "1.1.0" || !strings.HasSuffix(rel.Details[DetailImage], digest1) {
 		t.Errorf("release in esercizio: %+v %v", rel, err)
@@ -198,7 +198,7 @@ func TestDeployFallito(t *testing.T) {
 	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "pull") {
 		t.Fatalf("atteso errore di pull: %v", err)
 	}
-	// Riavvii continui: mai stabile entro il timeout.
+	// Continuous restarts: never stable within the timeout.
 	hosts["vm1"].failPull, hosts["vm1"].image, hosts["vm1"].state = false, "", "restarting||3"
 	req.Params[ParamWaitTimeout] = "100ms"
 	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "non pronto") {

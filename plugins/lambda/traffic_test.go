@@ -7,7 +7,7 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// routing legge i pesi aggiuntivi dell'alias live dal finto Lambda.
+// routing reads the additional weights of the live alias from the fake Lambda.
 func (f *fakeLambda) routing(fn string) map[string]any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -50,7 +50,7 @@ func TestAliasPesato(t *testing.T) {
 	if w, err := p.CandidateWeight(ctx, req); err != nil || w != 25 {
 		t.Errorf("peso letto: %d %v", w, err)
 	}
-	// Durante il rilascio la release in esercizio resta la stabile.
+	// During the rollout the release in service stays the stable one.
 	if cur, err := p.CurrentRelease(ctx, req); err != nil || cur.Version != "1.0.0" {
 		t.Errorf("release durante il rilascio: %+v %v", cur, err)
 	}
@@ -63,7 +63,7 @@ func TestAliasPesato(t *testing.T) {
 	if err := p.SetCandidateWeight(ctx, req, 50); err != nil {
 		t.Fatal(err)
 	}
-	// Un nuovo rilascio non parte mentre l'alias divide il traffico.
+	// A new rollout does not start while the alias splits traffic.
 	if _, err := p.PrepareSlots(ctx, req); err == nil {
 		t.Error("rilascio preparato con l'alias diviso")
 	}
@@ -100,7 +100,7 @@ func TestPrimoRilascioConAlias(t *testing.T) {
 	if _, err := p.DeployCandidate(ctx, req); err != nil {
 		t.Fatal(err)
 	}
-	// Senza versione stabile l'alias viene creato direttamente sulla candidata.
+	// Without a stable version the alias is created directly on the candidate.
 	if err := p.SetCandidateWeight(ctx, req, 100); err != nil || f.alias("shop") != "1" {
 		t.Fatalf("alias %s: %v", f.alias("shop"), err)
 	}

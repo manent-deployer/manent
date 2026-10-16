@@ -4,10 +4,10 @@ package logging
 
 import "errors"
 
-// JournalSender non è disponibile fuori dai sistemi Unix.
+// JournalSender is not available outside Unix systems.
 type JournalSender struct{ NoopSender }
 
-// NewJournalSender restituisce sempre un errore: journald esiste solo su Linux.
+// NewJournalSender always returns an error: journald exists only on Linux.
 func NewJournalSender(string) (*JournalSender, error) {
 	return nil, errors.New("rete SIEM journald non supportata su questo sistema")
 }

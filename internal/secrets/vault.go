@@ -17,52 +17,52 @@ import (
 	"time"
 )
 
-// Metodi di autenticazione verso Vault.
+// Authentication methods towards Vault.
 const (
 	VaultAuthToken      = "token"
 	VaultAuthAppRole    = "approle"
 	VaultAuthKubernetes = "kubernetes"
 )
 
-// VaultConfig configura il provider dello schema "vault:".
+// VaultConfig configures the "vault:" scheme provider.
 type VaultConfig struct {
-	// Address di Vault (default VAULT_ADDR).
+	// Address of Vault (default VAULT_ADDR).
 	Address string
-	// Namespace di Vault Enterprise / HCP, opzionale.
+	// Namespace of Vault Enterprise / HCP, optional.
 	Namespace string
-	// Auth è token (default), approle o kubernetes.
+	// Auth is token (default), approle or kubernetes.
 	Auth string
-	// TokenFile contiene il token (auth token); in alternativa si usa VAULT_TOKEN.
+	// TokenFile holds the token (token auth); otherwise VAULT_TOKEN is used.
 	TokenFile string
-	// AppRole: role_id e file con il secret_id; Mount default "approle".
+	// AppRole: role_id and file with the secret_id; Mount default "approle".
 	RoleID       string
 	SecretIDFile string
-	// Kubernetes: ruolo Vault e token del service account; Mount default "kubernetes".
+	// Kubernetes: Vault role and service account token; Mount default "kubernetes".
 	Role    string
 	JWTFile string
-	// Mount è il percorso del metodo di autenticazione (approle o kubernetes).
+	// Mount is the path of the authentication method (approle or kubernetes).
 	Mount string
-	// CAFile è un bundle di CA aggiuntive per raggiungere Vault.
+	// CAFile is a bundle of extra CAs to reach Vault.
 	CAFile  string
 	Timeout time.Duration
 }
 
-// DefaultJWTFile è il token del service account montato nei pod Kubernetes.
+// DefaultJWTFile is the service account token mounted in Kubernetes pods.
 const DefaultJWTFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
-// Vault risolve i riferimenti "vault:<percorso>#<campo>" leggendo i segreti da HashiCorp Vault
-// (KV v1 e v2, es. "vault:secret/data/myapp/prod#ssh_key"). I valori non vengono mai
-// memorizzati; il token di accesso è tenuto in memoria fino alla scadenza.
+// Vault resolves "vault:<path>#<field>" references by reading secrets from HashiCorp Vault
+// (KV v1 and v2, e.g. "vault:secret/data/myapp/prod#ssh_key"). Values are never stored; the
+// access token is kept in memory until it expires.
 type Vault struct {
 	cfg    VaultConfig
 	client *http.Client
 
 	mu     sync.Mutex
 	token  string
-	expiry time.Time // zero = non scade o letto da file a ogni uso
+	expiry time.Time // zero = does not expire or read from file at every use
 }
 
-// NewVault verifica la configurazione e prepara il client HTTP.
+// NewVault checks the configuration and prepares the HTTP client.
 func NewVault(cfg VaultConfig) (*Vault, error) {
 	cfg.Address = strings.TrimRight(cmp.Or(cfg.Address, os.Getenv("VAULT_ADDR")), "/")
 	if cfg.Address == "" {
@@ -103,8 +103,8 @@ func NewVault(cfg VaultConfig) (*Vault, error) {
 	return &Vault{cfg: cfg, client: client}, nil
 }
 
-// Resolve legge il campo indicato dal segreto. Se Vault rifiuta il token (scaduto o revocato),
-// rifà il login una volta.
+// Resolve reads the given field of the secret. If Vault rejects the token (expired or
+// revoked), it logs in again once.
 func (v *Vault) Resolve(ctx context.Context, ref string) (string, error) {
 	path, field, ok := strings.Cut(ref, "#")
 	if !ok || path == "" || field == "" {
@@ -135,7 +135,7 @@ func (v *Vault) read(ctx context.Context, path, field string) (string, error) {
 		return "", fmt.Errorf("vault %s: %w", path, err)
 	}
 	data := body.Data
-	// KV v2: il segreto è in data.data, accanto a data.metadata.
+	// KV v2: the secret is in data.data, next to data.metadata.
 	if inner, ok := data["data"].(map[string]any); ok {
 		if _, ok := data["metadata"]; ok {
 			data = inner
@@ -151,11 +151,11 @@ func (v *Vault) read(ctx context.Context, path, field string) (string, error) {
 	return "", fmt.Errorf("vault %s: il campo %q non è una stringa", path, field)
 }
 
-// currentToken restituisce un token valido, facendo il login se necessario.
+// currentToken returns a valid token, logging in if needed.
 func (v *Vault) currentToken(ctx context.Context) (string, error) {
 	if v.cfg.Auth == VaultAuthToken {
 		if v.cfg.TokenFile != "" {
-			// Riletto a ogni uso: un agente esterno (es. vault agent) può ruotarlo.
+			// Read again at every use: an external agent (e.g. vault agent) may rotate it.
 			b, err := os.ReadFile(v.cfg.TokenFile)
 			if err != nil {
 				return "", fmt.Errorf("vault: lettura token_file: %w", err)
@@ -191,13 +191,13 @@ func (v *Vault) currentToken(ctx context.Context) (string, error) {
 	v.token = resp.Auth.ClientToken
 	v.expiry = time.Time{}
 	if d := resp.Auth.LeaseDuration; d > 0 {
-		// Rinnovo anticipato: il token viene sostituito all'80% della durata.
+		// Early renewal: the token is replaced at 80% of its lifetime.
 		v.expiry = time.Now().Add(time.Duration(d) * time.Second * 8 / 10)
 	}
 	return v.token, nil
 }
 
-// loginPayload legge le credenziali di login dai file, a ogni login.
+// loginPayload reads the login credentials from the files, at every login.
 func (v *Vault) loginPayload() (map[string]string, error) {
 	switch v.cfg.Auth {
 	case VaultAuthAppRole:
@@ -221,8 +221,8 @@ func (v *Vault) invalidate() {
 	v.token = ""
 }
 
-// do esegue una chiamata all'API di Vault. Gli errori riportano solo lo status e i messaggi
-// di Vault, mai il contenuto dei segreti.
+// do calls the Vault API. Errors report only the status and Vault's messages, never the
+// content of the secrets.
 func (v *Vault) do(ctx context.Context, method, path, token string, payload, out any) error {
 	var body io.Reader
 	if payload != nil {

@@ -1,6 +1,6 @@
-# UC4: rilascio a ondate in una region (eu-1): canary nella AZ eu-1a, approvazione, poi le
-# altre AZ una alla volta, con bake e health gate (sonda /healthz) tra un passo e l'altro.
-# Ambiente prod: onFailure rollback-all; ambiente prod-stop: onFailure stop.
+# UC4: wave rollout in one region (eu-1): canary in AZ eu-1a, approval, then the other AZs
+# one at a time, with bake and health gate (/healthz probe) between passes.
+# prod environment: onFailure rollback-all; prod-stop environment: onFailure stop.
 APP=uc4-web
 log "UC4 · rollout a ondate per AZ in una region"
 

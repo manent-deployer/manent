@@ -66,7 +66,7 @@ Cosa è considerato incompatibile è descritto in [Versioni e aggiornamenti](ope
 
 - Ogni servizio è definito tramite interfacce, per facilitare mock e test.
 - Ogni componente riceve il logger per iniezione. I log arrivano sia al log applicativo sia al SIEM come `rfc5424.Message`.
-- I commenti nel codice sono in italiano, descrittivi ma sintetici.
+- I commenti nel codice sono in inglese, concisi ma completi.
 - `internal/app` è l'unico punto di composizione: i nuovi plugin interni si registrano in `app.NewPlugins`, i nuovi step in `app.NewSteps`.
 - Un nuovo step che deve funzionare in dry-run implementa `pipeline.DryRunner`. Altrimenti viene saltato.
 - Un nuovo step che modifica gli ambienti implementa `pipeline.Compensator` (e, se deve registrare lo stato precedente, `pipeline.Checkpointer`), così il rollback può annullarlo.

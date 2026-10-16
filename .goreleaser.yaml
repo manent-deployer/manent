@@ -1,16 +1,16 @@
-# Rilascio di manent (GoReleaser v2): binari, immagine, checksum firmati e SBOM.
-# Eseguito dal workflow .github/workflows/release.yml su un tag vX.Y.Z.
+# manent release (GoReleaser v2): binaries, image, signed checksums and SBOM.
+# Run by the .github/workflows/release.yml workflow on a vX.Y.Z tag.
 version: 2
 project_name: manent
 
 before:
   hooks:
     - go mod download
-    # Interfaccia web incorporata in manent-server (Node >= 20 o Docker).
+    # Web interface embedded in manent-server (Node >= 20 or Docker).
     - make web
 
 builds:
-  # Client: parla solo con l'API, per sviluppatori e CI.
+  # Client: talks only to the API, for developers and CI.
   - id: manent
     main: ./cmd/manent
     binary: manent
@@ -24,7 +24,7 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
-  # Server: API, worker e operazioni di piattaforma.
+  # Server: API, workers and platform operations.
   - id: manent-server
     main: ./cmd/manent-server
     binary: manent-server
@@ -67,11 +67,11 @@ archives:
 checksum:
   name_template: checksums.txt
 
-# SBOM SPDX di ogni archivio (richiede syft).
+# SPDX SBOM of every archive (requires syft).
 sboms:
   - artifacts: archive
 
-# Firma keyless (Sigstore) del file dei checksum: verifica con cosign verify-blob.
+# Keyless signature (Sigstore) of the checksum file: verify with cosign verify-blob.
 signs:
   - cmd: cosign
     certificate: "${artifact}.pem"
@@ -113,6 +113,6 @@ changelog:
   disable: true
 
 release:
-  # Le note di rilascio sono la sezione della versione in CHANGELOG.md
-  # (goreleaser release --release-notes, vedi release.yml).
+  # Release notes are the version's section in CHANGELOG.md
+  # (goreleaser release --release-notes, see release.yml).
   draft: false

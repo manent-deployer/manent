@@ -13,14 +13,14 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// WorkersCmd elenca i worker con stato, heartbeat e lavoro in corso.
+// WorkersCmd lists the workers with state, heartbeat and running work.
 type WorkersCmd struct {
 	global *GlobalOptions
 	JSON   bool          `long:"json" description:"output JSON"`
 	Watch  time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *WorkersCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		return repeat(ctx, c.Watch, func() error {
@@ -36,7 +36,7 @@ func (c *WorkersCmd) Execute([]string) error {
 	})
 }
 
-// ActivityCmd mostra i deploy in esecuzione, in attesa di approvazione, in coda e pianificati.
+// ActivityCmd shows the deploys running, awaiting approval, queued and scheduled.
 type ActivityCmd struct {
 	global      *GlobalOptions
 	Application string        `short:"a" long:"application" description:"solo questa applicazione"`
@@ -45,7 +45,7 @@ type ActivityCmd struct {
 	Watch       time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
 }
 
-// Execute implementa flags.Commander.
+// Execute implements flags.Commander.
 func (c *ActivityCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		return repeat(ctx, c.Watch, func() error {
@@ -61,8 +61,8 @@ func (c *ActivityCmd) Execute([]string) error {
 	})
 }
 
-// repeat esegue fn una volta o, con every > 0, a intervalli finché ctx non viene annullato,
-// pulendo lo schermo prima di ogni elenco.
+// repeat runs fn once or, with every > 0, periodically until ctx is cancelled, clearing the
+// screen before every listing.
 func repeat(ctx context.Context, every time.Duration, fn func() error) error {
 	if every <= 0 {
 		return fn()
@@ -100,7 +100,7 @@ func printWorkers(out io.Writer, ws []service.WorkerInfo, now time.Time) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
-	// Dettaglio del lavoro in corso, per worker.
+	// Detail of the running work, per worker.
 	var tasks int
 	for _, w := range ws {
 		tasks += len(w.Tasks)
@@ -189,7 +189,7 @@ func approvalOf(s service.Status) string {
 	if c := s.Approval.Change; c != nil {
 		r += fmt.Sprintf(", change %s %s", c.Number, c.Approval)
 	}
-	// Tra due ondate: l'ultimo stadio superato.
+	// Between two waves: the last stage passed.
 	if s.Rollout != nil {
 		last := ""
 		for _, st := range s.Rollout.Stages {
@@ -204,7 +204,7 @@ func approvalOf(s service.Status) string {
 	return r
 }
 
-// dependenciesOf elenca le dipendenze non ancora riuscite con il loro stato.
+// dependenciesOf lists the not yet successful dependencies with their state.
 func dependenciesOf(s service.Status) string {
 	if s.After == nil {
 		return ""
@@ -242,7 +242,7 @@ func dash(s string) string {
 	return s
 }
 
-// ago descrive quanto tempo fa, arrotondato al secondo.
+// ago describes how long ago, rounded to the second.
 func ago(t *time.Time, now time.Time) string {
 	if t == nil || t.IsZero() {
 		return "-"
@@ -250,7 +250,7 @@ func ago(t *time.Time, now time.Time) string {
 	return now.Sub(*t).Round(time.Second).String() + " fa"
 }
 
-// at descrive un orario futuro con il tempo che manca.
+// at describes a future time with the time left.
 func at(t *time.Time, now time.Time) string {
 	if t == nil {
 		return "-"

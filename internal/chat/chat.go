@@ -1,10 +1,9 @@
-// Package chat invia le notifiche dei deploy e delle approvazioni a Slack e Microsoft Teams e
-// riceve le decisioni prese con i pulsanti dei messaggi Slack.
+// Package chat sends deploy and approval notifications to Slack and Microsoft Teams and
+// receives the decisions taken with the buttons of Slack messages.
 //
-// Le destinazioni (Route) sono scelte all'accodamento del deploy per applicazione e ambiente
-// e salvate nella richiesta del workflow: l'invio è uno step DBOS, quindi la sequenza degli
-// step non dipende dalla configurazione letta durante una recovery. Un invio fallito non fa
-// mai fallire il deploy.
+// Destinations (Route) are chosen when the deploy is enqueued, by application and environment,
+// and saved in the workflow request: sending is a DBOS step, so the step sequence does not
+// depend on the configuration read during a recovery. A failed send never fails the deploy.
 package chat
 
 import (
@@ -21,7 +20,7 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
-// Eventi notificati.
+// Notified events.
 const (
 	EventStarted           = "started"
 	EventSucceeded         = "succeeded"
@@ -32,13 +31,13 @@ const (
 	EventApprovalExpired   = "approval_expired"
 )
 
-// Categorie di eventi delle destinazioni.
+// Event categories of the destinations.
 const (
 	CategoryDeployment = "deployment"
 	CategoryApproval   = "approval"
 )
 
-// Category restituisce la categoria di un evento.
+// Category returns the category of an event.
 func Category(event string) string {
 	if strings.HasPrefix(event, "approval_") {
 		return CategoryApproval
@@ -46,7 +45,7 @@ func Category(event string) string {
 	return CategoryDeployment
 }
 
-// Message è il contenuto di una notifica.
+// Message is the content of a notification.
 type Message struct {
 	Event        string
 	DeploymentID string
@@ -54,7 +53,7 @@ type Message struct {
 	Environment  string
 	Artifact     string
 	Version      string
-	// Kind è deploy, promotion o rollback.
+	// Kind is deploy, promotion or rollback.
 	Kind        string
 	RequestedBy string
 	DryRun      bool
@@ -64,44 +63,44 @@ type Message struct {
 	Change      *Change
 }
 
-// Approval descrive un'approvazione.
+// Approval describes an approval.
 type Approval struct {
 	Required  int
 	Decisions []Decision
 	ExpiresAt time.Time
-	// Change indica che serve anche l'approvazione del change nel sistema ITSM.
+	// Change means the change approval in the ITSM is also needed.
 	Change bool
 }
 
-// Decision è la decisione di un approvatore.
+// Decision is the decision of an approver.
 type Decision struct {
 	Approver string
 	Approve  bool
 	Comment  string
 }
 
-// Change è il ticket di change del deploy.
+// Change is the deploy's change ticket.
 type Change struct {
 	Number string
 	URL    string
 }
 
-// Ref identifica un messaggio inviato, per aggiornarlo in seguito (solo Slack con bot token).
-// Viene persistito da DBOS come output dello step.
+// Ref identifies a sent message, to update it later (only Slack with a bot token).
+// DBOS persists it as the step output.
 type Ref struct {
 	Channel string `json:"channel,omitempty"`
 	TS      string `json:"ts,omitempty"`
 }
 
-// Route è una destinazione delle notifiche.
+// Route is a notification destination.
 type Route struct {
 	Name         string
 	Applications []string
 	Environments []string
-	// Categories: deployment, approval (vuoto = entrambe).
+	// Categories: deployment, approval (empty = both).
 	Categories []string
 	DryRun     bool
-	// Esattamente una delle tre destinazioni.
+	// Exactly one of the three destinations.
 	SlackChannel    string
 	SlackWebhookRef string
 	TeamsWebhookRef string
@@ -111,13 +110,13 @@ func (r Route) wants(event string) bool {
 	return len(r.Categories) == 0 || slices.Contains(r.Categories, Category(event))
 }
 
-// HTTPDoer astrae il client HTTP per i test.
+// HTTPDoer abstracts the HTTP client for tests.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// NewHTTPClient crea il client per Slack e Teams; non segue i redirect, che porterebbero
-// token e URL dei webhook verso un altro host.
+// NewHTTPClient creates the client for Slack and Teams; it does not follow redirects, which
+// would carry tokens and webhook URLs to another host.
 func NewHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,
@@ -125,20 +124,20 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
-// Notifier invia i messaggi alle destinazioni configurate.
+// Notifier sends messages to the configured destinations.
 type Notifier struct {
 	Routes []Route
-	// PublicURL è l'indirizzo dell'interfaccia web per i link ("" = nessun link).
+	// PublicURL is the web interface address for links ("" = no link).
 	PublicURL string
 	Language  string
-	// Slack è il client dell'API di Slack (bot token); nil se non configurato.
+	// Slack is the Slack API client (bot token); nil if not configured.
 	Slack   *SlackAPI
 	Secrets secrets.Provider
 	Client  HTTPDoer
 	Logger  *slog.Logger
 }
 
-// Match restituisce, in ordine di configurazione, i nomi delle destinazioni di un deploy.
+// Match returns, in configuration order, the names of a deploy's destinations.
 func (n *Notifier) Match(application, environment string, dryRun bool) []string {
 	if n == nil {
 		return nil
@@ -163,16 +162,16 @@ func (n *Notifier) route(name string) (Route, bool) {
 	return n.Routes[i], true
 }
 
-// Wants indica se la destinazione riceve l'evento. Una destinazione rimossa dalla
-// configurazione non riceve più nulla.
+// Wants reports whether the destination receives the event. A destination removed from the
+// configuration receives nothing any more.
 func (n *Notifier) Wants(route, event string) bool {
 	r, ok := n.route(route)
 	return ok && r.wants(event)
 }
 
-// Send invia il messaggio alla destinazione. Con il bot di Slack e prev valorizzato aggiorna
-// il messaggio precedente (es. l'avvio del deploy diventa il suo esito); restituisce il
-// riferimento al messaggio, se aggiornabile.
+// Send sends the message to the destination. With the Slack bot and prev set it updates the
+// previous message (e.g. the deploy start becomes its outcome); it returns the reference to
+// the message, if it can be updated.
 func (n *Notifier) Send(ctx context.Context, route string, msg Message, prev *Ref) (*Ref, error) {
 	r, ok := n.route(route)
 	if !ok {
@@ -199,7 +198,7 @@ func (n *Notifier) Send(ctx context.Context, route string, msg Message, prev *Re
 	return nil, fmt.Errorf("destinazione %s senza canale", route)
 }
 
-// link è il collegamento al deploy nell'interfaccia web.
+// link is the link to the deploy in the web interface.
 func (n *Notifier) link(id string) string {
 	if n.PublicURL == "" || id == "" {
 		return ""
@@ -207,7 +206,7 @@ func (n *Notifier) link(id string) string {
 	return strings.TrimRight(n.PublicURL, "/") + "/deployments/" + id
 }
 
-// postWebhook invia il corpo JSON a un webhook letto dai segreti al momento dell'uso.
+// postWebhook sends the JSON body to a webhook read from the secrets at use time.
 func (n *Notifier) postWebhook(ctx context.Context, ref string, body any) error {
 	u, err := n.Secrets.Resolve(ctx, ref)
 	if err != nil {

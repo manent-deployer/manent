@@ -19,54 +19,54 @@ import (
 	"time"
 )
 
-// FieldManager è il gestore dei campi con cui manent applica gli oggetti (server-side apply).
+// FieldManager is the field manager manent applies objects with (server-side apply).
 const FieldManager = "manent"
 
-// ErrNotFound indica un oggetto o una risorsa che non esiste nel cluster.
+// ErrNotFound means an object or resource that does not exist in the cluster.
 var ErrNotFound = errors.New("non trovato")
 
-// Credentials sono le credenziali di accesso al cluster, risolte al momento dell'uso.
+// Credentials are the cluster access credentials, resolved at use time.
 type Credentials struct {
 	Token      string
 	ClientCert string // PEM
 	ClientKey  string // PEM
-	CA         string // PEM; vuota = CA di sistema o ca_file del plugin
+	CA         string // PEM; empty = system CAs or the plugin's ca_file
 }
 
-// API è l'accesso all'API di un cluster; astratta per poterla sostituire nei test.
+// API is the access to a cluster's API; abstract so tests can replace it.
 type API interface {
-	// Resource risolve apiVersion e kind nel nome della risorsa e dice se è namespaced.
+	// Resource resolves apiVersion and kind into the resource name and says whether it is namespaced.
 	Resource(ctx context.Context, apiVersion, kind string) (resource string, namespaced bool, err error)
-	// Apply applica l'oggetto con server-side apply; con dryRun nulla viene salvato.
+	// Apply applies the object with server-side apply; with dryRun nothing is saved.
 	Apply(ctx context.Context, obj Object, dryRun bool) (Object, error)
 	Get(ctx context.Context, apiVersion, kind, namespace, name string) (Object, error)
-	// Patch applica una JSON merge patch: con metadata.resourceVersion nella patch il server
-	// la rifiuta se l'oggetto è cambiato nel frattempo.
+	// Patch applies a JSON merge patch: with metadata.resourceVersion in the patch the server
+	// rejects it if the object changed meanwhile.
 	Patch(ctx context.Context, apiVersion, kind, namespace, name string, patch map[string]any) (Object, error)
 	Delete(ctx context.Context, apiVersion, kind, namespace, name string) error
-	// List elenca gli oggetti di un tipo in un namespace con il selettore di etichette.
+	// List lists the objects of a kind in a namespace with the label selector.
 	List(ctx context.Context, apiVersion, kind, namespace, selector string) ([]Object, error)
-	// Version restituisce la versione del cluster (verifica di connessione e credenziali).
+	// Version returns the cluster version (connection and credentials check).
 	Version(ctx context.Context) (string, error)
-	// GroupVersions restituisce le API servite dal cluster (es. "v1", "apps/v1").
+	// GroupVersions returns the APIs served by the cluster (e.g. "v1", "apps/v1").
 	GroupVersions(ctx context.Context) ([]string, error)
 }
 
-// Connector apre l'accesso al cluster di un target.
+// Connector opens access to a target's cluster.
 type Connector interface {
 	Connect(ctx context.Context, server string, creds Credentials) (API, error)
 }
 
-// HTTPConnector si collega all'API REST di Kubernetes senza dipendere da client-go.
+// HTTPConnector connects to the Kubernetes REST API without depending on client-go.
 type HTTPConnector struct {
-	// CAFile è un bundle di CA del cluster (es. /var/run/secrets/kubernetes.io/serviceaccount/ca.crt).
+	// CAFile is a bundle of cluster CAs (e.g. /var/run/secrets/kubernetes.io/serviceaccount/ca.crt).
 	CAFile string
-	// InsecureSkipTLSVerify disattiva la verifica del certificato (solo sviluppo).
+	// InsecureSkipTLSVerify disables certificate verification (development only).
 	InsecureSkipTLSVerify bool
 	Timeout               time.Duration
 }
 
-// Connect implementa Connector.
+// Connect implements Connector.
 func (c HTTPConnector) Connect(_ context.Context, server string, creds Credentials) (API, error) {
 	tc := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.InsecureSkipTLSVerify} //nolint:gosec // opzione esplicita per lo sviluppo
 	pool, err := x509.SystemCertPool()
@@ -108,7 +108,7 @@ func (c HTTPConnector) Connect(_ context.Context, server string, creds Credentia
 	}, nil
 }
 
-// serverURL costruisce l'indirizzo dell'API dal target (porta di default 6443).
+// serverURL builds the API address from the target (default port 6443).
 func serverURL(host string, port int) string {
 	if strings.HasPrefix(host, "https://") || strings.HasPrefix(host, "http://") {
 		return host
@@ -129,12 +129,12 @@ type httpAPI struct {
 	token  string
 	client *http.Client
 	mu     sync.Mutex
-	// cache delle risorse per gruppo/versione (discovery).
+	// cache of resources per group/version (discovery).
 	cache  map[string]apiResource
 	loaded map[string]bool
 }
 
-// groupPath restituisce il percorso dell'API di un apiVersion ("v1" → /api/v1).
+// groupPath returns the API path of an apiVersion ("v1" → /api/v1).
 func groupPath(apiVersion string) string {
 	if !strings.Contains(apiVersion, "/") {
 		return "/api/" + apiVersion
@@ -167,7 +167,7 @@ func (a *httpAPI) Resource(ctx context.Context, apiVersion, kind string) (string
 			return "", false, fmt.Errorf("discovery di %s: %w", apiVersion, err)
 		}
 		for _, r := range list.Resources {
-			if strings.Contains(r.Name, "/") { // sottorisorse (status, scale)
+			if strings.Contains(r.Name, "/") { // subresources (status, scale)
 				continue
 			}
 			a.cache[apiVersion+"/"+r.Kind] = apiResource{name: r.Name, namespaced: r.Namespaced}
@@ -181,7 +181,7 @@ func (a *httpAPI) Resource(ctx context.Context, apiVersion, kind string) (string
 	return r.name, r.namespaced, nil
 }
 
-// path costruisce il percorso di un oggetto (name vuoto = collezione).
+// path builds the path of an object (empty name = collection).
 func (a *httpAPI) path(ctx context.Context, apiVersion, kind, namespace, name string) (string, error) {
 	res, namespaced, err := a.Resource(ctx, apiVersion, kind)
 	if err != nil {
@@ -284,7 +284,7 @@ func (a *httpAPI) Version(ctx context.Context) (string, error) {
 	if err := a.do(ctx, http.MethodGet, "/version", "", nil, &v); err != nil {
 		return "", err
 	}
-	// /version risponde anche senza credenziali: la discovery le verifica.
+	// /version answers even without credentials: discovery checks them.
 	if _, _, err := a.Resource(ctx, "v1", "ConfigMap"); err != nil {
 		return "", err
 	}
@@ -311,8 +311,7 @@ func (a *httpAPI) GroupVersions(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// do esegue una richiesta all'API e decodifica la risposta; gli errori riportano il
-// messaggio dello Status di Kubernetes.
+// do runs an API request and decodes the response; errors carry the Kubernetes Status message.
 func (a *httpAPI) do(ctx context.Context, method, path, contentType string, body []byte, out any) error {
 	var r io.Reader
 	if body != nil {

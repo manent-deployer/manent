@@ -18,11 +18,10 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// fakeChat registra i messaggi inviati; i messaggi aggiornati riportano il riferimento
-// dell'invio precedente.
+// fakeChat records the sent messages; updated messages carry the reference of the previous send.
 type fakeChat struct {
 	mu   sync.Mutex
-	sent []string // "<destinazione>:<evento>[:update]"
+	sent []string // "<destination>:<event>[:update]"
 	msgs []chat.Message
 }
 
@@ -48,7 +47,7 @@ func (f *fakeChat) events() []string {
 	return slices.Clone(f.sent)
 }
 
-// fakeChange è un sistema ITSM in memoria: l'approvazione del change si imposta dal test.
+// fakeChange is an in-memory ITSM: the test sets the change approval.
 type fakeChange struct {
 	mu       sync.Mutex
 	tickets  map[string]*change.Ticket // per deploy
@@ -115,7 +114,7 @@ func (f *fakeChange) log() []string {
 	return slices.Clone(f.calls)
 }
 
-// staticRoutes sceglie le destinazioni per ambiente.
+// staticRoutes chooses the destinations per environment.
 type staticRoutes map[string][]string
 
 func (s staticRoutes) Match(_, environment string, dryRun bool) []string {
@@ -161,7 +160,7 @@ func TestNotificheEChange(t *testing.T) {
 	if got := ch.log(); !slices.Equal(got, []string{"open:" + id, "start:CHG0001", "close:CHG0001:true"}) {
 		t.Errorf("chiamate al sistema ITSM: %v", got)
 	}
-	// L'avvio e l'esito vanno al canale dei deploy; l'esito aggiorna il messaggio di avvio.
+	// Start and outcome go to the deploy channel; the outcome updates the start message.
 	if got := ct.events(); !slices.Equal(got, []string{"prod-slack:started", "prod-slack:succeeded:update"}) {
 		t.Errorf("notifiche: %v", got)
 	}
@@ -170,7 +169,7 @@ func TestNotificheEChange(t *testing.T) {
 		t.Errorf("messaggio finale: %+v", last)
 	}
 
-	// Un deploy fallito chiude il change come non riuscito e notifica l'errore.
+	// A failed deploy closes the change as unsuccessful and notifies the error.
 	failed, err := e.Submit(alice, appDescriptor("prod", "2.0.0-broken"))
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +184,7 @@ func TestNotificheEChange(t *testing.T) {
 		t.Errorf("notifica del fallimento: %+v", last)
 	}
 
-	// Il dry-run non apre change e non notifica; un ambiente senza regole neppure.
+	// A dry-run opens no change and sends no notification; neither does an environment without rules.
 	dry := appDescriptor("prod", "3.0.0")
 	dry.DryRun = true
 	deploy(t, e, alice, dry)
@@ -197,7 +196,7 @@ func TestNotificheEChange(t *testing.T) {
 		t.Errorf("notifiche per dry-run o ambienti senza destinazioni: %v", ct.events())
 	}
 
-	// Senza ticket il deploy non parte.
+	// Without a ticket the deploy does not start.
 	ch.mu.Lock()
 	ch.failOpen = true
 	ch.mu.Unlock()
@@ -227,7 +226,7 @@ func TestApprovazioneDelChange(t *testing.T) {
 	if st.Approval.Change.Approval != change.ApprovalPending || st.Change == nil || st.Change.Number != "CHG0001" {
 		t.Fatalf("approvazione: %+v, change %+v", st.Approval, st.Change)
 	}
-	// L'approvazione di manent da sola non basta: serve anche il change.
+	// manent's approval alone is not enough: the change is needed too.
 	if err := e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +251,7 @@ func TestApprovazioneDelChange(t *testing.T) {
 		t.Error("la destinazione delle sole approvazioni ha ricevuto l'avvio del deploy")
 	}
 
-	// Un change respinto nel sistema ITSM respinge il deploy.
+	// A change rejected in the ITSM rejects the deploy.
 	ch.setApproval(change.ApprovalRejected)
 	sub2, err := e.Submit(alice, appDescriptor("prod", "2.0.0"))
 	if err != nil {
@@ -269,7 +268,7 @@ func TestSoloApprovazioneDelChange(t *testing.T) {
 	e := integrationEngine(t, []governance.Rule{{
 		Environments: []string{"prod"}, Applications: []string{"*"}, Change: &governance.Change{Approval: true, Timeout: time.Hour},
 	}}, ch, &fakeChat{})
-	// Un change già approvato alla creazione (es. standard change) non fa attendere.
+	// A change already approved at creation (e.g. standard change) does not make it wait.
 	ch.setApproval(change.ApprovalApproved)
 	sub, err := e.Submit(alice, appDescriptor("prod", "1.0.0"))
 	if err != nil || sub.State != StateAwaitingApproval {

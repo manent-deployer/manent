@@ -1,12 +1,12 @@
-// Package external permette di eseguire un plugin di deploy come processo separato, distribuito
-// come binario indipendente da manent. Il trasporto è gRPC tramite github.com/hashicorp/go-plugin.
+// Package external lets a deploy plugin run as a separate process, shipped as a binary
+// independent of manent. The transport is gRPC through github.com/hashicorp/go-plugin.
 //
-// Lato plugin basta un main che passa a Serve la stessa plugin.Factory usata per un plugin
-// compilato dentro manent:
+// On the plugin side a main that passes to Serve the same plugin.Factory used for a plugin
+// compiled into manent is enough:
 //
-//	func main() { external.Serve(mioplugin.Factory) }
+//	func main() { external.Serve(myplugin.Factory) }
 //
-// Lato manent il processo viene avviato e gestito da internal/extplugin.
+// On the manent side the process is started and managed by internal/extplugin.
 package external
 
 import (
@@ -26,45 +26,45 @@ import (
 	pb "github.com/joeg-ita/manent/pkg/plugin/external/proto"
 )
 
-// ProtocolVersion è la versione del protocollo host-plugin. Va incrementata a ogni modifica
-// incompatibile di deployer.proto: go-plugin rifiuta i plugin con una versione diversa.
+// ProtocolVersion is the host-plugin protocol version. Increment it at every incompatible
+// change of deployer.proto: go-plugin rejects plugins with a different version.
 const ProtocolVersion = 1
 
-// Handshake è condiviso da host e plugin. Il cookie evita che il binario del plugin venga
-// eseguito direttamente per errore: non è una misura di sicurezza.
+// Handshake is shared by host and plugin. The cookie prevents running the plugin binary
+// directly by mistake: it is not a security measure.
 var Handshake = goplugin.HandshakeConfig{
 	ProtocolVersion:  ProtocolVersion,
 	MagicCookieKey:   "MANENT_PLUGIN",
 	MagicCookieValue: "7d1f0c5e-deployer",
 }
 
-// PluginName è il nome con cui il deployer è esposto nel PluginSet di go-plugin.
+// PluginName is the name the deployer is exposed with in the go-plugin PluginSet.
 const PluginName = "deployer"
 
-// GRPCPlugin implementa goplugin.GRPCPlugin per entrambi i lati: Factory è usata dal plugin,
-// mentre l'host ottiene un *Client.
+// GRPCPlugin implements goplugin.GRPCPlugin for both sides: Factory is used by the plugin,
+// while the host gets a *Client.
 type GRPCPlugin struct {
 	goplugin.NetRPCUnsupportedPlugin
 	Factory plugin.Factory
 }
 
-// GRPCServer registra il servizio Deployer nel processo del plugin.
+// GRPCServer registers the Deployer service in the plugin process.
 func (p *GRPCPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) error {
 	pb.RegisterDeployerServer(s, &server{factory: p.Factory, broker: broker})
 	return nil
 }
 
-// GRPCClient restituisce il client usato da manent.
+// GRPCClient returns the client used by manent.
 func (p *GRPCPlugin) GRPCClient(_ context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &Client{rpc: pb.NewDeployerClient(c), broker: broker}, nil
 }
 
-// PluginSet restituisce l'insieme di plugin da passare a go-plugin.
+// PluginSet returns the plugin set to pass to go-plugin.
 func PluginSet(f plugin.Factory) goplugin.PluginSet {
 	return goplugin.PluginSet{PluginName: &GRPCPlugin{Factory: f}}
 }
 
-// Capacità opzionali dichiarate dal plugin in Configure.
+// Optional capabilities declared by the plugin in Configure.
 const (
 	CapabilityDryRun         = "dry_run"
 	CapabilityCurrentRelease = "current_release"
@@ -75,7 +75,7 @@ const (
 	CapabilityScale          = "scale"
 )
 
-// capabilities restituisce le interfacce opzionali implementate dal deployer.
+// capabilities returns the optional interfaces implemented by the deployer.
 func capabilities(d plugin.Deployer) []string {
 	var caps []string
 	if _, ok := d.(plugin.DryRunner); ok {
@@ -102,7 +102,7 @@ func capabilities(d plugin.Deployer) []string {
 	return caps
 }
 
-// Client è il lato host del protocollo: espone il processo del plugin come plugin.Deployer.
+// Client is the host side of the protocol: it exposes the plugin process as a plugin.Deployer.
 type Client struct {
 	rpc    pb.DeployerClient
 	broker *goplugin.GRPCBroker
@@ -110,7 +110,7 @@ type Client struct {
 	caps   []string
 }
 
-// Configure invia la configurazione al plugin e ne registra nome e capacità.
+// Configure sends the configuration to the plugin and records its name and capabilities.
 func (c *Client) Configure(ctx context.Context, configJSON []byte) (string, error) {
 	resp, err := c.rpc.Configure(ctx, &pb.ConfigureRequest{ConfigJson: configJSON})
 	if err != nil {
@@ -120,11 +120,11 @@ func (c *Client) Configure(ctx context.Context, configJSON []byte) (string, erro
 	return c.name, nil
 }
 
-// Has indica se il plugin ha dichiarato la capacità indicata.
+// Has reports whether the plugin declared the given capability.
 func (c *Client) Has(capability string) bool { return slices.Contains(c.caps, capability) }
 
-// CurrentRelease legge la release in esercizio tramite il plugin; restituisce un errore se il
-// plugin non implementa plugin.ReleaseInspector.
+// CurrentRelease reads the release in service through the plugin; it returns an error if the
+// plugin does not implement plugin.ReleaseInspector.
 func (c *Client) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	var rel *plugin.Release
 	_, err := c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
@@ -141,8 +141,8 @@ func (c *Client) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	return rel, err
 }
 
-// Rollback riporta i target alla release indicata; restituisce plugin.ErrRollbackUnsupported
-// se il plugin non implementa plugin.Rollbacker.
+// Rollback brings the targets back to the given release; it returns
+// plugin.ErrRollbackUnsupported if the plugin does not implement plugin.Rollbacker.
 func (c *Client) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	return c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		resp, err := c.rpc.Rollback(ctx, &pb.RollbackRequest{Request: r, Previous: toProtoRelease(&previous)})
@@ -153,13 +153,13 @@ func (c *Client) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	})
 }
 
-// TrafficSupported implementa plugin.TrafficChecker con le capacità dichiarate in Configure.
+// TrafficSupported implements plugin.TrafficChecker with the capabilities declared in Configure.
 func (c *Client) TrafficSupported(context.Context) (plugin.TrafficSupport, error) {
 	return plugin.TrafficSupport{Slots: c.Has(CapabilitySlots), Router: c.Has(CapabilityTrafficRouter),
 		Testers: c.Has(CapabilityTesters), Scale: c.Has(CapabilityScale)}, nil
 }
 
-// unsupported traduce UNIMPLEMENTED in plugin.ErrTrafficUnsupported.
+// unsupported maps UNIMPLEMENTED to plugin.ErrTrafficUnsupported.
 func unsupported(err error) error {
 	if status.Code(err) == codes.Unimplemented {
 		return plugin.ErrTrafficUnsupported
@@ -167,7 +167,7 @@ func unsupported(err error) error {
 	return err
 }
 
-// empty esegue una chiamata senza risultato con i segreti serviti.
+// empty runs a call without a result with the secrets served.
 func (c *Client) empty(req *plugin.Request, call func(*pb.DeployRequest) error) error {
 	_, err := c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		return &pb.DeployResponse{}, unsupported(call(r))
@@ -175,7 +175,7 @@ func (c *Client) empty(req *plugin.Request, call func(*pb.DeployRequest) error) 
 	return err
 }
 
-// PrepareSlots implementa plugin.SlotDeployer.
+// PrepareSlots implements plugin.SlotDeployer.
 func (c *Client) PrepareSlots(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	var state map[string]string
 	err := c.empty(req, func(r *pb.DeployRequest) error {
@@ -186,7 +186,7 @@ func (c *Client) PrepareSlots(ctx context.Context, req *plugin.Request) (map[str
 	return state, err
 }
 
-// DeployCandidate implementa plugin.SlotDeployer.
+// DeployCandidate implements plugin.SlotDeployer.
 func (c *Client) DeployCandidate(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	return c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		resp, err := c.rpc.DeployCandidate(ctx, r)
@@ -194,22 +194,22 @@ func (c *Client) DeployCandidate(ctx context.Context, req *plugin.Request) (*plu
 	})
 }
 
-// PromoteCandidate implementa plugin.SlotDeployer.
+// PromoteCandidate implements plugin.SlotDeployer.
 func (c *Client) PromoteCandidate(ctx context.Context, req *plugin.Request) error {
 	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.PromoteCandidate(ctx, r); return err })
 }
 
-// RevertCandidate implementa plugin.SlotDeployer.
+// RevertCandidate implements plugin.SlotDeployer.
 func (c *Client) RevertCandidate(ctx context.Context, req *plugin.Request) error {
 	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.RevertCandidate(ctx, r); return err })
 }
 
-// RetirePrevious implementa plugin.SlotDeployer.
+// RetirePrevious implements plugin.SlotDeployer.
 func (c *Client) RetirePrevious(ctx context.Context, req *plugin.Request) error {
 	return c.empty(req, func(r *pb.DeployRequest) error { _, err := c.rpc.RetirePrevious(ctx, r); return err })
 }
 
-// SetCandidateWeight implementa plugin.TrafficRouter.
+// SetCandidateWeight implements plugin.TrafficRouter.
 func (c *Client) SetCandidateWeight(ctx context.Context, req *plugin.Request, percent int) error {
 	return c.empty(req, func(r *pb.DeployRequest) error {
 		_, err := c.rpc.SetCandidateWeight(ctx, &pb.WeightRequest{Request: r, Percent: int32(percent)})
@@ -217,7 +217,7 @@ func (c *Client) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 	})
 }
 
-// CandidateWeight implementa plugin.TrafficRouter.
+// CandidateWeight implements plugin.TrafficRouter.
 func (c *Client) CandidateWeight(ctx context.Context, req *plugin.Request) (int, error) {
 	w := 0
 	err := c.empty(req, func(r *pb.DeployRequest) error {
@@ -228,7 +228,7 @@ func (c *Client) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 	return w, err
 }
 
-// RouteTesters implementa plugin.TesterRouter.
+// RouteTesters implements plugin.TesterRouter.
 func (c *Client) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	var details map[string]string
 	err := c.empty(req, func(r *pb.DeployRequest) error {
@@ -239,7 +239,7 @@ func (c *Client) RouteTesters(ctx context.Context, req *plugin.Request) (map[str
 	return details, err
 }
 
-// ScaleCandidate implementa plugin.SlotScaler.
+// ScaleCandidate implements plugin.SlotScaler.
 func (c *Client) ScaleCandidate(ctx context.Context, req *plugin.Request, percent int) error {
 	return c.empty(req, func(r *pb.DeployRequest) error {
 		_, err := c.rpc.ScaleCandidate(ctx, &pb.WeightRequest{Request: r, Percent: int32(percent)})
@@ -247,14 +247,14 @@ func (c *Client) ScaleCandidate(ctx context.Context, req *plugin.Request, percen
 	})
 }
 
-// Name restituisce il nome dichiarato dal plugin in Configure.
+// Name returns the name declared by the plugin in Configure.
 func (c *Client) Name() string { return c.name }
 
-// shortCallTimeout limita le chiamate senza contesto del chiamante (Supports, Validate),
-// che non devono avere effetti né durare a lungo.
+// shortCallTimeout limits calls without a caller context (Supports, Validate), which must have
+// no effects and not last long.
 const shortCallTimeout = 30 * time.Second
 
-// Supports interroga il plugin; un errore di comunicazione vale come "non supportato".
+// Supports asks the plugin; a communication error counts as "not supported".
 func (c *Client) Supports(artifactType string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), shortCallTimeout)
 	defer cancel()
@@ -262,7 +262,7 @@ func (c *Client) Supports(artifactType string) bool {
 	return err == nil && resp.GetSupported()
 }
 
-// Validate valida la richiesta nel plugin, senza resolver dei segreti.
+// Validate validates the request in the plugin, without the secret resolver.
 func (c *Client) Validate(req *plugin.Request) error {
 	ctx, cancel := context.WithTimeout(context.Background(), shortCallTimeout)
 	defer cancel()
@@ -270,15 +270,15 @@ func (c *Client) Validate(req *plugin.Request) error {
 	return fromStatus(err)
 }
 
-// Deploy esegue il deploy nel plugin servendo i segreti per la durata della chiamata.
+// Deploy runs the deploy in the plugin, serving the secrets for the duration of the call.
 func (c *Client) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	return c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		return c.rpc.Deploy(ctx, r)
 	})
 }
 
-// DryRun esegue il dry-run nel plugin; restituisce plugin.ErrDryRunUnsupported se il plugin
-// non implementa plugin.DryRunner.
+// DryRun runs the dry-run in the plugin; it returns plugin.ErrDryRunUnsupported if the plugin
+// does not implement plugin.DryRunner.
 func (c *Client) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	return c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		resp, err := c.rpc.DryRun(ctx, r)
@@ -289,8 +289,8 @@ func (c *Client) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	})
 }
 
-// withSecrets serve il resolver dei segreti sul broker di go-plugin, esegue la chiamata e
-// arresta il server: il plugin può leggere i segreti solo durante questa chiamata.
+// withSecrets serves the secret resolver on the go-plugin broker, runs the call and stops the
+// server: the plugin can read secrets only during this call.
 func (c *Client) withSecrets(req *plugin.Request, call func(*pb.DeployRequest) (*pb.DeployResponse, error)) (*plugin.Result, error) {
 	var id uint32
 	if req.Secrets != nil {
@@ -306,7 +306,7 @@ func (c *Client) withSecrets(req *plugin.Request, call func(*pb.DeployRequest) (
 			mu.Lock()
 			defer mu.Unlock()
 			if closed {
-				// La chiamata è già terminata: il server non deve restare in ascolto.
+				// The call has already ended: the server must not keep listening.
 				go s.Stop()
 			}
 			srv = s
@@ -331,7 +331,7 @@ func (c *Client) withSecrets(req *plugin.Request, call func(*pb.DeployRequest) (
 	return fromProtoResult(resp), nil
 }
 
-// secretsServer espone il SecretResolver della richiesta al processo del plugin.
+// secretsServer exposes the request's SecretResolver to the plugin process.
 type secretsServer struct {
 	pb.UnimplementedSecretsServer
 	resolver plugin.SecretResolver
@@ -345,7 +345,7 @@ func (s *secretsServer) Secret(ctx context.Context, r *pb.SecretRequest) (*pb.Se
 	return &pb.SecretResponse{Value: v}, nil
 }
 
-// fromStatus converte un errore gRPC in un errore Go con il solo messaggio del plugin.
+// fromStatus converts a gRPC error into a Go error with only the plugin's message.
 func fromStatus(err error) error {
 	if err == nil {
 		return nil

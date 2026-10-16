@@ -1,6 +1,6 @@
-# Target dei casi d'uso: server SSH per il plugin remote-copy più un server HTTP che espone
-# le applicazioni rilasciate (http://<host>:8080/<app>/current/healthz), usato da post-test
-# e health gate. Debian e non Alpine: il plugin usa GNU coreutils (sha256sum, mv -T, readlink).
+# Use case target: SSH server for the remote-copy plugin plus an HTTP server exposing the
+# released applications (http://<host>:8080/<app>/current/healthz), used by post-test and
+# health gate. Debian and not Alpine: the plugin uses GNU coreutils (sha256sum, mv -T, readlink).
 FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssh-server coreutils tar gzip busybox \

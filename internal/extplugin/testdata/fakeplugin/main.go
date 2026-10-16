@@ -1,4 +1,4 @@
-// Command fakeplugin è un plugin esterno usato dai test di extplugin.
+// Command fakeplugin is an external plugin used by the extplugin tests.
 package main
 
 import (
@@ -25,7 +25,7 @@ func (fake) Validate(r *plugin.Request) error {
 	return nil
 }
 
-// Deploy legge il segreto indicato e riporta ciò che vede del proprio ambiente.
+// Deploy reads the given secret and reports what it sees of its environment.
 func (f fake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, error) {
 	if r.Params["crash"] == "true" {
 		os.Exit(3)
@@ -47,14 +47,14 @@ func (f fake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, er
 	}}}, nil
 }
 
-// dryFake supporta anche il dry-run.
+// dryFake also supports dry-run.
 type dryFake struct{ fake }
 
 func (dryFake) DryRun(_ context.Context, r *plugin.Request) (*plugin.Result, error) {
 	return &plugin.Result{Plugin: "fake", Targets: []plugin.TargetResult{{Host: r.Targets[0].Host, Status: plugin.StatusReady}}}, nil
 }
 
-// rbFake supporta la lettura della release corrente e il rollback.
+// rbFake supports reading the current release and rollback.
 type rbFake struct{ fake }
 
 func (rbFake) CurrentRelease(_ context.Context, r *plugin.Request) (*plugin.Release, error) {
@@ -64,7 +64,7 @@ func (rbFake) CurrentRelease(_ context.Context, r *plugin.Request) (*plugin.Rele
 	return &plugin.Release{Version: "1.0.0", Details: map[string]string{"source": "fake"}}, nil
 }
 
-// Rollback legge il segreto, come un deploy, e riporta la release ripristinata.
+// Rollback reads the secret, like a deploy, and reports the restored release.
 func (rbFake) Rollback(ctx context.Context, r *plugin.Request, prev plugin.Release) (*plugin.Result, error) {
 	secret, err := r.Secrets.Secret(ctx, r.Params["secret"])
 	if err != nil {
@@ -77,7 +77,7 @@ func (rbFake) Rollback(ctx context.Context, r *plugin.Request, prev plugin.Relea
 	}}}, nil
 }
 
-// slotFake supporta i rilasci per percentuale: lo stato registrato torna in ogni chiamata.
+// slotFake supports percentage rollouts: the recorded state comes back in every call.
 type slotFake struct {
 	fake
 	weight *int

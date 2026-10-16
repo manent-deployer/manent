@@ -10,22 +10,22 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// Checker è un singolo controllo di Quality Assurance.
+// Checker is a single Quality Assurance check.
 type Checker interface {
 	Name() string
 	Check(ctx context.Context, in pipeline.Input) error
 }
 
-// QA esegue in sequenza tutti i controlli configurati e fallisce se almeno uno non passa.
+// QA runs all configured checks in sequence and fails if at least one does not pass.
 type QA struct {
 	Checkers []Checker
 	Logger   *slog.Logger
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (QA) Name() string { return "qa" }
 
-// Run esegue i controlli e riporta l'esito di ciascuno.
+// Run runs the checks and reports the outcome of each.
 func (q QA) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	out := pipeline.Output{}
 	var errs []error
@@ -45,18 +45,18 @@ func (q QA) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
 	return out, nil
 }
 
-// DryRun coincide con Run: i controlli leggono solo l'artefatto locale.
+// DryRun is the same as Run: the checks only read the local artifact.
 func (q QA) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	return q.Run(ctx, in)
 }
 
-// ChecksumChecker confronta lo SHA-256 dichiarato con quello calcolato dallo step artifacts.
+// ChecksumChecker compares the declared SHA-256 with the one computed by the artifacts step.
 type ChecksumChecker struct{}
 
-// Name restituisce il nome del controllo.
+// Name returns the check name.
 func (ChecksumChecker) Name() string { return "checksum" }
 
-// Check passa se nel descrittore non è dichiarato alcun hash.
+// Check passes if the descriptor declares no hash.
 func (ChecksumChecker) Check(_ context.Context, in pipeline.Input) error {
 	want := in.Descriptor.Artifact.SHA256
 	if want == "" {
@@ -69,13 +69,13 @@ func (ChecksumChecker) Check(_ context.Context, in pipeline.Input) error {
 	return nil
 }
 
-// NonEmptyChecker verifica che l'artefatto non sia vuoto.
+// NonEmptyChecker checks that the artifact is not empty.
 type NonEmptyChecker struct{}
 
-// Name restituisce il nome del controllo.
+// Name returns the check name.
 func (NonEmptyChecker) Name() string { return "non-empty" }
 
-// Check fallisce se l'artefatto ha dimensione zero o non è stato recuperato.
+// Check fails if the artifact has zero size or was not fetched.
 func (NonEmptyChecker) Check(_ context.Context, in pipeline.Input) error {
 	size := in.Outputs["artifacts"][OutSize]
 	if size == "" || size == "0" {

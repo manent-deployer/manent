@@ -1,5 +1,5 @@
-# UC3: worker multipli, recovery e drain.
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC3: multiple workers, recovery and drain.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: remote-copy
 targets:
   - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
@@ -9,7 +9,7 @@ params:
   keep_releases: "3"
   ssh_key_secret: deploy-key
   prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
-  # Guasti simulati dai casi d'uso: $HOME/fault/uc3-batch.sleep (attesa) e .fail (errore).
+  # Faults simulated by the use cases: $HOME/fault/uc3-batch.sleep (wait) and .fail (error).
   post_command: 'f=$HOME/fault/uc3-batch; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
   rollback_command: "true"
 secrets:

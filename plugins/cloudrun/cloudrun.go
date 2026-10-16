@@ -1,12 +1,12 @@
-// Package cloudrun rilascia un'immagine di container su un servizio Google Cloud Run: cambia
-// l'immagine nel template del servizio, che crea una nuova revisione, e manda tutto il
-// traffico all'ultima revisione pronta. La release in esercizio è la revisione che riceve il
-// traffico; il rollback sposta il traffico sulla revisione precedente, senza ricrearla.
+// Package cloudrun releases a container image to a Google Cloud Run service: it changes the
+// image in the service template, which creates a new revision, and sends all traffic to the
+// latest ready revision. The release in service is the revision receiving traffic; rollback
+// moves traffic to the previous revision, without recreating it.
 //
-// L'artefatto è un'immagine di un registry (sorgente oci://registry/repository:tag), sempre
-// avviata fissata al digest. Il servizio (rete, service account, scalabilità, variabili) resta
-// di chi gestisce l'infrastruttura (Terraform): il plugin cambia solo l'immagine e scrive
-// versione e deploy nelle annotazioni della revisione. Ogni target è una region.
+// The artifact is a registry image (source oci://registry/repository:tag), always run pinned
+// to the digest. The service (network, service account, scaling, variables) belongs to whoever
+// manages the infrastructure (Terraform): the plugin changes only the image and writes version
+// and deploy in the revision annotations. Every target is a region.
 package cloudrun
 
 import (
@@ -24,36 +24,36 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "cloudrun"
 
-// Parametri del descrittore (deploy.params) letti dal plugin.
+// Descriptor parameters (deploy.params) read by the plugin.
 const (
-	ParamProject           = "project"            // progetto Google Cloud (obbligatorio)
-	ParamService           = "service"            // servizio Cloud Run (default: nome dell'applicazione)
-	ParamContainer         = "container"          // container a cui cambiare l'immagine (default: l'unico, o quello col nome dell'applicazione)
-	ParamCredentialsSecret = "credentials_secret" // segreto con la chiave JSON di un service account; default: Application Default Credentials
-	ParamWaitTimeout       = "wait_timeout"       // attesa della revisione e del traffico (default 10m)
+	ParamProject           = "project"            // Google Cloud project (required)
+	ParamService           = "service"            // Cloud Run service (default: application name)
+	ParamContainer         = "container"          // container whose image changes (default: the only one, or the one named after the application)
+	ParamCredentialsSecret = "credentials_secret" // secret with a service account JSON key; default: Application Default Credentials
+	ParamWaitTimeout       = "wait_timeout"       // wait for the revision and the traffic (default 10m)
 	defaultWaitTimeout     = 10 * time.Minute
 )
 
-// Annotazioni scritte sul template, quindi su ogni revisione.
+// Annotations written on the template, so on every revision.
 const (
 	AnnotationVersion    = "manent.io/version"
 	AnnotationDeployment = "manent.io/deployment"
 )
 
-// Tipi di destinazione del traffico.
+// Traffic destination types.
 const (
 	trafficLatest   = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
 	trafficRevision = "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION"
 )
 
-// DetailRevision è il prefisso delle chiavi di Release.Details con la revisione della release
-// su ciascun target ("revision@<target>").
+// DetailRevision is the prefix of the Release.Details keys with the release revision on each
+// target ("revision@<target>").
 const DetailRevision = "revision"
 
-// ErrNotFound indica un servizio o una revisione inesistente.
+// ErrNotFound means a service or revision that does not exist.
 var ErrNotFound = errors.New("non trovato")
 
 var (
@@ -62,25 +62,25 @@ var (
 	serviceRe = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,47}[a-z0-9])?$`)
 )
 
-// Object è una risorsa dell'API (servizio o revisione) come JSON generico: il servizio viene
-// riscritto per intero, quindi i campi che il plugin non conosce restano invariati.
+// Object is an API resource (service or revision) as generic JSON: the service is rewritten
+// entirely, so fields the plugin does not know stay unchanged.
 type Object = map[string]any
 
-// Operation è un'operazione a lunga durata dell'API.
+// Operation is a long-running API operation.
 type Operation struct {
 	Name  string     `json:"name"`
 	Done  bool       `json:"done"`
 	Error *OpFailure `json:"error,omitempty"`
 }
 
-// OpFailure è l'errore di un'operazione conclusa.
+// OpFailure is the error of an ended operation.
 type OpFailure struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// API sono le operazioni su Cloud Run (Admin API v2) usate dal plugin. I nomi sono quelli
-// completi delle risorse (projects/…/locations/…/services/…).
+// API are the Cloud Run operations (Admin API v2) used by the plugin. Names are the full
+// resource names (projects/…/locations/…/services/…).
 type API interface {
 	GetService(ctx context.Context, name string) (Object, error)
 	UpdateService(ctx context.Context, name string, svc Object, validateOnly bool) (*Operation, error)
@@ -89,12 +89,12 @@ type API interface {
 	ListRevisions(ctx context.Context, service string) ([]Object, error)
 }
 
-// Connector apre l'accesso all'API con le credenziali della richiesta.
+// Connector opens access to the API with the request's credentials.
 type Connector interface {
 	Connect(ctx context.Context, req *plugin.Request) (API, error)
 }
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	connector Connector
 	types     []string
@@ -102,14 +102,14 @@ type Plugin struct {
 	poll      time.Duration
 }
 
-// New crea il plugin con il connettore indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given connector and supported artifact types.
 func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{connector: c, types: types, logger: logger, poll: 2 * time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - endpoint: endpoint dell'API (default https://run.googleapis.com)
-//   - artifact_types: tipi supportati (default ["cloudrun"])
+// Factory builds the plugin from the application configuration:
+//   - endpoint: API endpoint (default https://run.googleapis.com)
+//   - artifact_types: supported types (default ["cloudrun"])
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	types, err := pluginutil.ArtifactTypes(cfg, Name)
 	if err != nil {
@@ -126,10 +126,10 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return New(&HTTPConnector{Endpoint: endpoint}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
 func serviceName(req *plugin.Request) string {
@@ -139,12 +139,12 @@ func serviceName(req *plugin.Request) string {
 	return req.Application
 }
 
-// resource è il nome completo del servizio nella region.
+// resource is the full name of the service in the region.
 func resource(req *plugin.Request, region string) string {
 	return "projects/" + req.Params[ParamProject] + "/locations/" + region + "/services/" + serviceName(req)
 }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
@@ -173,7 +173,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	return errors.Join(errs...)
 }
 
-// get legge un valore annidato di o.
+// get reads a nested value of o.
 func get(o Object, keys ...string) any {
 	var cur any = o
 	for _, k := range keys {
@@ -191,7 +191,7 @@ func str(o Object, keys ...string) string {
 	return s
 }
 
-// child restituisce la mappa o[key], creandola se manca.
+// child returns the map o[key], creating it if missing.
 func child(o Object, key string) Object {
 	m, ok := o[key].(map[string]any)
 	if !ok {
@@ -201,10 +201,10 @@ func child(o Object, key string) Object {
 	return m
 }
 
-// short restituisce l'ultimo elemento del nome di una risorsa.
+// short returns the last element of a resource name.
 func short(name string) string { return name[strings.LastIndexByte(name, '/')+1:] }
 
-// containers restituisce i container del template del servizio.
+// containers returns the containers of the service template.
 func containers(svc Object) []Object {
 	raw, _ := get(svc, "template", "containers").([]any)
 	var out []Object
@@ -216,7 +216,7 @@ func containers(svc Object) []Object {
 	return out
 }
 
-// chooseContainer sceglie il container a cui cambiare l'immagine.
+// chooseContainer chooses the container whose image changes.
 func chooseContainer(svc Object, req *plugin.Request) (Object, error) {
 	list := containers(svc)
 	names := make([]string, len(list))
@@ -237,9 +237,8 @@ func chooseContainer(svc Object, req *plugin.Request) (Object, error) {
 	return nil, fmt.Errorf("container %q assente dal servizio (container: %s): indicare %q", want, strings.Join(names, ", "), ParamContainer)
 }
 
-// serving restituisce la revisione che riceve il traffico ("" se nessuna). Con il traffico
-// diviso (es. un rilascio per percentuale in corso) è quella con la quota maggiore; a parità
-// è un errore.
+// serving returns the revision receiving traffic ("" if none). With split traffic (e.g. a
+// percentage rollout in progress) it is the one with the larger share; a tie is an error.
 func serving(svc Object) (string, error) {
 	statuses, _ := svc["trafficStatuses"].([]any)
 	var active []string
@@ -270,7 +269,7 @@ func serving(svc Object) (string, error) {
 	return rev, nil
 }
 
-// latestOnly indica se il servizio manda già tutto il traffico all'ultima revisione.
+// latestOnly reports whether the service already sends all traffic to the latest revision.
 func latestOnly(svc Object) bool {
 	tr, _ := svc["traffic"].([]any)
 	if len(tr) != 1 {
@@ -281,7 +280,7 @@ func latestOnly(svc Object) bool {
 	return m["type"] == trafficLatest && pct == 100
 }
 
-// state è lo stato di un target letto prima di deploy, dry-run e rollback.
+// state is the state of a target read before deploy, dry-run and rollback.
 type state struct {
 	region string
 	name   string
@@ -308,7 +307,7 @@ func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request)
 	return &state{region: t.Host, name: name, api: api, svc: svc}, nil
 }
 
-// version legge la versione di manent dalla revisione che riceve il traffico ("" se non c'è).
+// version reads the manent version from the revision receiving traffic ("" if none).
 func (s *state) version(ctx context.Context) (string, string, error) {
 	rev, err := serving(s.svc)
 	if err != nil || rev == "" {
@@ -329,8 +328,8 @@ func (s *state) details(ctx context.Context, req *plugin.Request) map[string]str
 	return d
 }
 
-// withImage restituisce il servizio con l'immagine e le annotazioni della release e tutto il
-// traffico sull'ultima revisione.
+// withImage returns the service with the release image and annotations and all traffic on the
+// latest revision.
 func withImage(svc Object, req *plugin.Request, image string) (Object, error) {
 	c, err := chooseContainer(svc, req)
 	if err != nil {
@@ -340,14 +339,14 @@ func withImage(svc Object, req *plugin.Request, image string) (Object, error) {
 	tmpl := child(svc, "template")
 	ann := child(tmpl, "annotations")
 	ann[AnnotationVersion], ann[AnnotationDeployment] = req.Artifact.Version, req.DeploymentID
-	// Un nome di revisione fisso impedirebbe di crearne una nuova: lo genera Cloud Run.
+	// A fixed revision name would prevent creating a new one: Cloud Run generates it.
 	delete(tmpl, "revision")
 	svc["traffic"] = []any{Object{"type": trafficLatest, "percent": 100}}
 	return svc, nil
 }
 
-// Deploy rilascia l'immagine su ogni region in sequenza; si ferma al primo errore. È
-// idempotente: un template già aggiornato da questo deploy non viene riscritto.
+// Deploy releases the image to every region in sequence; it stops at the first error. It is
+// idempotent: a template already updated by this deploy is not rewritten.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, err := plugin.ImageReference(req.Artifact)
 	if err != nil {
@@ -413,8 +412,8 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	return details, nil
 }
 
-// wait attende la conclusione dell'operazione; un'operazione fallita (es. revisione che non
-// si avvia) è un errore.
+// wait waits for the operation to end; a failed operation (e.g. a revision that does not
+// start) is an error.
 func (p *Plugin) wait(ctx context.Context, api API, op *Operation, timeout time.Duration) error {
 	for !op.Done {
 		select {
@@ -437,8 +436,8 @@ func (p *Plugin) wait(ctx context.Context, api API, op *Operation, timeout time.
 	return nil
 }
 
-// CurrentRelease legge su ogni region la versione della revisione che riceve il traffico. Una
-// revisione senza l'annotazione di manent non ha release; versioni diverse sono un errore.
+// CurrentRelease reads on every region the version of the revision receiving traffic. A
+// revision without the manent annotation has no release; different versions are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
 	details := map[string]string{"source": "revisione che riceve il traffico"}
@@ -473,9 +472,9 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	return nil, fmt.Errorf("versioni diverse tra le region: %s", strings.Join(desc, "; "))
 }
 
-// Rollback manda tutto il traffico di ogni region alla revisione della release indicata:
-// quella nei dettagli della release o, in mancanza, la più recente con quella versione.
-// Prosegue anche se una region fallisce. È idempotente.
+// Rollback sends all traffic of every region to the revision of the given release: the one in
+// the release details or, failing that, the most recent with that version.
+// It continues even if a region fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("versione %q non valida", previous.Version)
@@ -525,7 +524,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	return details, nil
 }
 
-// findRevision cerca la revisione più recente con la versione indicata.
+// findRevision looks for the most recent revision with the given version.
 func (p *Plugin) findRevision(ctx context.Context, s *state, version string) (string, error) {
 	list, err := s.api.ListRevisions(ctx, s.name)
 	if err != nil {
@@ -536,7 +535,7 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, version string) (st
 		if str(r, "annotations", AnnotationVersion) != version {
 			continue
 		}
-		// createTime è RFC 3339 in UTC: l'ordine lessicografico è quello temporale.
+		// createTime is RFC 3339 in UTC: lexicographic order is chronological.
 		if ct := str(r, "createTime"); best == "" || ct > bestTime {
 			best, bestTime = short(str(r, "name")), ct
 		}
@@ -547,8 +546,8 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, version string) (st
 	return best, nil
 }
 
-// DryRun verifica su ogni region, senza modificarla, che servizio e container esistano e che
-// l'aggiornamento sia accettato (validateOnly: validazione e permessi dell'API).
+// DryRun checks on every region, without changing it, that service and container exist and
+// that the update is accepted (validateOnly: API validation and permissions).
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, _ := plugin.ImageReference(req.Artifact)
 	res := &plugin.Result{Plugin: Name}

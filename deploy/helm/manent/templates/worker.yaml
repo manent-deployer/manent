@@ -64,7 +64,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 ---
-# Service headless del StatefulSet, usato anche per lo scrape delle metriche dei worker.
+# Headless Service of the StatefulSet, also used to scrape the workers' metrics.
 apiVersion: v1
 kind: Service
 metadata:

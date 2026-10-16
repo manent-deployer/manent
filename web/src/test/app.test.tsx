@@ -115,7 +115,7 @@ describe("inventario", () => {
     expect(within(table).getByRole("columnheader", { name: "test" })).toBeInTheDocument();
     expect(within(table).getByRole("link", { name: "1.5.0" })).toHaveAttribute("href", "/deployments/t1");
     expect(within(table).getByText(/Drift/)).toBeInTheDocument();
-    // L'approvatore non può promuovere né fare rollback.
+    // The approver can neither promote nor roll back.
     expect(within(table).queryByRole("button", { name: "Promote" })).toBeNull();
     expect(within(table).queryByRole("button", { name: "Roll back" })).toBeNull();
   });

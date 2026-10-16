@@ -1,7 +1,7 @@
-// Package service è il contratto tra i client e il server di manent: interfacce del servizio,
-// richieste, risposte ed errori. Non dipende da DBOS né dal database, così il client
-// (cmd/manent, internal/apiclient) resta leggero: lo implementano engine.Engine sul server e
-// apiclient.Client sopra l'API HTTP.
+// Package service is the contract between manent clients and server: service interfaces,
+// requests, responses and errors. It depends neither on DBOS nor on the database, so the
+// client (cmd/manent, internal/apiclient) stays light: engine.Engine implements it on the
+// server and apiclient.Client on top of the HTTP API.
 package service
 
 import (
@@ -14,19 +14,19 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// Stati di una Submission e di un deploy oltre a quelli dei workflow.
+// States of a Submission and of a deploy besides the workflow ones.
 const (
-	// StateScheduled indica una schedule ricorrente creata o aggiornata.
+	// StateScheduled is a recurring schedule created or updated.
 	StateScheduled = "SCHEDULED"
-	// StateAwaitingApproval indica un deploy in attesa delle approvazioni richieste.
+	// StateAwaitingApproval is a deploy waiting for the required approvals.
 	StateAwaitingApproval = "AWAITING_APPROVAL"
-	// StateRejected indica un deploy respinto da un approvatore.
+	// StateRejected is a deploy rejected by an approver.
 	StateRejected = "REJECTED"
-	// StateExpired indica un deploy non approvato entro il timeout.
+	// StateExpired is a deploy not approved within the timeout.
 	StateExpired = "EXPIRED"
 )
 
-// Stati dei workflow esposti dal servizio (gli stessi di DBOS).
+// Workflow states exposed by the service (the same as DBOS).
 const (
 	StatePending   = "PENDING"
 	StateEnqueued  = "ENQUEUED"
@@ -34,11 +34,11 @@ const (
 	StateSuccess   = "SUCCESS"
 	StateError     = "ERROR"
 	StateCancelled = "CANCELLED"
-	// StateMaxRecoveryAttempts indica un workflow non più ripreso dopo troppi tentativi.
+	// StateMaxRecoveryAttempts is a workflow no longer resumed after too many attempts.
 	StateMaxRecoveryAttempts = "MAX_RECOVERY_ATTEMPTS_EXCEEDED"
 )
 
-// Terminal indica gli stati finali di un deploy.
+// Terminal reports the final states of a deploy.
 func Terminal(state string) bool {
 	switch state {
 	case StateSuccess, StateError, StateCancelled, StateMaxRecoveryAttempts, StateRejected, StateExpired, StateDependencyFailed:
@@ -47,7 +47,7 @@ func Terminal(state string) bool {
 	return false
 }
 
-// Tipi di deploy, registrati nello stato e nell'inventario.
+// Deploy kinds, recorded in the state and in the inventory.
 const (
 	KindDeploy    = "deploy"
 	KindPromotion = "promotion"
@@ -55,15 +55,15 @@ const (
 )
 
 var (
-	// ErrNotFound indica un deploy o una schedule inesistente.
+	// ErrNotFound means a deploy or schedule that does not exist.
 	ErrNotFound = errors.New("non trovato")
-	// ErrInvalidRequest indica una richiesta non accettabile (es. orario nel passato).
+	// ErrInvalidRequest means an unacceptable request (e.g. a time in the past).
 	ErrInvalidRequest = errors.New("richiesta non valida")
-	// ErrForbidden indica un'azione non consentita dai permessi dell'utente.
+	// ErrForbidden means an action not allowed by the user's permissions.
 	ErrForbidden = errors.New("permesso negato")
 )
 
-// Service è il punto di ingresso usato da CLI e API.
+// Service is the entry point used by CLI and API.
 type Service interface {
 	DeploymentService
 	ScheduleService
@@ -74,26 +74,26 @@ type Service interface {
 	ReleaseService
 }
 
-// DeploymentService gestisce i deploy, immediati o pianificati.
+// DeploymentService manages deploys, immediate or scheduled.
 type DeploymentService interface {
-	// Plan calcola gli step che verrebbero eseguiti, senza avviare il deploy.
+	// Plan computes the steps that would run, without starting the deploy.
 	Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error)
-	// Validate verifica il descrittore come all'accodamento e restituisce il deploy effettivo,
-	// senza avviarlo.
+	// Validate checks the descriptor as at submission and returns the effective deploy, without
+	// starting it.
 	Validate(ctx context.Context, d *descriptor.Descriptor) (*Validation, error)
-	// Submit accoda un deploy, lo pianifica a un orario o crea una schedule ricorrente.
+	// Submit enqueues a deploy, schedules it at a time or creates a recurring schedule.
 	Submit(ctx context.Context, d *descriptor.Descriptor) (*Submission, error)
-	// Status restituisce lo stato corrente di un deploy.
+	// Status returns the current state of a deploy.
 	Status(ctx context.Context, id string) (*Status, error)
-	// List elenca i deploy più recenti, opzionalmente solo quelli di una schedule.
+	// List lists the most recent deploys, optionally only those of a schedule.
 	List(ctx context.Context, f ListFilter) ([]Status, error)
-	// Wait attende la conclusione di un deploy e ne restituisce il risultato.
+	// Wait waits for a deploy to end and returns its result.
 	Wait(ctx context.Context, id string) (*Result, error)
-	// Cancel annulla un deploy in attesa o in esecuzione.
+	// Cancel cancels a waiting or running deploy.
 	Cancel(ctx context.Context, id string) error
 }
 
-// ScheduleService gestisce le schedule dei deploy ricorrenti.
+// ScheduleService manages the schedules of recurring deploys.
 type ScheduleService interface {
 	ListSchedules(ctx context.Context) ([]ScheduleInfo, error)
 	GetSchedule(ctx context.Context, name string) (*ScheduleInfo, error)
@@ -102,53 +102,53 @@ type ScheduleService interface {
 	DeleteSchedule(ctx context.Context, name string) error
 }
 
-// GovernanceService gestisce inventario, promozioni, rollback manuali, approvazioni e freeze.
+// GovernanceService manages inventory, promotions, manual rollbacks, approvals and freezes.
 type GovernanceService interface {
-	// Inventory restituisce la release in esercizio in ogni applicazione/ambiente.
+	// Inventory returns the release in service in every application/environment.
 	Inventory(ctx context.Context, f InventoryFilter) ([]InventoryEntry, error)
-	// Promote rilascia in un ambiente lo stesso artefatto già rilasciato in un altro.
+	// Promote releases to an environment the same artifact already released to another one.
 	Promote(ctx context.Context, r PromoteRequest) (*Submission, error)
-	// Rollback rilascia di nuovo una versione precedente.
+	// Rollback releases a previous version again.
 	Rollback(ctx context.Context, r RollbackRequest) (*Submission, error)
-	// Decide approva o respinge un deploy in attesa di approvazione.
+	// Decide approves or rejects a deploy awaiting approval.
 	Decide(ctx context.Context, id string, r DecisionRequest) error
-	// Freezes elenca le finestre di freeze attive e future.
+	// Freezes lists the active and future freeze windows.
 	Freezes(ctx context.Context, application, environment string) ([]governance.WindowStatus, error)
-	// Approvals elenca i deploy in attesa di una decisione: prima del deploy o tra due ondate.
-	// Attraverso i permessi, solo quelli che l'identità può approvare.
+	// Approvals lists the deploys waiting for a decision: before the deploy or between two waves.
+	// Through permissions, only those the identity can approve.
 	Approvals(ctx context.Context) ([]Status, error)
 }
 
-// InsightService espone timeline, log e metriche DORA dei deploy.
+// InsightService exposes timeline, logs and DORA metrics of deploys.
 type InsightService interface {
-	// Steps restituisce gli step registrati di un deploy (o della sua approvazione, se il
-	// deploy non è ancora partito), con orari, output ed errori.
+	// Steps returns the recorded steps of a deploy (or of its approval, if the deploy has not
+	// started yet), with times, outputs and errors.
 	Steps(ctx context.Context, id string) ([]StepRecord, error)
-	// Logs restituisce le righe di log del deploy a partire da offset.
+	// Logs returns the deploy log lines from offset.
 	Logs(ctx context.Context, id string, offset int) (*LogPage, error)
-	// DORA calcola le metriche DORA dallo storico dei deploy.
+	// DORA computes the DORA metrics from the deploy history.
 	DORA(ctx context.Context, f DORAFilter) (*DORAReport, error)
 }
 
-// Validation è l'esito di Validate: il piano e il deploy effettivo, dopo la fusione con la
-// configurazione di ambiente e l'applicazione delle policy.
+// Validation is the result of Validate: the plan and the effective deploy, after merging
+// with the environment configuration and applying the policies.
 type Validation struct {
 	Valid    bool                 `json:"valid"`
 	Plan     pipeline.Plan        `json:"plan"`
 	Rollback *descriptor.Rollback `json:"rollback,omitempty"`
 	Deploy   *descriptor.Deploy   `json:"deploy,omitempty"`
-	// Secrets sono i nomi dei segreti dichiarati, mai i riferimenti né i valori.
+	// Secrets are the names of the declared secrets, never the references or values.
 	Secrets []string `json:"secrets,omitempty"`
-	// Config descrive la configurazione di ambiente usata (sorgente e revisione).
+	// Config describes the environment configuration used (source and revision).
 	Config     map[string]string     `json:"config,omitempty"`
 	Governance *GovernanceValidation `json:"governance,omitempty"`
-	// Rollout è il piano a ondate (stadi e passi) che verrebbe eseguito.
+	// Rollout is the wave plan (stages and passes) that would run.
 	Rollout *RolloutState `json:"rollout,omitempty"`
-	// Warnings segnala le verifiche non eseguite, ad esempio con Consul irraggiungibile.
+	// Warnings reports the checks not performed, for example with Consul unreachable.
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// GovernanceValidation sono le regole di governance che si applicherebbero al deploy.
+// GovernanceValidation are the governance rules that would apply to the deploy.
 type GovernanceValidation struct {
 	Rule      string                   `json:"rule,omitempty"`
 	Requires  []string                 `json:"requires,omitempty"`
@@ -156,36 +156,36 @@ type GovernanceValidation struct {
 	Freeze    *governance.WindowStatus `json:"freeze,omitempty"`
 }
 
-// StepResult è l'esito di uno step eseguito.
+// StepResult is the outcome of a run step.
 type StepResult struct {
 	Name   string          `json:"name"`
 	Output pipeline.Output `json:"output"`
 }
 
-// Result è l'output del workflow di deploy.
+// Result is the output of the deploy workflow.
 type Result struct {
 	DeploymentID string `json:"deployment_id"`
-	// DryRun indica una simulazione: nessuna modifica agli ambienti di esercizio.
+	// DryRun means a simulation: no changes to production environments.
 	DryRun bool         `json:"dry_run,omitempty"`
 	Steps  []StepResult `json:"steps"`
-	// Rollout è lo stato finale del rilascio a ondate, se il deploy ne ha uno.
+	// Rollout is the final state of the wave release, if the deploy has one.
 	Rollout *RolloutState `json:"rollout,omitempty"`
-	// Change è il ticket di change management del deploy, se previsto.
+	// Change is the deploy's change management ticket, if any.
 	Change *ChangeTicket `json:"change,omitempty"`
 }
 
-// Submission descrive l'esito di Submit.
+// Submission describes the outcome of Submit.
 type Submission struct {
-	// ID del deploy; vuoto per le schedule ricorrenti.
+	// ID of the deploy; empty for recurring schedules.
 	ID string `json:"id,omitempty"`
-	// State è ENQUEUED, DELAYED (deploy singolo pianificato) o SCHEDULED (ricorrente).
+	// State is ENQUEUED, DELAYED (scheduled single deploy) or SCHEDULED (recurring).
 	State       string     `json:"state"`
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	Schedule    string     `json:"schedule,omitempty"`
 	DryRun      bool       `json:"dry_run,omitempty"`
 }
 
-// Status descrive lo stato di un deploy.
+// Status describes the state of a deploy.
 type Status struct {
 	ID          string `json:"id"`
 	State       string `json:"state"`
@@ -193,55 +193,55 @@ type Status struct {
 	Environment string `json:"environment,omitempty"`
 	Artifact    string `json:"artifact,omitempty"`
 	Version     string `json:"version,omitempty"`
-	// SHA256 è l'hash dell'artefatto rilasciato, registrato al termine del deploy.
+	// SHA256 is the hash of the released artifact, recorded at the end of the deploy.
 	SHA256 string `json:"sha256,omitempty"`
 	Kind   string `json:"kind,omitempty"`
 	Source string `json:"source,omitempty"`
 	DryRun bool   `json:"dry_run,omitempty"`
-	// Rollback è l'esito del rollback automatico, se eseguito.
+	// Rollback is the outcome of the automatic rollback, if run.
 	Rollback    string     `json:"rollback,omitempty"`
 	RequestedBy string     `json:"requested_by,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
-	// StartedAt è l'inizio dell'esecuzione sul worker (assente finché il deploy è in coda).
+	// StartedAt is the start of execution on the worker (absent while the deploy is queued).
 	StartedAt *time.Time `json:"started_at,omitempty"`
-	// Executor è il worker che esegue o ha eseguito il deploy; Queue la coda.
+	// Executor is the worker running or that ran the deploy; Queue the queue.
 	Executor string `json:"executor,omitempty"`
 	Queue    string `json:"queue,omitempty"`
-	// LastStep è l'ultimo step registrato di un deploy in corso (solo nell'attività).
+	// LastStep is the last recorded step of a running deploy (only in activity).
 	LastStep string         `json:"last_step,omitempty"`
 	Approval *ApprovalState `json:"approval,omitempty"`
-	// Change è il ticket di change management del deploy, se previsto.
+	// Change is the deploy's change management ticket, if any.
 	Change *ChangeTicket `json:"change,omitempty"`
-	// After è lo stato delle dipendenze, se il deploy ne ha.
+	// After is the state of the dependencies, if the deploy has any.
 	After *AfterState `json:"after,omitempty"`
-	// Release è la release composta a cui appartiene il deploy.
+	// Release is the composite release the deploy belongs to.
 	Release string `json:"release,omitempty"`
-	// Rollout è lo stato del rilascio a ondate, se il deploy ne ha uno.
+	// Rollout is the state of the wave release, if the deploy has one.
 	Rollout *RolloutState `json:"rollout,omitempty"`
-	// RolloutProgress riassume il rollout negli elenchi: "stadi superati/stadi totali".
+	// RolloutProgress summarizes the rollout in listings: "stages passed/total stages".
 	RolloutProgress string  `json:"rollout_progress,omitempty"`
 	Result          *Result `json:"result,omitempty"`
 	Error           string  `json:"error,omitempty"`
 }
 
-// ListFilter filtra l'elenco dei deploy.
+// ListFilter filters the deploy list.
 type ListFilter struct {
 	Schedule    string `json:"schedule,omitempty"`
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
-	// State filtra per stato (es. SUCCESS, ERROR, AWAITING_APPROVAL).
+	// State filters by state (e.g. SUCCESS, ERROR, AWAITING_APPROVAL).
 	State string `json:"state,omitempty"`
 	Limit int    `json:"limit,omitempty"`
-	// Cursor è l'ID dell'ultimo deploy della pagina precedente: l'elenco riparte dal successivo.
+	// Cursor is the ID of the last deploy of the previous page: the listing restarts from the next one.
 	Cursor string `json:"cursor,omitempty"`
-	// Match, se presente, è un filtro aggiuntivo (es. i permessi): l'elenco prosegue sui deploy
-	// più vecchi finché non raggiunge Limit, quindi il filtro non riduce il numero di risultati.
+	// Match, if set, is an extra filter (e.g. permissions): the listing goes on with older
+	// deploys until it reaches Limit, so the filter does not reduce the number of results.
 	Match func(Status) bool `json:"-"`
 }
 
-// Matches applica i filtri a uno stato.
+// Matches applies the filters to a state.
 func (f ListFilter) Matches(s Status) bool {
 	return (f.Application == "" || s.Application == f.Application) &&
 		(f.Environment == "" || s.Environment == f.Environment) &&
@@ -249,7 +249,7 @@ func (f ListFilter) Matches(s Status) bool {
 		(f.Match == nil || f.Match(s))
 }
 
-// ScheduleInfo descrive una schedule ricorrente.
+// ScheduleInfo describes a recurring schedule.
 type ScheduleInfo struct {
 	Name        string `json:"name"`
 	Cron        string `json:"cron"`
@@ -257,7 +257,7 @@ type ScheduleInfo struct {
 	Status      string `json:"status"`
 	Application string `json:"application"`
 	Environment string `json:"environment"`
-	// RequestedBy è chi ha creato o aggiornato per ultimo la schedule.
+	// RequestedBy is who last created or updated the schedule.
 	RequestedBy string     `json:"requested_by,omitempty"`
 	LastFiredAt *time.Time `json:"last_fired_at,omitempty"`
 }

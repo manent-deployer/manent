@@ -56,7 +56,7 @@ func TestHealthGate(t *testing.T) {
 		t.Fatalf("soglia superata non rilevata: %s", r.Failed())
 	}
 	errorRate = "0.002"
-	// Allarme critico della stessa applicazione in un'altra region: non blocca eu-1.
+	// Critical alert of the same application in another region: it does not block eu-1.
 	alerts = `[{"labels":{"alertname":"HighLatency","severity":"critical","app":"myapp","region":"us-1"}}]`
 	if r := c.Check(ctx, in); !r.OK {
 		t.Fatalf("allarme di un'altra region: %s", r.Failed())
@@ -66,12 +66,12 @@ func TestHealthGate(t *testing.T) {
 		t.Fatalf("allarme non rilevato: %s", r.Failed())
 	}
 	alerts = `[]`
-	// Nessun dato: rosso.
+	// No data: red.
 	in.Passes[0].AZ = "eu-1b"
 	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "nessun dato") {
 		t.Fatalf("nessun dato accettato: %s", r.Failed())
 	}
-	// Sonda fallita.
+	// Failed probe.
 	in.Passes[0].AZ = "eu-1a"
 	in.Health.Probes[0].URL = "http://{host}/ready"
 	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "stato 503") {
@@ -110,12 +110,12 @@ func TestGateComparativo(t *testing.T) {
 	if r := c.Check(ctx, in); !r.OK {
 		t.Fatalf("gate verde atteso: %s", r.Failed())
 	}
-	// Pochi campioni: il gate non può dire che la candidata è sana.
+	// Few samples: the gate cannot say the candidate is healthy.
 	values["samples"] = "50"
 	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "campioni insufficienti") {
 		t.Fatalf("campioni: %s", r.Failed())
 	}
-	// Primo rilascio: niente da confrontare.
+	// First release: nothing to compare.
 	values["samples"], in.StableTrack = "500", ""
 	if r := c.Check(ctx, in); !r.OK {
 		t.Fatalf("primo rilascio: %s", r.Failed())

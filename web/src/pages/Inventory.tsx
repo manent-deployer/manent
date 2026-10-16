@@ -18,7 +18,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
   const me = useMe();
   if (!e) return <span className="text-sm text-muted">{t("inventory.notDeployed")}</span>;
   const cur = e.current;
-  // La destinazione si sceglie nel dialogo: basta poter rilasciare l'applicazione da qualche parte.
+  // The destination is chosen in the dialog: being able to release the application somewhere is enough.
   const canPromote = cur && canInApp(me.data, "deployment.submit", e.application);
   const canRollback = cur && can(me.data, "deployment.rollback", e.application, e.environment);
   return (
@@ -153,7 +153,7 @@ export function InventoryPage() {
   );
 }
 
-// Ordine abituale degli ambienti, poi alfabetico: dev, test, qa, staging, preprod, prod.
+// Usual environment order, then alphabetical: dev, test, qa, staging, preprod, prod.
 const ORDER = ["dev", "test", "qa", "staging", "preprod", "prod"];
 function envOrder(a: string, b: string) {
   const rank = (e: string) => {

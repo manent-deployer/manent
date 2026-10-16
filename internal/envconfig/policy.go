@@ -11,27 +11,27 @@ import (
 	"github.com/joeg-ita/manent/internal/glob"
 )
 
-// DescriptorPolicy limita ciò che un descrittore può aggiungere alla configurazione di ambiente.
-// Chi può inviare un descrittore non è necessariamente chi amministra gli ambienti: senza
-// limiti potrebbe, ad esempio, far eseguire comandi sui target (post_command) o far leggere al
-// worker segreti non suoi. Ciò che arriva dalla configurazione di ambiente non è soggetto
-// alla policy.
+// DescriptorPolicy limits what a descriptor can add to the environment configuration.
+// Whoever can submit a descriptor is not necessarily who administers the environments:
+// without limits they could, for example, run commands on the targets (post_command) or make
+// the worker read secrets that are not theirs. What comes from the environment configuration
+// is not subject to the policy.
 type DescriptorPolicy struct {
-	// Params elenca, per plugin, i pattern dei parametri che il descrittore può impostare;
-	// la chiave "*" vale per tutti i plugin.
+	// Params lists, per plugin, the patterns of the parameters the descriptor can set; the "*"
+	// key applies to all plugins.
 	Params map[string][]string
-	// SecretRefs sono i pattern dei riferimenti ai segreti che il descrittore può dichiarare.
-	// Accettano {application} e {environment}.
+	// SecretRefs are the patterns of the secret references the descriptor can declare.
+	// They accept {application} and {environment}.
 	SecretRefs []string
-	// Targets ammette target indicati dal descrittore quando l'ambiente non li definisce.
+	// Targets allows targets given by the descriptor when the environment does not define them.
 	Targets bool
-	// StepParams elenca, per step personalizzato, i pattern dei parametri che il descrittore
-	// può impostare; la chiave "*" vale per tutti gli step. Vuoto: nessuno.
+	// StepParams lists, per custom step, the patterns of the parameters the descriptor can set;
+	// the "*" key applies to all steps. Empty: none.
 	StepParams map[string][]string
 }
 
-// Check verifica il descrittore rispetto alla policy, considerando già definito ciò che
-// arriva dalla configurazione di ambiente c.
+// Check verifies the descriptor against the policy, treating as already defined what comes
+// from the environment configuration c.
 func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 	if p == nil {
 		return nil

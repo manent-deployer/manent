@@ -8,13 +8,13 @@ import (
 	"os"
 )
 
-// FileProvider legge la configurazione da file YAML/JSON locali; utile per sviluppo e test.
+// FileProvider reads the configuration from local YAML/JSON files; useful for development and tests.
 type FileProvider struct {
-	// PathTemplate è il modello del percorso, con segnaposto {application} e {environment}.
+	// PathTemplate is the path template, with {application} and {environment} placeholders.
 	PathTemplate string
 }
 
-// Get legge il file dell'applicazione/ambiente.
+// Get reads the application/environment file.
 func (p *FileProvider) Get(_ context.Context, application, environment string) (*Document, error) {
 	path := expandKey(p.PathTemplate, application, environment)
 	data, err := os.ReadFile(path)

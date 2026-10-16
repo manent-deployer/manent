@@ -1,10 +1,10 @@
-// Package deploylog raccoglie i log di ogni deploy in uno stream durevole DBOS del suo
-// workflow, consultabile da API e CLI anche quando il deploy è eseguito da un altro worker.
+// Package deploylog collects the logs of every deploy in a durable DBOS stream of its
+// workflow, readable from API and CLI even when the deploy runs on another worker.
 //
-// Il worker marca il context di ogni step con WithStep; Handler, inserito nella catena di
-// slog, scrive nello stream i record emessi con quel context (InfoContext, WarnContext, ...).
-// I log continuano ad andare anche al log applicativo e al SIEM. Come quelli, non devono
-// contenere segreti: lo stream è persistito nel database di sistema.
+// The worker marks the context of every step with WithStep; Handler, part of the slog chain,
+// writes to the stream the records emitted with that context (InfoContext, WarnContext, ...).
+// Logs still go to the application log and the SIEM too. Like those, they must not contain
+// secrets: the stream is persisted in the system database.
 package deploylog
 
 import (
@@ -18,33 +18,33 @@ import (
 	"github.com/joeg-ita/manent/internal/service"
 )
 
-// StreamKey è la chiave dello stream DBOS con i log del deploy.
+// StreamKey is the key of the DBOS stream with the deploy logs.
 const StreamKey = "log"
 
-// Limiti per step, perché lo stream sta nel database di sistema.
+// Per-step limits, because the stream lives in the system database.
 const (
 	maxLinesPerStep = 500
 	maxMessage      = 2000
 	maxAttrValue    = 500
 )
 
-// Line è una riga del log di un deploy (contratto in internal/service).
+// Line is a line of a deploy log (contract in internal/service).
 type Line = service.LogLine
 
-// stepKey è la chiave del context con lo step in esecuzione.
+// stepKey is the context key of the running step.
 type stepKey struct{}
 
-// stepInfo identifica lo step in esecuzione. ctx è il context DBOS dello step: resta
-// raggiungibile anche se il codice dello step crea context derivati (timeout, tracing).
+// stepInfo identifies the running step. ctx is the DBOS context of the step: it stays
+// reachable even if the step code creates derived contexts (timeouts, tracing).
 type stepInfo struct {
 	ctx   dbos.Context
 	step  string
 	lines atomic.Int32
 }
 
-// WithStep marca il context di uno step DBOS: i log emessi con il context restituito (o con
-// uno derivato) finiscono nello stream del deploy. ctx deve essere il context ricevuto dalla
-// funzione dello step; altrimenti viene restituito invariato.
+// WithStep marks the context of a DBOS step: logs emitted with the returned context (or a
+// derived one) go to the deploy stream. ctx must be the context received by the step
+// function; otherwise it is returned unchanged.
 func WithStep(ctx context.Context, step string) context.Context {
 	dc, ok := ctx.(dbos.Context)
 	if !ok {
@@ -53,19 +53,19 @@ func WithStep(ctx context.Context, step string) context.Context {
 	return context.WithValue(ctx, stepKey{}, &stepInfo{ctx: dc, step: step})
 }
 
-// Handler avvolge un handler slog e copia nello stream del deploy i record emessi nel
-// context di uno step.
+// Handler wraps a slog handler and copies to the deploy stream the records emitted in the
+// context of a step.
 type Handler struct {
 	next  slog.Handler
 	attrs []slog.Attr
 	group string
 }
 
-// NewHandler crea l'handler sopra next.
+// NewHandler creates the handler on top of next.
 func NewHandler(next slog.Handler) *Handler { return &Handler{next: next} }
 
-// Enabled implementa slog.Handler. Il log del deploy raccoglie i record da INFO in su anche
-// se il log applicativo ha un livello più alto (es. warn).
+// Enabled implements slog.Handler. The deploy log collects records from INFO up even if the
+// application log has a higher level (e.g. warn).
 func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 	if _, ok := ctx.Value(stepKey{}).(*stepInfo); ok && l >= slog.LevelInfo {
 		return true
@@ -73,7 +73,7 @@ func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 	return h.next.Enabled(ctx, l)
 }
 
-// Handle implementa slog.Handler. Un errore di scrittura nello stream non blocca il log.
+// Handle implements slog.Handler. A stream write error does not block logging.
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	if si, ok := ctx.Value(stepKey{}).(*stepInfo); ok && r.Level >= slog.LevelInfo {
 		h.write(si, r)
@@ -114,7 +114,7 @@ func (h *Handler) write(si *stepInfo, r slog.Record) {
 	_ = dbos.WriteStream(si.ctx, StreamKey, line)
 }
 
-// WithAttrs implementa slog.Handler.
+// WithAttrs implements slog.Handler.
 func (h *Handler) WithAttrs(as []slog.Attr) slog.Handler {
 	c := *h
 	c.next = h.next.WithAttrs(as)
@@ -122,7 +122,7 @@ func (h *Handler) WithAttrs(as []slog.Attr) slog.Handler {
 	return &c
 }
 
-// WithGroup implementa slog.Handler.
+// WithGroup implements slog.Handler.
 func (h *Handler) WithGroup(name string) slog.Handler {
 	c := *h
 	c.next = h.next.WithGroup(name)
@@ -140,11 +140,11 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// Page è una porzione del log di un deploy.
+// Page is a portion of a deploy log.
 type Page = service.LogPage
 
-// Read legge le righe del log dall'offset indicato, senza attendere quelle nuove. Done è
-// valorizzato solo se lo stream è stato chiuso: lo stato del workflow va verificato a parte.
+// Read reads the log lines from the given offset, without waiting for new ones. Done is set
+// only if the stream was closed: the workflow state must be checked separately.
 func Read(c dbos.Client, workflowID string, offset int) (Page, error) {
 	lines, done, err := dbos.ReadStream[Line](c, workflowID, StreamKey, dbos.WithReadStreamSnapshot(), dbos.WithReadStreamFromOffset(offset))
 	if err != nil {
@@ -156,9 +156,9 @@ func Read(c dbos.Client, workflowID string, offset int) (Page, error) {
 	return Page{Lines: lines, Next: offset + len(lines), Done: done}, nil
 }
 
-// Copy aggiunge allo stream del workflow corrente le righe di log di un altro workflow (es. il
-// figlio che ha eseguito un passo del rollout su un worker di region). ctx deve essere il
-// context di uno step DBOS. Restituisce le righe copiate.
+// Copy appends to the current workflow's stream the log lines of another workflow (e.g. the
+// child that ran a rollout pass on a region worker). ctx must be the context of a DBOS step.
+// It returns the copied lines.
 func Copy(ctx context.Context, src dbos.Client, workflowID string) (int, error) {
 	dc, ok := ctx.(dbos.Context)
 	if !ok {

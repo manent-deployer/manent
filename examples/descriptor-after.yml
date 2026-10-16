@@ -1,6 +1,6 @@
-# Deploy che parte solo dopo il successo di altri deploy (CLI: manent deploy -f ... oppure
-# --after <id>). Finché attende è WAITING_DEPENDENCY e non occupa la coda dell'ambiente; se una
-# dipendenza non riesce o l'attesa scade diventa DEPENDENCY_FAILED.
+# Deploy that starts only after other deploys succeed (CLI: manent deploy -f ... or
+# --after <id>). While waiting it is WAITING_DEPENDENCY and takes no environment queue slot; if a
+# dependency fails or the wait expires it becomes DEPENDENCY_FAILED.
 apiVersion: manent/v1
 id: shop-api-2.4.0-prod
 application: shop-api

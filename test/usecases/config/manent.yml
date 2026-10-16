@@ -1,12 +1,12 @@
-# Configurazione di manent per i casi d'uso (test/usecases): API e worker condividono questo file;
-# run.sh ne ricava le varianti dei worker di region aggiungendo dbos.region e dbos.region_routing.
-# Tempi ridotti (heartbeat, recovery, gate) perché gli scenari durino pochi minuti.
+# manent configuration for the use cases (test/usecases): API and workers share this file;
+# run.sh derives the region worker variants by adding dbos.region and dbos.region_routing.
+# Short times (heartbeat, recovery, gate) so the scenarios last a few minutes.
 app:
   name: manent
   version: 0.1.0
 
 dbos:
-  # Il database arriva da DBOS_SYSTEM_DATABASE_URL (compose.yml); l'executor_id è l'hostname.
+  # The database comes from DBOS_SYSTEM_DATABASE_URL (compose.yml); the executor_id is the hostname.
   queue: deployments
   concurrency: 4
   environment_concurrency: 1
@@ -21,7 +21,7 @@ recovery:
 rollout:
   check_timeout: 5s
 
-# UC9: letture frequenti dello stato dei deploy attesi.
+# UC9: frequent reads of the state of awaited deploys.
 chains:
   poll_interval: 1s
 
@@ -40,8 +40,8 @@ envconfig:
   file:
     path: /etc/manent/envconfig/{application}/{environment}.yml
 
-# Solo le sorgenti del laboratorio: gli artefatti sono nel volume condiviso /srv/artifacts,
-# le immagini dei container nel registry in chiaro (UC6, UC7).
+# Only the lab sources: artifacts are in the shared volume /srv/artifacts, container images
+# in the plain-text registry (UC6, UC7).
 artifacts:
   allow_unlisted: false
   sources:
@@ -64,11 +64,11 @@ rollback:
       enabled: false
       on: [deploy, post-test, activation]
 
-# Token statici di prova (uc-<nome>-token): solo lo sha256 in configurazione.
+# Test static tokens (uc-<name>-token): only the sha256 in the configuration.
 auth:
   mode: enabled
-  # Identity provider di prova (test/usecases/oidc) per l'interfaccia web (UC8): utenti
-  # ci, cab, admin e viewer con gli stessi gruppi dei token statici.
+  # Test identity provider (test/usecases/oidc) for the web interface (UC8): users ci, cab,
+  # admin and viewer with the same groups as the static tokens.
   oidc:
     issuer: http://oidc:9000
     audience: manent
@@ -91,19 +91,20 @@ rbac:
 
 governance:
   rules:
-    # UC2: in produzione solo artefatti già rilasciati in test, con un'approvazione.
+    # UC2: in production only artifacts already released to test, with one approval.
     - name: uc2-produzione
       applications: [uc2-api]
       environments: [prod]
       requires: [test]
       approvals: {required: 1, timeout: 1h}
-    # UC8: la promozione in prod dall'interfaccia web chiede un'approvazione.
+    # UC8: promotion to prod from the web interface asks for an approval.
     - name: uc8-produzione
       applications: [uc8-web]
       environments: [prod]
       approvals: {required: 1, timeout: 1h}
-    # Le approvazioni tra le ondate (UC4, UC5) non richiedono una regola: senza, ne basta una
-    # e scadono dopo 72 ore. Una regola con approvals imporrebbe anche un'approvazione prima del deploy.
+    # Approvals between waves (UC4, UC5) need no rule: without one, a single approval is enough
+    # and they expire after 72 hours. A rule with approvals would also impose an approval before
+    # the deploy, unless approvals.when: rollout.
   freezes:
     - name: uc2-congelato
       reason: ambiente congelato per il caso d'uso
@@ -130,10 +131,10 @@ pipeline:
 
 plugins:
   remote-copy:
-    insecure_ignore_host_key: true   # laboratorio: chiavi host rigenerate a ogni avvio
+    insecure_ignore_host_key: true   # lab: host keys regenerated at every start
     artifact_types: [application]
   container:
     insecure_ignore_host_key: true
     artifact_types: [container]
   kubernetes:
-    artifact_types: [kubernetes]     # CA del cluster da ca_secret (envconfig)
+    artifact_types: [kubernetes]     # cluster CA from ca_secret (envconfig)

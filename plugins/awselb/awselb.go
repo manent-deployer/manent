@@ -1,6 +1,7 @@
-// Package awselb integra i load balancer AWS (ALB e NLB) con manent: il pool aws-elb toglie e
-// rimette i target di un target group intorno al deploy, anche tramite lo standby di un Auto
-// Scaling group, e il router aws-alb sposta il traffico tra i target group di due slot.
+// Package awselb integrates AWS load balancers (ALB and NLB) with manent: the aws-elb pool
+// removes and restores the targets of a target group around the deploy, also through the
+// standby of an Auto Scaling group, and the aws-alb router shifts traffic between the target
+// groups of two slots.
 package awselb
 
 import (
@@ -15,15 +16,15 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/awsauth"
 )
 
-// Impostazioni del pool aws-elb, oltre a quelle delle credenziali di awsauth.
+// Settings of the aws-elb pool, besides the awsauth credential ones.
 const (
-	SettingRegion         = "region"             // region del load balancer
-	SettingTargetGroupARN = "target_group_arn"   // target group dei membri
-	SettingAutoScaling    = "auto_scaling_group" // Auto Scaling group: svuotamento con EnterStandby/ExitStandby
-	SettingPort           = "port"               // porta dei target nel target group (default: quella del target, o del target group)
+	SettingRegion         = "region"             // load balancer region
+	SettingTargetGroupARN = "target_group_arn"   // target group of the members
+	SettingAutoScaling    = "auto_scaling_group" // Auto Scaling group: draining with EnterStandby/ExitStandby
+	SettingPort           = "port"               // port of the targets in the target group (default: the target's, or the target group's)
 )
 
-// Stati dei target in un target group.
+// States of the targets in a target group.
 const (
 	healthHealthy  = "healthy"
 	healthDraining = "draining"
@@ -32,44 +33,44 @@ const (
 
 var tgARNRe = regexp.MustCompile(`^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/[A-Za-z0-9-]{1,32}/[0-9a-f]{16}$`)
 
-// Target è un target di un target group: ID dell'istanza (o IP, o ARN) e porta.
+// Target is a target of a target group: instance ID (or IP, or ARN) and port.
 type Target struct {
 	ID   string
 	Port int32
 }
 
-// TargetHealth è lo stato di un target nel target group.
+// TargetHealth is the state of a target in the target group.
 type TargetHealth struct {
 	Target
 	State  string
 	Reason string
 }
 
-// API sono le operazioni di Elastic Load Balancing usate dal pool e dal router.
+// API are the Elastic Load Balancing operations used by pool and router.
 type API interface {
 	DescribeTargetHealth(ctx context.Context, targetGroup string, targets []Target) ([]TargetHealth, error)
 	RegisterTargets(ctx context.Context, targetGroup string, targets []Target) error
 	DeregisterTargets(ctx context.Context, targetGroup string, targets []Target) error
-	// ForwardWeights legge i pesi dei target group dell'azione forward di un listener o di una regola.
+	// ForwardWeights reads the target group weights of the forward action of a listener or rule.
 	ForwardWeights(ctx context.Context, listenerOrRule string) (map[string]int32, error)
-	// SetForwardWeights imposta i pesi dei target group dell'azione forward.
+	// SetForwardWeights sets the target group weights of the forward action.
 	SetForwardWeights(ctx context.Context, listenerOrRule string, weights map[string]int32) error
 }
 
-// AutoScaling sono le operazioni sugli Auto Scaling group usate dal pool.
+// AutoScaling are the Auto Scaling group operations used by the pool.
 type AutoScaling interface {
-	// LifecycleStates restituisce lo stato (InService, Standby, ...) delle istanze.
+	// LifecycleStates returns the state (InService, Standby, ...) of the instances.
 	LifecycleStates(ctx context.Context, group string, ids []string) (map[string]string, error)
 	EnterStandby(ctx context.Context, group string, ids []string) error
 	ExitStandby(ctx context.Context, group string, ids []string) error
 }
 
-// Connector apre l'accesso ai servizi in una region.
+// Connector opens access to the services in a region.
 type Connector interface {
 	Connect(ctx context.Context, region string, req *plugin.Request) (API, AutoScaling, error)
 }
 
-// ValidatePool verifica le impostazioni del pool aws-elb.
+// ValidatePool checks the settings of the aws-elb pool.
 func ValidatePool(s map[string]string) error {
 	var errs []error
 	if !awsauth.ValidRegion(s[SettingRegion]) {
@@ -87,7 +88,7 @@ func ValidatePool(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewPool restituisce il costruttore del pool aws-elb con il connettore indicato.
+// NewPool returns the constructor of the aws-elb pool with the given connector.
 func NewPool(c Connector) traffic.PoolFactory {
 	return func(ctx context.Context, env traffic.Env) (traffic.Pool, error) {
 		if err := ValidatePool(env.Settings); err != nil {
@@ -131,7 +132,7 @@ func (p *pool) targets(members []string) []Target {
 	return out
 }
 
-// Members implementa traffic.Pool: i target registrati nel target group.
+// Members implements traffic.Pool: the targets registered in the target group.
 func (p *pool) Members(ctx context.Context) ([]traffic.Member, error) {
 	list, err := p.api.DescribeTargetHealth(ctx, p.tg, nil)
 	if err != nil {
@@ -151,8 +152,9 @@ func (p *pool) Members(ctx context.Context) ([]traffic.Member, error) {
 	return out, nil
 }
 
-// Drain implementa traffic.Pool: con un Auto Scaling group mette le istanze in standby (che le
-// toglie dai target group senza farle sostituire), altrimenti le deregistra.
+// Drain implements traffic.Pool: with an Auto Scaling group it puts the instances in standby
+// (which removes them from the target groups without having them replaced), otherwise it
+// deregisters them.
 func (p *pool) Drain(ctx context.Context, members []string) error {
 	if p.group != "" {
 		states, err := p.asg.LifecycleStates(ctx, p.group, members)
@@ -179,8 +181,8 @@ func isStandby(s string) bool {
 	return s == "Standby" || s == "EnteringStandby"
 }
 
-// Connections implementa traffic.Pool: un target in draining ha ancora connessioni (il numero
-// non è esposto); uno non più presente o unused no.
+// Connections implements traffic.Pool: a draining target still has connections (the number is
+// not exposed); one no longer present or unused has none.
 func (p *pool) Connections(ctx context.Context, members []string) (map[string]int, error) {
 	list, err := p.api.DescribeTargetHealth(ctx, p.tg, p.targets(members))
 	if err != nil {
@@ -198,7 +200,7 @@ func (p *pool) Connections(ctx context.Context, members []string) (map[string]in
 	return out, nil
 }
 
-// Restore implementa traffic.Pool.
+// Restore implements traffic.Pool.
 func (p *pool) Restore(ctx context.Context, members []string) error {
 	if p.group != "" {
 		states, err := p.asg.LifecycleStates(ctx, p.group, members)
@@ -219,7 +221,7 @@ func (p *pool) Restore(ctx context.Context, members []string) error {
 	return p.api.RegisterTargets(ctx, p.tg, p.targets(members))
 }
 
-// Healthy implementa traffic.Pool.
+// Healthy implements traffic.Pool.
 func (p *pool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	list, err := p.api.DescribeTargetHealth(ctx, p.tg, p.targets(members))
 	if err != nil {

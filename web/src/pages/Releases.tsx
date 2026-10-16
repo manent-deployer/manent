@@ -12,7 +12,7 @@ import type { MessageKey } from "@/i18n/en";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { can } from "@/lib/permissions";
 
-// Le release cambiano mentre i deploy avanzano: aggiornamento frequente finché sono in corso.
+// Releases change as deploys progress: frequent refresh while they are running.
 const REFRESH = 5_000;
 
 const th = "px-4 py-3 font-medium";

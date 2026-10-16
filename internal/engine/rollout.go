@@ -24,34 +24,34 @@ import (
 	"github.com/joeg-ita/manent/internal/telemetry"
 )
 
-// Nome stabile del workflow figlio che esegue un passo del rollout sulla coda della sua region.
+// Stable name of the child workflow that runs a rollout pass on its region's queue.
 const passWorkflowName = "manent.deploy-pass"
 
-// gateWorkflowName è il workflow figlio che esegue le sonde dell'health gate sui target di una
-// region, su un worker di quella region: con le reti separate per region l'orchestratore non
-// li raggiunge.
+// gateWorkflowName is the child workflow that runs the health gate probes on the targets of a
+// region, on a worker of that region: with separate networks per region the orchestrator
+// cannot reach them.
 const gateWorkflowName = "manent.gate-probe"
 
 const (
-	// rolloutEvent è la chiave dell'evento con lo stato del rollout.
+	// rolloutEvent is the key of the event with the rollout state.
 	rolloutEvent = "rollout"
-	// rolloutApprovalTopic è l'argomento delle decisioni sulle approvazioni tra le ondate.
+	// rolloutApprovalTopic is the topic of the decisions on approvals between waves.
 	rolloutApprovalTopic = "rollout-approval"
 )
 
-// Alias del contratto per lo stato del rollout.
+// Contract aliases for the rollout state.
 type (
 	RolloutState = service.RolloutState
 	RolloutStage = service.RolloutStage
 	RolloutPass  = service.RolloutPass
 )
 
-// passStepNames sono gli step che lavorano sui target: dal primo all'ultimo di questi, gli
-// step del piano sono eseguiti per ogni passo e lotto del rollout. Quelli prima (segreti,
-// artefatto, QA) una volta sola, quelli dopo alla fine.
+// passStepNames are the steps that work on the targets: from the first to the last of these,
+// the plan steps run for every rollout pass and batch. The ones before (secrets, artifact,
+// QA) run once, the ones after at the end.
 var passStepNames = []string{"deploy", "post-test", "activation"}
 
-// splitPlan divide il piano in step iniziali, step per passo e step finali.
+// splitPlan splits the plan into initial steps, per-pass steps and final steps.
 func splitPlan(plan pipeline.Plan) (prefix, perPass, suffix pipeline.Plan) {
 	first, last := -1, -1
 	for i, ps := range plan {
@@ -68,10 +68,10 @@ func splitPlan(plan pipeline.Plan) (prefix, perPass, suffix pipeline.Plan) {
 	return plan[:first], plan[first : last+1], plan[last+1:]
 }
 
-// regionQueue è la coda dei passi di una region: la ascoltano solo i worker di quella region.
+// regionQueue is the queue of a region's passes: only that region's workers listen to it.
 func regionQueue(deployQueue, region string) string { return deployQueue + "." + region }
 
-// newRolloutState crea lo stato iniziale del rollout dal piano.
+// newRolloutState creates the initial rollout state from the plan.
 func newRolloutState(p rollout.Plan, r *descriptor.Rollout) *RolloutState {
 	st := &RolloutState{Status: service.RolloutRunning, OnFailure: r.OnFailureOrDefault()}
 	for _, s := range p.Stages {
@@ -84,8 +84,8 @@ func newRolloutState(p rollout.Plan, r *descriptor.Rollout) *RolloutState {
 	return st
 }
 
-// checkRollout verifica il rollout del descrittore effettivo: piano coerente con i target,
-// rollback attivo se richiesto da onFailure, controlli di salute eseguibili.
+// checkRollout checks the rollout of the effective descriptor: plan consistent with the
+// targets, rollback enabled if required by onFailure, runnable health checks.
 func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOps) (rollout.Plan, error) {
 	if d.Traffic != nil {
 		if ops == nil {
@@ -127,16 +127,16 @@ func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOp
 	return p, nil
 }
 
-// passRun è un passo eseguito, con gli step da compensare in caso di rollback.
+// passRun is a run pass, with the steps to compensate on rollback.
 type passRun struct {
 	pass    rollout.Pass
 	routed  bool
 	started []startedStep
 }
 
-// runRollout esegue il piano a ondate: step iniziali, poi per ogni stadio i passi (in linea o
-// sui worker della region), il tempo di osservazione con l'health gate e, se previsto,
-// un'approvazione; infine gli step finali. Lo stato è pubblicato con SetEvent.
+// runRollout runs the wave plan: initial steps, then for every stage the passes (inline or on
+// the region workers), the observation time with the health gate and, if configured, an
+// approval; finally the final steps. The state is published with SetEvent.
 func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result) error {
 	if d.Rollout.IsTraffic() {
 		return w.runTraffic(ctx, id, req, d, ev, res)
@@ -209,15 +209,15 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 	return nil
 }
 
-// publishRollout pubblica lo stato del rollout, letto da Status e dal client.
+// publishRollout publishes the rollout state, read by Status and the client.
 func (w *Worker) publishRollout(ctx dbos.Context, rs *RolloutState) {
 	if err := dbos.SetEvent(ctx, rolloutEvent, *rs); err != nil {
 		w.logger.Warn("pubblicazione dello stato del rollout fallita", "error", err)
 	}
 }
 
-// runStage esegue i passi di uno stadio: quelli instradati alla loro region come workflow
-// figli, in parallelo; gli altri in linea, uno dopo l'altro. Attende la fine di tutti.
+// runStage runs the passes of a stage: those routed to their region as child workflows, in
+// parallel; the others inline, one after the other. It waits for all of them to end.
 func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, steps pipeline.Plan,
 	stage rollout.Stage, outputs map[string]pipeline.Output, res *Result, rs *RolloutState, si int) ([]passRun, error) {
 	run := make([]passRun, len(stage.Passes))
@@ -270,7 +270,7 @@ func cmpErr(a, b error) error {
 	return b
 }
 
-// passFinished registra l'esito di un passo nelle metriche.
+// passFinished records the outcome of a pass in the metrics.
 func (w *Worker) passFinished(d *descriptor.Descriptor, p rollout.Pass, err error) {
 	outcome := "succeeded"
 	if err != nil {
@@ -279,18 +279,18 @@ func (w *Worker) passFinished(d *descriptor.Descriptor, p rollout.Pass, err erro
 	w.metrics.PassFinished(d.Application, d.Environment, p.Region, p.AZ, outcome)
 }
 
-// runPass esegue gli step per passo sui lotti di un passo, un lotto dopo l'altro. Ogni lotto
-// vede gli output degli step iniziali e dei propri step precedenti.
+// runPass runs the per-pass steps on the batches of a pass, one batch after the other. Every
+// batch sees the outputs of the initial steps and of its own previous steps.
 func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, steps pipeline.Plan,
 	p rollout.Pass, outputs map[string]pipeline.Output, res *Result, track *passTrack) ([]startedStep, error) {
 	var started []startedStep
-	// Con un pool ogni lotto viene svuotato dal load balancer prima del deploy e rimesso in
-	// servizio prima dell'attivazione (o alla fine).
+	// With a pool every batch is drained from the load balancer before the deploy and put back
+	// in service before activation (or at the end).
 	pool := d.Traffic != nil && d.Traffic.Pool != nil && !d.DryRun
 	for b, batch := range p.Batches {
 		bo := maps.Clone(outputs)
 		if bo == nil {
-			// Nel workflow figlio una mappa vuota arriva nulla (omessa nel JSON).
+			// In the child workflow an empty map arrives as nil (omitted in JSON).
 			bo = map[string]pipeline.Output{}
 		}
 		suffix := "@" + p.Name + "#" + strconv.Itoa(b)
@@ -340,24 +340,24 @@ func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.
 	return started, nil
 }
 
-// passInput è l'input del workflow figlio di un passo.
+// passInput is the input of a pass's child workflow.
 type passInput struct {
 	DeploymentID string                     `json:"deployment_id"`
 	Descriptor   descriptor.Descriptor      `json:"descriptor"`
 	Steps        pipeline.Plan              `json:"steps,omitempty"`
 	Pass         rollout.Pass               `json:"pass"`
 	Outputs      map[string]pipeline.Output `json:"outputs,omitempty"`
-	// Undo, con Started, chiede di compensare gli step avviati invece di eseguire il passo.
+	// Undo, with Started, asks to compensate the started steps instead of running the pass.
 	Undo        bool          `json:"undo,omitempty"`
 	Started     []startedStep `json:"started,omitempty"`
 	Error       string        `json:"error,omitempty"`
 	TraceParent string        `json:"trace_parent,omitempty"`
-	// RequestedBy è l'identità del richiedente, registrata nell'audit degli step personalizzati.
+	// RequestedBy is the requester's identity, recorded in the audit of custom steps.
 	RequestedBy string `json:"requested_by,omitempty"`
 }
 
-// passOutput è l'esito di un passo. Un passo fallito non fa fallire il workflow figlio:
-// l'orchestratore ha bisogno degli step avviati per un eventuale rollback.
+// passOutput is the outcome of a pass. A failed pass does not fail the child workflow: the
+// orchestrator needs the started steps for a possible rollback.
 type passOutput struct {
 	Started  []startedStep `json:"started,omitempty"`
 	Steps    []StepResult  `json:"steps,omitempty"`
@@ -365,8 +365,8 @@ type passOutput struct {
 	Rollback string        `json:"rollback,omitempty"`
 }
 
-// startPass avvia il workflow figlio di un passo sulla coda della sua region, con ID
-// deterministico: dopo una recovery dell'orchestratore il figlio già avviato non è duplicato.
+// startPass starts the child workflow of a pass on its region's queue, with a deterministic
+// ID: after an orchestrator recovery the already started child is not duplicated.
 func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, steps pipeline.Plan,
 	p rollout.Pass, outputs map[string]pipeline.Output, undo []startedStep, cause string) (string, dbos.WorkflowHandle[passOutput], error) {
 	qname := regionQueue(w.queueName, p.Region)
@@ -396,9 +396,9 @@ func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descript
 	return childID, h, err
 }
 
-// passWorkflow esegue (o compensa) un passo su un worker della region. Gli eventi dei
-// callback li invia l'orchestratore; i log finiscono nello stream del figlio e vengono copiati
-// in quello del deploy alla fine del passo.
+// passWorkflow runs (or compensates) a pass on a region worker. The orchestrator sends the
+// callback events; logs go to the child's stream and are copied to the deploy's at the end of
+// the pass.
 func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error) {
 	_, span := telemetry.Tracer().Start(telemetry.WithTraceParent(context.Background(), in.TraceParent), "pass "+in.Pass.Name,
 		trace.WithAttributes(attribute.String("manent.deployment.id", in.DeploymentID), attribute.String("manent.region", in.Pass.Region), attribute.String("manent.az", in.Pass.AZ)))
@@ -424,8 +424,8 @@ func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error
 	}
 	out.Steps = res.Steps
 	if w.cleaner != nil {
-		// L'artefatto scaricato su questo worker non serve più; se il worker esegue anche
-		// l'orchestratore, uno step successivo lo riscarica e ne verifica lo sha256.
+		// The artifact downloaded on this worker is no longer needed; if the worker also runs the
+		// orchestrator, a later step downloads it again and verifies its sha256.
 		if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 			return "", w.cleaner.Cleanup(c, in.DeploymentID)
 		}, dbos.WithStepName("cleanup")); err != nil {
@@ -435,7 +435,7 @@ func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error
 	return out, nil
 }
 
-// copyPassLogs copia nel log del deploy le righe scritte dal workflow figlio di un passo.
+// copyPassLogs copies into the deploy log the lines written by a pass's child workflow.
 func (w *Worker) copyPassLogs(ctx dbos.Context, childID string) {
 	if _, err := dbos.RunAsStep(ctx, func(c context.Context) (int, error) {
 		return deploylog.Copy(c, w.dbos, childID)
@@ -444,10 +444,10 @@ func (w *Worker) copyPassLogs(ctx dbos.Context, childID string) {
 	}
 }
 
-// healthGate attende il tempo di osservazione dello stadio leggendo l'health gate a ogni
-// intervallo: si ferma appena i controlli rossi consecutivi arrivano a failuresToStop e
-// richiede che l'ultima lettura sia verde. Attese e letture sono durevoli: dopo una recovery
-// il bake già trascorso non viene ripetuto.
+// healthGate waits for the stage observation time, reading the health gate at every interval:
+// it stops as soon as consecutive red checks reach failuresToStop and requires the last read
+// to be green. Waits and reads are durable: after a recovery the bake already elapsed is not
+// repeated.
 func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descriptor, stage rollout.Stage, i int, rs *RolloutState,
 	bake time.Duration, tracks *rollout.GateInput) error {
 	h := d.Rollout.Health
@@ -500,11 +500,10 @@ func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descripto
 	return nil
 }
 
-// readGate esegue una lettura dell'health gate. Con il routing per region le sonde dei passi
-// instradati sono eseguite da un workflow figlio sulla coda di ogni region (ID deterministico
-// <id>.gate.<stadio>#<n>.<region>), in parallelo; metriche, allarmi e sonde dei passi senza
-// region restano sull'orchestratore. Come per i passi, una region senza worker attivi fa
-// attendere la lettura.
+// readGate runs one health gate read. With region routing the probes of routed passes run in
+// a child workflow on each region's queue (deterministic ID <id>.gate.<stage>#<n>.<region>),
+// in parallel; metrics, alerts and probes of passes without a region stay on the orchestrator.
+// As for passes, a region without live workers makes the read wait.
 func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor, in rollout.GateInput, label string) (rollout.GateResult, error) {
 	local := in
 	type child struct {
@@ -538,8 +537,8 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 				}
 				children = append(children, child{region: region, h: h})
 			}
-			// Sull'orchestratore restano le sonde dei passi senza region e i controlli
-			// centralizzati (metriche e allarmi) di tutti i passi.
+			// The orchestrator keeps the probes of passes without a region and the centralized checks
+			// (metrics and alerts) of all passes.
 			probes := local
 			probes.Passes, probes.Health = localPasses, descriptor.Health{Probes: in.Health.Probes}
 			local.Health.Probes = nil
@@ -561,7 +560,7 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 	return w.checkGate(ctx, "gate@"+label, local)
 }
 
-// checkGate esegue in uno step DBOS le letture indicate e ne unisce l'esito.
+// checkGate runs the given reads in a DBOS step and merges their outcome.
 func (w *Worker) checkGate(ctx dbos.Context, name string, ins ...rollout.GateInput) (rollout.GateResult, error) {
 	return dbos.RunAsStep(ctx, func(c context.Context) (rollout.GateResult, error) {
 		cc, cancel := context.WithTimeout(c, w.healthTimeout)
@@ -576,18 +575,18 @@ func (w *Worker) checkGate(ctx dbos.Context, name string, ins ...rollout.GateInp
 	}, dbos.WithStepName(name))
 }
 
-// gateWorkflow esegue le sonde dell'health gate sui target della region di questo worker.
+// gateWorkflow runs the health gate probes on the targets of this worker's region.
 func (w *Worker) gateWorkflow(ctx dbos.Context, in rollout.GateInput) (rollout.GateResult, error) {
 	return w.checkGate(ctx, "gate", in)
 }
 
-// now legge l'ora in uno step: il workflow resta deterministico dopo una recovery.
+// now reads the time in a step: the workflow stays deterministic after a recovery.
 func now(ctx dbos.Context) (time.Time, error) {
 	return dbos.RunAsStep(ctx, func(context.Context) (time.Time, error) { return time.Now().UTC(), nil }, dbos.WithStepName("now"))
 }
 
-// waitFreeze attende la fine dei freeze attivi sulle region dello stadio (o su tutto
-// l'ambiente). Una deroga (freezeOverride) li ignora.
+// waitFreeze waits for the end of the freezes active on the stage's regions (or on the whole
+// environment). An override (freezeOverride) ignores them.
 func (w *Worker) waitFreeze(ctx dbos.Context, d *descriptor.Descriptor, stage rollout.Stage, rs *RolloutState) error {
 	if w.governance == nil || d.FreezeOverride != "" {
 		return nil
@@ -625,9 +624,9 @@ func (w *Worker) waitFreeze(ctx dbos.Context, d *descriptor.Descriptor, stage ro
 	}
 }
 
-// waitRolloutApproval attende le approvazioni richieste dopo un'ondata. Valgono la regola di
-// governance del deploy (numero di approvazioni, auto-approvazione, scadenza) o, senza, una
-// sola approvazione di un'altra identità.
+// waitRolloutApproval waits for the approvals required after a wave. The deploy's governance
+// rule applies (number of approvals, self-approval, expiry) or, without one, a single
+// approval by another identity.
 func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, after, status string, rs *RolloutState) error {
 	rule := governance.Approvals{Required: 1, Timeout: governance.DefaultApprovalTimeout}
 	if a := req.Approval; a != nil {
@@ -687,8 +686,8 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 	return nil
 }
 
-// rolloutFailure applica onFailure dopo il fallimento dello stadio i: stop lascia tutto com'è,
-// rollback-wave compensa lo stadio fallito, rollback-all tutti gli stadi in ordine inverso.
+// rolloutFailure applies onFailure after stage i failed: stop leaves everything as is,
+// rollback-wave compensates the failed stage, rollback-all all stages in reverse order.
 func (w *Worker) rolloutFailure(ctx dbos.Context, id string, d *descriptor.Descriptor, ev *events, res *Result,
 	done [][]passRun, rs *RolloutState, i int, cause error) error {
 	rs.Status, rs.Stage = service.RolloutFailed, rs.Stages[i].Name
@@ -728,7 +727,7 @@ func (w *Worker) rolloutFailure(ctx dbos.Context, id string, d *descriptor.Descr
 	return rbErr
 }
 
-// undoPass compensa un passo, in linea o sul worker della sua region.
+// undoPass compensates a pass, inline or on its region's worker.
 func (w *Worker) undoPass(ctx dbos.Context, id string, d *descriptor.Descriptor, ev *events, res *Result, pr passRun, cause error) (string, error) {
 	if len(pr.started) == 0 {
 		return RollbackSkipped, nil
@@ -763,12 +762,12 @@ func cmpString(a, b string) string {
 	return b
 }
 
-// rolloutProgress riassume il rollout per gli attributi: "stadi superati/stadi totali".
+// rolloutProgress summarizes the rollout for the attributes: "stages passed/total stages".
 func rolloutProgress(rs *RolloutState) string {
 	return strconv.Itoa(len(rs.Completed())) + "/" + strconv.Itoa(len(rs.Stages))
 }
 
-// progressStarted indica un rollout che ha superato almeno uno stadio.
+// progressStarted reports a rollout that passed at least one stage.
 func progressStarted(p string) bool {
 	done, _, ok := strings.Cut(p, "/")
 	return ok && done != "0"

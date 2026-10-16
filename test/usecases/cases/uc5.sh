@@ -1,6 +1,6 @@
-# UC5: rilascio a ondate su due region (eu-1, us-1) con un worker per region e routing dei
-# passi: canary in eu-1a, approvazione, poi un'AZ per region alla volta con le due region in
-# parallelo. Ogni worker di region vede solo la rete dei suoi target.
+# UC5: wave rollout across two regions (eu-1, us-1) with one worker per region and pass
+# routing: canary in eu-1a, approval, then one AZ per region at a time with the two regions in
+# parallel. Every region worker sees only its targets' network.
 APP=uc5-global
 log "UC5 · rollout multi-region con worker di region"
 

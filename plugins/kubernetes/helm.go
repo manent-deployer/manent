@@ -24,39 +24,39 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Parametri del descrittore (deploy.params) per i chart Helm.
+// Descriptor parameters (deploy.params) for Helm charts.
 const (
-	ParamHelmRelease     = "helm_release"      // nome della release (.Release.Name, default: nome dell'applicazione)
+	ParamHelmRelease     = "helm_release"      // release name (.Release.Name, default: application name)
 	ParamHelmValues      = "helm_values"       // values in YAML
-	ParamHelmValuesFiles = "helm_values_files" // file di values contenuti nel chart, separati da virgola, applicati in ordine
-	ParamHelmValuePrefix = "helm_value."       // helm_value.<percorso> = valore YAML (es. helm_value.image.tag)
-	ParamHelmHooks       = "helm_hooks"        // skip (default): gli hook non vengono applicati; apply: applicati come oggetti normali
-	ParamHelmSkipCRDs    = "helm_skip_crds"    // "true": non applica le CRD della cartella crds/ del chart
+	ParamHelmValuesFiles = "helm_values_files" // values files inside the chart, comma separated, applied in order
+	ParamHelmValuePrefix = "helm_value."       // helm_value.<path> = YAML value (e.g. helm_value.image.tag)
+	ParamHelmHooks       = "helm_hooks"        // skip (default): hooks are not applied; apply: applied as normal objects
+	ParamHelmSkipCRDs    = "helm_skip_crds"    // "true": does not apply the CRDs of the chart's crds/ folder
 	helmHookAnnotation   = "helm.sh/hook"
 	defaultHelmTimeout   = 2 * time.Minute
 	maxChartSize         = 64 << 20
 	maxRenderedSize      = 32 << 20
 )
 
-// DetailHooksSkipped è la chiave dei dettagli con gli hook del chart non applicati.
+// DetailHooksSkipped is the details key with the chart hooks not applied.
 const DetailHooksSkipped = "helm_hooks_skipped"
 
 var releaseRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
 
-// Helm genera i manifest di un chart con "helm template": il chart viene solo renderizzato,
-// mai installato, quindi Helm non contatta il cluster e non tiene uno stato. Applicazione,
-// storico, attesa e rollback restano quelli del plugin.
+// Helm generates a chart's manifests with "helm template": the chart is only rendered, never
+// installed, so Helm does not contact the cluster and keeps no state. Apply, history, wait
+// and rollback stay the plugin's.
 type Helm struct {
-	// Command è il binario di Helm (default "helm", cercato nel PATH).
+	// Command is the Helm binary (default "helm", looked up in PATH).
 	Command string
-	// SHA256, se indicato, è verificato a ogni esecuzione.
+	// SHA256, if set, is verified at every run.
 	SHA256 string
-	// Timeout del rendering (default 2m).
+	// Timeout of the rendering (default 2m).
 	Timeout time.Duration
 }
 
-// isChart indica se l'artefatto è un chart Helm impacchettato (helm package): un archivio
-// .tgz con <nome>/Chart.yaml.
+// isChart reports whether the artifact is a packaged Helm chart (helm package): a .tgz
+// archive with <name>/Chart.yaml.
 func isChart(file string) (bool, error) {
 	lower := strings.ToLower(file)
 	if !strings.HasSuffix(lower, ".tgz") && !strings.HasSuffix(lower, ".tar.gz") {
@@ -87,8 +87,8 @@ func isChart(file string) (bool, error) {
 	}
 }
 
-// extractChart estrae il chart in dir e restituisce la cartella del chart. Sono ammessi solo
-// file e cartelle dentro dir, al più maxChartSize byte in tutto.
+// extractChart extracts the chart into dir and returns the chart folder. Only files and
+// folders inside dir are allowed, at most maxChartSize bytes in total.
 func extractChart(file, dir string) (string, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -143,7 +143,7 @@ func extractChart(file, dir string) (string, error) {
 				root = strings.Trim(d, "/")
 			}
 		default:
-			// Link e file speciali non servono a un chart e potrebbero uscire da dir.
+			// Links and special files are of no use to a chart and could escape dir.
 			continue
 		}
 	}
@@ -153,8 +153,8 @@ func extractChart(file, dir string) (string, error) {
 	return filepath.Join(dir, root), nil
 }
 
-// helmValues costruisce i values da helm_values e dai parametri helm_value.<percorso>, che
-// prevalgono. I valori sono interpretati come YAML: "3" è un numero, "true" un booleano.
+// helmValues builds the values from helm_values and from the helm_value.<path> parameters,
+// which win. Values are parsed as YAML: "3" is a number, "true" a boolean.
 func helmValues(params map[string]string) (map[string]any, error) {
 	vals := map[string]any{}
 	if raw := params[ParamHelmValues]; strings.TrimSpace(raw) != "" {
@@ -195,7 +195,7 @@ func helmValues(params map[string]string) (map[string]any, error) {
 	return vals, nil
 }
 
-// validateHelm controlla i parametri Helm.
+// validateHelm checks the Helm parameters.
 func validateHelm(params map[string]string) []error {
 	var errs []error
 	if r := params[ParamHelmRelease]; r != "" && (len(r) > 53 || !releaseRe.MatchString(r)) {
@@ -232,8 +232,8 @@ func releaseName(req *plugin.Request) string {
 	return dnsName(req.Application)
 }
 
-// Render genera i manifest del chart per un cluster con la versione e le API indicate, così
-// .Capabilities corrisponde al cluster di destinazione.
+// Render generates the chart manifests for a cluster with the given version and APIs, so
+// .Capabilities matches the destination cluster.
 func (h Helm) Render(ctx context.Context, req *plugin.Request, kubeVersion string, apiVersions []string) ([]byte, error) {
 	cmd, err := h.command()
 	if err != nil {
@@ -287,8 +287,8 @@ func (h Helm) Render(ctx context.Context, req *plugin.Request, kubeVersion strin
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	c := exec.CommandContext(ctx, cmd, args...)
-	// Helm non eredita l'ambiente del worker (segreti, KUBECONFIG): configurazione, cache e
-	// dati in una cartella temporanea, così non legge repository né credenziali locali.
+	// Helm does not inherit the worker environment (secrets, KUBECONFIG): configuration, cache
+	// and data live in a temporary folder, so it reads no local repositories or credentials.
 	c.Env = []string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + tmp, "KUBECONFIG=" + filepath.Join(tmp, "kubeconfig"),
 		"HELM_CONFIG_HOME=" + filepath.Join(tmp, "config"), "HELM_CACHE_HOME=" + filepath.Join(tmp, "cache"),
@@ -306,7 +306,7 @@ func (h Helm) Render(ctx context.Context, req *plugin.Request, kubeVersion strin
 	return stdout.Bytes(), nil
 }
 
-// command risolve il binario di Helm e ne verifica lo sha256, se configurato.
+// command resolves the Helm binary and verifies its sha256, if configured.
 func (h Helm) command() (string, error) {
 	name := h.Command
 	if name == "" {
@@ -334,7 +334,7 @@ func (h Helm) command() (string, error) {
 	return p, nil
 }
 
-// limitWriter scrive al più n byte e restituisce errore oltre il limite.
+// limitWriter writes at most n bytes and returns an error beyond the limit.
 type limitWriter struct {
 	w io.Writer
 	n int
@@ -348,8 +348,8 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-// filterHooks toglie gli hook del chart: quelli di test sempre, gli altri salvo helm_hooks:
-// apply. Restituisce gli oggetti rimasti e i riferimenti degli hook tolti.
+// filterHooks removes the chart hooks: test ones always, the others unless helm_hooks:
+// apply. It returns the remaining objects and the references of the removed hooks.
 func filterHooks(objs []Object, params map[string]string) ([]Object, []string) {
 	var kept []Object
 	var skipped []string

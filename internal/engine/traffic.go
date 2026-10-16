@@ -20,17 +20,17 @@ import (
 	"github.com/joeg-ita/manent/internal/steps"
 )
 
-// Nome stabile del workflow figlio che ridimensiona la versione sostituita da un rilascio per
-// percentuale, dopo rollout.traffic.scaleDownDelay.
+// Stable name of the child workflow that scales down the version replaced by a percentage
+// rollout, after rollout.traffic.scaleDownDelay.
 const retireWorkflowName = "manent.traffic-retire"
 
-// TrafficOps sono le operazioni sui load balancer e sui router, eseguite dal motore dentro
-// step DBOS (implementate da internal/steps).
+// TrafficOps are the load balancer and router operations, run by the engine inside DBOS
+// steps (implemented by internal/steps).
 type TrafficOps interface {
-	// Check verifica la configurazione di traffico del descrittore effettivo, senza effetti.
+	// Check checks the traffic configuration of the effective descriptor, without side effects.
 	Check(d *descriptor.Descriptor) error
-	// PoolStatus legge connessioni residue (phase "drain") o salute (phase "restore") dei
-	// target dell'input.
+	// PoolStatus reads remaining connections (phase "drain") or health (phase "restore") of the
+	// input targets.
 	PoolStatus(ctx context.Context, in pipeline.Input, phase string) (pipeline.Output, error)
 	Prepare(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
 	Testers(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
@@ -42,12 +42,12 @@ type TrafficOps interface {
 	Retire(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
 }
 
-// awaitsDecision indica uno stato del rollout che attende una decisione (approve/reject).
+// awaitsDecision reports a rollout state that waits for a decision (approve/reject).
 func awaitsDecision(status string) bool {
 	return status == service.RolloutPausedApproval || status == service.RolloutPausedDrift
 }
 
-// passTrack collega un passo allo stato pubblicato del rollout (nil nei workflow figli).
+// passTrack ties a pass to the published rollout state (nil in child workflows).
 type passTrack struct {
 	rs   *RolloutState
 	pass *RolloutPass
@@ -69,7 +69,7 @@ func (t *passTrack) drained(w *Worker, ctx dbos.Context, members []string, add b
 	w.publishRollout(ctx, t.rs)
 }
 
-// trafficOp esegue un'operazione di traffico come step DBOS, con log, span ed eventi.
+// trafficOp runs a traffic operation as a DBOS step, with logs, spans and events.
 func (w *Worker) trafficOp(ctx dbos.Context, ev *events, d *descriptor.Descriptor, res *Result, name string, quiet bool,
 	in pipeline.Input, fn func(context.Context, pipeline.Input) (pipeline.Output, error)) (pipeline.Output, error) {
 	out, err := dbos.RunAsStep(ctx,
@@ -90,9 +90,9 @@ func (w *Worker) trafficOp(ctx dbos.Context, ev *events, d *descriptor.Descripto
 	return out, nil
 }
 
-// drainBatch svuota i target di un lotto: lo step drain verifica la capacità del pool (se
-// insufficiente il motore attende e riprova, fino a drain_timeout) e toglie i membri, poi
-// un'attesa durevole aspetta la fine delle connessioni.
+// drainBatch drains the targets of a batch: the drain step checks the pool capacity (if
+// insufficient the engine waits and retries, up to drain_timeout) and removes the members,
+// then a durable wait waits for the connections to end.
 func (w *Worker) drainBatch(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, batch []descriptor.Target,
 	suffix string, outputs map[string]pipeline.Output, res *Result, track *passTrack) (*startedStep, error) {
 	if w.traffic == nil {
@@ -128,7 +128,7 @@ func (w *Worker) drainBatch(ctx dbos.Context, id string, ev *events, d *descript
 	track.drained(w, ctx, members, true)
 	if err := w.poolWait(ctx, id, ev, d, batch, steps.DrainStep, suffix, outputs, res); err != nil {
 		if cfg.OnTimeout == descriptor.OnTimeoutFail {
-			// Il lotto non viene toccato: torna in servizio prima di fermare il passo.
+			// The batch is not touched: it goes back in service before stopping the pass.
 			if _, rerr := w.restoreBatch(ctx, id, ev, d, batch, suffix, outputs, res, track); rerr != nil {
 				return started, errors.Join(err, rerr)
 			}
@@ -138,8 +138,8 @@ func (w *Worker) drainBatch(ctx dbos.Context, id string, ev *events, d *descript
 	return started, nil
 }
 
-// restoreBatch rimette in servizio i target del lotto e attende che il load balancer li veda
-// sani: un target non torna mai in servizio senza essere sano.
+// restoreBatch puts the batch targets back in service and waits for the load balancer to see
+// them healthy: a target never goes back in service without being healthy.
 func (w *Worker) restoreBatch(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, batch []descriptor.Target,
 	suffix string, outputs map[string]pipeline.Output, res *Result, track *passTrack) (*startedStep, error) {
 	ps := pipeline.PlannedStep{Name: steps.RestoreStep, MaxRetries: 3}
@@ -159,9 +159,9 @@ func poolMembers(d *descriptor.Descriptor, ts []descriptor.Target) []string {
 	return out
 }
 
-// poolWait attende, con letture e pause durevoli, la fine delle connessioni (drain) o la
-// salute dei target (restore). Allo scadere: per lo svuotamento con on_timeout proceed il
-// deploy prosegue (le connessioni residue vengono chiuse dal riavvio), altrimenti è un errore.
+// poolWait waits, with durable reads and pauses, for the connections to end (drain) or for
+// the targets to be healthy (restore). On timeout: for draining with on_timeout proceed the
+// deploy goes on (the remaining connections are closed by the restart), otherwise it is an error.
 func (w *Worker) poolWait(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, batch []descriptor.Target,
 	phase, suffix string, outputs map[string]pipeline.Output, res *Result) error {
 	cfg := d.Traffic.Pool
@@ -202,9 +202,8 @@ func (w *Worker) poolWait(ctx dbos.Context, id string, ev *events, d *descriptor
 	}
 }
 
-// trafficPlan è il piano di un rilascio per percentuale: con le ondate i passi del piano a
-// ondate (un cluster o una region alla volta), ciascuno con tutti i gradini; senza, un solo
-// passo con tutti i target.
+// trafficPlan is the plan of a percentage rollout: with waves the passes of the wave plan (one
+// cluster or region at a time), each with all steps; without, a single pass with all targets.
 func trafficPlan(d descriptor.Descriptor) (rollout.Plan, error) {
 	if len(d.Rollout.Waves) > 0 {
 		return rollout.Build(d.Deploy.Targets, d.Rollout)
@@ -213,11 +212,10 @@ func trafficPlan(d descriptor.Descriptor) (rollout.Plan, error) {
 	return rollout.Plan{Stages: []rollout.Stage{{Name: "traffic", Wave: "traffic", Passes: []rollout.Pass{p}, LastOfWave: true}}}, nil
 }
 
-// multiPass indica un rilascio per percentuale a ondate: nomi degli step e degli stadi
-// riportano il passo.
+// multiPass reports a percentage rollout in waves: step and stage names carry the pass.
 func multiPass(d *descriptor.Descriptor) bool { return len(d.Rollout.Waves) > 0 }
 
-// stageName è il nome dello stadio di un gradino ("25%", o "<passo>/25%" con le ondate).
+// stageName is the stage name of a step ("25%", or "<pass>/25%" with waves).
 func stageName(d *descriptor.Descriptor, pass string, percent int) string {
 	name := strconv.Itoa(percent) + "%"
 	if multiPass(d) {
@@ -226,8 +224,7 @@ func stageName(d *descriptor.Descriptor, pass string, percent int) string {
 	return name
 }
 
-// newTrafficState crea lo stato di un rilascio per percentuale: uno stadio per gradino di
-// ogni passo.
+// newTrafficState creates the state of a percentage rollout: one stage per step of every pass.
 func newTrafficState(d *descriptor.Descriptor, plan rollout.Plan) *RolloutState {
 	r := d.Rollout
 	st := &RolloutState{Strategy: descriptor.StrategyTraffic, Status: service.RolloutRunning, OnFailure: r.OnFailureOrDefault(),
@@ -243,12 +240,12 @@ func newTrafficState(d *descriptor.Descriptor, plan rollout.Plan) *RolloutState 
 	return st
 }
 
-// trafficRun è lo stato del rilascio di un passo, per il ritorno in caso di errore.
+// trafficRun is the rollout state of a pass, for the return on error.
 type trafficRun struct {
 	pass rollout.Pass
-	// base è l'indice del primo stadio del passo in RolloutState.Stages.
+	// base is the index of the pass's first stage in RolloutState.Stages.
 	base int
-	// sfx è il suffisso dei nomi degli step del passo ("" senza ondate).
+	// sfx is the suffix of the pass's step names ("" without waves).
 	sfx      string
 	in       pipeline.Input
 	prepared bool
@@ -256,11 +253,11 @@ type trafficRun struct {
 	started  []startedStep
 }
 
-// runTraffic esegue un rilascio per percentuale: step iniziali; per ogni passo (uno solo
-// senza ondate) preparazione (versione stabile, slot candidato), gli step da deploy ad
-// activation esclusa sulla candidata senza traffico, tester, gradini (pesi, bake, gate,
-// approvazioni), promozione e activation; infine gli step finali. Un workflow figlio per passo
-// ridimensiona la versione sostituita dopo scaleDownDelay.
+// runTraffic runs a percentage rollout: initial steps; for every pass (just one without
+// waves) preparation (stable version, candidate slot), the steps from deploy to activation
+// excluded on the candidate without traffic, testers, steps (weights, bake, gate,
+// approvals), promotion and activation; finally the final steps. A child workflow per pass
+// scales down the replaced version after scaleDownDelay.
 func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result) error {
 	if w.traffic == nil {
 		return pipeline.Permanent(errors.New("strategy: traffic non disponibile su questo server"))
@@ -338,7 +335,7 @@ func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descrip
 	return nil
 }
 
-// trafficPass esegue il rilascio affiancato sui target del passo (d ha i soli target del passo).
+// trafficPass runs the side-by-side release on the pass targets (d has only the pass targets).
 func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result,
 	rs *RolloutState, perPass pipeline.Plan, outputs map[string]pipeline.Output, run *trafficRun) error {
 	tr := d.Rollout.Traffic
@@ -393,7 +390,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		return err
 	}
 	if d.DryRun {
-		// In dry-run il traffico non si sposta: gli step restanti si simulano o si saltano.
+		// In dry-run traffic does not move: the remaining steps are simulated or skipped.
 		return exec(perPass[act:])
 	}
 	if tr.Testers != nil && hasStable {
@@ -412,7 +409,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 	for k, pct := range tr.Steps {
 		i := run.base + k
 		if !hasStable && pct < 100 {
-			// Primo rilascio: non c'è traffico da dividere, la candidata riceve subito tutto.
+			// First release: there is no traffic to split, the candidate gets everything at once.
 			rs.Stages[i].State = service.StageSucceeded
 			continue
 		}
@@ -472,8 +469,8 @@ func cmpTargets(a, b []descriptor.Target) []descriptor.Target {
 	return b
 }
 
-// checkDrift verifica che i pesi del router siano quelli impostati da manent: se qualcuno li
-// ha cambiati, il rollout si ferma in attesa di una decisione invece di sovrascriverli.
+// checkDrift checks that the router weights are those set by manent: if someone changed them,
+// the rollout stops waiting for a decision instead of overwriting them.
 func (w *Worker) checkDrift(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result,
 	rs *RolloutState, in pipeline.Input, sfx string, pct, last int) error {
 	out, err := w.trafficOp(ctx, ev, d, res, "traffic:weight@"+strconv.Itoa(pct)+sfx, true, in, w.traffic.Weight)
@@ -489,9 +486,9 @@ func (w *Worker) checkDrift(ctx dbos.Context, id string, req Request, d *descrip
 	return w.waitRolloutApproval(ctx, id, req, msg, service.RolloutPausedDrift, rs)
 }
 
-// trafficFailure riporta il traffico alla versione stabile (salvo onFailure: stop): con
-// rollback-wave solo nel passo fallito, con rollback-all in tutti i passi già eseguiti, in
-// ordine inverso. Poi compensa gli step avviati di quei passi.
+// trafficFailure brings traffic back to the stable version (unless onFailure: stop): with
+// rollback-wave only in the failed pass, with rollback-all in all passes already run, in
+// reverse order. Then it compensates the started steps of those passes.
 func (w *Worker) trafficFailure(ctx dbos.Context, id string, d *descriptor.Descriptor, ev *events, res *Result,
 	rs *RolloutState, runs []*trafficRun, cause error) error {
 	rs.Status = service.RolloutFailed
@@ -543,7 +540,7 @@ func (w *Worker) trafficFailure(ctx dbos.Context, id string, d *descriptor.Descr
 	return rbErr
 }
 
-// retireInput è l'input del workflow che ridimensiona la versione sostituita.
+// retireInput is the input of the workflow that scales down the replaced version.
 type retireInput struct {
 	DeploymentID string                     `json:"deployment_id"`
 	Descriptor   descriptor.Descriptor      `json:"descriptor"`
@@ -551,10 +548,9 @@ type retireInput struct {
 	RequestedBy  string                     `json:"requested_by,omitempty"`
 }
 
-// scheduleRetire avvia, con un ritardo pari a scaleDownDelay, il workflow figlio che
-// ridimensiona la versione sostituita nel passo (ID <id>.retire, o <id>.retire.<passo> con le
-// ondate). Gira sulla coda delle approvazioni: non occupa uno slot dell'ambiente, così il
-// deploy si conclude subito.
+// scheduleRetire starts, with a delay of scaleDownDelay, the child workflow that scales down
+// the version replaced in the pass (ID <id>.retire, or <id>.retire.<pass> with waves). It
+// runs on the approvals queue: it takes no environment slot, so the deploy ends at once.
 func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *trafficRun) {
 	q, err := dbos.RetrieveQueue(w.dbos, approvalQueue(w.queueName))
 	if err != nil {
@@ -584,8 +580,8 @@ func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *t
 	}
 }
 
-// retireWorkflow ridimensiona la versione sostituita. Il plugin non tocca la versione in
-// esercizio, anche se nel frattempo un altro rilascio l'ha cambiata.
+// retireWorkflow scales down the replaced version. The plugin does not touch the version in
+// service, even if another release changed it meanwhile.
 func (w *Worker) retireWorkflow(ctx dbos.Context, in retireInput) (pipeline.Output, error) {
 	if w.traffic == nil {
 		return nil, errors.New("strategy: traffic non disponibile su questo worker")
@@ -596,7 +592,7 @@ func (w *Worker) retireWorkflow(ctx dbos.Context, in retireInput) (pipeline.Outp
 	return w.trafficOp(ctx, ev, &in.Descriptor, &res, "traffic:retire", false, pin, w.traffic.Retire)
 }
 
-// trafficMeta descrive la configurazione di traffico nell'output dello step config.
+// trafficMeta describes the traffic configuration in the output of the config step.
 func trafficMeta(d descriptor.Descriptor) string {
 	var parts []string
 	if c := d.Traffic; c != nil {

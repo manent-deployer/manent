@@ -7,23 +7,23 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// Activator rende operativo in esercizio il rilascio (switch del traffico, apertura change, ...).
+// Activator puts the release into service (traffic switch, change opening, ...).
 type Activator interface {
 	Activate(ctx context.Context, in pipeline.Input) error
 }
 
-// Deactivator è implementato dagli Activator che sanno annullare l'attivazione, in caso di
-// rollback (es. riportare il traffico sulla release precedente). Deve essere idempotente.
+// Deactivator is implemented by Activators that can undo the activation, on rollback (e.g.
+// bring traffic back to the previous release). It must be idempotent.
 type Deactivator interface {
 	Deactivate(ctx context.Context, in pipeline.Input) error
 }
 
-// LogActivator è l'implementazione iniziale: registra soltanto l'attivazione.
+// LogActivator is the initial implementation: it only logs the activation.
 type LogActivator struct {
 	Logger *slog.Logger
 }
 
-// Activate registra l'attivazione senza altri effetti.
+// Activate logs the activation without other effects.
 func (a LogActivator) Activate(ctx context.Context, in pipeline.Input) error {
 	a.Logger.InfoContext(ctx, "rilascio attivato in esercizio",
 		"deployment", in.DeploymentID,
@@ -33,7 +33,7 @@ func (a LogActivator) Activate(ctx context.Context, in pipeline.Input) error {
 	return nil
 }
 
-// Deactivate registra l'annullamento dell'attivazione senza altri effetti.
+// Deactivate logs the undoing of the activation without other effects.
 func (a LogActivator) Deactivate(ctx context.Context, in pipeline.Input) error {
 	a.Logger.WarnContext(ctx, "attivazione annullata dal rollback",
 		"deployment", in.DeploymentID,
@@ -43,15 +43,15 @@ func (a LogActivator) Deactivate(ctx context.Context, in pipeline.Input) error {
 	return nil
 }
 
-// Activation delega all'Activator configurato.
+// Activation delegates to the configured Activator.
 type Activation struct {
 	Activator Activator
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (Activation) Name() string { return "activation" }
 
-// Run esegue l'attivazione.
+// Run runs the activation.
 func (a Activation) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	if err := a.Activator.Activate(ctx, in); err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (a Activation) Run(ctx context.Context, in pipeline.Input) (pipeline.Output
 	return pipeline.Output{"status": "active"}, nil
 }
 
-// Compensate annulla l'attivazione se l'Activator lo supporta; altrimenti non fa nulla.
+// Compensate undoes the activation if the Activator supports it; otherwise it does nothing.
 func (a Activation) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.Output) (pipeline.Output, error) {
 	d, ok := a.Activator.(Deactivator)
 	if !ok {

@@ -1,5 +1,5 @@
-# Worker di manent: esegue i deploy dalla coda.
-# Installazione: docs/content/operazioni/installazione.md
+# manent worker: runs the deploys from the queue.
+# Installation: docs/content/operazioni/installazione.md
 [Unit]
 Description=manent worker
 Documentation=https://github.com/joeg-ita/manent
@@ -10,18 +10,18 @@ Wants=network-online.target
 Type=simple
 User=manent
 Group=manent
-# DBOS_SYSTEM_DATABASE_URL e gli eventuali segreti (CONSUL_HTTP_TOKEN, ...).
+# DBOS_SYSTEM_DATABASE_URL and any secrets (CONSUL_HTTP_TOKEN, ...).
 EnvironmentFile=/etc/manent/manent.env
 Environment=MANENT_CONFIG=/etc/manent/manent.yml
 ExecStart=/usr/local/bin/manent-server worker
 WorkingDirectory=/var/lib/manent
-# All'arresto il worker smette di prelevare deploy e attende quelli in corso per
-# dbos.drain_timeout: il timeout di systemd deve superarlo.
+# On shutdown the worker stops dequeuing deploys and waits for the running ones for
+# dbos.drain_timeout: the systemd timeout must exceed it.
 TimeoutStopSec=6min
 KillSignal=SIGTERM
 Restart=on-failure
 RestartSec=5s
-# executor_id = hostname (default): deve restare lo stesso tra i riavvii.
+# executor_id = hostname (default): it must stay the same across restarts.
 StateDirectory=manent
 NoNewPrivileges=true
 ProtectSystem=strict

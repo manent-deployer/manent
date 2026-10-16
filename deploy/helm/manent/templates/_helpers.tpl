@@ -36,7 +36,7 @@ app.kubernetes.io/component: {{ .component }}
 {{- printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) -}}
 {{- end -}}
 
-{{/* Variabili comuni: database, configurazione e identità del pod. */}}
+{{/* Common variables: database, configuration and pod identity. */}}
 {{- define "manent.env" -}}
 - name: MANENT_CONFIG
   value: /etc/manent/manent.yml

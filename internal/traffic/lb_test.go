@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// fakeBigIP emula iControl REST per un pool con due membri.
+// fakeBigIP emulates iControl REST for a pool with two members.
 type fakeBigIP struct {
 	mu      sync.Mutex
 	members map[string]map[string]any
@@ -103,7 +103,7 @@ func TestF5Pool(t *testing.T) {
 	}
 }
 
-// fakeNginxPlus emula l'API di NGINX Plus per un upstream.
+// fakeNginxPlus emulates the NGINX Plus API for an upstream.
 type fakeNginxPlus struct {
 	mu    sync.Mutex
 	peers []map[string]any

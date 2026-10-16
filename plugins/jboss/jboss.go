@@ -1,14 +1,13 @@
-// Package jboss rilascia applicazioni Java EE / Jakarta EE (war, ear) su JBoss EAP e WildFly
-// tramite l'API HTTP di management, in standalone o in domain mode.
+// Package jboss releases Java EE / Jakarta EE applications (war, ear) to JBoss EAP and WildFly
+// through the HTTP management API, in standalone or domain mode.
 //
-// Ogni versione diventa un deployment distinto, "<applicazione>-<versione>.<ext>", con lo
-// stesso runtime-name (default "<applicazione>.<ext>"): il passaggio dalla versione in
-// esercizio alla nuova è un'operazione composite (undeploy della vecchia, deploy della nuova)
-// che il server applica in modo atomico. Le versioni precedenti restano nel repository dei
-// contenuti, disattivate, fino a keep_releases: il rollback riattiva la precedente senza
-// ricaricare nulla.
+// Every version becomes a separate deployment, "<application>-<version>.<ext>", with the same
+// runtime-name (default "<application>.<ext>"): switching from the version in service to the
+// new one is a composite operation (undeploy of the old, deploy of the new) that the server
+// applies atomically. Previous versions stay in the content repository, disabled, up to
+// keep_releases: the rollback reactivates the previous one without uploading anything.
 //
-// Sospensione (graceful), reload e restart del server sono controllati con parametri booleani.
+// Suspend (graceful), reload and restart of the server are controlled with boolean parameters.
 package jboss
 
 import (
@@ -38,25 +37,25 @@ import (
 	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "jboss"
 
-// Parametri del descrittore (deploy.params) letti dal plugin.
+// Descriptor parameters (deploy.params) read by the plugin.
 const (
-	ParamUsername       = "username"        // utente di management
-	ParamPasswordSecret = "password_secret" // segreto con la password di management
-	ParamTLS            = "tls"             // https verso l'interfaccia di management (default true)
-	ParamServerGroups   = "server_groups"   // domain mode: server group, separati da virgola
-	ParamRuntimeName    = "runtime_name"    // default "<applicazione>.<ext>"
-	ParamSuspend        = "suspend"         // sospende il server prima del cambio di versione
-	ParamSuspendTimeout = "suspend_timeout" // attesa delle richieste in corso (default 60s)
-	ParamReload         = "reload"          // reload del server dopo il cambio di versione
-	ParamRestart        = "restart"         // restart della JVM dopo il cambio di versione
-	ParamKeepReleases   = "keep_releases"   // versioni conservate, compresa l'attiva (default 3, minimo 2)
-	ParamWaitTimeout    = "wait_timeout"    // attesa del server dopo reload/restart (default 5m)
+	ParamUsername       = "username"        // management user
+	ParamPasswordSecret = "password_secret" // secret with the management password
+	ParamTLS            = "tls"             // https to the management interface (default true)
+	ParamServerGroups   = "server_groups"   // domain mode: server groups, comma separated
+	ParamRuntimeName    = "runtime_name"    // default "<application>.<ext>"
+	ParamSuspend        = "suspend"         // suspends the server before the version switch
+	ParamSuspendTimeout = "suspend_timeout" // wait for requests in progress (default 60s)
+	ParamReload         = "reload"          // server reload after the version switch
+	ParamRestart        = "restart"         // JVM restart after the version switch
+	ParamKeepReleases   = "keep_releases"   // versions kept, the active one included (default 3, at least 2)
+	ParamWaitTimeout    = "wait_timeout"    // wait for the server after reload/restart (default 5m)
 )
 
-// DetailDeployment è la chiave di Release.Details con il nome del deployment.
+// DetailDeployment is the Release.Details key with the deployment name.
 const DetailDeployment = "deployment"
 
 const (
@@ -65,28 +64,28 @@ const (
 	defaultWaitTimeout    = 5 * time.Minute
 )
 
-// extensions sono le estensioni di artefatto ammesse.
+// extensions are the allowed artifact extensions.
 var extensions = []string{".war", ".ear", ".jar", ".rar", ".sar"}
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	connector Connector
 	types     []string
 	logger    *slog.Logger
-	// poll è l'intervallo delle letture durante le attese.
+	// poll is the read interval during waits.
 	poll time.Duration
 }
 
-// New crea il plugin con il connector e i tipi di artefatto indicati.
+// New creates the plugin with the given connector and artifact types.
 func New(c Connector, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{connector: c, types: types, logger: logger, poll: 2 * time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - artifact_types: tipi supportati (default ["war", "ear"])
-//   - ca_file: CA aggiuntive per l'interfaccia di management in https
-//   - insecure_skip_tls_verify: non verifica il certificato (solo sviluppo)
-//   - request_timeout: durata massima di una chiamata (default 10m, per i caricamenti)
+// Factory builds the plugin from the application configuration:
+//   - artifact_types: supported types (default ["war", "ear"])
+//   - ca_file: extra CAs for the https management interface
+//   - insecure_skip_tls_verify: does not verify the certificate (development only)
+//   - request_timeout: maximum duration of a call (default 10m, for uploads)
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	types, err := pluginutil.ArtifactTypes(cfg, "war", "ear")
 	if err != nil {
@@ -118,20 +117,20 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = tlsCfg
-	// Un client che non segue i redirect: le credenziali vanno solo all'host indicato.
+	// A client that does not follow redirects: credentials go only to the given host.
 	hc := &http.Client{Transport: tr, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
 	return New(HTTPConnector{HTTP: hc}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
-// options sono i parametri del deploy già letti e validati.
+// options are the deploy parameters, already read and validated.
 type options struct {
 	username, passwordSecret string
 	tls                      bool
@@ -142,7 +141,7 @@ type options struct {
 	keep                     int
 }
 
-// parse legge e valida i parametri della richiesta.
+// parse reads and validates the request parameters.
 func parse(req *plugin.Request) (options, error) {
 	var errs []error
 	o := options{username: req.Params[ParamUsername], passwordSecret: req.Params[ParamPasswordSecret], prefix: req.Application + "-"}
@@ -207,7 +206,7 @@ func parse(req *plugin.Request) (options, error) {
 	return o, errors.Join(errs...)
 }
 
-// artifactExt restituisce l'estensione dell'artefatto: dal file scaricato o dal tipo.
+// artifactExt returns the artifact extension: from the downloaded file or from the type.
 func artifactExt(a plugin.Artifact) string {
 	if e := strings.ToLower(filepath.Ext(a.LocalPath)); slices.Contains(extensions, e) {
 		return e
@@ -218,10 +217,10 @@ func artifactExt(a plugin.Artifact) string {
 	return ""
 }
 
-// deploymentName è il nome del deployment di una versione.
+// deploymentName is the deployment name of a version.
 func (o options) deploymentName(version string) string { return o.prefix + version + o.ext }
 
-// versionOf ricava la versione dal nome di un deployment gestito da manent.
+// versionOf derives the version from the name of a deployment managed by manent.
 func (o options) versionOf(name string) (string, bool) {
 	if !strings.HasPrefix(name, o.prefix) || !strings.HasSuffix(name, o.ext) {
 		return "", false
@@ -230,14 +229,14 @@ func (o options) versionOf(name string) (string, bool) {
 	return v, v != ""
 }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	_, err := parse(req)
 	return err
 }
 
-// Deploy rilascia la versione su ogni target in sequenza e si ferma al primo errore. Un
-// target già sulla versione richiesta non viene toccato: l'operazione è idempotente.
+// Deploy releases the version to every target in sequence and stops at the first error. A
+// target already on the requested version is not touched: the operation is idempotent.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	o, err := parse(req)
 	if err != nil {
@@ -252,8 +251,8 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	})
 }
 
-// Rollback riattiva su ogni target il deployment della release precedente, ancora presente
-// nel repository dei contenuti.
+// Rollback reactivates on every target the deployment of the previous release, still present
+// in the content repository.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	o, err := parse(req)
 	if err != nil {
@@ -268,8 +267,8 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	})
 }
 
-// CurrentRelease legge dal primo target il deployment attivo con il runtime-name
-// dell'applicazione; nil se non ce n'è.
+// CurrentRelease reads from the first target the active deployment with the application's
+// runtime-name; nil if there is none.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	o, err := parse(req)
 	if err != nil {
@@ -292,14 +291,14 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	}
 	v, ok := o.versionOf(cur.Name)
 	if !ok {
-		// Deployment non creato da manent (es. rilasciato a mano): la versione non è nota, ma il
-		// rollback può comunque riattivarlo per nome.
+		// Deployment not created by manent (e.g. released by hand): the version is unknown, but the
+		// rollback can still reactivate it by name.
 		v = cur.Name
 	}
 	return &plugin.Release{Version: v, Details: map[string]string{DetailDeployment: cur.Name}}, nil
 }
 
-// DryRun verifica credenziali, modalità, server group e stato di ogni target, senza modifiche.
+// DryRun checks credentials, mode, server groups and state of every target, without changes.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	o, err := parse(req)
 	if err != nil {
@@ -329,7 +328,7 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	})
 }
 
-// each apre una sessione per target ed esegue fn, fermandosi al primo errore.
+// each opens a session per target and runs fn, stopping at the first error.
 func (p *Plugin) each(ctx context.Context, req *plugin.Request, o options, status string, fn func(*session) (map[string]string, error)) (*plugin.Result, error) {
 	res := &plugin.Result{Plugin: Name}
 	for _, t := range req.Targets {
@@ -347,7 +346,7 @@ func (p *Plugin) each(ctx context.Context, req *plugin.Request, o options, statu
 	return res, nil
 }
 
-// session è la connessione a un'istanza standalone o a un domain controller.
+// session is the connection to a standalone instance or a domain controller.
 type session struct {
 	c      Client
 	domain bool
@@ -364,7 +363,7 @@ func (s *session) mode() string {
 	return "standalone"
 }
 
-// open si connette al target, riconosce la modalità e verifica i server group.
+// open connects to the target, detects the mode and checks the server groups.
 func (p *Plugin) open(ctx context.Context, req *plugin.Request, o options, t plugin.Target) (*session, error) {
 	if req.Secrets == nil {
 		return nil, errors.New("secret resolver non disponibile")
@@ -412,7 +411,7 @@ func (p *Plugin) open(ctx context.Context, req *plugin.Request, o options, t plu
 	return s, nil
 }
 
-// attribute legge un attributo stringa di una risorsa.
+// attribute reads a string attribute of a resource.
 func (s *session) attribute(ctx context.Context, addr Address, name string) (string, error) {
 	raw, err := s.c.Execute(ctx, op("read-attribute", addr, "name", name))
 	if err != nil {
@@ -425,14 +424,14 @@ func (s *session) attribute(ctx context.Context, addr Address, name string) (str
 	return v, nil
 }
 
-// deployment è un deployment del server (o del dominio).
+// deployment is a deployment of the server (or of the domain).
 type deployment struct {
 	Name        string
 	RuntimeName string
 	Hash        string
-	// Enabled: attivo (in domain mode, in tutti i server group indicati).
+	// Enabled: active (in domain mode, in all the given server groups).
 	Enabled bool
-	// Groups sono i server group a cui è assegnato (domain mode), con lo stato di attivazione.
+	// Groups are the server groups it is assigned to (domain mode), with their enabled state.
 	Groups map[string]bool
 }
 
@@ -446,7 +445,7 @@ type dmrDeployment struct {
 	} `json:"content"`
 }
 
-// deployments legge i deployment; in domain mode anche le assegnazioni ai server group.
+// deployments reads the deployments; in domain mode also the server group assignments.
 func (s *session) deployments(ctx context.Context) (map[string]*deployment, error) {
 	read := func(addr Address) (map[string]dmrDeployment, error) {
 		raw, err := s.c.Execute(ctx, op("read-children-resources", addr, "child-type", "deployment"))
@@ -496,8 +495,8 @@ func (s *session) deployments(ctx context.Context) (map[string]*deployment, erro
 	return out, nil
 }
 
-// active restituisce il deployment attivo con il runtime-name indicato. In domain mode, se le
-// assegnazioni non sono allineate, quello attivo in almeno un server group.
+// active returns the active deployment with the given runtime-name. In domain mode, if the
+// assignments are not aligned, the one active in at least one server group.
 func active(deps map[string]*deployment, runtimeName string) *deployment {
 	var partial *deployment
 	for _, name := range slices.Sorted(maps.Keys(deps)) {
@@ -517,8 +516,8 @@ func active(deps map[string]*deployment, runtimeName string) *deployment {
 	return partial
 }
 
-// release porta il target sul deployment name. Con sum (deploy) carica il contenuto se manca;
-// senza (rollback) il deployment deve esistere già.
+// release brings the target to deployment name. With sum (deploy) it uploads the content if
+// missing; without it (rollback) the deployment must already exist.
 func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o options, name, sum string) (map[string]string, error) {
 	details := map[string]string{"mode": s.mode(), DetailDeployment: name, "runtime_name": o.runtimeName}
 	deps, err := s.deployments(ctx)
@@ -542,8 +541,8 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 	case target == nil && sum == "":
 		return details, fmt.Errorf("il deployment %s non è più presente: impossibile riattivarlo", name)
 	case target != nil && sum != "" && target.Hash != sum:
-		// Stesso nome ma contenuto diverso (es. artefatto ricostruito con la stessa versione):
-		// mai sostituire il contenuto del deployment attivo senza passare dal cambio di versione.
+		// Same name but different content (e.g. artifact rebuilt with the same version): never
+		// replace the content of the active deployment without going through a version switch.
 		if target == cur {
 			return details, fmt.Errorf("il deployment attivo %s ha un contenuto diverso dall'artefatto: usare una nuova versione", name)
 		}
@@ -576,7 +575,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 	}
 	if err := s.swap(ctx, deps, o.runtimeName, target); err != nil {
 		if suspended {
-			// Il cambio è annullato dal server: si rimette in servizio la versione di prima.
+			// The server rolled the switch back: put the previous version back in service.
 			if rerr := s.resume(ctx); rerr != nil {
 				s.log.ErrorContext(ctx, "resume dopo un cambio di versione fallito", "error", rerr)
 				err = fmt.Errorf("%w; resume fallito: %v", err, rerr)
@@ -603,14 +602,14 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 	}
 	if sum != "" {
 		if err := s.cleanup(ctx, o, name, details["previous"]); err != nil {
-			// La pulizia non fa fallire un rilascio riuscito.
+			// Cleanup does not fail a successful release.
 			s.log.WarnContext(ctx, "pulizia dei deployment precedenti fallita", "error", err)
 		}
 	}
 	return details, nil
 }
 
-// add carica il contenuto e crea il deployment, non attivo.
+// add uploads the content and creates the deployment, disabled.
 func (s *session) add(ctx context.Context, path, name, runtimeName string) error {
 	hash, err := s.c.Upload(ctx, path)
 	if err != nil {
@@ -632,8 +631,8 @@ func (s *session) add(ctx context.Context, path, name, runtimeName string) error
 	return nil
 }
 
-// swap disattiva i deployment con lo stesso runtime-name e attiva target, in un'unica
-// operazione composite: se un passo fallisce il server annulla anche gli altri.
+// swap disables the deployments with the same runtime-name and enables target, in a single
+// composite operation: if a step fails the server rolls back the others too.
 func (s *session) swap(ctx context.Context, deps map[string]*deployment, runtimeName string, target *deployment) error {
 	var steps []Operation
 	addrs := func(name string) []Address {
@@ -676,8 +675,8 @@ func (s *session) swap(ctx context.Context, deps map[string]*deployment, runtime
 	return nil
 }
 
-// suspend sospende il server (o i server group): le nuove richieste ricevono 503 e quelle in
-// corso hanno suspend_timeout per terminare.
+// suspend suspends the server (or the server groups): new requests get 503 and those in
+// progress have suspend_timeout to finish.
 func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 	secs := int(timeout.Seconds())
 	if s.domain {
@@ -692,8 +691,8 @@ func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 	if _, err := s.c.Execute(ctx, op("suspend", nil, "suspend-timeout", secs)); err != nil {
 		return fmt.Errorf("suspend: %w", err)
 	}
-	// Su un'istanza standalone l'operazione può restituire prima della fine delle richieste:
-	// si attende lo stato SUSPENDED, al più suspend_timeout.
+	// On a standalone instance the operation may return before requests finish: wait for the
+	// SUSPENDED state, at most suspend_timeout.
 	deadline := time.Now().Add(timeout)
 	for {
 		state, err := s.attribute(ctx, nil, "suspend-state")
@@ -711,7 +710,7 @@ func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 	}
 }
 
-// resume rimette in servizio il server (o i server group).
+// resume puts the server (or the server groups) back in service.
 func (s *session) resume(ctx context.Context) error {
 	if s.domain {
 		for _, g := range s.groups {
@@ -727,7 +726,7 @@ func (s *session) resume(ctx context.Context) error {
 	return nil
 }
 
-// reloadServer ricarica la configurazione e i servizi senza riavviare la JVM.
+// reloadServer reloads configuration and services without restarting the JVM.
 func (s *session) reloadServer(ctx context.Context, wait time.Duration) error {
 	if s.domain {
 		return s.groupOp(ctx, "reload-servers")
@@ -738,8 +737,8 @@ func (s *session) reloadServer(ctx context.Context, wait time.Duration) error {
 	return s.waitRunning(ctx, wait)
 }
 
-// restartServer riavvia la JVM: in standalone con shutdown(restart=true), che richiede un
-// avvio tramite standalone.sh o un servizio che lo gestisce.
+// restartServer restarts the JVM: in standalone mode with shutdown(restart=true), which
+// requires a start through standalone.sh or a service that handles it.
 func (s *session) restartServer(ctx context.Context, wait time.Duration) error {
 	if s.domain {
 		return s.groupOp(ctx, "restart-servers")
@@ -750,7 +749,7 @@ func (s *session) restartServer(ctx context.Context, wait time.Duration) error {
 	return s.waitRunning(ctx, wait)
 }
 
-// groupOp esegue un'operazione bloccante su ogni server group.
+// groupOp runs a blocking operation on every server group.
 func (s *session) groupOp(ctx context.Context, name string) error {
 	for _, g := range s.groups {
 		if _, err := s.c.Execute(ctx, op(name, Address{{"server-group", g}}, "blocking", true)); err != nil {
@@ -761,11 +760,11 @@ func (s *session) groupOp(ctx context.Context, name string) error {
 	return nil
 }
 
-// waitRunning attende che il server torni nello stato running; durante il riavvio
-// l'interfaccia di management non risponde.
+// waitRunning waits until the server is running again; during the restart the management
+// interface does not answer.
 func (s *session) waitRunning(ctx context.Context, wait time.Duration) error {
 	deadline := time.Now().Add(wait)
-	// Il server impiega un attimo a lasciare lo stato running.
+	// The server takes a moment to leave the running state.
 	if err := sleep(ctx, s.poll); err != nil {
 		return err
 	}
@@ -787,7 +786,7 @@ func (s *session) waitRunning(ctx context.Context, wait time.Duration) error {
 	}
 }
 
-// remove elimina un deployment non attivo (in domain mode prima dai server group).
+// remove deletes a disabled deployment (in domain mode from the server groups first).
 func (s *session) remove(ctx context.Context, d *deployment) error {
 	for g := range d.Groups {
 		if _, err := s.c.Execute(ctx, op("remove", Address{{"server-group", g}, {"deployment", d.Name}})); err != nil {
@@ -800,8 +799,8 @@ func (s *session) remove(ctx context.Context, d *deployment) error {
 	return nil
 }
 
-// cleanup elimina le versioni gestite da manent oltre keep_releases, dalla più vecchia; non
-// tocca mai la versione attivata, la precedente né un deployment attivo.
+// cleanup deletes the manent-managed versions beyond keep_releases, oldest first; it never
+// touches the activated version, the previous one or an active deployment.
 func (s *session) cleanup(ctx context.Context, o options, current, previous string) error {
 	deps, err := s.deployments(ctx)
 	if err != nil {
@@ -838,7 +837,7 @@ func (s *session) cleanup(ctx context.Context, o options, current, previous stri
 	return nil
 }
 
-// contentHash è l'hash del contenuto come lo calcola il server (SHA-1, in base64 nel DMR).
+// contentHash is the content hash as the server computes it (SHA-1, base64 in DMR).
 func contentHash(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -852,14 +851,14 @@ func contentHash(path string) (string, error) {
 	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
-// disconnected indica un errore di rete: reload e shutdown possono chiudere la connessione
-// prima della risposta.
+// disconnected reports a network error: reload and shutdown may close the connection before
+// the response.
 func disconnected(err error) bool {
 	var oe *OperationError
 	return !errors.As(err, &oe)
 }
 
-// compareVersions confronta due versioni a segmenti numerici e testuali (1.10 > 1.9).
+// compareVersions compares two versions by numeric and text segments (1.10 > 1.9).
 func compareVersions(a, b string) int {
 	sa, sb := splitVersion(a), splitVersion(b)
 	for i := 0; i < len(sa) && i < len(sb); i++ {

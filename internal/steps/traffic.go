@@ -18,27 +18,27 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Nomi degli step del pool: il motore li inserisce intorno agli step di ogni lotto quando
-// l'ambiente ha un pool (traffic.pool).
+// Names of the pool steps: the engine inserts them around the steps of every batch when the
+// environment has a pool (traffic.pool).
 const (
 	DrainStep   = "drain"
 	RestoreStep = "restore"
 )
 
-// Chiavi degli output degli step di traffico.
+// Output keys of the traffic steps.
 const (
 	OutMembers  = "members"
 	OutCapacity = "capacity"
 	OutDetail   = "detail"
-	// CapacityInsufficient indica uno svuotamento rimandato: il motore attende e riprova.
+	// CapacityInsufficient means a postponed drain: the engine waits and retries.
 	CapacityInsufficient = "insufficient"
 )
 
-// TrafficOutput è la chiave in pipeline.Input.Outputs con lo stato del rilascio per
-// percentuale, registrato da Traffic.Prepare.
+// TrafficOutput is the key in pipeline.Input.Outputs with the state of the percentage
+// rollout, recorded by Traffic.Prepare.
 const TrafficOutput = "traffic"
 
-// Chiavi dell'output di Traffic.Prepare.
+// Output keys of Traffic.Prepare.
 const (
 	OutMode       = "mode"
 	OutStable     = "stable"
@@ -51,18 +51,18 @@ const (
 	ModeRouter    = "router"
 )
 
-// Pool costruisce il pool dell'ambiente per un deploy. Condiviso dagli step drain e restore e
-// dalle attese del motore.
+// Pool builds the environment pool for a deploy. Shared by the drain and restore steps and by
+// the engine's waits.
 type Pool struct {
 	Providers *traffic.Providers
 	Secrets   secrets.Provider
-	// Dialer apre le sessioni SSH dei provider basati sui target (nil: SSH con known_hosts).
+	// Dialer opens the SSH sessions of target-based providers (nil: SSH with known_hosts).
 	Dialer  traffic.Dialer
 	Timeout time.Duration
 	Logger  *slog.Logger
 }
 
-// open costruisce il pool e calcola i membri dei target dell'input.
+// open builds the pool and computes the members of the input targets.
 func (p Pool) open(ctx context.Context, in pipeline.Input) (traffic.Pool, *descriptor.PoolConfig, []string, error) {
 	d := in.Descriptor
 	if d.Traffic == nil || d.Traffic.Pool == nil {
@@ -87,9 +87,9 @@ func (p Pool) log(in pipeline.Input) *slog.Logger {
 	return p.Logger.With("deployment", in.DeploymentID, "pool", in.Descriptor.Traffic.Pool.Provider)
 }
 
-// Status legge lo stato dei membri durante un'attesa del motore: con phase "drain" le
-// connessioni residue, con "restore" la salute. done indica l'attesa conclusa; min_wait è
-// l'attesa minima dopo lo svuotamento per i provider che non contano le connessioni.
+// Status reads the state of the members during an engine wait: with phase "drain" the
+// remaining connections, with "restore" the health. done means the wait is over; min_wait is
+// the minimum wait after draining for providers that do not count connections.
 func (p Pool) Status(ctx context.Context, in pipeline.Input, phase string) (pipeline.Output, error) {
 	pool, _, members, err := p.open(ctx, in)
 	if err != nil {
@@ -130,15 +130,15 @@ func (p Pool) Status(ctx context.Context, in pipeline.Input, phase string) (pipe
 	return out, nil
 }
 
-// Drain toglie i target del lotto dal load balancer. Prima verifica la capacità: se i membri
-// sani rimasti sarebbero meno di min_healthy non svuota e lo segnala nell'output, così il
-// motore attende e riprova senza consumare i retry dello step.
+// Drain removes the batch targets from the load balancer. It checks capacity first: if the
+// remaining healthy members would be fewer than min_healthy it does not drain and says so in
+// the output, so the engine waits and retries without consuming the step retries.
 type Drain struct{ Pool Pool }
 
-// Name implementa pipeline.Step.
+// Name implements pipeline.Step.
 func (Drain) Name() string { return DrainStep }
 
-// Run implementa pipeline.Step.
+// Run implements pipeline.Step.
 func (s Drain) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	pool, cfg, members, err := s.Pool.open(ctx, in)
 	if err != nil {
@@ -167,8 +167,8 @@ func (s Drain) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, err
 	return pipeline.Output{OutMembers: strings.Join(members, ","), OutCapacity: "ok"}, nil
 }
 
-// Compensate rimette in servizio i target svuotati e ne attende la salute: è l'ultima
-// compensazione del lotto, dopo il rollback del deploy.
+// Compensate puts the drained targets back in service and waits for their health: it is the
+// last compensation of the batch, after the deploy rollback.
 func (s Drain) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.Output) (pipeline.Output, error) {
 	if err := s.Pool.restore(ctx, in, true); err != nil {
 		return nil, err
@@ -176,13 +176,13 @@ func (s Drain) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.Out
 	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted, "status": "restored"}, nil
 }
 
-// Restore rimette in servizio i target del lotto. L'attesa della salute la fa il motore.
+// Restore puts the batch targets back in service. The engine waits for their health.
 type Restore struct{ Pool Pool }
 
-// Name implementa pipeline.Step.
+// Name implements pipeline.Step.
 func (Restore) Name() string { return RestoreStep }
 
-// Run implementa pipeline.Step.
+// Run implements pipeline.Step.
 func (s Restore) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	if err := s.Pool.restore(ctx, in, false); err != nil {
 		return nil, err
@@ -195,8 +195,8 @@ func (s Restore) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, e
 	return pipeline.Output{OutMembers: strings.Join(members, ",")}, nil
 }
 
-// Compensate svuota di nuovo i target prima che il rollback del deploy li tocchi, e attende
-// la fine delle connessioni.
+// Compensate drains the targets again before the deploy rollback touches them, and waits for
+// the connections to end.
 func (s Restore) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.Output) (pipeline.Output, error) {
 	pool, cfg, members, err := s.Pool.open(ctx, in)
 	if err != nil {
@@ -224,8 +224,8 @@ func (s Restore) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.O
 	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted, "status": "drained"}, nil
 }
 
-// restore rimette in servizio i membri; con wait attende anche la salute (nelle
-// compensazioni, dove non c'è l'attesa durevole del motore).
+// restore puts the members back in service; with wait it also waits for their health (in
+// compensations, where there is no durable engine wait).
 func (p Pool) restore(ctx context.Context, in pipeline.Input, wait bool) error {
 	pool, cfg, members, err := p.open(ctx, in)
 	if err != nil {
@@ -257,7 +257,7 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// waitUntil ripete check fino all'esito positivo o allo scadere del timeout.
+// waitUntil repeats check until it succeeds or the timeout expires.
 func waitUntil(ctx context.Context, timeout, poll time.Duration, check func() (bool, error)) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -277,9 +277,9 @@ func waitUntil(ctx context.Context, timeout, poll time.Duration, check func() (b
 	}
 }
 
-// Traffic esegue le operazioni dei rilasci per percentuale: con un router dell'ambiente
-// (traffic.router) gli slot sono i gruppi di target con l'etichetta slot; altrimenti il plugin
-// di deploy deve implementare plugin.SlotDeployer e plugin.TrafficRouter.
+// Traffic runs the operations of percentage rollouts: with an environment router
+// (traffic.router) the slots are the groups of targets with the slot label; otherwise the
+// deploy plugin must implement plugin.SlotDeployer and plugin.TrafficRouter.
 type Traffic struct {
 	Deploy    Deploy
 	Pool      Pool
@@ -288,12 +288,12 @@ type Traffic struct {
 	Logger    *slog.Logger
 }
 
-// PoolStatus legge lo stato dei membri del pool durante le attese del motore.
+// PoolStatus reads the state of the pool members during the engine waits.
 func (t Traffic) PoolStatus(ctx context.Context, in pipeline.Input, phase string) (pipeline.Output, error) {
 	return t.Pool.Status(ctx, in, phase)
 }
 
-// Check verifica la configurazione di traffico di un ambiente senza contattare i sistemi.
+// Check checks an environment's traffic configuration without contacting the systems.
 func (t Traffic) Check(d *descriptor.Descriptor) error {
 	if err := t.Providers.Check(d.Traffic); err != nil {
 		return err
@@ -309,12 +309,12 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 	}
 	dep, _, err := t.Deploy.selectPlugin(pipeline.Input{Descriptor: d})
 	if err != nil {
-		// Il plugin si sceglie con la configurazione di ambiente: lo verifica lo step config.
+		// The plugin is chosen by the environment configuration: the config step checks it.
 		return nil
 	}
 	if _, ok := dep.(plugin.TrafficChecker); ok {
-		// Un plugin esterno dichiara il supporto all'avvio: si verifica all'esecuzione, senza
-		// avviare il processo all'accodamento.
+		// An external plugin declares its support at startup: it is checked at execution, without
+		// starting the process at submission.
 		return nil
 	}
 	if _, ok := dep.(plugin.SlotDeployer); !ok {
@@ -331,7 +331,7 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 	return nil
 }
 
-// checkSlotLabels verifica che ogni target abbia lo slot a o b.
+// checkSlotLabels checks that every target has slot a or b.
 func checkSlotLabels(ts []descriptor.Target) error {
 	var errs []error
 	for _, t := range ts {
@@ -352,7 +352,7 @@ func (t Traffic) router(ctx context.Context, in pipeline.Input) (traffic.Router,
 
 func routerMode(d *descriptor.Descriptor) bool { return d.Traffic != nil && d.Traffic.Router != nil }
 
-// pluginCall prepara plugin e richiesta per le operazioni dello SlotDeployer.
+// pluginCall prepares plugin and request for the SlotDeployer operations.
 func (t Traffic) pluginCall(in pipeline.Input) (plugin.Deployer, *plugin.Request, *slog.Logger, error) {
 	dep, log, err := t.Deploy.selectPlugin(in)
 	if err != nil {
@@ -365,8 +365,8 @@ func (t Traffic) pluginCall(in pipeline.Input) (plugin.Deployer, *plugin.Request
 	return dep, req, log, nil
 }
 
-// Prepare registra lo stato prima del rilascio: versione stabile e slot candidato. Non
-// modifica nulla.
+// Prepare records the state before the rollout: stable version and candidate slot. It
+// changes nothing.
 func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	d := in.Descriptor
 	if routerMode(d) {
@@ -425,8 +425,8 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 	return out, nil
 }
 
-// CandidateTargets restituisce i target dello slot candidato (modalità router), nil se il
-// rilascio usa tutti i target.
+// CandidateTargets returns the targets of the candidate slot (router mode), nil if the
+// rollout uses all targets.
 func CandidateTargets(d *descriptor.Descriptor, prep pipeline.Output) []descriptor.Target {
 	if prep[OutMode] != ModeRouter {
 		return nil
@@ -440,7 +440,7 @@ func CandidateTargets(d *descriptor.Descriptor, prep pipeline.Output) []descript
 	return out
 }
 
-// SetWeight manda alla candidata percent% del traffico.
+// SetWeight sends percent% of the traffic to the candidate.
 func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) (pipeline.Output, error) {
 	prep := in.Outputs[TrafficOutput]
 	if prep[OutMode] == ModeRouter {
@@ -473,7 +473,7 @@ func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) 
 	return pipeline.Output{"weight": strconv.Itoa(percent)}, nil
 }
 
-// Weight legge la quota corrente della candidata (-1 se i target non sono concordi).
+// Weight reads the candidate's current share (-1 if the targets disagree).
 func (t Traffic) Weight(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	prep := in.Outputs[TrafficOutput]
 	w := 0
@@ -509,7 +509,7 @@ func (t Traffic) Weight(ctx context.Context, in pipeline.Input) (pipeline.Output
 	return pipeline.Output{"weight": strconv.Itoa(w)}, nil
 }
 
-// Testers instrada verso la candidata le sole richieste dei tester.
+// Testers routes only the testers' requests to the candidate.
 func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	prep := in.Outputs[TrafficOutput]
 	var details map[string]string
@@ -545,7 +545,7 @@ func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 	return out, nil
 }
 
-// Scale dimensiona la candidata in proporzione alla quota di traffico.
+// Scale sizes the candidate in proportion to its traffic share.
 func (t Traffic) Scale(ctx context.Context, in pipeline.Input, percent int) (pipeline.Output, error) {
 	if in.Outputs[TrafficOutput][OutMode] == ModeRouter {
 		return nil, pipeline.Permanent(errors.New("rollout.traffic.replicas: proportional richiede un plugin che dimensioni la candidata"))
@@ -564,7 +564,7 @@ func (t Traffic) Scale(ctx context.Context, in pipeline.Input, percent int) (pip
 	return pipeline.Output{"replicas_percent": strconv.Itoa(percent)}, nil
 }
 
-// Promote rende la candidata la versione in esercizio.
+// Promote makes the candidate the version in service.
 func (t Traffic) Promote(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	prep := in.Outputs[TrafficOutput]
 	if prep[OutMode] == ModeRouter {
@@ -573,7 +573,7 @@ func (t Traffic) Promote(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 	return t.slotCall(ctx, in, "promoted", plugin.SlotDeployer.PromoteCandidate)
 }
 
-// Revert riporta tutto il traffico alla versione stabile e ritira la candidata.
+// Revert brings all traffic back to the stable version and retires the candidate.
 func (t Traffic) Revert(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	prep := in.Outputs[TrafficOutput]
 	if prep[OutMode] == ModeRouter {
@@ -597,7 +597,7 @@ func (t Traffic) Revert(ctx context.Context, in pipeline.Input) (pipeline.Output
 	return out, nil
 }
 
-// Retire ridimensiona la versione sostituita dopo la promozione.
+// Retire scales down the replaced version after the promotion.
 func (t Traffic) Retire(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	if in.Outputs[TrafficOutput][OutMode] == ModeRouter {
 		return pipeline.Output{"status": "skipped"}, nil
@@ -621,7 +621,7 @@ func (t Traffic) slotCall(ctx context.Context, in pipeline.Input, status string,
 	return pipeline.Output{"status": status}, nil
 }
 
-// trafficRequest ricostruisce i dati del rilascio per percentuale per il plugin.
+// trafficRequest rebuilds the percentage rollout data for the plugin.
 func trafficRequest(in pipeline.Input) *plugin.TrafficRequest {
 	prep, ok := in.Outputs[TrafficOutput]
 	if !ok || prep[OutMode] != ModePlugin {
@@ -638,8 +638,8 @@ func trafficRequest(in pipeline.Input) *plugin.TrafficRequest {
 	return tr
 }
 
-// unsupported rende permanente l'errore di un'operazione non supportata dal plugin (un plugin
-// esterno lo scopre solo a runtime): un nuovo tentativo non cambierebbe l'esito.
+// unsupported makes permanent the error of an operation the plugin does not support (an
+// external plugin finds out only at runtime): a retry would not change the outcome.
 func unsupported(dep plugin.Deployer, err error) error {
 	if errors.Is(err, plugin.ErrTrafficUnsupported) {
 		return pipeline.Permanent(fmt.Errorf("plugin %q: %w", dep.Name(), err))

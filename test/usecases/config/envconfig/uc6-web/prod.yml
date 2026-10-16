@@ -1,5 +1,5 @@
-# UC6: container su due VM in due AZ, rollback automatico e rilascio a ondate (canary su vm-a).
-# Casi d'uso (test/usecases): target, parametri e segreti dell'ambiente.
+# UC6: containers on two VMs in two AZs, automatic rollback and wave rollout (canary on vm-a).
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
 plugin: container
 targets:
   - {host: vm-a, user: deploy, labels: {region: eu-1, az: eu-1a}}

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installa la chiave pubblica condivisa, avvia sshd e il demone Docker (in primo piano).
+# Installs the shared public key, starts sshd and the Docker daemon (in the foreground).
 set -eu
 until [ -s /keys/id.pub ]; do sleep 1; done
 cp /keys/id.pub /home/deploy/.ssh/authorized_keys

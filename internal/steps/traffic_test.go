@@ -14,7 +14,7 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// slotDeployer è un plugin che rilascia versioni affiancate e sposta il traffico.
+// slotDeployer is a plugin that releases side-by-side versions and shifts traffic.
 type slotDeployer struct {
 	fakeDeployer
 	calls  []string
@@ -94,14 +94,14 @@ func TestTrafficConIlPlugin(t *testing.T) {
 		t.Fatalf("preparazione: %v", prep)
 	}
 	in.Outputs[TrafficOutput] = prep
-	// Lo step deploy, con lo stato del rilascio negli output, rilascia la candidata.
+	// The deploy step, with the rollout state in the outputs, releases the candidate.
 	if _, err := deploy.Run(ctx, in); err != nil {
 		t.Fatal(err)
 	}
 	if dep.got != nil {
 		t.Error("deploy in place eseguito invece della candidata")
 	}
-	// Il checkpoint non legge la release: il ritorno è uno spostamento di traffico.
+	// The checkpoint does not read the release: the return is a traffic shift.
 	if cp, err := deploy.Checkpoint(ctx, in); err != nil || cp["mode"] != "traffic" {
 		t.Errorf("checkpoint: %v %v", cp, err)
 	}
@@ -119,18 +119,18 @@ func TestTrafficConIlPlugin(t *testing.T) {
 	if want := "candidate:a:x-canary: 1,weight:25,promote,revert,retire"; strings.Join(dep.calls, ",") != want {
 		t.Errorf("chiamate: %v", dep.calls)
 	}
-	// I tester richiedono un plugin che sappia instradarli.
+	// Testers require a plugin able to route them.
 	if _, err := tr.Testers(ctx, in); err == nil || !strings.Contains(err.Error(), "non sa instradare i tester") {
 		t.Errorf("tester: %v", err)
 	}
-	// Un plugin senza versioni affiancate richiede un router dell'ambiente.
+	// A plugin without side-by-side versions requires an environment router.
 	plain := Traffic{Deploy: Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "plain", types: []string{"application"}})}}, Logger: discard}, Providers: traffic.Default()}
 	if err := plain.Check(d); err == nil || !strings.Contains(err.Error(), "traffic.router") {
 		t.Errorf("plugin senza slot: %v", err)
 	}
 }
 
-// fakeRouter divide il traffico tra gli slot a e b.
+// fakeRouter splits traffic between slots a and b.
 type fakeRouter struct{ w map[string]int }
 
 func (r *fakeRouter) Weights(context.Context) (map[string]int, error) { return r.w, nil }
@@ -179,7 +179,7 @@ func TestTrafficConIlRouter(t *testing.T) {
 	if _, err := tr.Promote(ctx, in); err != nil || r.w["b"] != 100 || r.w["a"] != 0 {
 		t.Errorf("promozione: %v %v", r.w, err)
 	}
-	// Ogni target deve dichiarare lo slot.
+	// Every target must declare its slot.
 	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "vm4"})
 	if err := tr.Check(d); err == nil || !strings.Contains(err.Error(), "vm4") {
 		t.Errorf("slot mancante: %v", err)

@@ -1,4 +1,4 @@
-// Package secrets risolve i riferimenti ai segreti dichiarati nel descrittore.
+// Package secrets resolves the secret references declared in the descriptor.
 package secrets
 
 import (
@@ -10,18 +10,19 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-// Provider risolve un riferimento (es. "env:VAR", "file:/path") nel valore del segreto.
+// Provider resolves a reference (e.g. "env:VAR", "file:/path") into the secret value.
 type Provider interface {
 	Resolve(ctx context.Context, ref string) (string, error)
 }
 
-// SchemeProvider smista i riferimenti al provider registrato per lo schema (prefisso prima di ':').
+// SchemeProvider dispatches references to the provider registered for the scheme (prefix
+// before ':').
 type SchemeProvider struct {
 	providers map[string]Provider
 }
 
-// NewDefaultProvider crea un provider con gli schemi "env" e "file".
-// Altri backend (Vault, cloud KMS, ...) si aggiungono con Register.
+// NewDefaultProvider creates a provider with the "env" and "file" schemes.
+// Other backends (Vault, cloud KMS, ...) are added with Register.
 func NewDefaultProvider() *SchemeProvider {
 	p := &SchemeProvider{providers: map[string]Provider{}}
 	p.Register("env", EnvProvider{})
@@ -29,12 +30,12 @@ func NewDefaultProvider() *SchemeProvider {
 	return p
 }
 
-// Register associa un provider a uno schema.
+// Register binds a provider to a scheme.
 func (p *SchemeProvider) Register(scheme string, prov Provider) {
 	p.providers[scheme] = prov
 }
 
-// Resolve individua lo schema e delega al provider corrispondente.
+// Resolve finds the scheme and delegates to the matching provider.
 func (p *SchemeProvider) Resolve(ctx context.Context, ref string) (string, error) {
 	scheme, rest, ok := strings.Cut(ref, ":")
 	if !ok {
@@ -47,10 +48,10 @@ func (p *SchemeProvider) Resolve(ctx context.Context, ref string) (string, error
 	return prov.Resolve(ctx, rest)
 }
 
-// EnvProvider legge i segreti da variabili d'ambiente.
+// EnvProvider reads secrets from environment variables.
 type EnvProvider struct{}
 
-// Resolve restituisce il valore della variabile d'ambiente indicata.
+// Resolve returns the value of the given environment variable.
 func (EnvProvider) Resolve(_ context.Context, name string) (string, error) {
 	v, ok := os.LookupEnv(name)
 	if !ok {
@@ -59,10 +60,10 @@ func (EnvProvider) Resolve(_ context.Context, name string) (string, error) {
 	return v, nil
 }
 
-// FileProvider legge i segreti da file.
+// FileProvider reads secrets from files.
 type FileProvider struct{}
 
-// Resolve restituisce il contenuto del file indicato.
+// Resolve returns the content of the given file.
 func (FileProvider) Resolve(_ context.Context, path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -71,14 +72,14 @@ func (FileProvider) Resolve(_ context.Context, path string) (string, error) {
 	return string(b), nil
 }
 
-// DescriptorResolver espone i segreti di un descrittore per nome logico ai plugin.
-// I valori sono risolti a ogni richiesta e mai memorizzati.
+// DescriptorResolver exposes a descriptor's secrets to plugins by logical name.
+// Values are resolved at every request and never stored.
 type DescriptorResolver struct {
 	Provider   Provider
 	Descriptor *descriptor.Descriptor
 }
 
-// Secret risolve il segreto con il nome logico indicato.
+// Secret resolves the secret with the given logical name.
 func (r DescriptorResolver) Secret(ctx context.Context, name string) (string, error) {
 	ref, ok := r.Descriptor.SecretRefByName(name)
 	if !ok {

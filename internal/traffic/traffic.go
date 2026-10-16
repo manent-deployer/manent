@@ -1,9 +1,9 @@
-// Package traffic integra manent con i load balancer e i router del traffico: svuota i target
-// da un pool prima di aggiornarli e li rimette in servizio dopo (Pool), e sposta il traffico
-// tra due gruppi di target, gli slot, nei rilasci per percentuale (Router).
+// Package traffic integrates manent with load balancers and traffic routers: it drains the
+// targets from a pool before updating them and puts them back in service afterwards (Pool),
+// and it shifts traffic between two groups of targets, the slots, in percentage rollouts (Router).
 //
-// I provider che parlano solo HTTP o SSH stanno qui; quelli che usano un SDK (es. AWS) stanno
-// tra i plugin e si registrano in Providers da internal/app.
+// Providers that speak only HTTP or SSH live here; those using an SDK (e.g. AWS) live among
+// the plugins and are registered in Providers by internal/app.
 package traffic
 
 import (
@@ -24,99 +24,95 @@ import (
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
-// Stati di un membro del pool.
+// States of a pool member.
 const (
 	StateActive   = "active"
 	StateDraining = "draining"
 	StateDisabled = "disabled"
 )
 
-// Member è lo stato di un membro del pool.
+// Member is the state of a pool member.
 type Member struct {
 	Name    string `json:"name"`
 	State   string `json:"state"`
 	Healthy bool   `json:"healthy"`
 }
 
-// InService indica un membro attivo e sano, che riceve traffico.
+// InService means an active and healthy member that receives traffic.
 func (m Member) InService() bool { return m.State == StateActive && m.Healthy }
 
-// Pool è il pool di un load balancer. Tutti i metodi sono idempotenti: possono essere ripetuti
-// da retry e recovery.
+// Pool is a load balancer pool. All methods are idempotent: retries and recoveries can repeat them.
 type Pool interface {
-	// Members restituisce lo stato di tutti i membri del pool, per il controllo di capacità;
-	// nil se il provider non lo conosce.
+	// Members returns the state of all pool members, for the capacity check; nil if the provider
+	// does not know it.
 	Members(ctx context.Context) ([]Member, error)
-	// Drain smette di mandare nuove richieste ai membri; quelle in corso proseguono.
+	// Drain stops sending new requests to the members; requests in progress continue.
 	Drain(ctx context.Context, members []string) error
-	// Connections restituisce le connessioni ancora attive di ogni membro.
+	// Connections returns the still active connections of every member.
 	Connections(ctx context.Context, members []string) (map[string]int, error)
-	// Restore rimette i membri in servizio.
+	// Restore puts the members back in service.
 	Restore(ctx context.Context, members []string) error
-	// Healthy indica, per ogni membro, se è in servizio e sano per il load balancer.
+	// Healthy reports, for every member, whether it is in service and healthy for the load balancer.
 	Healthy(ctx context.Context, members []string) (map[string]bool, error)
 }
 
-// DrainDelayer è implementato dai pool che non sanno contare le connessioni: dopo Drain si
-// attende sempre almeno DrainDelay (es. il tempo che il load balancer impiega ad accorgersi
-// di un health check rosso).
+// DrainDelayer is implemented by pools that cannot count connections: after Drain the wait is
+// always at least DrainDelay (e.g. the time the load balancer takes to notice a red health check).
 type DrainDelayer interface {
 	DrainDelay() time.Duration
 }
 
-// Router sposta il traffico tra gli slot: ogni slot è il gruppo di target con l'etichetta slot.
+// Router shifts traffic between slots: every slot is the group of targets with the slot label.
 type Router interface {
-	// Weights restituisce la quota di traffico di ogni slot (0-100).
+	// Weights returns the traffic share of every slot (0-100).
 	Weights(ctx context.Context) (map[string]int, error)
-	// SetWeights imposta le quote; idempotente.
+	// SetWeights sets the shares; idempotent.
 	SetWeights(ctx context.Context, weights map[string]int) error
 }
 
-// TesterRouter è implementato dai router che sanno instradare verso uno slot le sole
-// richieste dei tester.
+// TesterRouter is implemented by routers that can route only the testers' requests to a slot.
 type TesterRouter interface {
 	RouteTesters(ctx context.Context, slot string) (map[string]string, error)
 }
 
-// Env è ciò che serve per costruire un provider.
+// Env is what is needed to build a provider.
 type Env struct {
-	// Settings sono le impostazioni del provider (traffic.pool.settings o traffic.router.settings).
+	// Settings are the provider settings (traffic.pool.settings or traffic.router.settings).
 	Settings map[string]string
-	// Member calcola il nome del membro di un target.
+	// Member computes the member name of a target.
 	Member func(descriptor.Target) string
-	// Targets sono tutti i target del deploy (per i provider che lavorano sui target).
+	// Targets are all the deploy targets (for providers that work on the targets).
 	Targets []descriptor.Target
-	// Secrets risolve i segreti per nome, al momento dell'uso.
+	// Secrets resolves secrets by name, at use time.
 	Secrets plugin.SecretResolver
-	// DeploymentID identifica il deploy nelle chiamate (es. nome della sessione STS).
+	// DeploymentID identifies the deploy in calls (e.g. STS session name).
 	DeploymentID string
-	// Dialer apre le sessioni SSH (provider basati sui target).
+	// Dialer opens SSH sessions (target-based providers).
 	Dialer  Dialer
 	Logger  *slog.Logger
 	Timeout time.Duration
 }
 
-// PoolFactory costruisce un pool; ValidatePool ne verifica le impostazioni senza effetti.
+// PoolFactory builds a pool; ValidatePool checks its settings without side effects.
 type (
 	PoolFactory   func(ctx context.Context, env Env) (Pool, error)
 	RouterFactory func(ctx context.Context, env Env) (Router, error)
 	Validator     func(settings map[string]string) error
 )
 
-// Provider è un provider registrato: costruttore e verifica delle impostazioni.
+// Provider is a registered provider: constructor and settings check.
 type Provider[F any] struct {
 	New      F
 	Validate Validator
 }
 
-// Providers sono i provider disponibili, per nome.
+// Providers are the available providers, by name.
 type Providers struct {
 	Pools   map[string]Provider[PoolFactory]
 	Routers map[string]Provider[RouterFactory]
 }
 
-// Default restituisce i provider di questo package; quelli basati su un SDK si aggiungono da
-// internal/app.
+// Default returns this package's providers; SDK-based ones are added by internal/app.
 func Default() *Providers {
 	return &Providers{
 		Pools: map[string]Provider[PoolFactory]{
@@ -134,8 +130,8 @@ func Default() *Providers {
 	}
 }
 
-// Check verifica la configurazione di traffico di un ambiente: provider noti e impostazioni
-// valide. Non contatta i sistemi.
+// Check checks an environment's traffic configuration: known providers and valid settings.
+// It does not contact the systems.
 func (p *Providers) Check(c *descriptor.TrafficConfig) error {
 	if c == nil {
 		return nil
@@ -164,7 +160,7 @@ func (p *Providers) Check(c *descriptor.TrafficConfig) error {
 	return errors.Join(errs...)
 }
 
-// Pool costruisce il pool dell'ambiente.
+// Pool builds the environment pool.
 func (p *Providers) Pool(ctx context.Context, c *descriptor.PoolConfig, env Env) (Pool, error) {
 	pr, ok := p.Pools[c.Provider]
 	if !ok {
@@ -175,22 +171,21 @@ func (p *Providers) Pool(ctx context.Context, c *descriptor.PoolConfig, env Env)
 	return pr.New(ctx, env)
 }
 
-// Router costruisce il router dell'ambiente.
+// Router builds the environment router.
 func (p *Providers) Router(ctx context.Context, c *descriptor.RouterConfig, env Env) (Router, error) {
 	pr, ok := p.Routers[c.Provider]
 	if !ok {
 		return nil, fmt.Errorf("traffic.router.provider %q sconosciuto", c.Provider)
 	}
 	env.Settings = c.Settings
-	// Il nome del server di un target nei router dei load balancer (impostazione member,
-	// default "{host}").
+	// The server name of a target in load balancer routers (member setting, default "{host}").
 	tmpl := c.Settings["member"]
 	env.Member = func(t descriptor.Target) string { return descriptor.ExpandTarget(tmpl, t) }
 	return pr.New(ctx, env)
 }
 
-// Capacity verifica che, togliendo i membri indicati, restino in servizio almeno minHealthy
-// membri sani. I membri già fuori servizio non contano.
+// Capacity checks that, removing the given members, at least minHealthy healthy members stay
+// in service. Members already out of service do not count.
 func Capacity(all []Member, drain []string, minHealthy int) error {
 	in := 0
 	for _, m := range all {
@@ -205,7 +200,7 @@ func Capacity(all []Member, drain []string, minHealthy int) error {
 	return nil
 }
 
-// Missing restituisce i membri indicati che il pool non contiene.
+// Missing returns the given members the pool does not contain.
 func Missing(all []Member, names []string) []string {
 	var out []string
 	for _, n := range names {
@@ -216,8 +211,7 @@ func Missing(all []Member, names []string) []string {
 	return out
 }
 
-// httpClient costruisce il client HTTP dei provider: TLS 1.2+, CA dedicata (ca_file),
-// nessun redirect.
+// httpClient builds the providers' HTTP client: TLS 1.2+, dedicated CA (ca_file), no redirects.
 func httpClient(settings map[string]string, timeout time.Duration) (*http.Client, error) {
 	tc := &tls.Config{MinVersion: tls.VersionTLS12}
 	if f := settings["ca_file"]; f != "" {
@@ -243,7 +237,7 @@ func httpClient(settings map[string]string, timeout time.Duration) (*http.Client
 	}, nil
 }
 
-// checkURL verifica un URL di un'API di gestione: https, salvo allow_http.
+// checkURL checks a management API URL: https, unless allow_http.
 func checkURL(settings map[string]string, key, u string) error {
 	switch {
 	case strings.HasPrefix(u, "https://"):
@@ -254,7 +248,7 @@ func checkURL(settings map[string]string, key, u string) error {
 	return fmt.Errorf("%s %q: serve un URL https (http solo con allow_http: \"true\")", key, u)
 }
 
-// splitList legge una lista separata da virgole.
+// splitList reads a comma-separated list.
 func splitList(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {

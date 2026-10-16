@@ -16,7 +16,7 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// artifactStep simula lo step artifacts: restituisce lo sha256 dell'artefatto.
+// artifactStep simulates the artifacts step: it returns the artifact's sha256.
 type artifactStep struct{}
 
 func (artifactStep) Name() string { return "artifacts" }
@@ -34,7 +34,7 @@ var (
 	carol = auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "carol", Method: auth.MethodOIDC})
 )
 
-// govEngine avvia un worker e un engine con le regole indicate.
+// govEngine starts a worker and an engine with the given rules.
 func govEngine(t *testing.T, rules []governance.Rule, windows []governance.Window) *Engine {
 	t.Helper()
 	gov, err := governance.New(rules, windows)
@@ -59,7 +59,7 @@ func appDescriptor(env, version string) *descriptor.Descriptor {
 	return d
 }
 
-// deploy accoda il deploy e ne attende la conclusione.
+// deploy enqueues the deploy and waits for it to end.
 func deploy(t *testing.T, e *Engine, ctx context.Context, d *descriptor.Descriptor) string {
 	t.Helper()
 	sub, err := e.Submit(ctx, d)
@@ -75,13 +75,13 @@ func deploy(t *testing.T, e *Engine, ctx context.Context, d *descriptor.Descript
 func TestInventarioEPromozione(t *testing.T) {
 	e := govEngine(t, []governance.Rule{{Applications: []string{"*"}, Environments: []string{"prod"}, Requires: []string{"test"}}}, nil)
 
-	// La 2.0.0 non è stata rilasciata in test: in prod non è ammessa.
+	// 2.0.0 was not released in test: it is not allowed in prod.
 	if _, err := e.Submit(alice, appDescriptor("prod", "2.0.0")); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("atteso ErrInvalidRequest per una versione non promossa, ottenuto %v", err)
 	}
 	deploy(t, e, alice, appDescriptor("test", "1.0.0"))
 	testID := deploy(t, e, alice, appDescriptor("test", "2.0.0"))
-	// Il dry-run non è soggetto alle regole.
+	// Dry-runs are not subject to the rules.
 	dry := appDescriptor("prod", "3.0.0")
 	dry.DryRun = true
 	deploy(t, e, alice, dry)
@@ -100,7 +100,7 @@ func TestInventarioEPromozione(t *testing.T) {
 	if st.Kind != KindPromotion || st.Source != testID || st.Version != "2.0.0" || st.SHA256 != "sha-2.0.0" || st.Environment != "prod" {
 		t.Errorf("stato della promozione inatteso: %+v", st)
 	}
-	// Una versione mai rilasciata nell'ambiente di origine non si promuove.
+	// A version never released in the source environment cannot be promoted.
 	if _, err := e.Promote(alice, PromoteRequest{Application: "app", From: "test", To: "prod", Version: "9.9.9"}); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("atteso ErrInvalidRequest, ottenuto %v", err)
 	}
@@ -121,7 +121,7 @@ func TestInventarioEPromozione(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Version != "2.0.0" {
 		t.Errorf("elenco filtrato inatteso: %+v %v", list, err)
 	}
-	// Il filtro Match non riduce il numero di risultati sotto il limite.
+	// The Match filter does not reduce the number of results below the limit.
 	list, err = e.List(alice, ListFilter{Limit: 2, Match: func(s Status) bool { return s.Version == "1.0.0" || s.Kind == KindPromotion }})
 	if err != nil || len(list) != 2 {
 		t.Errorf("elenco con Match: attesi 2 deploy, ottenuti %+v %v", list, err)
@@ -143,7 +143,7 @@ func TestApprovazioni(t *testing.T) {
 	}
 	waitState(t, e, "rel-1", StateAwaitingApproval, func(s *Status) bool { return s.Approval != nil })
 
-	// L'auto-approvazione viene scartata dal workflow anche se arriva fino a lui.
+	// Self-approval is discarded by the workflow even if it gets there.
 	if err := e.Decide(alice, "rel-1", DecisionRequest{Approve: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestApprovazioni(t *testing.T) {
 		t.Errorf("stato dopo l'approvazione inatteso: %+v %v", st, err)
 	}
 
-	// Un rifiuto chiude la richiesta.
+	// A rejection closes the request.
 	d2 := appDescriptor("prod", "1.1.0")
 	sub, err = e.Submit(alice, d2)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestApprovazioni(t *testing.T) {
 		t.Errorf("elenco inatteso: %+v %v", list, err)
 	}
 
-	// Una richiesta annullata non viene eseguita.
+	// A cancelled request does not run.
 	sub, err = e.Submit(alice, appDescriptor("prod", "1.2.0"))
 	if err != nil {
 		t.Fatal(err)
@@ -244,8 +244,8 @@ func TestFreezeVerificatoDalWorker(t *testing.T) {
 	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Governance = gov
 	w := startWorker(t, opts)
-	// Un engine senza governance (es. deploy accodato prima del freeze) non blocca la richiesta:
-	// la blocca il worker all'avvio, senza retry.
+	// An engine without governance (e.g. deploy enqueued before the freeze) does not block the
+	// request: the worker blocks it at startup, without retries.
 	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
 	sub, err := e.Submit(alice, appDescriptor("prod", "1.0.0"))
 	if err != nil {
@@ -275,8 +275,8 @@ func TestRollbackManuale(t *testing.T) {
 		t.Errorf("inventario dopo il rollback inatteso: %+v %v", inv, err)
 	}
 
-	// Un deploy fallito senza rollback automatico lascia i target modificati: la versione
-	// dell'ultimo deploy riuscito si può ripristinare, ed è il default del rollback.
+	// A failed deploy without automatic rollback leaves the targets changed: the version of the
+	// last successful deploy can be restored, and it is the rollback default.
 	sub, err = e.Submit(alice, appDescriptor("prod", "3.0.0-broken"))
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +308,7 @@ func TestRollbackManuale(t *testing.T) {
 		t.Errorf("--to con la versione dell'ultimo deploy riuscito dopo un fallimento: %v", err)
 	}
 
-	// Le migration non ammettono il rollback.
+	// Migrations do not allow rollback.
 	m1 := appDescriptor("db", "1")
 	m1.Artifact.Type = "migration"
 	deploy(t, e, alice, m1)
@@ -320,7 +320,7 @@ func TestRollbackManuale(t *testing.T) {
 	}
 }
 
-// waitState attende che il deploy raggiunga lo stato indicato (e la condizione, se presente).
+// waitState waits until the deploy reaches the given state (and condition, if any).
 func waitState(t *testing.T, e *Engine, id, state string, cond func(*Status) bool) *Status {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
@@ -336,8 +336,8 @@ func waitState(t *testing.T, e *Engine, id, state string, cond func(*Status) boo
 	}
 }
 
-// policyResolver simula la configurazione di ambiente: rifiuta "vietata", non è raggiungibile
-// per "irraggiungibile".
+// policyResolver simulates the environment configuration: it rejects "vietata" and is
+// unreachable for "irraggiungibile".
 type policyResolver struct{}
 
 func (policyResolver) Resolve(_ context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
@@ -359,7 +359,7 @@ func TestPolicyVerificataAllAccodamento(t *testing.T) {
 	if _, err := e.Submit(alice, d); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("violazione della policy: atteso ErrInvalidRequest, ricevuto %v", err)
 	}
-	// Se la configurazione non è raggiungibile la verifica resta al worker.
+	// If the configuration is unreachable the check is left to the worker.
 	d.Application = "irraggiungibile"
 	if _, err := e.Submit(alice, d); err != nil {
 		t.Errorf("configurazione non raggiungibile: la richiesta va accettata, ricevuto %v", err)
@@ -407,7 +407,7 @@ func TestApprovazioniInAttesaECursore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Lo stato dell'approvazione è pubblicato appena il suo workflow parte.
+	// The approval state is published as soon as its workflow starts.
 	var list []Status
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
 		if list, err = e.Approvals(alice); err == nil && len(list) == 1 && list[0].Approval != nil {
@@ -427,7 +427,7 @@ func TestApprovazioniInAttesaECursore(t *testing.T) {
 		t.Errorf("approvato: non è più in attesa: %+v", list)
 	}
 
-	// Paginazione: la seconda pagina riparte dopo l'ultimo deploy della prima.
+	// Pagination: the second page restarts after the last deploy of the first.
 	page1, _ := e.List(alice, ListFilter{Limit: 2})
 	page2, _ := e.List(alice, ListFilter{Limit: 2, Cursor: page1[1].ID})
 	if len(page1) != 2 || len(page2) != 1 || page2[0].ID == page1[0].ID || page2[0].ID == page1[1].ID {

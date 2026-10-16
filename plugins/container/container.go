@@ -1,11 +1,11 @@
-// Package container rilascia un'immagine di container su server o VM via SSH, con Docker o
-// Podman: scarica l'immagine fissata al digest, sostituisce il container dell'applicazione e
-// attende che sia in esecuzione (e "healthy", se l'immagine ha un HEALTHCHECK).
+// Package container releases a container image to servers or VMs over SSH, with Docker or
+// Podman: it pulls the image pinned to the digest, replaces the application's container and
+// waits until it is running (and "healthy", if the image has a HEALTHCHECK).
 //
-// L'artefatto è un'immagine di un registry (sorgente oci://registry/repository:tag): manent ne
-// risolve il digest, che diventa lo sha256 dell'artefatto, e il plugin avvia sempre
-// "repository@sha256:<digest>". Versione e immagine sono scritte nelle etichette del
-// container, da cui il plugin legge la release in esercizio e torna alla precedente.
+// The artifact is a registry image (source oci://registry/repository:tag): manent resolves its
+// digest, which becomes the artifact's sha256, and the plugin always runs
+// "repository@sha256:<digest>". Version and image are written in the container labels, from
+// which the plugin reads the release in service and goes back to the previous one.
 package container
 
 import (
@@ -22,25 +22,25 @@ import (
 	"github.com/joeg-ita/manent/plugins/remotecopy"
 )
 
-// Name è il nome con cui il plugin si registra.
+// Name is the name the plugin registers with.
 const Name = "container"
 
-// Parametri del descrittore (deploy.params) letti dal plugin.
+// Descriptor parameters (deploy.params) read by the plugin.
 const (
-	ParamRuntime        = "runtime"        // docker (default) o podman
-	ParamContainerName  = "container_name" // default: nome dell'applicazione
-	ParamRunArgs        = "run_args"       // argomenti aggiuntivi di "run" (porte, volumi, env-file, rete)
-	ParamCommand        = "command"        // argomenti passati al container dopo l'immagine
+	ParamRuntime        = "runtime"        // docker (default) or podman
+	ParamContainerName  = "container_name" // default: application name
+	ParamRunArgs        = "run_args"       // extra "run" arguments (ports, volumes, env-file, network)
+	ParamCommand        = "command"        // arguments passed to the container after the image
 	ParamSSHKeySecret   = "ssh_key_secret"
 	ParamPasswordSecret = "password_secret"
-	ParamSudo           = "sudo"                     // "true": comandi del runtime con sudo -n
-	ParamRegistryUser   = "registry_username"        // login al registry prima del pull
-	ParamRegistrySecret = "registry_password_secret" // segreto con la password del registry
-	ParamWaitTimeout    = "wait_timeout"             // attesa dell'avvio (default 60s)
-	ParamStableFor      = "stable_for"               // senza HEALTHCHECK: tempo in esecuzione senza riavvii (default 5s)
+	ParamSudo           = "sudo"                     // "true": runtime commands with sudo -n
+	ParamRegistryUser   = "registry_username"        // registry login before the pull
+	ParamRegistrySecret = "registry_password_secret" // secret with the registry password
+	ParamWaitTimeout    = "wait_timeout"             // startup wait (default 60s)
+	ParamStableFor      = "stable_for"               // without HEALTHCHECK: running time without restarts (default 5s)
 )
 
-// Etichette scritte sul container.
+// Labels written on the container.
 const (
 	LabelApplication = "manent.application"
 	LabelEnvironment = "manent.environment"
@@ -48,7 +48,7 @@ const (
 	LabelDeployment  = "manent.deployment"
 )
 
-// DetailImage è la chiave di Release.Details con l'immagine della release.
+// DetailImage is the Release.Details key with the release image.
 const DetailImage = "image"
 
 const (
@@ -61,23 +61,23 @@ var (
 	versionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$`)
 )
 
-// Plugin implementa plugin.Deployer, DryRunner, ReleaseInspector e Rollbacker.
+// Plugin implements plugin.Deployer, DryRunner, ReleaseInspector and Rollbacker.
 type Plugin struct {
 	dialer remotecopy.Dialer
 	types  []string
 	logger *slog.Logger
-	// poll è l'intervallo dei controlli durante l'attesa dell'avvio.
+	// poll is the check interval while waiting for startup.
 	poll time.Duration
 }
 
-// New crea il plugin con il dialer indicato e i tipi di artefatto supportati.
+// New creates the plugin with the given dialer and supported artifact types.
 func New(dialer remotecopy.Dialer, types []string, logger *slog.Logger) *Plugin {
 	return &Plugin{dialer: dialer, types: types, logger: logger, poll: time.Second}
 }
 
-// Factory costruisce il plugin dalla configurazione applicativa:
-//   - known_hosts, insecure_ignore_host_key: come remote-copy
-//   - artifact_types: tipi supportati (default ["container"])
+// Factory builds the plugin from the application configuration:
+//   - known_hosts, insecure_ignore_host_key: as remote-copy
+//   - artifact_types: supported types (default ["container"])
 func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	knownHosts, _ := cfg["known_hosts"].(string)
 	insecure, _ := cfg["insecure_ignore_host_key"].(bool)
@@ -95,13 +95,13 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	return New(&remotecopy.SSHDialer{KnownHostsPath: knownHosts, InsecureIgnoreHostKey: insecure}, types, logger), nil
 }
 
-// Name restituisce il nome del plugin.
+// Name returns the plugin name.
 func (p *Plugin) Name() string { return Name }
 
-// Supports indica se il tipo di artefatto è gestito.
+// Supports reports whether the artifact type is handled.
 func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.types, artifactType) }
 
-// Validate controlla parametri e target prima di qualsiasi connessione.
+// Validate checks parameters and targets before any connection.
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if r := req.Params[ParamRuntime]; r != "" && r != "docker" && r != "podman" {
@@ -154,7 +154,7 @@ func duration(req *plugin.Request, key string, def time.Duration) (time.Duration
 	return d, nil
 }
 
-// runtime restituisce il comando del runtime, con sudo se richiesto.
+// runtime returns the runtime command, with sudo if requested.
 func runtime(req *plugin.Request) string {
 	r := req.Params[ParamRuntime]
 	if r == "" {
@@ -166,14 +166,14 @@ func runtime(req *plugin.Request) string {
 	return r
 }
 
-// running descrive il container dell'applicazione su un target.
+// running describes the application container on a target.
 type running struct {
 	Version string
 	Image   string
 	Status  string
 }
 
-// inspect legge versione, immagine e stato del container; nil se non esiste.
+// inspect reads version, image and state of the container; nil if it does not exist.
 func inspect(ctx context.Context, sess remotecopy.Session, rt, name string) (*running, error) {
 	q := remotecopy.ShellQuote
 	format := `{{index .Config.Labels "` + LabelVersion + `"}}|{{.Config.Image}}|{{.State.Status}}`
@@ -193,9 +193,9 @@ func inspect(ctx context.Context, sess remotecopy.Session, rt, name string) (*ru
 	return &running{Version: parts[0], Image: parts[1], Status: parts[2]}, nil
 }
 
-// Deploy rilascia l'immagine su ogni target in sequenza; si ferma al primo errore. Se il
-// container in esercizio ha già la stessa immagine e versione non viene riavviato, quindi
-// l'operazione è idempotente.
+// Deploy releases the image to every target in sequence; it stops at the first error. If the
+// container in service already has the same image and version it is not restarted, so the
+// operation is idempotent.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, err := plugin.ImageReference(req.Artifact)
 	if err != nil {
@@ -217,7 +217,7 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	return res, nil
 }
 
-// release porta il container di un target all'immagine e alla versione indicate.
+// release brings a target's container to the given image and version.
 func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.Auth, req *plugin.Request, image, version string, rollback bool) (map[string]string, error) {
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host, "rollback", rollback)
 	sess, err := p.dialer.Dial(ctx, t, auth)
@@ -235,7 +235,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	if cur != nil {
 		details["previous_version"], details["previous_image"] = cur.Version, cur.Image
 		if cur.Image == image && cur.Version == version && cur.Status == "running" {
-			// Già sulla release richiesta (es. retry o recovery): non viene riavviato se è pronto.
+			// Already on the requested release (e.g. retry or recovery): not restarted if ready.
 			if state, err := p.wait(ctx, sess, rt, name, req); err == nil {
 				log.InfoContext(ctx, "container già sulla release richiesta", "container", name, "version", version)
 				details["unchanged"], details["state"] = "true", state
@@ -264,7 +264,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	if c := req.Params[ParamCommand]; c != "" {
 		run = append(run, c)
 	}
-	// Il container precedente viene rimosso solo dopo il pull riuscito, per ridurre il fermo.
+	// The previous container is removed only after a successful pull, to reduce downtime.
 	if _, err := sess.Run(ctx, rt+" rm -f "+q(name)+" >/dev/null 2>&1; "+strings.Join(run, " ")); err != nil {
 		return details, fmt.Errorf("avvio del container %s: %w", name, err)
 	}
@@ -281,7 +281,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	return details, nil
 }
 
-// login esegue il login al registry dell'immagine passando la password sullo stdin.
+// login logs in to the image registry passing the password on stdin.
 func (p *Plugin) login(ctx context.Context, sess remotecopy.Session, rt string, req *plugin.Request, image string) error {
 	user := req.Params[ParamRegistryUser]
 	if user == "" {
@@ -303,8 +303,8 @@ func (p *Plugin) login(ctx context.Context, sess remotecopy.Session, rt string, 
 	return nil
 }
 
-// wait attende che il container sia in esecuzione: con un HEALTHCHECK finché è "healthy",
-// altrimenti per stable_for senza riavvii. Un container uscito o "unhealthy" è un errore.
+// wait waits until the container is running: with a HEALTHCHECK until it is "healthy",
+// otherwise for stable_for without restarts. An exited or "unhealthy" container is an error.
 func (p *Plugin) wait(ctx context.Context, sess remotecopy.Session, rt, name string, req *plugin.Request) (string, error) {
 	timeout, _ := duration(req, ParamWaitTimeout, defaultWaitTimeout)
 	stable, _ := duration(req, ParamStableFor, defaultStableFor)
@@ -352,9 +352,9 @@ func (p *Plugin) wait(ctx context.Context, sess remotecopy.Session, rt, name str
 	}
 }
 
-// CurrentRelease legge su ogni target versione e immagine del container in esercizio. Un
-// target senza container (es. appena aggiunto) viene ignorato; release diverse tra i target
-// sono un errore, perché non sarebbe chiaro a quale tornare.
+// CurrentRelease reads on every target version and image of the container in service. A
+// target without a container (e.g. just added) is ignored; different releases across targets
+// are an error, because it would be unclear which one to go back to.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -400,9 +400,9 @@ func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth remotecopy
 	return inspect(ctx, sess, runtime(req), containerName(req))
 }
 
-// Rollback riporta il container di ogni target all'immagine della release indicata (letta
-// dalle etichette prima del deploy). Prosegue anche se un target fallisce, per ripristinare il
-// maggior numero di target, e riporta gli errori alla fine. È idempotente.
+// Rollback brings every target's container back to the image of the given release (read from
+// the labels before the deploy). It continues even if a target fails, to restore as many
+// targets as possible, and reports the errors at the end. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	image := previous.Details[DetailImage]
 	if image == "" || !strings.Contains(image, "@sha256:") {
@@ -429,9 +429,9 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	return res, errors.Join(errs...)
 }
 
-// DryRun verifica su ogni target, senza modificarlo, che il deploy sia eseguibile: connessione,
-// runtime raggiungibile con i permessi dell'utente e release in esercizio. Il pull non viene
-// eseguito. A differenza di Deploy controlla tutti i target.
+// DryRun checks on every target, without changing it, that the deploy can run: connection,
+// runtime reachable with the user's permissions and release in service. No pull runs. Unlike
+// Deploy it checks all targets.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -479,7 +479,7 @@ func (p *Plugin) check(ctx context.Context, t plugin.Target, auth remotecopy.Aut
 	return details, nil
 }
 
-// resolveAuth legge le credenziali SSH dai segreti solo al momento dell'uso.
+// resolveAuth reads the SSH credentials from the secrets only at use time.
 func (p *Plugin) resolveAuth(ctx context.Context, req *plugin.Request) (remotecopy.Auth, error) {
 	var a remotecopy.Auth
 	var err error
@@ -496,7 +496,7 @@ func (p *Plugin) resolveAuth(ctx context.Context, req *plugin.Request) (remoteco
 	return a, nil
 }
 
-// lastLine restituisce l'ultima riga non vuota dell'output (es. il digest stampato dal pull).
+// lastLine returns the last non-empty line of the output (e.g. the digest printed by the pull).
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])

@@ -16,8 +16,8 @@ import (
 	"github.com/crewjam/rfc5424"
 )
 
-// listenUnixgram apre un socket a datagrammi in una directory breve (i percorsi dei socket unix
-// hanno un limite di circa 100 caratteri).
+// listenUnixgram opens a datagram socket in a short directory (unix socket paths have a limit
+// of about 100 characters).
 func listenUnixgram(t *testing.T) (*net.UnixConn, string) {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "mlog")
@@ -39,7 +39,7 @@ func listenAt(t *testing.T, path string) *net.UnixConn {
 	return c
 }
 
-// receive legge un datagramma; se trasporta un descrittore di file restituisce il contenuto del file.
+// receive reads a datagram; if it carries a file descriptor it returns the file content.
 func receive(t *testing.T, c *net.UnixConn) []byte {
 	t.Helper()
 	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -69,7 +69,7 @@ func receive(t *testing.T, c *net.UnixConn) []byte {
 	return data
 }
 
-// parseJournal decodifica il protocollo nativo di journald.
+// parseJournal decodes the native journald protocol.
 func parseJournal(t *testing.T, data []byte) map[string][]string {
 	t.Helper()
 	out := map[string][]string{}
@@ -115,7 +115,7 @@ func TestSyslogLocale(t *testing.T) {
 	if !strings.HasPrefix(got, "<132>1 ") || !strings.Contains(got, `[manent@32473 deployment="d1" step.name="qa"]`) || !strings.HasSuffix(got, "step fallito") {
 		t.Fatalf("messaggio RFC 5424 inatteso: %q", got)
 	}
-	// Il demone viene riavviato e ricrea il socket: il messaggio successivo arriva comunque.
+	// The daemon restarts and recreates the socket: the next message still arrives.
 	_ = srv.Close()
 	_ = os.Remove(path)
 	srv = listenAt(t, path)
@@ -149,7 +149,7 @@ func TestJournaldNativo(t *testing.T) {
 	}
 }
 
-// Un messaggio più grande di un datagramma passa dal descrittore di un file temporaneo.
+// A message larger than a datagram goes through a temporary file's descriptor.
 func TestJournaldMessaggioGrande(t *testing.T) {
 	srv, path := listenUnixgram(t)
 	s, err := NewJournalSender(path)
@@ -177,7 +177,7 @@ func TestJournalName(t *testing.T) {
 	}
 }
 
-// Più destinazioni: l'errore di una non impedisce l'invio alle altre.
+// Several destinations: an error on one does not prevent sending to the others.
 func TestMultiSender(t *testing.T) {
 	srv, path := listenUnixgram(t)
 	ok, _ := NewSender(NetworkUnixgram, path)

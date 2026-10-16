@@ -12,18 +12,18 @@ import (
 	"strings"
 )
 
-// Impostazioni del provider f5 (BIG-IP LTM, iControl REST).
+// Settings of the f5 provider (BIG-IP LTM, iControl REST).
 const (
-	settingManagementURL = "management_url" // URL di gestione del BIG-IP attivo
-	settingPartition     = "partition"      // partizione del pool (default Common)
-	settingPool          = "pool"           // pool LTM con i membri
-	settingSyncGroup     = "sync_group"     // device group da sincronizzare dopo ogni modifica (config-sync)
+	settingManagementURL = "management_url" // management URL of the active BIG-IP
+	settingPartition     = "partition"      // pool partition (default Common)
+	settingPool          = "pool"           // LTM pool with the members
+	settingSyncGroup     = "sync_group"     // device group to sync after every change (config-sync)
 )
 
 var f5NameRe = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,255}$`)
 
-// f5Pool svuota i membri di un pool LTM: session user-disabled lascia proseguire le
-// connessioni esistenti (e quelle persistenti) e non ne accetta di nuove.
+// f5Pool drains the members of an LTM pool: session user-disabled lets existing (and
+// persistent) connections continue and accepts no new ones.
 type f5Pool struct {
 	base      string
 	partition string
@@ -55,7 +55,7 @@ func validateF5(s map[string]string) error {
 	return errors.Join(errs...)
 }
 
-// NewF5Pool costruisce il pool f5.
+// NewF5Pool builds the f5 pool.
 func NewF5Pool(ctx context.Context, env Env) (Pool, error) {
 	if err := validateF5(env.Settings); err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (m f5Member) inService() bool {
 	return m.State == "up" && m.Session != "user-disabled"
 }
 
-// Members implementa Pool.
+// Members implements Pool.
 func (p *f5Pool) Members(ctx context.Context) ([]Member, error) {
 	list, err := p.list(ctx)
 	if err != nil {
@@ -142,7 +142,7 @@ func (p *f5Pool) patch(ctx context.Context, members []string, body map[string]st
 	return p.configSync(ctx)
 }
 
-// configSync propaga la modifica agli altri dispositivi del device group.
+// configSync propagates the change to the other devices of the device group.
 func (p *f5Pool) configSync(ctx context.Context) error {
 	if p.sync == "" {
 		return nil
@@ -150,17 +150,17 @@ func (p *f5Pool) configSync(ctx context.Context) error {
 	return p.do(ctx, http.MethodPost, p.base+"/mgmt/tm/cm", map[string]string{"command": "run", "utilCmdArgs": "config-sync to-group " + p.sync}, nil)
 }
 
-// Drain implementa Pool.
+// Drain implements Pool.
 func (p *f5Pool) Drain(ctx context.Context, members []string) error {
 	return p.patch(ctx, members, map[string]string{"session": "user-disabled"})
 }
 
-// Restore implementa Pool.
+// Restore implements Pool.
 func (p *f5Pool) Restore(ctx context.Context, members []string) error {
 	return p.patch(ctx, members, map[string]string{"session": "user-enabled", "state": "user-up"})
 }
 
-// Connections implementa Pool: le connessioni lato server (serverside.curConns) del membro.
+// Connections implements Pool: the member's server-side connections (serverside.curConns).
 func (p *f5Pool) Connections(ctx context.Context, members []string) (map[string]int, error) {
 	out := map[string]int{}
 	for _, m := range members {
@@ -177,7 +177,7 @@ func (p *f5Pool) Connections(ctx context.Context, members []string) (map[string]
 	return out, nil
 }
 
-// findStat cerca ricorsivamente un contatore nelle statistiche annidate di iControl REST.
+// findStat looks recursively for a counter in the nested iControl REST statistics.
 func findStat(v any, key string) (int, bool) {
 	switch x := v.(type) {
 	case map[string]any:
@@ -210,7 +210,7 @@ func sortedKeys(m map[string]any) []string {
 	return keys
 }
 
-// Healthy implementa Pool.
+// Healthy implements Pool.
 func (p *f5Pool) Healthy(ctx context.Context, members []string) (map[string]bool, error) {
 	list, err := p.list(ctx)
 	if err != nil {

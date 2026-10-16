@@ -16,7 +16,7 @@ import (
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// fakeDeployer è un plugin minimale per i test di selezione e deploy.
+// fakeDeployer is a minimal plugin for the selection and deploy tests.
 type fakeDeployer struct {
 	name  string
 	types []string
@@ -91,13 +91,13 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Il plugin riceve il percorso garantito dallo store, non quello registrato dallo step artifacts.
+	// The plugin receives the path guaranteed by the store, not the one recorded by the artifacts step.
 	if dep.got.Artifact.LocalPath != "/altro-worker/app.tgz" || dep.got.Targets[0].Host != "h1" || out["plugin"] != "app" {
 		t.Errorf("richiesta al plugin inattesa: %+v", dep.got)
 	}
 }
 
-// dryDeployer supporta il dry-run e registra se è stato eseguito il deploy reale.
+// dryDeployer supports dry-run and records whether the real deploy ran.
 type dryDeployer struct {
 	fakeDeployer
 	dry bool
@@ -118,7 +118,7 @@ func TestDeployDryRun(t *testing.T) {
 		Outputs: map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/app.tgz", OutSHA256: "abc"}},
 	}
 
-	// Plugin con DryRun: viene chiamato al posto di Deploy.
+	// Plugin with DryRun: it is called instead of Deploy.
 	dep := &dryDeployer{fakeDeployer: fakeDeployer{name: "app", types: []string{"application"}}}
 	reg := plugin.NewRegistry()
 	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
@@ -132,7 +132,7 @@ func TestDeployDryRun(t *testing.T) {
 		t.Fatalf("dry-run inatteso: dry=%v deploy=%v out=%v", dep.dry, dep.got != nil, out)
 	}
 
-	// Plugin senza DryRun: solo validazione, nessun deploy.
+	// Plugin without DryRun: validation only, no deploy.
 	plain := &fakeDeployer{name: "app", types: []string{"application"}}
 	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, plain)}
 	if out, err = s.DryRun(context.Background(), in); err != nil {
@@ -143,7 +143,7 @@ func TestDeployDryRun(t *testing.T) {
 	}
 }
 
-// fakeStore simula uno store che riscarica l'artefatto su un altro percorso.
+// fakeStore simulates a store that downloads the artifact again to another path.
 type fakeStore struct {
 	path string
 }
@@ -181,7 +181,7 @@ func TestSecretsCallbackNonDichiarato(t *testing.T) {
 	}
 }
 
-// rollbackDeployer legge la release corrente e registra il rollback.
+// rollbackDeployer reads the current release and records the rollback.
 type rollbackDeployer struct {
 	fakeDeployer
 	current  *plugin.Release
@@ -232,7 +232,7 @@ func TestDeployCheckpointECompensate(t *testing.T) {
 		t.Fatalf("rollback inatteso: restored=%q out=%v", dep.restored, out)
 	}
 
-	// Primo deploy: nessuna release precedente, la compensazione non chiama il plugin.
+	// First deploy: no previous release, the compensation does not call the plugin.
 	dep.current, dep.restored = nil, ""
 	if cp, err = s.Checkpoint(context.Background(), in); err != nil {
 		t.Fatal(err)
@@ -244,7 +244,7 @@ func TestDeployCheckpointECompensate(t *testing.T) {
 		t.Fatalf("compensazione inattesa: %v", out)
 	}
 
-	// Plugin senza Rollbacker: il checkpoint fallisce prima del deploy.
+	// Plugin without Rollbacker: the checkpoint fails before the deploy.
 	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "app", types: []string{"application"}})}
 	if _, err := s.Checkpoint(context.Background(), in); err == nil || !strings.Contains(err.Error(), "non lo supporta") {
 		t.Fatalf("atteso errore di rollback non supportato, ricevuto %v", err)

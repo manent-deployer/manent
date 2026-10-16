@@ -9,31 +9,31 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 )
 
-// Chiavi dell'output dello step artifacts, lette dagli step successivi.
+// Output keys of the artifacts step, read by the next steps.
 const (
 	OutLocalPath = "local_path"
 	OutSHA256    = "sha256"
 	OutSize      = "size"
 )
 
-// ArtifactStore gestisce gli artefatti nella directory di lavoro del worker.
+// ArtifactStore manages the artifacts in the worker's working directory.
 type ArtifactStore interface {
 	Fetch(ctx context.Context, deploymentID, source string) (*artifact.Fetched, error)
-	// Ensure restituisce il percorso locale dell'artefatto, riscaricandolo se manca su questo worker;
-	// il booleano indica se è stato riscaricato.
+	// Ensure returns the local path of the artifact, downloading it again if missing on this
+	// worker; the boolean reports whether it was downloaded again.
 	Ensure(ctx context.Context, deploymentID, source, localPath, sha256 string) (string, bool, error)
 }
 
-// Artifacts recupera l'artefatto nella directory di lavoro del deploy.
+// Artifacts fetches the artifact into the deploy's working directory.
 type Artifacts struct {
 	Store  ArtifactStore
 	Logger *slog.Logger
 }
 
-// Name restituisce il nome dello step.
+// Name returns the step name.
 func (Artifacts) Name() string { return "artifacts" }
 
-// Run scarica l'artefatto e ne restituisce percorso, hash e dimensione.
+// Run downloads the artifact and returns path, hash and size.
 func (a Artifacts) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	f, err := a.Store.Fetch(ctx, in.DeploymentID, in.Descriptor.Artifact.Source)
 	if err != nil {
@@ -47,8 +47,8 @@ func (a Artifacts) Run(ctx context.Context, in pipeline.Input) (pipeline.Output,
 	}, nil
 }
 
-// DryRun coincide con Run: l'artefatto viene scaricato solo nella directory di lavoro del worker,
-// che la pulizia finale rimuove.
+// DryRun is the same as Run: the artifact is downloaded only into the worker's working
+// directory, which the final cleanup removes.
 func (a Artifacts) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
 	return a.Run(ctx, in)
 }

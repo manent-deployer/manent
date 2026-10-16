@@ -1,15 +1,15 @@
-# UC9: catene di deploy. Un deploy che attende un altro (after), una dipendenza che fallisce,
-# una release composta riuscita (db → api → web) e una fallita con onFailure: rollback.
-# Ogni applicazione ha un proprio target: uc9-db su eu1-a, uc9-api su eu1-b, uc9-web su eu1-c.
+# UC9: deploy chains. A deploy waiting for another (after), a failing dependency, a successful
+# composite release (db → api → web) and a failed one with onFailure: rollback.
+# Every application has its own target: uc9-db on eu1-a, uc9-api on eu1-b, uc9-web on eu1-c.
 log "UC9 · catene di deploy: dipendenze e release composte"
 
 for v in 1.0.0 1.1.0 1.2.0 1.3.0; do
   for a in uc9-db uc9-api uc9-web; do artifact $a $v >/dev/null; done
 done
 
-# event_at <target> <app> <start|end> <versione>: orario (epoch) dell'evento del post_command.
+# event_at <target> <app> <start|end> <version>: time (epoch) of the post_command event.
 event_at() { dc exec -T "$1" sh -c "cat /home/deploy/fault/$2.log 2>/dev/null" | awk -v e="$3" -v v="$4" '$2==e && $3==v {print $1}' | tail -1; }
-# after_ok <descrizione> <target1> <app1> <target2> <app2> <versione>: app2 è partita dopo la fine di app1.
+# after_ok <description> <target1> <app1> <target2> <app2> <version>: app2 started after app1 ended.
 after_ok() {
   end=$(event_at "$2" "$3" end "$6"); start=$(event_at "$4" "$5" start "$6")
   [ -n "$end" ] && [ -n "$start" ] && [ "$start" -ge "$end" ] && pass "$1" || fail "$1" "fine $3=$end, inizio $5=$start"
