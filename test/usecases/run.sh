@@ -22,9 +22,9 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -56,6 +56,12 @@ printf 'uc-slack-signing' >"$WORK/keys/slack-signing"
 printf 'http://fakes:9100/teams/cab' >"$WORK/keys/teams-webhook"
 printf 'uc-snow' >"$WORK/keys/snow-password"
 printf 'uc-jboss-1' >"$WORK/keys/jboss-pass"
+printf 'uc-dd-api' >"$WORK/keys/dd-api"
+printf 'uc-dd-app' >"$WORK/keys/dd-app"
+printf 'uc-nr-key' >"$WORK/keys/nr-key"
+printf 'uc-es-key' >"$WORK/keys/es-key"
+printf 'AKIDUCTEST' >"$WORK/keys/aws-id"
+printf 'uc-aws-secret' >"$WORK/keys/aws-secret"
 chmod 644 "$WORK"/keys/*
 
 # Configuration variants for the region workers (UC5).
@@ -71,7 +77,7 @@ region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
 dc --profile regions --profile containers --profile lb --profile jboss build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0

@@ -53,6 +53,67 @@ Al 1% una soglia assoluta su errori o latenza dice poco. Una metrica con `compar
 
 Le metriche dell'applicazione devono avere l'etichetta dello slot: su Kubernetes è `manent.io/track` sui pod, da portare in Prometheus con il relabeling.
 
+## Analisi canary
+
+Una soglia su una lettura singola è fragile: un picco della stabile, o pochi errori della candidata a basso traffico, decidono il gradino. Con `analysis: mann-whitney` la metrica è giudicata come in Kayenta: a ogni lettura del gate manent legge le **serie** di candidata e stabile sul tempo trascorso nel gradino (o `lookback`), con un punto ogni `step`, e le confronta con il test **U di Mann-Whitney** a due code. La metrica fallisce solo se la differenza è significativa (`p < alpha`) **e** va nella direzione considerata peggiore oltre il rapporto tollerato tra le medie.
+
+```yaml title="envconfig/shop/prod.yml"
+rollout:
+  strategy: traffic
+  traffic: {steps: [5, 25, 50, 100], bake: 15m}
+  health:
+    interval: 1m
+    analysis: {pass: 95, marginal: 75}   # soglie del punteggio, 0-100
+    metrics:
+      - name: errori
+        compare: stable
+        analysis: mann-whitney
+        critical: true                   # rossa da sola, qualunque sia il punteggio
+        query: 'sum(rate(http_requests_total{app="{application}",track="{track}",code=~"5.."}[1m])) / sum(rate(http_requests_total{app="{application}",track="{track}"}[1m]))'
+      - name: latenza-p99
+        provider: datadog
+        compare: stable
+        analysis: mann-whitney
+        maxRatio: 1.2                    # fino a +20% è tollerato anche se significativo
+        weight: 2
+        query: 'p99:trace.http.request.duration{service:{application},track:{track}}'
+      - name: throughput
+        provider: cloudwatch
+        compare: stable
+        analysis: mann-whitney
+        direction: decrease              # peggiore quando cala
+        minRatio: 0.8
+        query: "SELECT SUM(RequestCount) FROM \"AWS/ApplicationELB\" WHERE TargetGroup = 'shop-{track}'"
+```
+
+| Campo | Default | Significato |
+|---|---|---|
+| `analysis` | | `mann-whitney` per il confronto statistico; senza, le soglie su una lettura singola descritte sopra. Richiede `compare: stable`. |
+| `provider` | `prometheus` | Sistema di metriche: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch` (configurati in [`rollout`](../operazioni/configurazione.md#rollout)). |
+| `direction` | `increase` | Cosa è peggiore: `increase`, `decrease` o `either`. |
+| `maxRatio`, `minRatio` | `1` | Rapporto tollerato tra le medie (candidata/stabile) nella direzione peggiore. |
+| `alpha` | `0.05` | Livello di significatività. |
+| `step`, `lookback` | `15s`, tempo nel gradino | Risoluzione e finestra delle serie. |
+| `minPoints` | `5` | Con meno punti da una delle due parti la metrica è **inconcludente**. |
+| `weight` | `1` | Peso nel punteggio. |
+| `critical` | `false` | Una metrica critica fallita rende rosso il gate a prescindere dal punteggio. |
+
+**Punteggio.** Con `health.analysis` il gate calcola a ogni lettura il punteggio del rilascio: la quota pesata delle metriche non inconcludenti superate, da 0 a 100. Durante il bake la lettura è verde da `marginal` in su (default 75); l'ultima, alla fine del bake, deve raggiungere `pass` (default 95) e non avere metriche inconcludenti, perché un gradino finito senza dati non può dire che il rilascio è sano. Sonde e allarmi restano superato/fallito. Il punteggio compare in `rollout.stages[].score` e nell'interfaccia web; un gate rosso elenca le metriche fallite con medie, rapporto e p-value, ad esempio `metric errori: candidata 0.2761, stabile 0 (medie di 11 e 11 punti): rapporto +Inf, p=9.3e-05 < 0.05`.
+
+Il confronto ha senso solo finché entrambe le versioni ricevono traffico: avviene nei gradini intermedi; al 100% e al primo rilascio le metriche comparative non sono valutate.
+
+### Query per sistema
+
+Ogni query è scritta nel linguaggio del suo sistema, con i soliti segnaposto (`{track}`, `{application}`, …):
+
+| `provider` | Linguaggio | Note |
+|---|---|---|
+| `prometheus` | PromQL | Query istantanea per un valore, `query_range` con `step` per una serie; la prima serie del risultato. |
+| `datadog` | metric query (`/api/v1/query`) | Datadog sceglie la risoluzione dalla finestra; `.rollup(avg, 15)` la fissa. |
+| `newrelic` | NRQL via NerdGraph | Senza `SINCE`, `UNTIL` e `TIMESERIES`: li aggiunge manent per la finestra letta. La metrica è il primo campo numerico. |
+| `elastic` | ES\|QL (`/_query`) | Segnaposto `{start}`, `{end}` (RFC 3339) e `{step}` (es. `15 seconds`); l'ultima colonna numerica, una riga per intervallo ordinata per tempo. |
+| `cloudwatch` | metric math o Metrics Insights (`SELECT …`) | Letta con `GetMetricData`; il periodo è arrotondato a un valore accettato da CloudWatch (1, 5, 10, 30 secondi o multipli di 60). |
+
 ## Router
 
 | Router | Slot | Come si sposta il traffico | Tester |

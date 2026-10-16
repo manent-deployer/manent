@@ -81,6 +81,48 @@ type RolloutConfig struct {
 	AlertmanagerURL string `yaml:"alertmanager_url"`
 	// CheckTimeout limits every health gate read.
 	CheckTimeout time.Duration `yaml:"check_timeout"`
+	// Other metrics systems for the gates (rollout.health.metrics[].provider).
+	Datadog    *DatadogMetrics    `yaml:"datadog"`
+	NewRelic   *NewRelicMetrics   `yaml:"newrelic"`
+	Elastic    *ElasticMetrics    `yaml:"elastic"`
+	CloudWatch *CloudWatchMetrics `yaml:"cloudwatch"`
+}
+
+// DatadogMetrics configures the Datadog API: keys are secret references, read at every call.
+type DatadogMetrics struct {
+	// URL is the API site (default https://api.datadoghq.com; e.g. https://api.datadoghq.eu).
+	URL       string `yaml:"url"`
+	APIKeyRef string `yaml:"api_key_ref"`
+	AppKeyRef string `yaml:"app_key_ref"`
+}
+
+// NewRelicMetrics configures NerdGraph with a user API key.
+type NewRelicMetrics struct {
+	// URL is the NerdGraph endpoint (default https://api.newrelic.com/graphql).
+	URL       string `yaml:"url"`
+	AccountID int64  `yaml:"account_id"`
+	APIKeyRef string `yaml:"api_key_ref"`
+}
+
+// ElasticMetrics configures Elasticsearch (ES|QL): API key or user and password.
+type ElasticMetrics struct {
+	URL         string `yaml:"url"`
+	APIKeyRef   string `yaml:"api_key_ref"`
+	Username    string `yaml:"username"`
+	PasswordRef string `yaml:"password_ref"`
+	// CAFile is a bundle of extra CAs to reach Elasticsearch.
+	CAFile string `yaml:"ca_file"`
+}
+
+// CloudWatchMetrics configures Amazon CloudWatch (GetMetricData). Credentials come from the
+// SDK default chain or from the secret references, with an optional role to assume.
+type CloudWatchMetrics struct {
+	Region             string `yaml:"region"`
+	Endpoint           string `yaml:"endpoint"`
+	AccessKeyIDRef     string `yaml:"access_key_id_ref"`
+	SecretAccessKeyRef string `yaml:"secret_access_key_ref"`
+	RoleARN            string `yaml:"role_arn"`
+	ExternalID         string `yaml:"external_id"`
 }
 
 // Chains configures dependencies between deploys (after) and composite releases.
@@ -624,6 +666,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateOperations()...)
 	errs = append(errs, c.validateSIEM()...)
 	errs = append(errs, c.validateIntegrations()...)
+	errs = append(errs, c.validateMetricSources()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
@@ -677,6 +720,25 @@ func (c *Config) validateSIEM() []error {
 		default:
 			errs = append(errs, fmt.Errorf("siem: rete %q non supportata (udp, tcp, unixgram, journald)", d.Network))
 		}
+	}
+	return errs
+}
+
+// validateMetricSources checks the metrics systems of the gates.
+func (c *Config) validateMetricSources() []error {
+	var errs []error
+	r := c.Rollout
+	if d := r.Datadog; d != nil && (d.APIKeyRef == "" || d.AppKeyRef == "" || (d.URL != "" && !validURL(d.URL))) {
+		errs = append(errs, errors.New("rollout.datadog: api_key_ref e app_key_ref obbligatori, url http(s) se indicato"))
+	}
+	if n := r.NewRelic; n != nil && (n.AccountID <= 0 || n.APIKeyRef == "" || (n.URL != "" && !validURL(n.URL))) {
+		errs = append(errs, errors.New("rollout.newrelic: account_id e api_key_ref obbligatori, url http(s) se indicato"))
+	}
+	if e := r.Elastic; e != nil && (!validURL(e.URL) || (e.APIKeyRef == "") == (e.Username == "") || (e.Username != "" && e.PasswordRef == "")) {
+		errs = append(errs, errors.New("rollout.elastic: url obbligatorio e api_key_ref oppure username con password_ref"))
+	}
+	if w := r.CloudWatch; w != nil && (w.Region == "" || (w.AccessKeyIDRef == "") != (w.SecretAccessKeyRef == "") || (w.Endpoint != "" && !validURL(w.Endpoint))) {
+		errs = append(errs, errors.New("rollout.cloudwatch: region obbligatoria, access_key_id_ref e secret_access_key_ref insieme, endpoint http(s) se indicato"))
 	}
 	return errs
 }

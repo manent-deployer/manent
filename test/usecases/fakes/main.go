@@ -1,10 +1,12 @@
 // Command fakes emulates, for the use case lab, the external services manent talks to and that
-// have no local version: the Slack Web API, Microsoft Teams webhooks, the ServiceNow Table API
-// and a generic HTTP endpoint for custom steps. Every request is recorded and can be read on
+// have no local version: the Slack Web API, Microsoft Teams webhooks, the ServiceNow Table API,
+// a generic HTTP endpoint for custom steps and the metric APIs of Datadog, New Relic
+// (NerdGraph), Elastic (ES|QL) and CloudWatch (GetMetricData, Smithy RPC v2 CBOR). Every request is recorded and can be read on
 // GET /records, so the cases check what manent sent. Never use it outside the lab.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,6 +15,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/aws/smithy-go/encoding/cbor"
 )
 
 // record is a request received by the fakes.
@@ -30,7 +35,25 @@ type fakes struct {
 	records []record
 	changes map[string]map[string]any // sys_id → ServiceNow change request
 	polls   map[string]int            // job → GET count
+	metrics []metricSeries            // series returned by the metric APIs
 	seq     int
+}
+
+// metricSeries is the series a metric API returns for the queries of a provider that contain key.
+type metricSeries struct {
+	Provider string    `json:"provider"`
+	Key      string    `json:"key"`
+	Values   []float64 `json:"values"`
+}
+
+// series returns the values configured for the query (the most recent matching key).
+func (f *fakes) series(provider, query string) []float64 {
+	for i := len(f.metrics) - 1; i >= 0; i-- {
+		if m := f.metrics[i]; m.Provider == provider && strings.Contains(query, m.Key) {
+			return m.Values
+		}
+	}
+	return nil
 }
 
 // recorded headers: authentication and idempotency, to check what manent sends.
@@ -93,6 +116,23 @@ func (f *fakes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 404, map[string]string{"error": "change " + number + " inesistente"})
 	case strings.HasPrefix(p, "/hooks/"):
 		f.hook(w, r, body)
+	case p == "/control/metrics":
+		// POST /control/metrics {"provider":..., "key":..., "values":[...]}: series to return.
+		var m metricSeries
+		if err := json.Unmarshal(body, &m); err != nil {
+			reply(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
+		f.metrics = append(f.metrics, m)
+		reply(w, 200, m)
+	case strings.HasPrefix(p, "/datadog/"):
+		f.datadog(w, r, body)
+	case strings.HasPrefix(p, "/newrelic/"):
+		f.newrelic(w, r, body)
+	case strings.HasPrefix(p, "/elastic/"):
+		f.elastic(w, r, body)
+	case strings.HasPrefix(p, "/cloudwatch/"):
+		f.cloudwatch(w, r, body)
 	default:
 		reply(w, 404, map[string]string{"error": "percorso sconosciuto " + p})
 	}
@@ -195,4 +235,105 @@ func main() {
 	f := &fakes{changes: map[string]map[string]any{}, polls: map[string]int{}}
 	log.Printf("fakes in ascolto su %s", *listen)
 	log.Fatal(http.ListenAndServe(*listen, f))
+}
+
+// datadog emulates GET /api/v1/query with the keys uc-dd-api and uc-dd-app.
+func (f *fakes) datadog(w http.ResponseWriter, r *http.Request, body []byte) {
+	f.add("datadog", r, body)
+	if r.Header.Get("Dd-Api-Key") != "uc-dd-api" || r.Header.Get("Dd-Application-Key") != "uc-dd-app" {
+		reply(w, 403, map[string]any{"errors": []string{"Forbidden"}})
+		return
+	}
+	var points [][]any
+	for i, v := range f.series("datadog", r.URL.Query().Get("query")) {
+		points = append(points, []any{float64(i) * 1000, v})
+	}
+	series := []any{}
+	if len(points) > 0 {
+		series = append(series, map[string]any{"pointlist": points})
+	}
+	reply(w, 200, map[string]any{"status": "ok", "series": series})
+}
+
+// newrelic emulates NerdGraph (POST /graphql) for NRQL queries with the key uc-nr-key.
+func (f *fakes) newrelic(w http.ResponseWriter, r *http.Request, body []byte) {
+	f.add("newrelic", r, body)
+	if r.Header.Get("Api-Key") != "uc-nr-key" {
+		reply(w, 200, map[string]any{"errors": []map[string]string{{"message": "Invalid API key"}}})
+		return
+	}
+	var req struct {
+		Variables struct {
+			NRQL string `json:"nrql"`
+		} `json:"variables"`
+	}
+	_ = json.Unmarshal(body, &req)
+	vals := f.series("newrelic", req.Variables.NRQL)
+	rows := []map[string]any{}
+	if strings.Contains(req.Variables.NRQL, "TIMESERIES") {
+		for i, v := range vals {
+			rows = append(rows, map[string]any{"beginTimeSeconds": i, "endTimeSeconds": i + 1, "average.duration": v})
+		}
+	} else if len(vals) > 0 {
+		rows = append(rows, map[string]any{"average.duration": vals[len(vals)-1]})
+	}
+	reply(w, 200, map[string]any{"data": map[string]any{"actor": map[string]any{"account": map[string]any{"nrql": map[string]any{"results": rows}}}}})
+}
+
+// elastic emulates ES|QL (POST /_query) with the API key uc-es-key.
+func (f *fakes) elastic(w http.ResponseWriter, r *http.Request, body []byte) {
+	f.add("elastic", r, body)
+	if r.Header.Get("Authorization") != "ApiKey uc-es-key" {
+		reply(w, 401, map[string]any{"error": map[string]string{"type": "security_exception"}})
+		return
+	}
+	var req struct {
+		Query string `json:"query"`
+	}
+	_ = json.Unmarshal(body, &req)
+	rows := [][]any{}
+	for i, v := range f.series("elastic", req.Query) {
+		rows = append(rows, []any{time.Unix(int64(i), 0).UTC().Format(time.RFC3339), v})
+	}
+	reply(w, 200, map[string]any{"columns": []map[string]string{{"name": "bucket", "type": "date"}, {"name": "value", "type": "double"}}, "values": rows})
+}
+
+// cloudwatch emulates GetMetricData with the Smithy RPC v2 CBOR protocol of the AWS SDK: it
+// requires a SigV4 signature of the key AKIDUCTEST and returns, for each query, the series
+// configured for its expression.
+func (f *fakes) cloudwatch(w http.ResponseWriter, r *http.Request, body []byte) {
+	in, err := cbor.Decode(body)
+	var expressions []string
+	if m, ok := in.(cbor.Map); ok && err == nil {
+		if qs, ok := m["MetricDataQueries"].(cbor.List); ok {
+			for _, q := range qs {
+				if qm, ok := q.(cbor.Map); ok {
+					if e, ok := qm["Expression"].(cbor.String); ok {
+						expressions = append(expressions, string(e))
+					}
+				}
+			}
+		}
+	}
+	rec, _ := json.Marshal(map[string]any{"operation": r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:], "expressions": expressions})
+	f.add("cloudwatch", r, rec)
+	if !strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 Credential=AKIDUCTEST/") {
+		w.Header().Set("Smithy-Protocol", "rpc-v2-cbor")
+		w.Header().Set("Content-Type", "application/cbor")
+		w.WriteHeader(403)
+		_, _ = w.Write(cbor.Encode(cbor.Map{"__type": cbor.String("AccessDeniedException"), "message": cbor.String("firma assente")}))
+		return
+	}
+	results := cbor.List{}
+	for i, e := range expressions {
+		vals, ts := cbor.List{}, cbor.List{}
+		for j, v := range f.series("cloudwatch", e) {
+			vals = append(vals, cbor.Float64(v))
+			ts = append(ts, &cbor.Tag{ID: 1, Value: cbor.Float64(float64(1700000000 + 60*j))})
+		}
+		results = append(results, cbor.Map{"Id": cbor.String(fmt.Sprintf("m%d", i)), "Values": vals, "Timestamps": ts, "StatusCode": cbor.String("Complete")})
+	}
+	w.Header().Set("Smithy-Protocol", "rpc-v2-cbor")
+	w.Header().Set("Content-Type", "application/cbor")
+	_, _ = io.Copy(w, bytes.NewReader(cbor.Encode(cbor.Map{"MetricDataResults": results})))
 }

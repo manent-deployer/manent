@@ -14,6 +14,16 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Analisi canary alla Kayenta nei gate di salute: `analysis: mann-whitney` confronta le serie di
+  candidata e stabile con il test U di Mann-Whitney (`direction`, `alpha`, `maxRatio`/`minRatio`,
+  `step`, `lookback`, `minPoints`), `health.analysis` calcola un punteggio pesato 0–100 con
+  soglie `marginal` (durante il bake) e `pass` (alla fine), metriche `critical` e inconcludenti.
+  Punteggio in `rollout.stages[].score` e nell'interfaccia web.
+- Sorgenti di metriche oltre a Prometheus (`provider` della metrica, configurazione in
+  `rollout`): Datadog, New Relic (NerdGraph/NRQL), Elastic (ES|QL) e Amazon CloudWatch
+  (`GetMetricData`, `plugins/awsmetrics`). Casi d'uso UC15 (Prometheus e HAProxy veri) e UC16
+  (sorgenti emulate da `test/usecases/fakes`).
+
 - Casi d'uso UC10–UC14: svuotamento e router su un HAProxy vero con la Data Plane API, rilascio
   per percentuale di un chart Helm su k3s con la Gateway API, step personalizzati (SSH e HTTP),
   integrazioni Slack, Teams e ServiceNow (servizio finto `test/usecases/fakes`) e JBoss su un
@@ -82,6 +92,8 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- Nella strategy `traffic` il gradino del 100% e il primo rilascio non valutano più le metriche
+  `compare: stable`: la stabile non riceve traffico e il confronto leggerebbe una serie vuota.
 - Governance: `approvals.when: rollout` sposta le approvazioni di una regola nei punti
   `approvalsBetween` del rollout, senza l'approvazione prima del deploy; un deploy senza punti di
   approvazione viene rifiutato.

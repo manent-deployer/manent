@@ -74,6 +74,34 @@ type Health struct {
 	Interval string `json:"interval,omitempty" yaml:"interval,omitempty"`
 	// FailuresToStop are the consecutive red checks that stop the pass (default 1).
 	FailuresToStop int `json:"failuresToStop,omitempty" yaml:"failuresToStop,omitempty"`
+	// Analysis, if set, judges the metrics with a weighted score instead of requiring every
+	// one of them to be green (canary analysis in the style of Kayenta).
+	Analysis *CanaryAnalysis `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+}
+
+// CanaryAnalysis are the score thresholds of the canary analysis (0-100): during the bake a
+// score below Marginal stops the stage, at the end the score must reach Pass.
+type CanaryAnalysis struct {
+	Pass     float64 `json:"pass,omitempty" yaml:"pass,omitempty"`
+	Marginal float64 `json:"marginal,omitempty" yaml:"marginal,omitempty"`
+}
+
+// Default score thresholds of the canary analysis.
+const (
+	DefaultAnalysisPass     = 95
+	DefaultAnalysisMarginal = 75
+)
+
+// Thresholds returns pass and marginal with their defaults.
+func (a *CanaryAnalysis) Thresholds() (pass, marginal float64) {
+	pass, marginal = DefaultAnalysisPass, DefaultAnalysisMarginal
+	if a != nil && a.Pass > 0 {
+		pass = a.Pass
+	}
+	if a != nil && a.Marginal > 0 {
+		marginal = a.Marginal
+	}
+	return pass, min(marginal, pass)
 }
 
 // Probe is an HTTP probe to every target of the pass. URL must contain {host}: probes reach
@@ -101,6 +129,88 @@ type MetricGate struct {
 	// SamplesQuery counts the observed requests; below MinSamples the check is not green.
 	SamplesQuery string  `json:"samplesQuery,omitempty" yaml:"samplesQuery,omitempty"`
 	MinSamples   float64 `json:"minSamples,omitempty" yaml:"minSamples,omitempty"`
+	// Provider is the metrics system: prometheus (default), datadog, cloudwatch, newrelic or
+	// elastic, configured in manent.yml.
+	Provider string `json:"provider,omitempty" yaml:"provider,omitempty"`
+	// Analysis is threshold (default: the value or the ratio against the stable version) or
+	// mann-whitney: the series of candidate and stable are compared with the Mann-Whitney U test.
+	Analysis string `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+	// Direction is what counts as worse with mann-whitney: increase (default), decrease or either.
+	Direction string `json:"direction,omitempty" yaml:"direction,omitempty"`
+	// Alpha is the significance level of the test (default 0.05).
+	Alpha float64 `json:"alpha,omitempty" yaml:"alpha,omitempty"`
+	// MinRatio is the minimum candidate/stable ratio with direction decrease (default 1); with
+	// mann-whitney MaxRatio defaults to 1 too: any significant worsening fails.
+	MinRatio *float64 `json:"minRatio,omitempty" yaml:"minRatio,omitempty"`
+	// Lookback is the window of the series (default: the time elapsed in the stage).
+	Lookback string `json:"lookback,omitempty" yaml:"lookback,omitempty"`
+	// Step is the resolution of the series (default 15s).
+	Step string `json:"step,omitempty" yaml:"step,omitempty"`
+	// MinPoints are the points of each series needed for a judgement (default 5): with fewer
+	// the metric is inconclusive, and red at the end of the bake.
+	MinPoints int `json:"minPoints,omitempty" yaml:"minPoints,omitempty"`
+	// Weight of the metric in the analysis score (default 1).
+	Weight *float64 `json:"weight,omitempty" yaml:"weight,omitempty"`
+	// Critical makes the stage fail when the metric fails, whatever the score.
+	Critical bool `json:"critical,omitempty" yaml:"critical,omitempty"`
+}
+
+// Metric providers.
+const (
+	ProviderPrometheus = "prometheus"
+	ProviderDatadog    = "datadog"
+	ProviderCloudWatch = "cloudwatch"
+	ProviderNewRelic   = "newrelic"
+	ProviderElastic    = "elastic"
+)
+
+// MetricProviders are the supported metrics systems.
+var MetricProviders = []string{ProviderPrometheus, ProviderDatadog, ProviderCloudWatch, ProviderNewRelic, ProviderElastic}
+
+// Metric analyses and directions.
+const (
+	AnalysisThreshold   = "threshold"
+	AnalysisMannWhitney = "mann-whitney"
+	DirectionIncrease   = "increase"
+	DirectionDecrease   = "decrease"
+	DirectionEither     = "either"
+)
+
+// Defaults of the statistical analysis.
+const (
+	DefaultAlpha     = 0.05
+	DefaultStep      = 15 * time.Second
+	DefaultMinPoints = 5
+)
+
+// ProviderOrDefault returns the metrics system, prometheus by default.
+func (m MetricGate) ProviderOrDefault() string {
+	if m.Provider == "" {
+		return ProviderPrometheus
+	}
+	return m.Provider
+}
+
+// WeightOrDefault returns the weight in the analysis score.
+func (m MetricGate) WeightOrDefault() float64 {
+	if m.Weight == nil {
+		return 1
+	}
+	return *m.Weight
+}
+
+// StepDuration returns the resolution of the series.
+func (m MetricGate) StepDuration() time.Duration {
+	if d, err := time.ParseDuration(m.Step); err == nil && d > 0 {
+		return d
+	}
+	return DefaultStep
+}
+
+// LookbackDuration returns the window of the series; zero means the time elapsed in the stage.
+func (m MetricGate) LookbackDuration() time.Duration {
+	d, _ := time.ParseDuration(m.Lookback)
+	return d
 }
 
 // CompareStable compares the candidate version with the stable one.
@@ -260,14 +370,23 @@ func (h *Health) validate() error {
 				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: name, query e almeno uno tra min e max obbligatori", i))
 			}
 		case CompareStable:
-			if !validName(m.Name) || !strings.Contains(m.Query, "{track}") || (m.MaxRatio == nil && m.MaxDelta == nil) {
-				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: con compare: stable servono name, una query con {track} e maxRatio o maxDelta", i))
+			if !validName(m.Name) || !strings.Contains(m.Query, "{track}") || (m.MaxRatio == nil && m.MaxDelta == nil && m.Analysis != AnalysisMannWhitney) {
+				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: con compare: stable servono name, una query con {track} e maxRatio o maxDelta (o analysis: mann-whitney)", i))
 			}
 		default:
 			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d].compare %q non valido (stable)", i, m.Compare))
 		}
 		if m.MinSamples < 0 || (m.MinSamples > 0 && strings.TrimSpace(m.SamplesQuery) == "") {
 			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: minSamples richiede samplesQuery", i))
+		}
+		errs = append(errs, m.validateAnalysis(i)...)
+	}
+	if a := h.Analysis; a != nil {
+		if a.Pass < 0 || a.Pass > 100 || a.Marginal < 0 || a.Marginal > 100 || (a.Pass > 0 && a.Marginal > a.Pass) {
+			errs = append(errs, errors.New("rollout.health.analysis: pass e marginal tra 0 e 100, marginal non oltre pass"))
+		}
+		if len(h.Metrics) == 0 {
+			errs = append(errs, errors.New("rollout.health.analysis richiede almeno una metrica"))
 		}
 	}
 	if a := h.Alerts; a != nil {
@@ -281,4 +400,40 @@ func (h *Health) validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// validateAnalysis checks provider, analysis and statistical parameters of a metric.
+func (m MetricGate) validateAnalysis(i int) []error {
+	var errs []error
+	p := fmt.Sprintf("rollout.health.metrics[%d]", i)
+	if m.Provider != "" && !slices.Contains(MetricProviders, m.Provider) {
+		errs = append(errs, fmt.Errorf("%s.provider %q non valido (%s)", p, m.Provider, strings.Join(MetricProviders, ", ")))
+	}
+	switch m.Analysis {
+	case "", AnalysisThreshold:
+	case AnalysisMannWhitney:
+		if m.Compare != CompareStable {
+			errs = append(errs, fmt.Errorf("%s: analysis mann-whitney richiede compare: stable", p))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("%s.analysis %q non valido (threshold, mann-whitney)", p, m.Analysis))
+	}
+	if m.Direction != "" && m.Direction != DirectionIncrease && m.Direction != DirectionDecrease && m.Direction != DirectionEither {
+		errs = append(errs, fmt.Errorf("%s.direction %q non valido (increase, decrease, either)", p, m.Direction))
+	}
+	if m.Alpha < 0 || m.Alpha > 0.5 {
+		errs = append(errs, fmt.Errorf("%s.alpha deve essere tra 0 e 0.5", p))
+	}
+	for k, v := range map[string]string{"lookback": m.Lookback, "step": m.Step} {
+		if v == "" {
+			continue
+		}
+		if d, err := time.ParseDuration(v); err != nil || d < time.Second {
+			errs = append(errs, fmt.Errorf("%s.%s %q non valido (almeno 1s)", p, k, v))
+		}
+	}
+	if m.MinPoints < 0 || (m.Weight != nil && *m.Weight < 0) {
+		errs = append(errs, fmt.Errorf("%s: minPoints e weight non possono essere negativi", p))
+	}
+	return errs
 }

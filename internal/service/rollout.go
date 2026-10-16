@@ -63,8 +63,10 @@ type RolloutStage struct {
 	State  string        `json:"state"`
 	Passes []RolloutPass `json:"passes"`
 	// Gate describes the last red health gate, or is empty.
-	Gate  string `json:"gate,omitempty"`
-	Error string `json:"error,omitempty"`
+	Gate string `json:"gate,omitempty"`
+	// Score is the canary analysis score of the last gate read (rollout.health.analysis).
+	Score *float64 `json:"score,omitempty"`
+	Error string   `json:"error,omitempty"`
 }
 
 // RolloutPass is the work on a region (or an AZ) within a stage.

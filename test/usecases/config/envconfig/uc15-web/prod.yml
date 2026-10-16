@@ -1,0 +1,54 @@
+# UC15: percentage rollout behind HAProxy judged by the canary analysis on Prometheus: the
+# series of candidate and stable (HAProxy server = slot) are compared with Mann-Whitney.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a, slot: a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b, slot: b}}
+params:
+  dest_dir: /home/deploy/apps/uc15-web
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  rollback_command: "true"
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+  - {name: dataplane, ref: file:/keys/dataplane}
+rollout:
+  strategy: traffic
+  traffic:
+    steps: [50, 100]
+    bake: 40s
+  onFailure: rollback-all
+  health:
+    interval: 5s
+    failuresToStop: 2
+    analysis: {pass: 95, marginal: 50}
+    metrics:
+      # Share of 4xx responses of the slot: critical, any significant increase fails.
+      - name: errori
+        compare: stable
+        analysis: mann-whitney
+        critical: true
+        step: 2s
+        minPoints: 8
+        query: 'sum(rate(haproxy_server_http_responses_total{proxy="uc15-web",server="{track}",code="4xx"}[5s])) / sum(rate(haproxy_server_http_responses_total{proxy="uc15-web",server="{track}"}[5s]))'
+      # Requests per second of the slot: the candidate must not receive much less traffic.
+      - name: richieste
+        compare: stable
+        analysis: mann-whitney
+        direction: decrease
+        minRatio: 0.5
+        step: 2s
+        minPoints: 8
+        query: 'sum(rate(haproxy_server_http_responses_total{proxy="uc15-web",server="{track}"}[5s]))'
+traffic:
+  router:
+    provider: haproxy
+    settings:
+      dataplane_urls: http://haproxy:5555
+      backend: uc15-web
+      member: "{label.slot}"
+      credentials_secret: dataplane
+      allow_http: "true"

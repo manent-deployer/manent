@@ -1,0 +1,41 @@
+# UC16: percentage rollout behind HAProxy judged on four metrics systems emulated by fakes (Datadog,
+# New Relic, Elastic, CloudWatch), each compared with Mann-Whitney.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a, slot: a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b, slot: b}}
+params:
+  dest_dir: /home/deploy/apps/uc16-web
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  rollback_command: "true"
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+  - {name: dataplane, ref: file:/keys/dataplane}
+rollout:
+  strategy: traffic
+  traffic:
+    steps: [50, 100]
+    bake: 8s
+  onFailure: rollback-all
+  health:
+    interval: 2s
+    failuresToStop: 2
+    analysis: {pass: 95, marginal: 50}
+    metrics:
+      - {name: dd-errori, provider: datadog, compare: stable, analysis: mann-whitney, query: "avg:uc16.errors{track:{track}}"}
+      - {name: nr-durata, provider: newrelic, compare: stable, analysis: mann-whitney, query: "SELECT average(duration) FROM Transaction WHERE appName = 'uc16' AND track = '{track}'"}
+      - {name: es-latenza, provider: elastic, compare: stable, analysis: mann-whitney, query: "FROM uc16 | WHERE track == \"{track}\" AND @timestamp >= \"{start}\" | STATS v = AVG(latency) BY b = BUCKET(@timestamp, {step}) | SORT b"}
+      - {name: cw-errori, provider: cloudwatch, compare: stable, analysis: mann-whitney, critical: true, query: "SELECT AVG(Errors) FROM uc16 WHERE track = '{track}'"}
+traffic:
+  router:
+    provider: haproxy
+    settings:
+      dataplane_urls: http://haproxy:5555
+      backend: uc16-web
+      member: "{label.slot}"
+      credentials_secret: dataplane
+      allow_http: "true"

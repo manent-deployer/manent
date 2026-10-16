@@ -175,8 +175,12 @@ Health gate of [wave rollouts](../guida/ondate.md#health-gate).
 
 | Key | Default | Description |
 |---|---|---|
-| `prometheus_url` | | Prometheus API for `rollout.health.metrics` (e.g. `http://prometheus:9090`). Without it, a rollout with metrics is rejected. |
+| `prometheus_url` | | Prometheus API for `rollout.health.metrics` (e.g. `http://prometheus:9090`). Without it, a rollout with Prometheus metrics is rejected; the same holds for the other systems. |
 | `alertmanager_url` | | Alertmanager API for `rollout.health.alerts`. |
+| `datadog` | | Datadog for metrics with `provider: datadog`: `url` (API site, default `https://api.datadoghq.com`), `api_key_ref`, `app_key_ref`. |
+| `newrelic` | | New Relic NerdGraph: `url` (default `https://api.newrelic.com/graphql`), `account_id`, `api_key_ref` (user key). |
+| `elastic` | | Elasticsearch ES\|QL: `url`, `api_key_ref` or `username` and `password_ref`, `ca_file`. |
+| `cloudwatch` | | Amazon CloudWatch: `region`, `endpoint` (optional), credentials from the SDK chain or `access_key_id_ref` and `secret_access_key_ref`, `role_arn` and `external_id` to assume a role. |
 | `check_timeout` | `30s` | Maximum time of each gate reading. |
 
 ### `integrations`

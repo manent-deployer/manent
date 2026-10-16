@@ -140,6 +140,7 @@ export const it: Record<MessageKey, string> = {
   "detail.rollout.onFailure": "In caso di errore: {policy}",
   "detail.rollout.paused": "In pausa: {reason}",
   "detail.rollout.gate": "Ultimo controllo rosso dell'health gate: {gate}",
+  "detail.rollout.score": "Punteggio canary: {score}/100",
   "detail.rollout.hosts": "{count} host",
   "detail.rollout.stageList": "Stadi in ordine di esecuzione",
   "detail.rollout.traffic.weight": "La candidata riceve il {weight}% del traffico",

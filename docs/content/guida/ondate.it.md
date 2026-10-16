@@ -90,7 +90,7 @@ Dopo ogni stadio il worker attende il tempo di osservazione leggendo i controlli
 | Controllo | Fonte | Rosso quando |
 |---|---|---|
 | `probes` | HTTP verso ogni target dello stadio (`{host}` sostituito) | Stato diverso da `expectStatus` (default 200), o errore. L'URL deve iniziare con `http(s)://{host}`: le sonde raggiungono solo i target. |
-| `metrics` | Query PromQL su `rollout.prometheus_url`, per ogni passo; `{application}`, `{environment}`, `{region}` e `{az}` sostituiti | Valore oltre `max` o sotto `min`, oppure **nessun dato** (un gate che non vede traffico non può dire che il rilascio è sano: per accettarlo, `or vector(0)`). |
+| `metrics` | Query sul sistema di metriche di `provider` (default Prometheus, `rollout.prometheus_url`; anche Datadog, New Relic, Elastic, CloudWatch: vedi [analisi canary](traffico.md#analisi-canary)), per ogni passo; `{application}`, `{environment}`, `{region}` e `{az}` sostituiti | Valore oltre `max` o sotto `min`, oppure **nessun dato** (un gate che non vede traffico non può dire che il rilascio è sano: per accettarlo, `or vector(0)`). |
 | `alerts` | Alertmanager (`rollout.alertmanager_url`), allarmi attivi | Un allarme soddisfa tutte le condizioni di `blockOn` e riguarda l'applicazione (`application` o `app`), la region (`region`) e l'AZ (`az`) dello stadio; un'etichetta assente nell'allarme vale per tutti. |
 
 Lo stato del rollout riporta l'ultimo gate rosso: `stages[].gate`, ad esempio `metric error-rate (us-1/us-1a): valore 0.2 fuori soglia`.

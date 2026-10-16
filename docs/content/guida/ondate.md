@@ -90,7 +90,7 @@ After each stage the worker waits for the bake time, reading the checks every `i
 | Check | Source | Red when |
 |---|---|---|
 | `probes` | HTTP to every target of the stage (`{host}` substituted) | Status other than `expectStatus` (default 200), or an error. The URL must start with `http(s)://{host}`: probes only reach the targets. |
-| `metrics` | PromQL query on `rollout.prometheus_url`, for each pass; `{application}`, `{environment}`, `{region}` and `{az}` substituted | Value above `max` or below `min`, or **no data** (a gate that sees no traffic cannot say the release is healthy: to accept that, use `or vector(0)`). |
+| `metrics` | Query on the metrics system of `provider` (default Prometheus, `rollout.prometheus_url`; also Datadog, New Relic, Elastic, CloudWatch: see [canary analysis](traffico.md#canary-analysis)), for each pass; `{application}`, `{environment}`, `{region}` and `{az}` substituted | Value above `max` or below `min`, or **no data** (a gate that sees no traffic cannot say the release is healthy: to accept that, use `or vector(0)`). |
 | `alerts` | Alertmanager (`rollout.alertmanager_url`), active alerts | An alert matches all the `blockOn` conditions and concerns the application (`application` or `app`), the region (`region`) and the AZ (`az`) of the stage; a label missing from the alert matches everything. |
 
 The rollout status reports the last red gate: `stages[].gate`, for example `metric error-rate (us-1/us-1a): valore 0.2 fuori soglia`.

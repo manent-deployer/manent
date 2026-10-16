@@ -613,6 +613,7 @@ components:
         state: {type: string, enum: [pending, running, baking, succeeded, failed, rolled-back]}
         passes: {type: array, items: {$ref: '#/components/schemas/RolloutPass'}}
         gate: {type: string, description: Ultimo controllo rosso dell'health gate}
+        score: {type: number, description: Punteggio dell'analisi canary (0-100) all'ultima lettura del gate}
         error: {type: string}
     RolloutState:
       type: object

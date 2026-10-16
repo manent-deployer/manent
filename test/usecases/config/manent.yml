@@ -20,6 +20,12 @@ recovery:
 
 rollout:
   check_timeout: 5s
+  # UC15: real Prometheus; UC16: Datadog, New Relic, Elastic and CloudWatch emulated by fakes.
+  prometheus_url: http://prometheus:9090
+  datadog: {url: http://fakes:9100/datadog, api_key_ref: file:/keys/dd-api, app_key_ref: file:/keys/dd-app}
+  newrelic: {url: http://fakes:9100/newrelic/graphql, account_id: 1234, api_key_ref: file:/keys/nr-key}
+  elastic: {url: http://fakes:9100/elastic, api_key_ref: file:/keys/es-key}
+  cloudwatch: {region: eu-west-1, endpoint: http://fakes:9100/cloudwatch, access_key_id_ref: file:/keys/aws-id, secret_access_key_ref: file:/keys/aws-secret}
 
 # UC9: frequent reads of the state of awaited deploys.
 chains:

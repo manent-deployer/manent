@@ -70,3 +70,37 @@ func TestTrafficConfig(t *testing.T) {
 		t.Errorf("traffic nel descrittore: %v", err)
 	}
 }
+
+func TestMetricGateAnalisi(t *testing.T) {
+	q := `rate(x{track="{track}"}[1m])`
+	h := &Health{Analysis: &CanaryAnalysis{Pass: 90, Marginal: 60}, Metrics: []MetricGate{
+		{Name: "errori", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Provider: ProviderDatadog, Critical: true, Step: "10s"},
+		{Name: "latenza", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Direction: DirectionEither, Alpha: 0.01, Lookback: "5m"},
+	}}
+	if err := h.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if p, m := h.Analysis.Thresholds(); p != 90 || m != 60 {
+		t.Errorf("soglie: %g %g", p, m)
+	}
+	if p, m := (*CanaryAnalysis)(nil).Thresholds(); p != DefaultAnalysisPass || m != DefaultAnalysisMarginal {
+		t.Errorf("soglie di default: %g %g", p, m)
+	}
+	cases := map[string]MetricGate{
+		"provider \"grafana\"":      {Name: "a", Query: "x", Max: new(float64), Provider: "grafana"},
+		"richiede compare: stable":  {Name: "a", Query: "x", Max: new(float64), Analysis: AnalysisMannWhitney},
+		"analysis \"bayes\"":        {Name: "a", Query: q, Compare: CompareStable, MaxRatio: new(float64), Analysis: "bayes"},
+		"direction \"giu\"":         {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Direction: "giu"},
+		"alpha deve essere":         {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Alpha: 0.9},
+		"step \"1ms\" non valido":   {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Step: "1ms"},
+		"maxRatio o maxDelta (o an": {Name: "a", Query: q, Compare: CompareStable},
+	}
+	for want, m := range cases {
+		if err := (&Health{Metrics: []MetricGate{m}}).validate(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("atteso %q, ricevuto %v", want, err)
+		}
+	}
+	if err := (&Health{Analysis: &CanaryAnalysis{Pass: 50, Marginal: 80}}).validate(); err == nil || !strings.Contains(err.Error(), "marginal non oltre pass") {
+		t.Errorf("soglie invertite: %v", err)
+	}
+}

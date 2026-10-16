@@ -53,6 +53,67 @@ At 1% an absolute threshold on errors or latency says little. A metric with `com
 
 The application metrics need the slot label: on Kubernetes it is `manent.io/track` on the pods, to be carried into Prometheus with relabeling.
 
+## Canary analysis
+
+A threshold on a single reading is fragile: a spike of the stable version, or a few errors of the candidate at low traffic, decide the step. With `analysis: mann-whitney` the metric is judged as in Kayenta: at every reading of the gate manent reads the **series** of candidate and stable over the time elapsed in the step (or `lookback`), with points every `step`, and compares them with the two-sided **Mann-Whitney U** test. The metric fails only when the difference is significant (`p < alpha`) **and** goes in the direction that counts as worse beyond the tolerated ratio between the means.
+
+```yaml title="envconfig/shop/prod.yml"
+rollout:
+  strategy: traffic
+  traffic: {steps: [5, 25, 50, 100], bake: 15m}
+  health:
+    interval: 1m
+    analysis: {pass: 95, marginal: 75}   # score thresholds, 0-100
+    metrics:
+      - name: errors
+        compare: stable
+        analysis: mann-whitney
+        critical: true                   # red on its own, whatever the score
+        query: 'sum(rate(http_requests_total{app="{application}",track="{track}",code=~"5.."}[1m])) / sum(rate(http_requests_total{app="{application}",track="{track}"}[1m]))'
+      - name: latency-p99
+        provider: datadog
+        compare: stable
+        analysis: mann-whitney
+        maxRatio: 1.2                    # up to +20% is tolerated even if significant
+        weight: 2
+        query: 'p99:trace.http.request.duration{service:{application},track:{track}}'
+      - name: throughput
+        provider: cloudwatch
+        compare: stable
+        analysis: mann-whitney
+        direction: decrease              # worse when it drops
+        minRatio: 0.8
+        query: "SELECT SUM(RequestCount) FROM \"AWS/ApplicationELB\" WHERE TargetGroup = 'shop-{track}'"
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `analysis` | | `mann-whitney` for the statistical comparison; without it, the thresholds on a single reading above. Requires `compare: stable`. |
+| `provider` | `prometheus` | Metrics system: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch` (configured in [`rollout`](../operazioni/configurazione.md#rollout)). |
+| `direction` | `increase` | What counts as worse: `increase`, `decrease` or `either`. |
+| `maxRatio`, `minRatio` | `1` | Tolerated ratio between the means (candidate/stable) in the worse direction. |
+| `alpha` | `0.05` | Significance level. |
+| `step`, `lookback` | `15s`, time in the step | Resolution and window of the series. |
+| `minPoints` | `5` | Fewer points on either side: the metric is **inconclusive**. |
+| `weight` | `1` | Weight in the score. |
+| `critical` | `false` | A failed critical metric makes the gate red regardless of the score. |
+
+**Score.** With `health.analysis` the gate computes, at every reading, the score of the release: the weighted share of the non-inconclusive metrics that passed, from 0 to 100. During the bake the reading is green from `marginal` up (default 75); the last reading, at the end of the bake, must reach `pass` (default 95) and must have no inconclusive metric, because a step that ended without data cannot say the release is healthy. Probes and alerts stay pass/fail. The score is shown in `rollout.stages[].score` and in the web interface; a red gate lists the failed metrics with means, ratio and p-value, for example `metric errors: candidata 0.2761, stabile 0 (medie di 11 e 11 punti): rapporto +Inf, p=9.3e-05 < 0.05`.
+
+The comparison only makes sense while both versions receive traffic: it runs at the intermediate steps; at 100% and on the first release the comparative metrics are not evaluated.
+
+### Queries per system
+
+Every query is written in the language of its system, with the usual placeholders (`{track}`, `{application}`, …):
+
+| `provider` | Language | Notes |
+|---|---|---|
+| `prometheus` | PromQL | Instant query for a value, `query_range` with `step` for a series; the first series of the result. |
+| `datadog` | metric query (`/api/v1/query`) | Datadog chooses the resolution from the window; `.rollup(avg, 15)` sets it. |
+| `newrelic` | NRQL via NerdGraph | Without `SINCE`, `UNTIL` and `TIMESERIES`: manent adds them for the window it reads. The metric is the first numeric field. |
+| `elastic` | ES\|QL (`/_query`) | Placeholders `{start}`, `{end}` (RFC 3339) and `{step}` (e.g. `15 seconds`); the last numeric column, one row per bucket sorted by time. |
+| `cloudwatch` | metric math or Metrics Insights (`SELECT …`) | Read with `GetMetricData`; the period is rounded to a value CloudWatch accepts (1, 5, 10, 30 seconds or multiples of 60). |
+
 ## Routers
 
 | Router | Slots | How traffic moves | Testers |

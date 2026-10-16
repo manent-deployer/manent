@@ -5,6 +5,8 @@ package app
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +35,7 @@ import (
 	"github.com/joeg-ita/manent/internal/config"
 	"github.com/joeg-ita/manent/internal/customstep"
 	"github.com/joeg-ita/manent/internal/deploylog"
+	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/extplugin"
@@ -49,6 +52,7 @@ import (
 	"github.com/joeg-ita/manent/internal/webui"
 	"github.com/joeg-ita/manent/pkg/plugin"
 	"github.com/joeg-ita/manent/plugins/awselb"
+	"github.com/joeg-ita/manent/plugins/awsmetrics"
 	"github.com/joeg-ita/manent/plugins/cloudrun"
 	"github.com/joeg-ita/manent/plugins/container"
 	"github.com/joeg-ita/manent/plugins/ecs"
@@ -351,14 +355,48 @@ func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
 	return governance.New(rules, windows)
 }
 
-// NewHealthChecker creates the health gate of wave rollouts: HTTP probes, Prometheus and
+// NewHealthChecker creates the health gate of rollouts: HTTP probes, metrics from Prometheus,
+// Datadog, New Relic, Elastic and CloudWatch (rollout.<system> in manent.yml) and
 // Alertmanager. Another metrics system is added here, implementing rollout.Checker.
-func NewHealthChecker(cfg *config.Config) rollout.Checker {
-	return &rollout.HTTPChecker{
-		Client:          &http.Client{Timeout: cfg.Rollout.CheckTimeout},
-		PrometheusURL:   cfg.Rollout.PrometheusURL,
-		AlertmanagerURL: cfg.Rollout.AlertmanagerURL,
+func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker, error) {
+	client := &http.Client{Timeout: cfg.Rollout.CheckTimeout}
+	r := cfg.Rollout
+	sources := map[string]rollout.MetricSource{}
+	secret := rollout.SecretFunc(sp.Resolve)
+	if r.PrometheusURL != "" {
+		sources[descriptor.ProviderPrometheus] = &rollout.PrometheusSource{URL: r.PrometheusURL, Client: client}
 	}
+	if d := r.Datadog; d != nil {
+		sources[descriptor.ProviderDatadog] = &rollout.DatadogSource{URL: d.URL, APIKeyRef: d.APIKeyRef, AppKeyRef: d.AppKeyRef, Secret: secret, Client: client}
+	}
+	if n := r.NewRelic; n != nil {
+		sources[descriptor.ProviderNewRelic] = &rollout.NewRelicSource{URL: n.URL, AccountID: n.AccountID, APIKeyRef: n.APIKeyRef, Secret: secret, Client: client}
+	}
+	if e := r.Elastic; e != nil {
+		ec := client
+		if e.CAFile != "" {
+			pem, err := os.ReadFile(e.CAFile)
+			if err != nil {
+				return nil, fmt.Errorf("rollout.elastic.ca_file: %w", err)
+			}
+			pool, err := x509.SystemCertPool()
+			if err != nil {
+				pool = x509.NewCertPool()
+			}
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("rollout.elastic.ca_file %s: nessun certificato PEM", e.CAFile)
+			}
+			tr := http.DefaultTransport.(*http.Transport).Clone()
+			tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+			ec = &http.Client{Timeout: cfg.Rollout.CheckTimeout, Transport: tr}
+		}
+		sources[descriptor.ProviderElastic] = &rollout.ElasticSource{URL: e.URL, APIKeyRef: e.APIKeyRef, Username: e.Username, PasswordRef: e.PasswordRef, Secret: secret, Client: ec}
+	}
+	if w := r.CloudWatch; w != nil {
+		sources[descriptor.ProviderCloudWatch] = &awsmetrics.Source{Region: w.Region, Endpoint: w.Endpoint, AccessKeyIDRef: w.AccessKeyIDRef,
+			SecretAccessKeyRef: w.SecretAccessKeyRef, RoleARN: w.RoleARN, ExternalID: w.ExternalID, Secret: secret}
+	}
+	return &rollout.HTTPChecker{Client: client, Sources: sources, AlertmanagerURL: r.AlertmanagerURL}, nil
 }
 
 // NewDescriptorPolicy returns the descriptor policy of the configuration.
@@ -520,9 +558,13 @@ func newComponents(cfg *config.Config) (*components, error) {
 	if cfg.Observability.Metrics {
 		metrics = telemetry.NewMetrics(telemetry.BuildInfo{Version: version.Version, Commit: version.Get().Commit, WorkflowVersion: cfg.App.Version})
 	}
+	health, err := NewHealthChecker(cfg, sp)
+	if err != nil {
+		return nil, err
+	}
 	return &components{
 		metrics:    metrics,
-		health:     NewHealthChecker(cfg),
+		health:     health,
 		traffic:    trafficOps,
 		plugins:    plugins,
 		policy:     policy,

@@ -310,6 +310,10 @@ func TestRilascioPerPercentuale(t *testing.T) {
 	if len(env.ch.seen) < 3 || env.ch.seen[0].Stage != "traffic@10" || env.ch.seen[0].Track != "b" || env.ch.seen[0].StableTrack != "a" {
 		t.Errorf("gate: %+v", env.ch.seen)
 	}
+	// At 100% the stable version has no traffic: no track to compare with.
+	if l := env.ch.seen[len(env.ch.seen)-1]; l.Stage != "traffic@100" || l.Track != "b" || l.StableTrack != "" {
+		t.Errorf("gate al 100%%: %+v", l)
+	}
 	st, err := env.e.Status(ctx, sub.ID)
 	if err != nil {
 		t.Fatal(err)

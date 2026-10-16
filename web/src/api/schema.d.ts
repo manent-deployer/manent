@@ -619,6 +619,8 @@ export interface components {
             passes: components["schemas"]["RolloutPass"][];
             /** @description Ultimo controllo rosso dell'health gate */
             gate?: string;
+            /** @description Punteggio dell'analisi canary (0-100) all'ultima lettura del gate */
+            score?: number;
             error?: string;
         };
         RolloutState: {

@@ -91,6 +91,7 @@ export function RolloutView({ rollout }: { rollout: RolloutState }) {
                   </li>
                 ))}
               </ul>
+              {s.score !== undefined && <p className="text-xs text-muted">{t("detail.rollout.score", { score: String(s.score) })}</p>}
               {s.gate && <p className="rounded-md bg-bad/10 p-2 text-xs text-bad">{t("detail.rollout.gate", { gate: s.gate })}</p>}
               {s.error && <p className="rounded-md bg-bad/10 p-2 text-xs text-bad">{s.error}</p>}
             </div>

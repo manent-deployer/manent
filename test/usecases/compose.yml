@@ -8,6 +8,7 @@
 # - "containers" profile: image registry and two VMs with Docker (UC6, container plugin).
 # - "kubernetes" profile: registry and a k3s cluster (UC7, kubernetes plugin).
 # - "lb" profile: HAProxy with the Data Plane API in front of the eu-1 targets (UC10).
+# - "metrics" profile: Prometheus scraping HAProxy (UC15, canary analysis).
 # - "jboss" profile: WildFly with the HTTP management API (UC14, jboss plugin).
 # - "tools" profile: the manent client, run with "docker compose run --rm client ...".
 #
@@ -185,6 +186,17 @@ services:
     hostname: haproxy
     ports: ["127.0.0.1:15555:5555", "127.0.0.1:18081:80"]
     networks: [core, eu1]
+
+  # Prometheus (UC15): API on 127.0.0.1:19090.
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    profiles: [metrics]
+    hostname: prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=1h"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["127.0.0.1:19090:9090"]
+    networks: [core]
 
   # WildFly (UC14): management API on 127.0.0.1:19990, applications on 127.0.0.1:18082.
   wildfly:

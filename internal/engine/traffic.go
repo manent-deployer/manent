@@ -444,7 +444,13 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		p := run.pass
 		p.Targets = cmpTargets(targets, d.Deploy.Targets)
 		stage := rollout.Stage{Name: "traffic@" + strconv.Itoa(pct) + run.sfx, Wave: p.Wave, Bake: bake, Passes: []rollout.Pass{p}}
-		if err := w.healthGate(ctx, id, d, stage, i, rs, bake, tracks); err != nil {
+		gt := tracks
+		if pct == 100 || !hasStable {
+			// The stable version receives no traffic: a comparison would read an empty series.
+			g := *tracks
+			g.StableTrack, gt = "", &g
+		}
+		if err := w.healthGate(ctx, id, d, stage, i, rs, bake, gt); err != nil {
 			return err
 		}
 		rs.Stages[i].State = service.StageSucceeded

@@ -474,11 +474,14 @@ func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descripto
 			elapsed += wait
 		}
 		n++
+		// Elapsed and Final come from the workflow, not from a clock: the read stays deterministic.
+		in.Elapsed, in.Final = elapsed, elapsed >= bake
 		r, err := w.readGate(ctx, id, d, in, stage.Name+"#"+strconv.Itoa(n))
 		if err != nil {
 			return err
 		}
 		last = r
+		rs.Stages[i].Score = r.Score
 		if r.OK {
 			fails = 0
 		} else {

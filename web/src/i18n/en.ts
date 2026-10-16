@@ -139,6 +139,7 @@ export const en = {
   "detail.rollout.onFailure": "On failure: {policy}",
   "detail.rollout.paused": "Paused: {reason}",
   "detail.rollout.gate": "Last red health check: {gate}",
+  "detail.rollout.score": "Canary score: {score}/100",
   "detail.rollout.hosts": "{count} hosts",
   "detail.rollout.stageList": "Stages in execution order",
   "detail.rollout.traffic.weight": "Candidate receives {weight}% of the traffic",

@@ -6,6 +6,6 @@ RUN mkdir -p /var/run/haproxy /tmp/dataplaneapi && chown -R haproxy:haproxy /var
 COPY --chown=haproxy:haproxy haproxy.cfg dataplaneapi.yml /usr/local/etc/haproxy/
 COPY entrypoint.sh /entrypoint.sh
 USER haproxy
-EXPOSE 80 5555
+EXPOSE 80 5555 8405
 ENTRYPOINT ["/entrypoint.sh"]
 CMD []
