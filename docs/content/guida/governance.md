@@ -114,6 +114,9 @@ With `approvals.required` the deploy does not run immediately: it stays `AWAITIN
 | `required` | `0` | Approvals needed. |
 | `allow_self` | `false` | Allows approval by whoever requested the deploy. |
 | `timeout` | `72h` | When it expires the request becomes `EXPIRED` and the deploy does not run. |
+| `when` | `before` | `before`: approvals before the deploy. `rollout`: no approval before the deploy, the rule's approvals are asked at the approval points of the rollout (see below). |
+
+With a [wave rollout](ondate.md#approvazioni-e-freeze) or a [percentage rollout](traffico.md) that has `approvalsBetween`, a rule with `approvals` asks for approvals twice by default: before the deploy and at every point of the rollout. With `when: rollout` the first wave (or the candidate at weight 0) starts without approval, and the approvals of the rule (number, `allow_self`, `timeout`) are asked only at the points listed in `approvalsBetween`. A deploy covered by such a rule must have a rollout with `approvalsBetween`: otherwise it is rejected at submission (`422`), or fails in the `config` step, before touching any target, if the environment configuration changed in the meantime. Change approval in the ITSM (`change.approval`) is still asked before the deploy.
 
 ```sh
 manent deploy -f prod.yml

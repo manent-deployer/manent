@@ -79,8 +79,6 @@ services:
         condition: service_healthy
       oidc:
         condition: service_started
-    # L'API (client DBOS) non migra lo schema: su un database vuoto attende che lo faccia un worker.
-    restart: on-failure
     ports: ["127.0.0.1:18080:8080"]
     volumes:
       - ./config/manent.yml:/etc/manent/manent.yml:ro

@@ -72,4 +72,4 @@ This is why steps and plugins must be idempotent. The `remote-copy` plugin, for 
 
 ## Concurrent startup
 
-On an empty Postgres, several workers started together try to create the DBOS schema at the same time. Initialization is retried automatically with an increasing wait, so there is no need to start workers one at a time.
+On an empty Postgres, several workers started together try to create the DBOS schema at the same time. Initialization is retried automatically with an increasing wait, so there is no need to start workers one at a time. The API (`api`, `serve --no-worker`) and `admin` create the schema too if they find it missing, so they can start before the workers.

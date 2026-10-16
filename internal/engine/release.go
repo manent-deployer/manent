@@ -78,7 +78,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		if _, err := e.planner.Plan(&d); err != nil {
 			return nil, fmt.Errorf("%w: deploy %s: %w", ErrInvalidRequest, rd.Name, err)
 		}
-		if err := e.check(ctx, &d); err != nil {
+		if _, err := e.check(ctx, &d); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
 		// Freeze e regole di governance rifiutano la release subito, non dopo l'accodamento.

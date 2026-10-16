@@ -23,7 +23,19 @@ type Approvals struct {
 	AllowSelf bool `json:"allow_self,omitempty"`
 	// Timeout dopo cui la richiesta scade e il deploy non viene eseguito.
 	Timeout time.Duration `json:"timeout"`
+	// When è il momento delle approvazioni: before (default) prima del deploy; rollout le
+	// sposta sui punti di approvazione del rollout (approvalsBetween), se ce ne sono.
+	When string `json:"when,omitempty"`
 }
+
+// Momenti delle approvazioni (Approvals.When).
+const (
+	ApprovalsBefore  = "before"
+	ApprovalsRollout = "rollout"
+)
+
+// InRollout indica se le approvazioni vanno chieste nei punti di approvazione del rollout.
+func (a *Approvals) InRollout() bool { return a != nil && a.When == ApprovalsRollout }
 
 // RequiredOrZero restituisce il numero di approvazioni richieste (0 senza regola).
 func (a *Approvals) RequiredOrZero() int {
@@ -100,6 +112,9 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 		}
 		if r.Approvals.Required < 0 {
 			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.required deve essere >= 0", i))
+		}
+		if w := r.Approvals.When; w != "" && w != ApprovalsBefore && w != ApprovalsRollout {
+			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.when %q non valido (before o rollout)", i, w))
 		}
 		if r.Approvals.Required > 0 && r.Approvals.Timeout <= 0 {
 			rules[i].Approvals.Timeout = DefaultApprovalTimeout

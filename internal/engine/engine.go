@@ -196,8 +196,9 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	if err != nil {
 		return nil, err
 	}
+	var eff *descriptor.Descriptor
 	if !meta.prechecked {
-		if err := e.check(ctx, d); err != nil {
+		if eff, err = e.check(ctx, d); err != nil {
 			return nil, err
 		}
 	}
@@ -207,6 +208,11 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	}
 	if req.Approval, req.Change, err = e.govern(ctx, d); err != nil {
 		return nil, err
+	}
+	if eff != nil {
+		if err := checkRolloutApprovals(eff, req.Approval); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		}
 	}
 	if e.notify != nil {
 		req.Notify = e.notify.Match(d.Application, d.Environment, d.DryRun)
@@ -292,16 +298,16 @@ func (e *Engine) alreadyScheduled(ctx context.Context, d *descriptor.Descriptor)
 // check rifiuta subito ciò che il worker non potrebbe eseguire: callback e sorgenti non
 // ammessi, descrittore in violazione della policy o incompatibile con la configurazione di
 // ambiente, rollback non ammesso. Se la configurazione di ambiente non è raggiungibile la
-// verifica è lasciata al worker.
-func (e *Engine) check(ctx context.Context, d *descriptor.Descriptor) error {
-	v, err := e.inspect(ctx, d)
+// verifica è lasciata al worker. Restituisce il descrittore effettivo, o nil se non è noto.
+func (e *Engine) check(ctx context.Context, d *descriptor.Descriptor) (*descriptor.Descriptor, error) {
+	v, eff, err := e.inspect(ctx, d)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, w := range v.Warnings {
 		e.logger.Warn(w, "application", d.Application, "environment", d.Environment)
 	}
-	return nil
+	return eff, nil
 }
 
 // Validate verifica il descrittore come all'accodamento, senza accodarlo, e restituisce il
@@ -312,7 +318,7 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	v, err := e.inspect(ctx, d)
+	v, _, err := e.inspect(ctx, d)
 	if err != nil {
 		return nil, err
 	}
@@ -331,16 +337,16 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 
 // inspect esegue le verifiche di check e descrive il deploy effettivo. Un errore permanente
 // rende la richiesta non valida; una configurazione di ambiente irraggiungibile produce solo
-// un avviso.
-func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Validation, error) {
+// un avviso, e il descrittore effettivo restituito è nil.
+func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Validation, *descriptor.Descriptor, error) {
 	for _, cb := range d.Callbacks {
 		if err := e.callbacks.Check(cb.URL); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		}
 	}
 	if e.sources != nil {
 		if err := e.sources.Check(d.Artifact.Source); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		}
 	}
 	v := &Validation{Valid: true}
@@ -349,7 +355,7 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		r, meta, err := e.resolver.Resolve(ctx, *d)
 		switch {
 		case errors.Is(err, pipeline.ErrPermanent):
-			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		case err != nil:
 			v.Warnings = append(v.Warnings, "configurazione di ambiente non verificabile all'accodamento: la verifica resta al worker ("+err.Error()+")")
 		default:
@@ -359,7 +365,7 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 	if e.rollback != nil {
 		r, err := e.rollback.Apply(eff)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		}
 		eff = r
 	}
@@ -367,7 +373,7 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 		// Con la configurazione di ambiente letta il piano a ondate è quello definitivo.
 		p, err := checkRollout(eff, e.health, e.traffic)
 		if err != nil {
-			return nil, fmt.Errorf("%w: rollout: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: rollout: %w", ErrInvalidRequest, err)
 		}
 		v.Rollout = newRolloutState(p, eff.Rollout)
 		if eff.Rollout.IsTraffic() {
@@ -379,16 +385,19 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 	// arrivare da lì: si verificano solo i valori già presenti.
 	plan, err := e.planner.Plan(d)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	if err := checkCustomSteps(plan, eff, e.resolver == nil || v.Config != nil); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	v.Deploy, v.Rollback = &eff.Deploy, eff.Rollback
 	for _, sec := range eff.Secrets {
 		v.Secrets = append(v.Secrets, sec.Name)
 	}
-	return v, nil
+	if e.resolver == nil || v.Config != nil {
+		return v, &eff, nil
+	}
+	return v, nil, nil
 }
 
 // govern applica le regole di governance a un deploy reale: freeze, promozione obbligatoria e
@@ -441,8 +450,18 @@ func changeTicket(st dbos.WorkflowStatus) *ChangeTicket {
 
 // needsApproval indica se il deploy attende un'approvazione prima dell'accodamento: di
 // identità di manent, del change nel sistema ITSM o di entrambi.
+// Le approvazioni spostate nel rollout (approvals.when: rollout) non contano.
 func needsApproval(req Request) bool {
-	return req.Approval != nil || (req.Change != nil && req.Change.Approval)
+	return (req.Approval != nil && !req.Approval.InRollout()) || (req.Change != nil && req.Change.Approval)
+}
+
+// checkRolloutApprovals verifica che un deploy con le approvazioni spostate nel rollout abbia
+// un rollout con punti di approvazione: altrimenti partirebbe senza approvazioni.
+func checkRolloutApprovals(d *descriptor.Descriptor, a *governance.Approvals) error {
+	if !a.InRollout() || (d.Rollout != nil && len(d.Rollout.ApprovalsBetween) > 0) {
+		return nil
+	}
+	return errors.New("la regola di governance sposta le approvazioni nel rollout (approvals.when: rollout), ma il deploy non ha un rollout con approvalsBetween")
 }
 
 // freezeMessage descrive il freeze che blocca un deploy.

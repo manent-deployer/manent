@@ -114,6 +114,9 @@ Con `approvals.required` il deploy non viene eseguito subito: resta `AWAITING_AP
 | `required` | `0` | Approvazioni necessarie. |
 | `allow_self` | `false` | Ammette l'approvazione di chi ha richiesto il deploy. |
 | `timeout` | `72h` | Scaduto il tempo la richiesta passa a `EXPIRED` e il deploy non viene eseguito. |
+| `when` | `before` | `before`: approvazioni prima del deploy. `rollout`: nessuna approvazione prima del deploy, quelle della regola si chiedono nei punti di approvazione del rollout (vedi sotto). |
+
+Con un [rilascio a ondate](ondate.md#approvazioni-e-freeze) o un [rilascio per percentuale](traffico.md) che ha `approvalsBetween`, una regola con `approvals` chiede per default le approvazioni due volte: prima del deploy e in ogni punto del rollout. Con `when: rollout` la prima ondata (o la candidata a peso 0) parte senza approvazione, e le approvazioni della regola (numero, `allow_self`, `timeout`) si chiedono solo nei punti elencati in `approvalsBetween`. Un deploy soggetto a una regola così deve avere un rollout con `approvalsBetween`: altrimenti viene rifiutato all'invio (`422`), o fallisce nello step `config`, prima di toccare i target, se nel frattempo la configurazione di ambiente è cambiata. L'approvazione del change nell'ITSM (`change.approval`) resta prima del deploy.
 
 ```sh
 manent deploy -f prod.yml

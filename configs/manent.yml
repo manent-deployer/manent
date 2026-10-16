@@ -216,7 +216,7 @@ governance:
   #   applications: ["*"]
   #   environments: [prod]
   #   requires: [preprod]               # lo stesso artefatto deve essere già stato rilasciato in preprod
-  #   approvals: {required: 1, timeout: 72h}   # allow_self: false (default)
+  #   approvals: {required: 1, timeout: 72h}   # allow_self: false, when: before (default; rollout = nei punti approvalsBetween)
   freezes: []
   # - name: fine-anno
   #   reason: chiusura contabile

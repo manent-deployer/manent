@@ -590,3 +590,40 @@ func TestRolloutRipresoDopoUnCrash(t *testing.T) {
 		t.Fatalf("esecuzioni dopo la ripresa: %v, attese %v", got, want)
 	}
 }
+
+func TestRolloutApprovazioniSpostateNelRollout(t *testing.T) {
+	gov, err := governance.New([]governance.Rule{{Name: "prod", Applications: []string{"*"}, Environments: []string{"*"},
+		Approvals: governance.Approvals{Required: 2, Timeout: time.Minute, When: governance.ApprovalsRollout}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := newWaveEngine(t, "", gov)
+	ctx := context.Background()
+	// Senza punti di approvazione nel rollout il deploy partirebbe senza approvazioni.
+	if _, err := env.e.Submit(alice, waveDescriptor("ondate-when-senza")); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("atteso ErrInvalidRequest, ottenuto %v", err)
+	}
+	d := waveDescriptor("ondate-when")
+	d.Rollout.ApprovalsBetween = []string{"canary"}
+	sub, err := env.e.Submit(alice, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Nessuna approvazione prima del deploy: l'ondata canary parte subito, poi la pausa
+	// chiede le approvazioni della regola.
+	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
+	if st.Rollout == nil || st.Rollout.Approval == nil || st.Rollout.Approval.Required != 2 || len(env.log.get()) != 2 {
+		t.Fatalf("pausa inattesa: %+v %v", st.Rollout, env.log.get())
+	}
+	for _, who := range []context.Context{bob, carol} {
+		if err := env.e.Decide(who, sub.ID, DecisionRequest{Approve: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := env.e.Wait(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(env.log.get()); n != 12 {
+		t.Errorf("esecuzioni dopo l'approvazione: %d", n)
+	}
+}

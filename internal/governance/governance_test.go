@@ -89,3 +89,20 @@ func TestFreezePerRegion(t *testing.T) {
 		t.Errorf("freeze di us-1 non rilevato: %+v", w)
 	}
 }
+
+func TestApprovalsWhen(t *testing.T) {
+	rule := func(when string) []Rule {
+		return []Rule{{Applications: []string{"*"}, Environments: []string{"*"}, Approvals: Approvals{Required: 1, When: when}}}
+	}
+	for _, w := range []string{"", ApprovalsBefore, ApprovalsRollout} {
+		if _, err := New(rule(w), nil); err != nil {
+			t.Errorf("when %q: %v", w, err)
+		}
+	}
+	if _, err := New(rule("after"), nil); err == nil {
+		t.Error("when non valido accettato")
+	}
+	if (&Approvals{When: ApprovalsRollout}).InRollout() != true || (*Approvals)(nil).InRollout() {
+		t.Error("InRollout")
+	}
+}

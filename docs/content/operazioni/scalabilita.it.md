@@ -72,4 +72,4 @@ Per questo gli step e i plugin devono essere idempotenti. Il plugin `remote-copy
 
 ## Avvio contemporaneo
 
-Su un Postgres vuoto, più worker avviati insieme tentano di creare lo schema DBOS nello stesso momento. L'inizializzazione viene ritentata automaticamente con un'attesa crescente, quindi non serve avviare i worker uno alla volta.
+Su un Postgres vuoto, più worker avviati insieme tentano di creare lo schema DBOS nello stesso momento. L'inizializzazione viene ritentata automaticamente con un'attesa crescente, quindi non serve avviare i worker uno alla volta. Anche l'API (`api`, `serve --no-worker`) e `admin` creano lo schema se lo trovano assente, quindi possono partire prima dei worker.

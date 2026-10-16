@@ -26,6 +26,7 @@ import (
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/telemetry"
@@ -271,6 +272,20 @@ func newContextWithRetry(cfg dbos.Config, log *slog.Logger) (dbos.Context, error
 			return ctx, err
 		}
 		log.Warn("inizializzazione DBOS fallita, nuovo tentativo", "attempt", attempt+1, "error", err)
+		time.Sleep(initBackoff[attempt])
+	}
+}
+
+// Migrate crea o aggiorna lo schema DBOS del database, con gli stessi tentativi di
+// newContextWithRetry: serve ai processi che usano solo un client DBOS (API, admin), che
+// verificano lo schema ma non lo creano, quando partono prima dei worker su un database nuovo.
+func Migrate(databaseURL string, log *slog.Logger) error {
+	for attempt := 0; ; attempt++ {
+		err := dbos.Migrate(context.Background(), databaseURL, dbos.WithMigrateLogger(log))
+		if err == nil || attempt == len(initBackoff) {
+			return err
+		}
+		log.Warn("migrazione dello schema DBOS fallita, nuovo tentativo", "attempt", attempt+1, "error", err)
 		time.Sleep(initBackoff[attempt])
 	}
 }
@@ -595,7 +610,9 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 	res := Result{DeploymentID: id, DryRun: dryRun}
 	if w.resolver != nil || w.rollback != nil || w.governance != nil {
 		rc, err := dbos.RunAsStep(ctx, func(c context.Context) (resolvedConfig, error) {
-			return instrument(w, c, ev, "config", func(c context.Context) (resolvedConfig, error) { return w.resolveConfig(c, req.Descriptor) })
+			return instrument(w, c, ev, "config", func(c context.Context) (resolvedConfig, error) {
+				return w.resolveConfig(c, req.Descriptor, req.Approval)
+			})
 		}, dbos.WithStepName("config"), dbos.WithStepMaxRetries(w.resolverRetries), dbos.WithStepRetryPredicate(pipeline.Retryable))
 		ev.send(&req.Descriptor, stepEvent("config", rc.Meta, err))
 		if err != nil {
@@ -724,8 +741,9 @@ func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn
 }
 
 // resolveConfig produce il descrittore effettivo: configurazione di ambiente e policy di rollback.
-// Un deploy reale che parte durante una finestra di freeze fallisce, salvo deroga.
-func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor) (resolvedConfig, error) {
+// Un deploy reale che parte durante una finestra di freeze fallisce, salvo deroga; così uno
+// con le approvazioni spostate nel rollout, se il rollout effettivo non ne prevede.
+func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, approvals *governance.Approvals) (resolvedConfig, error) {
 	meta := map[string]string{}
 	if w.governance != nil && !d.DryRun {
 		if d.FreezeOverride != "" {
@@ -766,6 +784,9 @@ func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor) (re
 		if err := w.traffic.Check(&d); err != nil {
 			return resolvedConfig{}, pipeline.Permanent(err)
 		}
+	}
+	if err := checkRolloutApprovals(&d, approvals); err != nil {
+		return resolvedConfig{}, pipeline.Permanent(err)
 	}
 	if m := trafficMeta(d); m != "" {
 		meta["traffic"] = m

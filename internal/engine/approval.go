@@ -63,6 +63,10 @@ func enqueueApproval(client dbos.Client, deployQueue string, req Request, id str
 // pubblicato come evento DBOS, letto da Status.
 func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalState, error) {
 	rule := in.Request.Approval
+	if rule.InRollout() {
+		// Le approvazioni di manent si chiedono nel rollout: qui resta solo il change.
+		rule = nil
+	}
 	chg := in.Request.Change
 	if chg != nil && !chg.Approval {
 		chg = nil

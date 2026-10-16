@@ -99,4 +99,4 @@ L'`executor_id` di default è l'hostname: deve restare lo stesso tra i riavvii. 
 
 ## Database
 
-Per più nodi serve Postgres. All'avvio manent crea lo schema `dbos` (DBOS) e lo schema `manent` (registro dei worker). L'utente deve poterli creare, oppure vanno creati in anticipo. Per backup e ripristino vedi [Backup e ripristino](affidabilita.md#backup-e-ripristino).
+Per più nodi serve Postgres. All'avvio manent crea lo schema `dbos` (DBOS) e lo schema `manent` (registro dei worker): i worker sempre, l'API e `admin` solo se lo schema `dbos` manca. L'utente deve poterli creare, oppure vanno creati in anticipo. Per backup e ripristino vedi [Backup e ripristino](affidabilita.md#backup-e-ripristino).

@@ -333,7 +333,7 @@ func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
 	for i, r := range g.Rules {
 		rules[i] = governance.Rule{Name: r.Name, Applications: r.Applications, Environments: r.Environments, Requires: r.Requires}
 		if a := r.Approvals; a != nil {
-			rules[i].Approvals = governance.Approvals{Required: a.Required, AllowSelf: a.AllowSelf, Timeout: a.Timeout}
+			rules[i].Approvals = governance.Approvals{Required: a.Required, AllowSelf: a.AllowSelf, Timeout: a.Timeout, When: a.When}
 		}
 		if ch := r.Change; ch != nil {
 			rules[i].Change = &governance.Change{Approval: ch.Approval, Timeout: cmp.Or(ch.Timeout, 72*time.Hour)}
@@ -642,13 +642,19 @@ func NewClient(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := dbos.NewClient(context.Background(), dbos.ClientConfig{
-		DatabaseURL: cfg.DBOS.DatabaseURL,
-		AppName:     cfg.App.Name,
-		Logger:      c.log.With("component", "dbos"),
-	})
+	dbosLog := c.log.With("component", "dbos")
+	clientCfg := dbos.ClientConfig{DatabaseURL: cfg.DBOS.DatabaseURL, AppName: cfg.App.Name, Logger: dbosLog}
+	client, err := dbos.NewClient(context.Background(), clientCfg)
 	if err != nil {
-		return nil, fmt.Errorf("connessione al database DBOS: %w", err)
+		// Il client verifica lo schema DBOS ma non lo crea: su un database nuovo, se l'API parte
+		// prima dei worker, lo crea come farebbe un worker e riprova. Con lo schema già presente
+		// non serve: un ruolo senza permessi DDL non arriva mai qui.
+		if merr := engine.Migrate(cfg.DBOS.DatabaseURL, dbosLog); merr != nil {
+			return nil, fmt.Errorf("connessione al database DBOS: %w (creazione dello schema: %v)", err, merr)
+		}
+		if client, err = dbos.NewClient(context.Background(), clientCfg); err != nil {
+			return nil, fmt.Errorf("connessione al database DBOS: %w", err)
+		}
 	}
 	a := &App{
 		Config:  cfg,

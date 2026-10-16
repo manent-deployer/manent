@@ -370,6 +370,8 @@ type ApprovalSettings struct {
 	Required  int           `yaml:"required"`
 	AllowSelf bool          `yaml:"allow_self"`
 	Timeout   time.Duration `yaml:"timeout"`
+	// When: before (default) o rollout, per chiederle nei punti di approvazione del rollout.
+	When string `yaml:"when"`
 }
 
 // FreezeWindow è una finestra in cui i deploy sono bloccati: assoluta (from/to) o

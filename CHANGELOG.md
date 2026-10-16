@@ -73,6 +73,9 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- Governance: `approvals.when: rollout` sposta le approvazioni di una regola nei punti
+  `approvalsBetween` del rollout, senza l'approvazione prima del deploy; un deploy senza punti di
+  approvazione viene rifiutato.
 - Licenza cambiata da GPL-3.0 ad Apache-2.0.
 - **Incompatibile:** la CLI è divisa in due binari. `manent` è il client: parla solo con l'API
   (`--server`, `MANENT_SERVER` o `~/.config/manent/client.yml`, default `http://127.0.0.1:8080`)
@@ -87,6 +90,8 @@ ne usa il contenuto come note.
 
 ### Corretto
 
+- L'API (`api`, `serve --no-worker`) e `admin` su un database nuovo creano lo schema DBOS invece
+  di fallire se partono prima dei worker.
 - `manent status` (e l'API) di un deploy fallito ora riporta l'errore: in modalità client lo
   stato DBOS non lo includeva.
 - Il log di un deploy raccoglie le righe INFO anche con `logging.level` più alto.

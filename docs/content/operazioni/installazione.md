@@ -99,4 +99,4 @@ The default `executor_id` is the hostname: it must stay the same across restarts
 
 ## Database
 
-Several nodes need Postgres. At startup manent creates the `dbos` schema (DBOS) and the `manent` schema (worker registry). The user must be able to create them, or they must be created in advance. For backup and restore see [Backup and restore](affidabilita.md#backup-e-ripristino).
+Several nodes need Postgres. At startup manent creates the `dbos` schema (DBOS) and the `manent` schema (worker registry): the workers always, the API and `admin` only if the `dbos` schema is missing. The user must be able to create them, or they must be created in advance. For backup and restore see [Backup and restore](affidabilita.md#backup-e-ripristino).
