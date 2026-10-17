@@ -328,22 +328,101 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 		return nil, err
 	}
 	v.Plan = plan.Public()
-	if e.governance != nil {
-		rule := e.governance.Rule(d.Application, d.Environment)
-		v.Governance = &GovernanceValidation{Rule: rule.Name, Requires: rule.Requires, Approvals: rule.Approvals.Required}
-		at := e.now()
-		if d.Schedule != nil && d.Schedule.At != nil {
-			at = *d.Schedule.At
-		}
-		v.Governance.Freeze = e.governance.Frozen(d.Application, d.Environment, at)
-	}
+	e.describeGovernance(v, d)
 	return v, nil
+}
+
+// describeGovernance adds to the validation the governance rules that apply to the deploy.
+func (e *Engine) describeGovernance(v *Validation, d *descriptor.Descriptor) {
+	if e.governance == nil {
+		return
+	}
+	rule := e.governance.Rule(d.Application, d.Environment)
+	v.Governance = &GovernanceValidation{Rule: rule.Name, Requires: rule.Requires, Approvals: rule.Approvals.Required}
+	at := e.now()
+	if d.Schedule != nil && d.Schedule.At != nil {
+		at = *d.Schedule.At
+	}
+	v.Governance.Freeze = e.governance.Frozen(d.Application, d.Environment, at)
+}
+
+// CandidateResolver merges a descriptor with a given environment configuration instead of the
+// provider's (envconfig.Resolver).
+type CandidateResolver interface {
+	ResolveWith(ctx context.Context, d descriptor.Descriptor, config []byte) (descriptor.Descriptor, map[string]string, error)
+}
+
+// ValidateEnvironment checks a candidate environment configuration as the deploy of the
+// example descriptor would use it at submission: strict parsing, descriptor policy, merge,
+// rollback, wave and traffic plan, plugins and health checks. Nothing is enqueued or written.
+func (e *Engine) ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*Validation, error) {
+	cr, ok := e.resolver.(CandidateResolver)
+	if !ok {
+		return nil, fmt.Errorf("%w: il server non gestisce la configurazione di ambiente", ErrInvalidRequest)
+	}
+	d, err := e.exampleDescriptor(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := e.planner.Plan(d)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	v, _, err := e.inspectWith(ctx, d, func(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
+		return cr.ResolveWith(ctx, d, []byte(c.Config))
+	})
+	if err != nil {
+		return nil, err
+	}
+	v.Plan = plan.Public()
+	e.describeGovernance(v, d)
+	return v, nil
+}
+
+// exampleDescriptor returns the descriptor to merge with a candidate configuration: the given
+// one, or the request of the deploy in service in the environment, without schedule and
+// dependencies (they do not concern the configuration).
+func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*descriptor.Descriptor, error) {
+	if strings.TrimSpace(c.Config) == "" {
+		return nil, fmt.Errorf("%w: configurazione vuota", ErrInvalidRequest)
+	}
+	if c.Descriptor != nil {
+		d := *c.Descriptor
+		if d.Application != c.Application || d.Environment != c.Environment {
+			return nil, fmt.Errorf("%w: il descrittore di esempio è di %s/%s, non di %s/%s", ErrInvalidRequest, d.Application, d.Environment, c.Application, c.Environment)
+		}
+		return &d, nil
+	}
+	inv, err := e.Inventory(ctx, InventoryFilter{Application: c.Application, Environment: c.Environment})
+	if err != nil {
+		return nil, err
+	}
+	if len(inv) == 0 || inv[0].Current == nil {
+		return nil, fmt.Errorf("%w: nessun deploy in esercizio in %s/%s: indicare un descrittore di esempio", ErrInvalidRequest, c.Application, c.Environment)
+	}
+	req, err := e.loadRequest(inv[0].Current.ID)
+	if err != nil {
+		return nil, err
+	}
+	d := req.Descriptor
+	d.ID, d.Schedule, d.After, d.AfterTimeout, d.DryRun = "", nil, nil, "", false
+	return &d, nil
 }
 
 // inspect runs the check verifications and describes the effective deploy. A permanent error
 // makes the request invalid; an unreachable environment configuration only produces a
 // warning, and the returned effective descriptor is nil.
 func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Validation, *descriptor.Descriptor, error) {
+	var resolve func(context.Context, descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)
+	if e.resolver != nil {
+		resolve = e.resolver.Resolve
+	}
+	return e.inspectWith(ctx, d, resolve)
+}
+
+// inspectWith is inspect with the given environment configuration resolution (nil: none).
+func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
+	resolve func(context.Context, descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)) (*Validation, *descriptor.Descriptor, error) {
 	for _, cb := range d.Callbacks {
 		if err := e.callbacks.Check(cb.URL); err != nil {
 			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -356,8 +435,8 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 	}
 	v := &Validation{Valid: true}
 	eff := *d
-	if e.resolver != nil {
-		r, meta, err := e.resolver.Resolve(ctx, *d)
+	if resolve != nil {
+		r, meta, err := resolve(ctx, *d)
 		switch {
 		case errors.Is(err, pipeline.ErrPermanent):
 			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)

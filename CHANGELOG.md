@@ -14,6 +14,13 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Integrazioni con CI e IaC: `manent deploy --ci` (esiti in `$GITHUB_OUTPUT` o nel report dotenv
+  di GitLab, riepilogo in `$GITHUB_STEP_SUMMARY`), `--outputs`, `--summary`, `--id`, `--version`,
+  `--source`, `--sha256`; verifica di una configurazione di ambiente candidata (`manent env
+  validate`, `POST /api/v1/environments/validate`); GitHub Action (`integrations/github`),
+  template GitLab (`integrations/gitlab/manent.yml`) e provider Terraform (`integrations/terraform`:
+  `manent_deployment` con drift dall'inventario e dalla riconciliazione, `manent_inventory`,
+  `manent_environment_check`). Casi d'uso UC18 (CI) e UC19 (Terraform vero).
 - Stato reale dei target (`reconcile` in `manent.yml`): i worker leggono a intervalli, un target
   alla volta, la release in esercizio con `CurrentRelease` del plugin e la confrontano con
   l'inventario. `targets` e `out_of_sync` nell'inventario (API, `manent inventory

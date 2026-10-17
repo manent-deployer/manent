@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/governance"
 )
 
@@ -73,5 +74,35 @@ func TestValidateRollout(t *testing.T) {
 	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
 	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback attivo") {
 		t.Errorf("rollback non attivo: %v", err)
+	}
+}
+
+func TestValidateEnvironment(t *testing.T) {
+	_, planner := testRegistry(t, waveStep{name: "deploy", log: &waveLog{}})
+	e := NewService(ServiceOptions{Planner: planner, Logger: discard, Resolver: envconfig.Resolver{}, Health: &fakeChecker{}})
+	ctx := context.Background()
+	d := appDescriptor("prod", "1.0.0")
+	check := func(config string) (*Validation, error) {
+		return e.ValidateEnvironment(ctx, EnvironmentCheck{Application: d.Application, Environment: d.Environment, Config: config, Descriptor: d})
+	}
+	v, err := check("plugin: remote-copy\ntargets:\n  - {host: web-1, labels: {region: eu-1, az: eu-1a}}\n  - {host: web-2, labels: {region: eu-1, az: eu-1b}}\nrollout:\n  waves: [{name: tutto, select: \"region=eu-1\", by: az}]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.Valid || v.Config["source"] != "configurazione candidata" || len(v.Deploy.Targets) != 2 || v.Rollout == nil || len(v.Rollout.Stages) != 2 {
+		t.Errorf("validazione: %+v", v)
+	}
+	for want, config := range map[string]string{
+		"field plugn not found": "plugn: remote-copy\n",
+		"non appartiene":        "targets:\n  - {host: web-1, labels: {region: eu-1, az: eu-1a}}\n  - {host: us-1, labels: {region: us-1, az: us-1a}}\nrollout:\n  waves: [{name: eu, select: \"region=eu-1\", by: az}]\n",
+		"configurazione vuota":  " ",
+	} {
+		if _, err := check(config); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), want) {
+			t.Errorf("atteso %q, ricevuto %v", want, err)
+		}
+	}
+	// The example descriptor must be of the environment checked.
+	if _, err := e.ValidateEnvironment(ctx, EnvironmentCheck{Application: "altra", Environment: "prod", Config: "plugin: x\n", Descriptor: d}); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("descrittore di un altro ambiente: %v", err)
 	}
 }

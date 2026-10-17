@@ -200,6 +200,24 @@ type Resolver struct {
 	Policy *DescriptorPolicy
 }
 
+// ResolveWith merges the descriptor with the given configuration (YAML or JSON) instead of the
+// provider's, with the same policy: it checks a configuration before it is applied. Every
+// error is permanent.
+func (r Resolver) ResolveWith(_ context.Context, d descriptor.Descriptor, config []byte) (descriptor.Descriptor, map[string]string, error) {
+	cfg, err := Parse(config)
+	if err != nil {
+		return d, nil, pipeline.Permanent(err)
+	}
+	if err := r.Policy.Check(d, cfg); err != nil {
+		return d, nil, pipeline.Permanent(err)
+	}
+	eff, err := Merge(d, cfg)
+	if err != nil {
+		return d, nil, pipeline.Permanent(err)
+	}
+	return eff, map[string]string{"source": "configurazione candidata", "targets": strconv.Itoa(len(eff.Deploy.Targets))}, nil
+}
+
 // Resolve reads the environment configuration and merges it with the descriptor.
 // It also returns the metadata (source, revision) to record in the deploy result.
 func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {

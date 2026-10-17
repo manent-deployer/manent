@@ -167,6 +167,10 @@ func (f *fakeService) Me(ctx context.Context) (*engine.Identity, error) {
 	return (&engine.Engine{}).Me(ctx)
 }
 
+func (f *fakeService) ValidateEnvironment(context.Context, engine.EnvironmentCheck) (*engine.Validation, error) {
+	return &engine.Validation{Valid: true}, nil
+}
+
 func (f *fakeService) Validate(context.Context, *descriptor.Descriptor) (*engine.Validation, error) {
 	return &engine.Validation{Valid: true}, nil
 }

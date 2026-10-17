@@ -452,6 +452,15 @@ func (c *Client) DORA(ctx context.Context, f service.DORAFilter) (*service.DORAR
 	return &rep, nil
 }
 
+// ValidateEnvironment implements service.Service.
+func (c *Client) ValidateEnvironment(ctx context.Context, e service.EnvironmentCheck) (*service.Validation, error) {
+	var v service.Validation
+	if err := c.do(ctx, http.MethodPost, "/environments/validate", nil, e, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // Validate implements service.Service.
 func (c *Client) Validate(ctx context.Context, d *descriptor.Descriptor) (*service.Validation, error) {
 	var v service.Validation

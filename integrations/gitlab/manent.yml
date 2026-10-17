@@ -1,0 +1,63 @@
+# GitLab CI/CD template for manent: deploys from a pipeline without writing API calls. It runs
+# "manent deploy --ci": the outcome goes to the dotenv report manent.env, so deployment_id, state
+# and version become variables of the following jobs.
+# MANENT_SERVER and MANENT_TOKEN come from the project's CI/CD variables (token masked).
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+#       inputs:
+#         descriptor: deploy/prod.yml
+#         version: $CI_COMMIT_TAG
+#         manent_ref: v0.1.0
+spec:
+  inputs:
+    job:
+      default: manent-deploy
+      description: Nome del job
+    stage:
+      default: deploy
+    descriptor:
+      description: Descrittore di deploy YAML nel repository
+    version:
+      default: ""
+      description: Versione dell'artefatto, al posto di quella del descrittore (es. $CI_COMMIT_TAG)
+    source:
+      default: ""
+    sha256:
+      default: ""
+    id:
+      default: ""
+      description: ID del deploy (chiave di idempotenza), es. gl-$CI_PIPELINE_ID
+    dry_run:
+      type: boolean
+      default: false
+    timeout:
+      default: 30m
+    image:
+      default: golang:1.27-alpine
+      description: Immagine del job; il client manent viene installato se non è già presente
+    manent_ref:
+      default: main
+      description: Versione del client da installare (tag o commit di manent)
+---
+"$[[ inputs.job ]]":
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  script:
+    # manent:script:begin (the use cases run these lines as the job would)
+    - |
+      if ! command -v manent >/dev/null 2>&1; then
+        GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@$[[ inputs.manent_ref ]]
+      fi
+      set -- deploy --ci -f "$[[ inputs.descriptor ]]" --timeout "$[[ inputs.timeout ]]"
+      if [ -n "$[[ inputs.version ]]" ]; then set -- "$@" --version "$[[ inputs.version ]]"; fi
+      if [ -n "$[[ inputs.source ]]" ]; then set -- "$@" --source "$[[ inputs.source ]]"; fi
+      if [ -n "$[[ inputs.sha256 ]]" ]; then set -- "$@" --sha256 "$[[ inputs.sha256 ]]"; fi
+      if [ -n "$[[ inputs.id ]]" ]; then set -- "$@" --id "$[[ inputs.id ]]"; fi
+      if [ "$[[ inputs.dry_run ]]" = true ]; then set -- "$@" --dry-run; fi
+      manent "$@"
+    # manent:script:end
+  artifacts:
+    when: always
+    reports:
+      dotenv: manent.env

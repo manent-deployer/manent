@@ -56,6 +56,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/environments/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verifica una configurazione di ambiente candidata, prima di applicarla
+         * @description Fonde la configurazione (YAML o JSON, come nel sistema di configurazione) con il descrittore
+         *     di esempio (default: la richiesta del deploy in esercizio) e applica le verifiche
+         *     dell'accodamento: campi sconosciuti, policy sui descrittori, fusione, rollback, piano delle
+         *     ondate e del traffico. Non accoda e non scrive nulla.
+         *
+         */
+        post: operations["validateEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/deployments/{id}": {
         parameters: {
             query?: never;
@@ -857,6 +881,13 @@ export interface components {
             next: number;
             done: boolean;
         };
+        EnvironmentCheck: {
+            application: string;
+            environment: string;
+            /** @description Configurazione di ambiente in YAML o JSON */
+            config: string;
+            descriptor?: components["schemas"]["Descriptor"];
+        };
         InventoryEntry: {
             application: string;
             environment: string;
@@ -1120,6 +1151,33 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    validateEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvironmentCheck"];
+            };
+        };
+        responses: {
+            /** @description Deploy effettivo con la configurazione candidata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Validation"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

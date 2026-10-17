@@ -400,6 +400,15 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 	return g.Next.Validate(ctx, d)
 }
 
+// ValidateEnvironment requires reading the deploys of the environment: the check reveals its
+// effective configuration, as Validate does.
+func (g *Guard) ValidateEnvironment(ctx context.Context, c engine.EnvironmentCheck) (*engine.Validation, error) {
+	if err := g.check(ctx, DeploymentRead, target{application: c.Application, environment: c.Environment}); err != nil {
+		return nil, err
+	}
+	return g.Next.ValidateEnvironment(ctx, c)
+}
+
 // Me returns the identity and the roles that apply to it (the bindings that concern it),
 // without checking permissions: everyone can read their own.
 func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {

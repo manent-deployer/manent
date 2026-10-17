@@ -9,7 +9,7 @@ LDFLAGS := -s -w -X github.com/joeg-ita/manent/internal/version.Version=$(VERSIO
 PG_TEST_URL ?= postgres://postgres:postgres@localhost:55432/postgres?sslmode=disable
 IMAGE ?= manent:$(VERSION)
 
-.PHONY: build plugins test test-postgres test-e2e test-load test-usecases lint run fmt clean proto docs docs-serve image web web-dev web-test web-api
+.PHONY: build plugins terraform-provider test test-postgres test-e2e test-load test-usecases lint run fmt clean proto docs docs-serve image web web-dev web-test web-api
 
 # npm with a local Node >= 20, otherwise in a container (scripts/web.sh).
 WEB := scripts/web.sh
@@ -48,6 +48,11 @@ plugins:
 
 test:
 	go test ./...
+	cd integrations/terraform && go test ./...
+
+# Terraform provider (separate module integrations/terraform, it does not add dependencies to manent).
+terraform-provider:
+	cd integrations/terraform && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o ../../bin/terraform-provider-manent .
 
 # Same tests on Postgres: every test creates and drops its own database.
 test-postgres:
@@ -74,7 +79,7 @@ image:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --target client -t manent-client:$(VERSION) .
 
 lint:
-	gofmt -l . | (! grep .) && go vet ./...
+	gofmt -l . | (! grep .) && go vet ./... && (cd integrations/terraform && go vet ./...)
 
 fmt:
 	gofmt -w .

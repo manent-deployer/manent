@@ -109,6 +109,26 @@ paths:
         '200': {description: Deploy effettivo, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
+  /api/v1/environments/validate:
+    post:
+      tags: [deployments]
+      summary: Verifica una configurazione di ambiente candidata, prima di applicarla
+      description: |
+        Fonde la configurazione (YAML o JSON, come nel sistema di configurazione) con il descrittore
+        di esempio (default: la richiesta del deploy in esercizio) e applica le verifiche
+        dell'accodamento: campi sconosciuti, policy sui descrittori, fusione, rollback, piano delle
+        ondate e del traffico. Non accoda e non scrive nulla.
+      operationId: validateEnvironment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EnvironmentCheck'}
+      responses:
+        '200': {description: Deploy effettivo con la configurazione candidata, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}:
     get:
       tags: [deployments]
@@ -836,6 +856,14 @@ components:
         lines: {type: array, items: {$ref: '#/components/schemas/LogLine'}}
         next: {type: integer}
         done: {type: boolean}
+    EnvironmentCheck:
+      type: object
+      required: [application, environment, config]
+      properties:
+        application: {type: string}
+        environment: {type: string}
+        config: {type: string, description: Configurazione di ambiente in YAML o JSON}
+        descriptor: {$ref: '#/components/schemas/Descriptor'}
     InventoryEntry:
       type: object
       required: [application, environment]

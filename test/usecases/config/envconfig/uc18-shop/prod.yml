@@ -1,0 +1,15 @@
+# UC18: one target, released from the CI (GitHub Action, GitLab template).
+plugin: remote-copy
+targets:
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc18-shop
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  post_command: 'echo "$(date +%s) start $MANENT_VERSION" >> $HOME/fault/uc18-shop.log'
+  rollback_command: "true"
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -88,6 +89,7 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.GET("/deployments", s.list)
 	v1.POST("/deployments/plan", s.plan)
 	v1.POST("/deployments/validate", s.validate)
+	v1.POST("/environments/validate", s.validateEnvironment)
 	v1.GET("/deployments/:id", s.status)
 	v1.GET("/deployments/:id/steps", s.steps)
 	v1.GET("/deployments/:id/logs", s.logs)
@@ -410,6 +412,31 @@ func (s *Server) validate(c *gin.Context) {
 		return
 	}
 	v, err := s.svc.Validate(c.Request.Context(), d)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, v)
+}
+
+// validateEnvironment checks a candidate environment configuration before it is applied.
+func (s *Server) validateEnvironment(c *gin.Context) {
+	var req engine.EnvironmentCheck
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, fmt.Errorf("%w: %w", engine.ErrInvalidRequest, err))
+		return
+	}
+	if req.Application == "" || req.Environment == "" {
+		writeError(c, fmt.Errorf("%w: application ed environment obbligatori", engine.ErrInvalidRequest))
+		return
+	}
+	if req.Descriptor != nil {
+		if err := req.Descriptor.Validate(); err != nil {
+			writeError(c, fmt.Errorf("%w: %w", engine.ErrInvalidRequest, err))
+			return
+		}
+	}
+	v, err := s.svc.ValidateEnvironment(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return

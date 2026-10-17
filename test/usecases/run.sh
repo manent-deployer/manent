@@ -22,16 +22,16 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
 log "preparazione"
 rm -rf "$WORK"
-mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config" "$WORK/k3s"
+mkdir -p "$WORK/bin" "$WORK/keys" "$WORK/artifacts" "$WORK/uc" "$WORK/config" "$WORK/k3s" "$WORK/ci" "$WORK/tf"
 arch=$(docker info --format '{{.Architecture}}')
 case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) goarch=$arch ;; esac
 # Web interface embedded in manent-server (UC8): local Node >= 20 or a container.
@@ -40,7 +40,8 @@ case "$arch" in x86_64|amd64) goarch=amd64 ;; aarch64|arm64) goarch=arm64 ;; *) 
 info "interfaccia web compilata"
 (cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc &&
-  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-fakes" ./test/usecases/fakes)
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-fakes" ./test/usecases/fakes &&
+  cd integrations/terraform && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/terraform-provider-manent" .)
 info "binari linux/$goarch compilati"
 
 # Lab SSH key: readable by the nonroot user of the manent containers.
@@ -77,7 +78,7 @@ region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
 dc --profile regions --profile containers --profile lb --profile jboss build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0

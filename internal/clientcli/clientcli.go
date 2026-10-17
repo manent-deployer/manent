@@ -84,6 +84,12 @@ func Run(args []string) error {
 		}); err != nil {
 		return err
 	}
+	if err := cliutil.AddGroup(p, "env", "Verifica le configurazioni di ambiente",
+		"Verifica sul server una configurazione di ambiente candidata, prima di applicarla", []cliutil.Command{
+			{Name: "validate", Short: "Verifica una configurazione di ambiente come la userebbe un deploy", Cmd: &EnvValidateCmd{global: g}},
+		}); err != nil {
+		return err
+	}
 	if err := cliutil.AddGroup(p, "release", "Gestisce le release composte (più deploy con dipendenze)",
 		"Gestisce le release composte: più deploy con dipendenze tra loro, in parallelo dove possibile", []cliutil.Command{
 			{Name: "submit", Short: "Accoda una release da un file YAML e ne segue l'avanzamento", Cmd: &ReleaseSubmitCmd{global: g}},

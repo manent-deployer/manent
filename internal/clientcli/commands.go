@@ -28,6 +28,39 @@ type DeployCmd struct {
 	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
 	DryRun  bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
 	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
+	ArtifactOverrides
+	Outputs string `long:"outputs" description:"file a cui aggiungere gli esiti come righe chiave=valore (deployment_id, state, ...): $GITHUB_OUTPUT o un report dotenv di GitLab"`
+	Summary string `long:"summary" description:"file a cui aggiungere il riepilogo del deploy in Markdown ($GITHUB_STEP_SUMMARY)"`
+	CI      bool   `long:"ci" description:"riconosce GitHub Actions (esiti in $GITHUB_OUTPUT, riepilogo in $GITHUB_STEP_SUMMARY) o GitLab CI (esiti in manent.env, o $MANENT_DOTENV)"`
+}
+
+// ArtifactOverrides replace fields of the descriptor from the command line: in CI the
+// descriptor stays in the repository and the build gives the version.
+type ArtifactOverrides struct {
+	ID      string `long:"id" description:"ID del deploy (chiave di idempotenza), al posto di quello del descrittore"`
+	Version string `long:"version" description:"versione dell'artefatto, al posto di quella del descrittore"`
+	Source  string `long:"source" description:"sorgente dell'artefatto, al posto di quella del descrittore"`
+	SHA256  string `long:"sha256" description:"sha256 atteso dell'artefatto"`
+}
+
+// apply writes the overrides into the descriptor and validates it again.
+func (o ArtifactOverrides) apply(d *descriptor.Descriptor) bool {
+	if o == (ArtifactOverrides{}) {
+		return false
+	}
+	if o.ID != "" {
+		d.ID = o.ID
+	}
+	if o.Version != "" {
+		d.Artifact.Version = o.Version
+	}
+	if o.Source != "" {
+		d.Artifact.Source = o.Source
+	}
+	if o.SHA256 != "" {
+		d.Artifact.SHA256 = o.SHA256
+	}
+	return true
 }
 
 // Execute implements flags.Commander.
@@ -36,19 +69,25 @@ func (c *DeployCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	if c.DryRun || len(c.After) > 0 {
+	if c.ArtifactOverrides.apply(d) || c.DryRun || len(c.After) > 0 {
 		d.DryRun = d.DryRun || c.DryRun
 		d.After = append(d.After, c.After...)
 		if err := d.Validate(); err != nil {
 			return err
 		}
 	}
+	rep, err := c.report()
+	if err != nil {
+		return err
+	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		sub, err := svc.Submit(ctx, d)
 		if err != nil {
 			return err
 		}
-		return follow(ctx, svc, sub, c.NoWait, c.Timeout)
+		ferr := follow(ctx, svc, sub, c.NoWait, c.Timeout)
+		// Also on failure: the pipeline reads the state of the deploy it started.
+		return errors.Join(ferr, rep.write(ctx, svc, d, sub))
 	})
 }
 

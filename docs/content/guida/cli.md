@@ -59,6 +59,8 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--timeout` | Maximum wait (e.g. `30m`). When it expires the command exits, but the deploy continues. |
 | `--dry-run` | Runs the deploy as a [simulation](dry-run.md). |
 | `--after <id>` | Starts the deploy only after the deploy `<id>` has succeeded (repeatable): see [Deploy chains](catene.md). |
+| `--id`, `--version`, `--source`, `--sha256` | Replace the ID and the artifact fields of the descriptor (the pipeline gives the version). |
+| `--outputs <file>`, `--summary <file>`, `--ci` | `key=value` outcome and Markdown summary for CI: see [CI and infrastructure as code](ci-iac.md). |
 
 Scheduled deploys (`schedule` in the descriptor) and those [awaiting approval](governance.md#approvazioni) are not waited for: the command prints the state and exits.
 
@@ -71,6 +73,14 @@ manent validate -f examples/descriptor.yml
 ```
 
 The output also lists the names of the declared secrets, the [governance](governance.md) rule that applies and any active freeze. If the environment configuration cannot be reached, the server reports it in `warnings` and the check is left to the worker. To check a manent configuration before installing it there is [`manent-server validate`](../operazioni/server.md#validate).
+
+### `env validate`
+
+Checks a candidate environment configuration before it reaches the configuration system, merging it with an example descriptor (default: the request of the deploy in service). See [CI and infrastructure as code](ci-iac.md#env-validate).
+
+```sh
+manent env validate -a <application> -e <environment> -f prod.yml [-d descriptor.yml]
+```
 
 ### `status`
 

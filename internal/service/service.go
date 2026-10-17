@@ -81,6 +81,9 @@ type DeploymentService interface {
 	// Validate checks the descriptor as at submission and returns the effective deploy, without
 	// starting it.
 	Validate(ctx context.Context, d *descriptor.Descriptor) (*Validation, error)
+	// ValidateEnvironment checks a candidate environment configuration, before it is applied, as
+	// a deploy would use it at submission.
+	ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*Validation, error)
 	// Submit enqueues a deploy, schedules it at a time or creates a recurring schedule.
 	Submit(ctx context.Context, d *descriptor.Descriptor) (*Submission, error)
 	// Status returns the current state of a deploy.
@@ -146,6 +149,18 @@ type Validation struct {
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// Warnings reports the checks not performed, for example with Consul unreachable.
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+// EnvironmentCheck asks to check a candidate environment configuration (e.g. a change in the
+// repository or in Terraform) before it reaches the configuration system.
+type EnvironmentCheck struct {
+	Application string `json:"application"`
+	Environment string `json:"environment"`
+	// Config is the configuration in YAML or JSON, as it would be stored in the provider.
+	Config string `json:"config"`
+	// Descriptor is the example deploy merged with the configuration; default the request of
+	// the deploy in service in the environment.
+	Descriptor *descriptor.Descriptor `json:"descriptor,omitempty"`
 }
 
 // GovernanceValidation are the governance rules that would apply to the deploy.

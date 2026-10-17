@@ -27,6 +27,7 @@ Authorization: Bearer <token>
 | `GET` | `/api/v1/deployments` | Lists the most recent deploys. |
 | `POST` | `/api/v1/deployments/plan` | Computes the plan without starting anything. |
 | `POST` | `/api/v1/deployments/validate` | Checks a descriptor as at enqueue time and returns the effective deploy. |
+| `POST` | `/api/v1/environments/validate` | Checks a candidate environment configuration (`application`, `environment`, `config`, optional `descriptor`): see [CI and infrastructure as code](ci-iac.md#env-validate). |
 | `GET` | `/api/v1/deployments/{id}` | Status and result of a deploy. |
 | `GET` | `/api/v1/deployments/{id}/steps` | Step timeline. |
 | `GET` | `/api/v1/deployments/{id}/logs?offset=` | Deploy log. |

@@ -66,6 +66,7 @@ type (
 	Identity             = service.Identity
 	Grant                = service.Grant
 	Validation           = service.Validation
+	EnvironmentCheck     = service.EnvironmentCheck
 	GovernanceValidation = service.GovernanceValidation
 	StepResult           = service.StepResult
 	Result               = service.Result

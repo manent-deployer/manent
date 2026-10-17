@@ -1,0 +1,113 @@
+# GitHub Action for manent: deploys from a workflow without writing API calls. It installs the
+# manent client from this repository (same version as the action) if it is not on the PATH, and
+# runs "manent deploy --ci": outputs in $GITHUB_OUTPUT, summary in $GITHUB_STEP_SUMMARY.
+#
+#   - uses: joeg-ita/manent/integrations/github@v0.1.0
+#     with:
+#       server: https://manent.example.com
+#       token: ${{ secrets.MANENT_TOKEN }}
+#       descriptor: deploy/prod.yml
+#       version: ${{ github.ref_name }}
+name: manent deploy
+description: Rilascia un artefatto con manent (deploy, validazione del descrittore o della configurazione di ambiente)
+author: manent
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  server:
+    description: URL del server manent
+    required: true
+  token:
+    description: Token dell'API (OIDC o statico); usare un secret
+    required: true
+  command:
+    description: "deploy (default), validate (descrittore) o env-validate (configurazione di ambiente candidata)"
+    default: deploy
+  descriptor:
+    description: Descrittore di deploy YAML (obbligatorio per deploy e validate; per env-validate è il descrittore di esempio, facoltativo)
+    default: ""
+  version:
+    description: Versione dell'artefatto, al posto di quella del descrittore
+    default: ""
+  source:
+    description: Sorgente dell'artefatto, al posto di quella del descrittore
+    default: ""
+  sha256:
+    description: sha256 atteso dell'artefatto
+    default: ""
+  id:
+    description: ID del deploy (chiave di idempotenza), ad esempio gh-${{ github.run_id }}
+    default: ""
+  dry-run:
+    description: Simula il deploy su un worker senza modificare i target
+    default: "false"
+  wait:
+    description: Attende la conclusione del deploy e fallisce se non riesce
+    default: "true"
+  timeout:
+    description: Tempo massimo di attesa (es. 30m); il deploy prosegue comunque
+    default: 30m
+  after:
+    description: ID di deploy che devono riuscire prima di questo, separati da spazi
+    default: ""
+  application:
+    description: Applicazione (env-validate)
+    default: ""
+  environment:
+    description: Ambiente (env-validate)
+    default: ""
+  env-config:
+    description: File della configurazione di ambiente candidata (env-validate)
+    default: ""
+  ca-file:
+    description: Certificato della CA del server, se privata
+    default: ""
+outputs:
+  deployment-id:
+    description: ID del deploy
+    value: ${{ steps.run.outputs.deployment_id }}
+  state:
+    description: Stato finale (SUCCESS, ERROR, ...) o iniziale senza attesa
+    value: ${{ steps.run.outputs.state }}
+  version:
+    description: Versione rilasciata
+    value: ${{ steps.run.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: client
+      shell: sh
+      run: |
+        if command -v manent >/dev/null 2>&1; then echo "install=false" >>"$GITHUB_OUTPUT"; else echo "install=true" >>"$GITHUB_OUTPUT"; fi
+    - if: steps.client.outputs.install == 'true'
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/../../go.mod
+        cache: false
+    - if: steps.client.outputs.install == 'true'
+      shell: sh
+      run: |
+        # The client of the same version as the action: the action's checkout is the repository.
+        cd "$GITHUB_ACTION_PATH/../.." && GOBIN="$RUNNER_TEMP/manent-bin" go install ./cmd/manent
+        echo "$RUNNER_TEMP/manent-bin" >>"$GITHUB_PATH"
+    - id: run
+      shell: sh
+      run: sh "$GITHUB_ACTION_PATH/run.sh"
+      env:
+        MANENT_SERVER: ${{ inputs.server }}
+        MANENT_TOKEN: ${{ inputs.token }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_DESCRIPTOR: ${{ inputs.descriptor }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_SHA256: ${{ inputs.sha256 }}
+        INPUT_ID: ${{ inputs.id }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_WAIT: ${{ inputs.wait }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_AFTER: ${{ inputs.after }}
+        INPUT_APPLICATION: ${{ inputs.application }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_ENV_CONFIG: ${{ inputs.env-config }}
+        INPUT_CA_FILE: ${{ inputs.ca-file }}

@@ -59,6 +59,8 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--timeout` | Tempo massimo di attesa (es. `30m`). Scaduto il tempo il comando termina, ma il deploy prosegue. |
 | `--dry-run` | Esegue il deploy in [simulazione](dry-run.md). |
 | `--after <id>` | Avvia il deploy solo dopo il successo del deploy `<id>` (ripetibile): vedi [Catene di deploy](catene.md). |
+| `--id`, `--version`, `--source`, `--sha256` | Sostituiscono ID e campi dell'artefatto del descrittore (la pipeline dà la versione). |
+| `--outputs <file>`, `--summary <file>`, `--ci` | Esiti `chiave=valore` e riepilogo Markdown per la CI: vedi [CI e infrastruttura come codice](ci-iac.md). |
 
 I deploy pianificati (`schedule` nel descrittore) e quelli in [attesa di approvazione](governance.md#approvazioni) non vengono attesi: il comando stampa lo stato e termina.
 
@@ -71,6 +73,14 @@ manent validate -f examples/descriptor.yml
 ```
 
 L'output riporta anche i nomi dei segreti dichiarati, la regola di [governance](governance.md) che si applica e l'eventuale freeze attivo. Se la configurazione di ambiente non è raggiungibile, il server lo segnala in `warnings` e la verifica resta al worker. Per verificare una configurazione di manent prima di installarla c'è [`manent-server validate`](../operazioni/server.md#validate).
+
+### `env validate`
+
+Verifica una configurazione di ambiente candidata prima che arrivi nel sistema di configurazione, fondendola con un descrittore di esempio (default: la richiesta del deploy in esercizio). Vedi [CI e infrastruttura come codice](ci-iac.md#env-validate).
+
+```sh
+manent env validate -a <applicazione> -e <ambiente> -f prod.yml [-d descrittore.yml]
+```
 
 ### `status`
 

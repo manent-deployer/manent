@@ -112,6 +112,7 @@ plugins:
             Deploy chains: Catene di deploy
             Custom steps: Step personalizzati
             Chat and change management: Chat e change management
+            CI and infrastructure as code: CI e infrastruttura come codice
             Web interface: Interfaccia web
             Operations: Operazioni
             Installation: Installazione
@@ -178,6 +179,7 @@ nav:
       - Deploy chains: guida/catene.md
       - Custom steps: guida/step-personalizzati.md
       - Chat and change management: guida/integrazioni.md
+      - CI and infrastructure as code: guida/ci-iac.md
       - Web interface: guida/interfaccia-web.md
   - Operations:
       - Installation: operazioni/installazione.md
