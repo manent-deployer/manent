@@ -29,7 +29,7 @@ func (s Deploy) InspectTargets(ctx context.Context, d *descriptor.Descriptor, ta
 	}
 	ins, ok := dep.(plugin.ReleaseInspector)
 	if !ok {
-		return nil, nil, fmt.Errorf("il plugin %q non sa leggere la release in esercizio", dep.Name())
+		return nil, nil, fmt.Errorf("plugin %q cannot read the release in service", dep.Name())
 	}
 	versions, errs = make([]string, len(targets)), make([]error, len(targets))
 	sem := make(chan struct{}, max(1, concurrency))

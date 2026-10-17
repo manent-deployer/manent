@@ -9,5 +9,5 @@ type JournalSender struct{ NoopSender }
 
 // NewJournalSender always returns an error: journald exists only on Linux.
 func NewJournalSender(string) (*JournalSender, error) {
-	return nil, errors.New("rete SIEM journald non supportata su questo sistema")
+	return nil, errors.New("journald SIEM network not supported on this system")
 }

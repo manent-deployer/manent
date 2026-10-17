@@ -28,7 +28,7 @@ type RollbackChecker interface {
 }
 
 // ErrRollbackUnsupported means a plugin that does not support rollback.
-var ErrRollbackUnsupported = errors.New("rollback non supportato dal plugin")
+var ErrRollbackUnsupported = errors.New("rollback not supported by the plugin")
 
 // CanRollback reports whether the Deployer supports rollback.
 func CanRollback(ctx context.Context, d Deployer) (bool, error) {
@@ -64,7 +64,7 @@ type PluginLocator struct{}
 func (PluginLocator) Current(ctx context.Context, dep Deployer, req *Request) (*Release, error) {
 	ins, ok := dep.(ReleaseInspector)
 	if !ok {
-		return nil, fmt.Errorf("il plugin %q non sa leggere la release in esercizio: usare un altro locator", dep.Name())
+		return nil, fmt.Errorf("plugin %q cannot read the release in service: use another locator", dep.Name())
 	}
 	return ins.CurrentRelease(ctx, req)
 }

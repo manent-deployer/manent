@@ -239,7 +239,7 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	var delay time.Duration
 	if d.Schedule != nil && d.Schedule.At != nil {
 		if delay = d.Schedule.At.Sub(e.now()); delay <= 0 {
-			return nil, fmt.Errorf("%w: schedule.at %s è nel passato", ErrInvalidRequest, d.Schedule.At.Format(time.RFC3339))
+			return nil, fmt.Errorf("%w: schedule.at %s is in the past", ErrInvalidRequest, d.Schedule.At.Format(time.RFC3339))
 		}
 		sub.State = string(dbos.WorkflowStatusDelayed)
 		sub.ScheduledAt = d.Schedule.At
@@ -358,7 +358,7 @@ type CandidateResolver interface {
 func (e *Engine) ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*Validation, error) {
 	cr, ok := e.resolver.(CandidateResolver)
 	if !ok {
-		return nil, fmt.Errorf("%w: il server non gestisce la configurazione di ambiente", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: the server does not manage the environment configuration", ErrInvalidRequest)
 	}
 	d, err := e.exampleDescriptor(ctx, c)
 	if err != nil {
@@ -384,12 +384,12 @@ func (e *Engine) ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*
 // dependencies (they do not concern the configuration).
 func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*descriptor.Descriptor, error) {
 	if strings.TrimSpace(c.Config) == "" {
-		return nil, fmt.Errorf("%w: configurazione vuota", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: empty configuration", ErrInvalidRequest)
 	}
 	if c.Descriptor != nil {
 		d := *c.Descriptor
 		if d.Application != c.Application || d.Environment != c.Environment {
-			return nil, fmt.Errorf("%w: il descrittore di esempio è di %s/%s, non di %s/%s", ErrInvalidRequest, d.Application, d.Environment, c.Application, c.Environment)
+			return nil, fmt.Errorf("%w: the example descriptor is for %s/%s, not for %s/%s", ErrInvalidRequest, d.Application, d.Environment, c.Application, c.Environment)
 		}
 		return &d, nil
 	}
@@ -398,7 +398,7 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 		return nil, err
 	}
 	if len(inv) == 0 || inv[0].Current == nil {
-		return nil, fmt.Errorf("%w: nessun deploy in esercizio in %s/%s: indicare un descrittore di esempio", ErrInvalidRequest, c.Application, c.Environment)
+		return nil, fmt.Errorf("%w: no deploy in service in %s/%s: provide an example descriptor", ErrInvalidRequest, c.Application, c.Environment)
 	}
 	req, err := e.loadRequest(inv[0].Current.ID)
 	if err != nil {
@@ -507,7 +507,7 @@ func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governa
 			return nil, nil, err
 		}
 		if rel == nil {
-			return nil, nil, fmt.Errorf("%w: %s %s non risulta rilasciato con successo in %s: va promosso da lì (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
+			return nil, nil, fmt.Errorf("%w: %s %s was not released successfully in %s: it must be promoted from there (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
 		}
 	}
 	var approvals *governance.Approvals
@@ -546,7 +546,7 @@ func checkRolloutApprovals(d *descriptor.Descriptor, a *governance.Approvals) er
 	if !a.InRollout() || rolloutAsksApproval(d.Rollout) {
 		return nil
 	}
-	return errors.New("la regola di governance sposta le approvazioni nel rollout (approvals.when: rollout), ma il rollout non ha punti di approvazione in approvalsBetween (dopo un'ondata che non sia l'ultima, o un gradino del traffico)")
+	return errors.New("the governance rule moves approvals into the rollout (approvals.when: rollout), but the rollout has no approval points in approvalsBetween (after a wave that is not the last one, or a traffic step)")
 }
 
 // rolloutAsksApproval reports whether the rollout pauses for an approval at least once. After
@@ -572,11 +572,11 @@ func rolloutAsksApproval(r *descriptor.Rollout) bool {
 
 // freezeMessage describes the freeze blocking a deploy.
 func freezeMessage(w *governance.WindowStatus) string {
-	msg := fmt.Sprintf("deploy bloccato dal freeze %q fino a %s", w.Name, w.End.Format(time.RFC3339))
+	msg := fmt.Sprintf("deploy blocked by freeze %q until %s", w.Name, w.End.Format(time.RFC3339))
 	if w.Reason != "" {
 		msg += " (" + w.Reason + ")"
 	}
-	return msg + "; per un'emergenza indicare freezeOverride con il motivo"
+	return msg + "; in an emergency set freezeOverride with the reason"
 }
 
 // sameArtifact reports whether the recorded deploy released the same artifact as the
@@ -678,7 +678,7 @@ func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 	if st.Status == dbos.WorkflowStatusSuccess {
 		var res Result
 		if err := decodeInput(st.Output, &res); err != nil {
-			return nil, fmt.Errorf("risultato del deploy %s: %w", id, err)
+			return nil, fmt.Errorf("result of deploy %s: %w", id, err)
 		}
 		s.Result = &res
 	}
@@ -907,7 +907,7 @@ func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 				return nil, err
 			}
 			if a.Status != ApprovalApproved {
-				return nil, fmt.Errorf("deploy %s non eseguito: approvazione %s", id, a.Status)
+				return nil, fmt.Errorf("deploy %s not run: approval %s", id, a.Status)
 			}
 			continue
 		}
@@ -917,7 +917,7 @@ func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 				return nil, err
 			}
 			if a.Status != service.AfterSatisfied {
-				return nil, fmt.Errorf("deploy %s non eseguito: dipendenze %s (%s)", id, a.Status, a.Reason)
+				return nil, fmt.Errorf("deploy %s not run: dependencies %s (%s)", id, a.Status, a.Reason)
 			}
 			continue
 		}

@@ -36,7 +36,7 @@ func (r *run) http(ctx context.Context) (map[string]string, error) {
 			return nil, permanent("%w", err)
 		}
 		if body, err = json.Marshal(v); err != nil {
-			return nil, permanent("corpo JSON: %w", err)
+			return nil, permanent("JSON body: %w", err)
 		}
 	}
 	req, err := http.NewRequestWithContext(ctx, a.Method, u.String(), bytes.NewReader(body))
@@ -72,7 +72,7 @@ func (r *run) http(ctx context.Context) (map[string]string, error) {
 	for _, k := range slices.Sorted(maps.Keys(r.s.doc.Outputs)) {
 		v, ok := customspec.Lookup(doc, r.s.doc.Outputs[k].Path)
 		if !ok {
-			return nil, permanent("output %q: %s assente o non scalare nella risposta", k, r.s.doc.Outputs[k].Path)
+			return nil, permanent("output %q: %s missing or not scalar in the response", k, r.s.doc.Outputs[k].Path)
 		}
 		out[k] = v
 	}
@@ -87,7 +87,7 @@ func (r *run) authorize(req *http.Request) error {
 	}
 	secret, ok := r.secrets[au.Secret]
 	if !ok {
-		return permanent("segreto %q dell'autenticazione non tra quelli dell'esecuzione", au.Secret)
+		return permanent("authentication secret %q not among those of the run", au.Secret)
 	}
 	secret = strings.TrimSpace(secret)
 	switch au.Type {
@@ -113,7 +113,7 @@ func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
 	if err != nil {
-		return nil, temporary("%s %s: lettura della risposta: %w", req.Method, target, err)
+		return nil, temporary("%s %s: reading the response: %w", req.Method, target, err)
 	}
 	r.log.InfoContext(req.Context(), "richiesta HTTP", "method", req.Method, "url", target, "status", resp.StatusCode)
 	if !accepted(resp.StatusCode, expect) {
@@ -121,11 +121,11 @@ func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
 		case c >= 500 || c == http.StatusRequestTimeout || c == http.StatusTooManyRequests:
 			return nil, temporary("%s %s: status %d", req.Method, target, c)
 		default:
-			return nil, permanent("%s %s: status %d non atteso", req.Method, target, c)
+			return nil, permanent("%s %s: unexpected status %d", req.Method, target, c)
 		}
 	}
 	if len(data) > maxResponse {
-		return nil, permanent("%s %s: risposta oltre %d byte", req.Method, target, maxResponse)
+		return nil, permanent("%s %s: response over %d bytes", req.Method, target, maxResponse)
 	}
 	if !parse {
 		return nil, nil
@@ -134,7 +134,7 @@ func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	if err := dec.Decode(&doc); err != nil {
-		return nil, permanent("%s %s: la risposta non è JSON", req.Method, target)
+		return nil, permanent("%s %s: the response is not JSON", req.Method, target)
 	}
 	return doc, nil
 }
@@ -156,9 +156,9 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, temporary("attesa interrotta: %w", ctx.Err())
+			return nil, temporary("wait interrupted: %w", ctx.Err())
 		case <-deadline.C:
-			return nil, permanent("attesa dell'esito scaduta dopo %s", p.Timeout)
+			return nil, permanent("wait for the outcome expired after %s", p.Timeout)
 		case <-tick.C:
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -181,7 +181,7 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 		}
 		if f := p.Fail; f != nil {
 			if v, ok := customspec.Lookup(doc, f.Path); ok && slices.Contains(f.In, v) {
-				return nil, permanent("l'operazione è fallita: %s = %q", f.Path, v)
+				return nil, permanent("the operation failed: %s = %q", f.Path, v)
 			}
 		}
 		if v, ok := customspec.Lookup(doc, p.Until.Path); ok && slices.Contains(p.Until.In, v) {

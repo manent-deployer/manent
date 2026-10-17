@@ -84,7 +84,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hd.Set("Cross-Origin-Opener-Policy", "same-origin")
 	hd.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "metodo non consentito", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	if h.index == nil {

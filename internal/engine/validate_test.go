@@ -66,13 +66,13 @@ func TestValidateRollout(t *testing.T) {
 	}
 	// A target without a wave makes the request invalid.
 	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "ap-1a", Labels: map[string]string{"region": "ap-1", "az": "ap-1a"}})
-	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a non appartiene") {
+	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a belongs to no wave") {
 		t.Errorf("target scoperto: %v", err)
 	}
 	// An onFailure with rollback without rollback enabled is rejected.
 	d = waveDescriptor("v-ondate-2")
 	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
-	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback attivo") {
+	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback enabled") {
 		t.Errorf("rollback non attivo: %v", err)
 	}
 }
@@ -94,8 +94,8 @@ func TestValidateEnvironment(t *testing.T) {
 	}
 	for want, config := range map[string]string{
 		"field plugn not found": "plugn: remote-copy\n",
-		"non appartiene":        "targets:\n  - {host: web-1, labels: {region: eu-1, az: eu-1a}}\n  - {host: us-1, labels: {region: us-1, az: us-1a}}\nrollout:\n  waves: [{name: eu, select: \"region=eu-1\", by: az}]\n",
-		"configurazione vuota":  " ",
+		"belongs to no wave":    "targets:\n  - {host: web-1, labels: {region: eu-1, az: eu-1a}}\n  - {host: us-1, labels: {region: us-1, az: us-1a}}\nrollout:\n  waves: [{name: eu, select: \"region=eu-1\", by: az}]\n",
+		"empty configuration":   " ",
 	} {
 		if _, err := check(config); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), want) {
 			t.Errorf("atteso %q, ricevuto %v", want, err)

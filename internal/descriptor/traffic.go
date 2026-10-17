@@ -98,51 +98,51 @@ func (t *Testers) HeaderPair() (string, string) {
 func (t *TrafficRollout) validate() error {
 	var errs []error
 	if len(t.Steps) == 0 {
-		errs = append(errs, errors.New("rollout.traffic.steps: almeno un gradino (es. [1, 5, 25, 50, 100], [100] per un blue/green)"))
+		errs = append(errs, errors.New("rollout.traffic.steps: at least one step (e.g. [1, 5, 25, 50, 100], [100] for a blue/green)"))
 	}
 	prev := 0
 	for i, s := range t.Steps {
 		if s <= prev || s > 100 {
-			errs = append(errs, fmt.Errorf("rollout.traffic.steps[%d] = %d: le percentuali vanno da 1 a 100, crescenti", i, s))
+			errs = append(errs, fmt.Errorf("rollout.traffic.steps[%d] = %d: percentages go from 1 to 100, increasing", i, s))
 		}
 		prev = s
 	}
 	if len(t.Steps) > 0 && t.Steps[len(t.Steps)-1] != 100 {
-		errs = append(errs, errors.New("rollout.traffic.steps: l'ultimo gradino deve essere 100"))
+		errs = append(errs, errors.New("rollout.traffic.steps: the last step must be 100"))
 	}
 	if len(t.Steps) > 20 {
-		errs = append(errs, errors.New("rollout.traffic.steps: al più 20 gradini"))
+		errs = append(errs, errors.New("rollout.traffic.steps: at most 20 steps"))
 	}
 	for _, f := range []struct{ name, v string }{{"bake", t.Bake}, {"scaleDownDelay", t.ScaleDownDelay}} {
 		if f.v == "" {
 			continue
 		}
 		if d, err := time.ParseDuration(f.v); err != nil || d < 0 || d > maxBake {
-			errs = append(errs, fmt.Errorf("rollout.traffic.%s %q non valido (durata tra 0 e 24h)", f.name, f.v))
+			errs = append(errs, fmt.Errorf("invalid rollout.traffic.%s %q (duration between 0 and 24h)", f.name, f.v))
 		}
 	}
 	switch t.Replicas {
 	case "", ReplicasProportional:
 	default:
-		errs = append(errs, fmt.Errorf("rollout.traffic.replicas %q non valido (proportional)", t.Replicas))
+		errs = append(errs, fmt.Errorf("invalid rollout.traffic.replicas %q (proportional)", t.Replicas))
 	}
 	switch t.OnDrift {
 	case "", OnDriftPause, OnDriftIgnore:
 	default:
-		errs = append(errs, fmt.Errorf("rollout.traffic.onDrift %q non valido (pause|ignore)", t.OnDrift))
+		errs = append(errs, fmt.Errorf("invalid rollout.traffic.onDrift %q (pause|ignore)", t.OnDrift))
 	}
 	if ts := t.Testers; ts != nil {
 		if ts.Header == "" && ts.Tag == "" {
-			errs = append(errs, errors.New("rollout.traffic.testers: header o tag"))
+			errs = append(errs, errors.New("rollout.traffic.testers: header or tag"))
 		}
 		if ts.Header != "" {
 			k, v := ts.HeaderPair()
 			if !headerNameRe.MatchString(k) || v == "" || strings.ContainsAny(v, "\r\n") {
-				errs = append(errs, fmt.Errorf("rollout.traffic.testers.header %q non valido (\"nome: valore\")", ts.Header))
+				errs = append(errs, fmt.Errorf("invalid rollout.traffic.testers.header %q (\"name: value\")", ts.Header))
 			}
 		}
 		if ts.Tag != "" && !tagRe.MatchString(ts.Tag) {
-			errs = append(errs, fmt.Errorf("rollout.traffic.testers.tag %q non valido", ts.Tag))
+			errs = append(errs, fmt.Errorf("invalid rollout.traffic.testers.tag %q", ts.Tag))
 		}
 	}
 	return errors.Join(errs...)
@@ -264,32 +264,32 @@ func (c *TrafficConfig) Validate() error {
 	var errs []error
 	if p := c.Pool; p != nil {
 		if p.Provider == "" {
-			errs = append(errs, errors.New("traffic.pool.provider obbligatorio"))
+			errs = append(errs, errors.New("traffic.pool.provider is required"))
 		}
 		for _, f := range []struct{ name, v string }{{"drain_timeout", p.DrainTimeout}, {"restore_timeout", p.RestoreTimeout}, {"poll_interval", p.PollInterval}} {
 			if f.v == "" {
 				continue
 			}
 			if d, err := time.ParseDuration(f.v); err != nil || d < time.Second || d > maxBake {
-				errs = append(errs, fmt.Errorf("traffic.pool.%s %q non valido (durata tra 1s e 24h)", f.name, f.v))
+				errs = append(errs, fmt.Errorf("invalid traffic.pool.%s %q (duration between 1s and 24h)", f.name, f.v))
 			}
 		}
 		if v := strings.TrimSpace(p.MinHealthy); v != "" {
 			n, err := strconv.Atoi(strings.TrimSuffix(v, "%"))
 			if err != nil || n < 0 || (strings.HasSuffix(v, "%") && n > 100) {
-				errs = append(errs, fmt.Errorf("traffic.pool.min_healthy %q non valido (numero o percentuale)", v))
+				errs = append(errs, fmt.Errorf("invalid traffic.pool.min_healthy %q (number or percentage)", v))
 			}
 		}
 		switch p.OnTimeout {
 		case "", OnTimeoutProceed, OnTimeoutFail:
 		default:
-			errs = append(errs, fmt.Errorf("traffic.pool.on_timeout %q non valido (proceed|fail)", p.OnTimeout))
+			errs = append(errs, fmt.Errorf("invalid traffic.pool.on_timeout %q (proceed|fail)", p.OnTimeout))
 		}
 		errs = append(errs, checkSettings("traffic.pool.settings", p.Settings))
 	}
 	if r := c.Router; r != nil {
 		if r.Provider == "" {
-			errs = append(errs, errors.New("traffic.router.provider obbligatorio"))
+			errs = append(errs, errors.New("traffic.router.provider is required"))
 		}
 		errs = append(errs, checkSettings("traffic.router.settings", r.Settings))
 	}
@@ -300,10 +300,10 @@ func checkSettings(field string, s map[string]string) error {
 	var errs []error
 	for k, v := range s {
 		if !settingKeyRe.MatchString(k) {
-			errs = append(errs, fmt.Errorf("%s: chiave %q non valida", field, k))
+			errs = append(errs, fmt.Errorf("%s: invalid key %q", field, k))
 		}
 		if strings.ContainsAny(v, "\r\n\x00") {
-			errs = append(errs, fmt.Errorf("%s.%s: caratteri di controllo non ammessi", field, k))
+			errs = append(errs, fmt.Errorf("%s.%s: control characters not allowed", field, k))
 		}
 	}
 	return errors.Join(errs...)

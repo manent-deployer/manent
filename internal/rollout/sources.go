@@ -26,7 +26,7 @@ type MetricSource interface {
 }
 
 // ErrNoData means a query without points: a gate that sees no data is not green.
-var ErrNoData = errors.New("nessun dato")
+var ErrNoData = errors.New("no data")
 
 // SecretFunc resolves a secret reference at use time.
 type SecretFunc func(ctx context.Context, ref string) (string, error)
@@ -74,7 +74,7 @@ func httpJSON(ctx context.Context, c *http.Client, method, u string, body any, h
 		return err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("stato %d: %.200s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return fmt.Errorf("status %d: %.200s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
 	return json.Unmarshal(data, out)
 }
@@ -131,7 +131,7 @@ func (p *PrometheusSource) Value(ctx context.Context, query string, at time.Time
 		}
 		sample = vec[0].Value
 	default:
-		return 0, fmt.Errorf("prometheus: risultato %q non supportato (serve uno scalare o un vettore)", out.Data.ResultType)
+		return 0, fmt.Errorf("prometheus: result %q not supported (a scalar or a vector is required)", out.Data.ResultType)
 	}
 	return promSample(sample)
 }
@@ -144,7 +144,7 @@ func (p *PrometheusSource) Series(ctx context.Context, query string, start, end 
 		return nil, err
 	}
 	if out.Data.ResultType != "matrix" {
-		return nil, fmt.Errorf("prometheus: risultato %q non supportato in un intervallo", out.Data.ResultType)
+		return nil, fmt.Errorf("prometheus: result %q not supported in a range", out.Data.ResultType)
 	}
 	var m []struct {
 		Values [][]any `json:"values"`
@@ -170,7 +170,7 @@ func promTime(t time.Time) string {
 
 func promSample(s []any) (float64, error) {
 	if len(s) != 2 {
-		return 0, errors.New("prometheus: campione non valido")
+		return 0, errors.New("prometheus: invalid sample")
 	}
 	str, _ := s[1].(string)
 	return strconv.ParseFloat(str, 64)
@@ -406,7 +406,7 @@ func (e *ElasticSource) Series(ctx context.Context, query string, start, end tim
 		if len(out.Values) == 0 {
 			return nil, nil
 		}
-		return nil, errors.New("elastic: la query non restituisce una colonna numerica")
+		return nil, errors.New("elastic: the query does not return a numeric column")
 	}
 	var vals []float64
 	for _, row := range out.Values {

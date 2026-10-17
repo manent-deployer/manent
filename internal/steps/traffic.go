@@ -66,7 +66,7 @@ type Pool struct {
 func (p Pool) open(ctx context.Context, in pipeline.Input) (traffic.Pool, *descriptor.PoolConfig, []string, error) {
 	d := in.Descriptor
 	if d.Traffic == nil || d.Traffic.Pool == nil {
-		return nil, nil, nil, pipeline.Permanent(errors.New("nessun pool configurato (traffic.pool)"))
+		return nil, nil, nil, pipeline.Permanent(errors.New("no pool configured (traffic.pool)"))
 	}
 	cfg := d.Traffic.Pool
 	pool, err := p.Providers.Pool(ctx, cfg, traffic.Env{
@@ -122,7 +122,7 @@ func (p Pool) Status(ctx context.Context, in pipeline.Input, phase string) (pipe
 			}
 		}
 	default:
-		return nil, fmt.Errorf("fase %q sconosciuta", phase)
+		return nil, fmt.Errorf("unknown phase %q", phase)
 	}
 	if len(pending) > 0 {
 		out["done"], out["pending"] = "false", strings.Join(pending, ",")
@@ -147,11 +147,11 @@ func (s Drain) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, err
 	log := s.Pool.log(in)
 	all, err := pool.Members(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("lettura del pool: %w", err)
+		return nil, fmt.Errorf("reading the pool: %w", err)
 	}
 	if all != nil {
 		if miss := traffic.Missing(all, members); len(miss) > 0 {
-			return nil, pipeline.Permanent(fmt.Errorf("membri assenti dal pool: %s (traffic.pool.member)", strings.Join(miss, ", ")))
+			return nil, pipeline.Permanent(fmt.Errorf("members missing from the pool: %s (traffic.pool.member)", strings.Join(miss, ", ")))
 		}
 		if err := traffic.Capacity(all, members, cfg.MinHealthyFor(len(all))); err != nil {
 			log.WarnContext(ctx, "svuotamento rimandato", "members", members, "error", err)
@@ -161,7 +161,7 @@ func (s Drain) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, err
 		log.InfoContext(ctx, "controllo di capacità non disponibile per il provider", "members", members)
 	}
 	if err := pool.Drain(ctx, members); err != nil {
-		return nil, fmt.Errorf("svuotamento di %s: %w", strings.Join(members, ", "), err)
+		return nil, fmt.Errorf("draining %s: %w", strings.Join(members, ", "), err)
 	}
 	log.InfoContext(ctx, "target in svuotamento", "members", members)
 	return pipeline.Output{OutMembers: strings.Join(members, ","), OutCapacity: "ok"}, nil
@@ -219,7 +219,7 @@ func (s Restore) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.O
 		return !slices.ContainsFunc(members, func(m string) bool { return conns[m] > 0 }), nil
 	})
 	if err != nil && cfg.OnTimeout == descriptor.OnTimeoutFail {
-		return nil, fmt.Errorf("svuotamento prima del rollback: %w", err)
+		return nil, fmt.Errorf("draining before the rollback: %w", err)
 	}
 	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted, "status": "drained"}, nil
 }
@@ -232,7 +232,7 @@ func (p Pool) restore(ctx context.Context, in pipeline.Input, wait bool) error {
 		return err
 	}
 	if err := pool.Restore(ctx, members); err != nil {
-		return fmt.Errorf("rientro di %s: %w", strings.Join(members, ", "), err)
+		return fmt.Errorf("restoring %s: %w", strings.Join(members, ", "), err)
 	}
 	p.log(in).InfoContext(ctx, "target rimessi in servizio", "members", members)
 	if !wait {
@@ -269,7 +269,7 @@ func waitUntil(ctx context.Context, timeout, poll time.Duration, check func() (b
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("non concluso entro %s", timeout)
+			return fmt.Errorf("not completed within %s", timeout)
 		}
 		if err := sleep(ctx, poll); err != nil {
 			return err
@@ -303,7 +303,7 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 	}
 	if d.Traffic != nil && d.Traffic.Router != nil {
 		if len(d.Rollout.Waves) > 0 {
-			return errors.New("strategy: traffic con rollout.waves richiede un plugin che faccia da router: traffic.router sposta il traffico di tutto l'ambiente")
+			return errors.New("strategy: traffic with rollout.waves requires a plugin acting as router: traffic.router shifts the traffic of the whole environment")
 		}
 		return checkSlotLabels(d.Deploy.Targets)
 	}
@@ -318,14 +318,14 @@ func (t Traffic) Check(d *descriptor.Descriptor) error {
 		return nil
 	}
 	if _, ok := dep.(plugin.SlotDeployer); !ok {
-		return fmt.Errorf("strategy: traffic: il plugin %q non sa rilasciare una versione affiancata; configurare traffic.router nell'ambiente", dep.Name())
+		return fmt.Errorf("strategy: traffic: plugin %q cannot release a side-by-side version; configure traffic.router in the environment", dep.Name())
 	}
 	if _, ok := dep.(plugin.TrafficRouter); !ok {
-		return fmt.Errorf("strategy: traffic: il plugin %q non sa spostare il traffico; configurare traffic.router nell'ambiente", dep.Name())
+		return fmt.Errorf("strategy: traffic: plugin %q cannot shift traffic; configure traffic.router in the environment", dep.Name())
 	}
 	if d.Rollout.Traffic.Replicas == descriptor.ReplicasProportional {
 		if _, ok := dep.(plugin.SlotScaler); !ok {
-			return fmt.Errorf("rollout.traffic.replicas: proportional non è supportato dal plugin %q", dep.Name())
+			return fmt.Errorf("rollout.traffic.replicas: proportional is not supported by plugin %q", dep.Name())
 		}
 	}
 	return nil
@@ -336,7 +336,7 @@ func checkSlotLabels(ts []descriptor.Target) error {
 	var errs []error
 	for _, t := range ts {
 		if !descriptor.ValidSlot(t.Labels[descriptor.SlotLabel]) {
-			errs = append(errs, fmt.Errorf("target %s: con traffic.router serve l'etichetta %s (a o b)", t.Host, descriptor.SlotLabel))
+			errs = append(errs, fmt.Errorf("target %s: with traffic.router the label %s (a or b) is required", t.Host, descriptor.SlotLabel))
 		}
 	}
 	return errors.Join(errs...)
@@ -376,7 +376,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 		}
 		w, err := r.Weights(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("lettura dei pesi del router: %w", err)
+			return nil, fmt.Errorf("reading the router weights: %w", err)
 		}
 		stable := ""
 		for _, s := range descriptor.Slots {
@@ -392,7 +392,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 			}
 		}
 		if len(hosts) == 0 {
-			return nil, pipeline.Permanent(fmt.Errorf("nessun target nello slot %s", cand))
+			return nil, pipeline.Permanent(fmt.Errorf("no target in slot %s", cand))
 		}
 		out := pipeline.Output{OutMode: ModeRouter, OutRouter: d.Traffic.Router.Provider, OutStable: stable, OutCandidate: cand,
 			OutHasStable: strconv.FormatBool(stable != ""), OutCandidates: strings.Join(hosts, ",")}
@@ -405,7 +405,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 	}
 	sd, ok := dep.(plugin.SlotDeployer)
 	if !ok {
-		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
+		return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot release a side-by-side version", dep.Name()))
 	}
 	state, err := sd.PrepareSlots(ctx, req)
 	if err != nil {
@@ -464,7 +464,7 @@ func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) 
 	}
 	tr, ok := dep.(plugin.TrafficRouter)
 	if !ok {
-		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa spostare il traffico", dep.Name()))
+		return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot shift traffic", dep.Name()))
 	}
 	if err := tr.SetCandidateWeight(ctx, req, percent); err != nil {
 		return nil, unsupported(dep, err)
@@ -500,7 +500,7 @@ func (t Traffic) Weight(ctx context.Context, in pipeline.Input) (pipeline.Output
 		}
 		tr, ok := dep.(plugin.TrafficRouter)
 		if !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa spostare il traffico", dep.Name()))
+			return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot shift traffic", dep.Name()))
 		}
 		if w, err = tr.CandidateWeight(ctx, req); err != nil {
 			return nil, unsupported(dep, err)
@@ -520,7 +520,7 @@ func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 		}
 		tr, ok := r.(traffic.TesterRouter)
 		if !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("il router %s non sa instradare i tester", prep[OutRouter]))
+			return nil, pipeline.Permanent(fmt.Errorf("router %s cannot route the testers", prep[OutRouter]))
 		}
 		if details, err = tr.RouteTesters(ctx, prep[OutCandidate]); err != nil {
 			return nil, err
@@ -532,7 +532,7 @@ func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 		}
 		tr, ok := dep.(plugin.TesterRouter)
 		if !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa instradare i tester", dep.Name()))
+			return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot route the testers", dep.Name()))
 		}
 		if details, err = tr.RouteTesters(ctx, req); err != nil {
 			return nil, unsupported(dep, err)
@@ -548,7 +548,7 @@ func (t Traffic) Testers(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 // Scale sizes the candidate in proportion to its traffic share.
 func (t Traffic) Scale(ctx context.Context, in pipeline.Input, percent int) (pipeline.Output, error) {
 	if in.Outputs[TrafficOutput][OutMode] == ModeRouter {
-		return nil, pipeline.Permanent(errors.New("rollout.traffic.replicas: proportional richiede un plugin che dimensioni la candidata"))
+		return nil, pipeline.Permanent(errors.New("rollout.traffic.replicas: proportional requires a plugin that scales the candidate"))
 	}
 	dep, req, _, err := t.pluginCall(in)
 	if err != nil {
@@ -556,7 +556,7 @@ func (t Traffic) Scale(ctx context.Context, in pipeline.Input, percent int) (pip
 	}
 	sc, ok := dep.(plugin.SlotScaler)
 	if !ok {
-		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non dimensiona la candidata", dep.Name()))
+		return nil, pipeline.Permanent(fmt.Errorf("plugin %q does not scale the candidate", dep.Name()))
 	}
 	if err := sc.ScaleCandidate(ctx, req, percent); err != nil {
 		return nil, unsupported(dep, err)
@@ -612,7 +612,7 @@ func (t Traffic) slotCall(ctx context.Context, in pipeline.Input, status string,
 	}
 	sd, ok := dep.(plugin.SlotDeployer)
 	if !ok {
-		return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
+		return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot release a side-by-side version", dep.Name()))
 	}
 	if err := fn(sd, ctx, req); err != nil {
 		return nil, unsupported(dep, err)

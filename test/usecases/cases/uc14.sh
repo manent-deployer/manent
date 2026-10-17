@@ -51,7 +51,7 @@ expect_eq "server di nuovo in servizio" "$(mgmt '{"operation":"read-attribute","
 info "-- war rifiutato da WildFly: resta la versione in esercizio"
 id=$(submit "$(desc uc14-c uc14-300-invalid 3.0.0 "$posttest")")
 expect_eq "deploy in errore" "$(wait_state "$id" terminal 180)" ERROR
-expect_match "l'errore riporta il rifiuto di WildFly" "$(manent status "$id" | jq -r .error)" "cambio di versione"
+expect_match "l'errore riporta il rifiuto di WildFly" "$(manent status "$id" | jq -r .error)" "version switch"
 expect_eq "WildFly serve ancora la 2.0.0" "$(served)" 2.0.0
 expect_eq "server di nuovo in servizio dopo il cambio fallito" "$(mgmt '{"operation":"read-attribute","name":"suspend-state"}' | jq -r .result)" RUNNING
 

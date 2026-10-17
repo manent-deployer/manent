@@ -18,17 +18,17 @@ func TestRolloutTraffic(t *testing.T) {
 		t.Errorf("header: %q %q", k, v)
 	}
 	cases := map[string]*Rollout{
-		"l'ultimo gradino deve essere 100":                 {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{10, 50}}},
-		"crescenti":                                        {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{50, 10, 100}}},
-		"obbligatorio con strategy":                        {Strategy: StrategyTraffic},
-		"testers.header":                                   {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}, Testers: &Testers{Header: "senza valore"}}},
-		"approvalsBetween: ondata \"50\"":                  {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
-		"richiede strategy: traffic":                       {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
-		"strategy \"blu\"":                                 {Strategy: "blu"},
-		"batchBake non ammesso":                            {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "1m"}}},
-		"batchBake \"presto\" non valido":                  {Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "presto"}}},
-		"rollout.waves[0].maxUnavailable \"0\" non valido": {Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "0"}}},
-		"maxUnavailable non ammesso":                       {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "2"}}},
+		"the last step must be 100":                     {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{10, 50}}},
+		"increasing":                                    {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{50, 10, 100}}},
+		"is required with strategy":                     {Strategy: StrategyTraffic},
+		"testers.header":                                {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}, Testers: &Testers{Header: "senza valore"}}},
+		"approvalsBetween: wave \"50\"":                 {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
+		"requires strategy: traffic":                    {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
+		"strategy \"blu\"":                              {Strategy: "blu"},
+		"batchBake not allowed":                         {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "1m"}}},
+		"batchBake \"presto\"":                          {Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "presto"}}},
+		"invalid rollout.waves[0].maxUnavailable \"0\"": {Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "0"}}},
+		"maxUnavailable not allowed":                    {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "2"}}},
 	}
 	for want, r := range cases {
 		if err := r.Validate(); err == nil || !strings.Contains(err.Error(), want) {
@@ -64,13 +64,13 @@ func TestTrafficConfig(t *testing.T) {
 	}
 	bad := &TrafficConfig{Pool: &PoolConfig{MinHealthy: "120%", OnTimeout: "attendi", Settings: map[string]string{"Chiave": "x"}}}
 	err := bad.Validate()
-	for _, want := range []string{"provider obbligatorio", "min_healthy", "on_timeout", "chiave \"Chiave\""} {
+	for _, want := range []string{"provider is required", "min_healthy", "on_timeout", "key \"Chiave\""} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("manca %q: %v", want, err)
 		}
 	}
 	d := Descriptor{Traffic: c}
-	if err := d.Validate(); err == nil || !strings.Contains(err.Error(), "solo nella configurazione di ambiente") {
+	if err := d.Validate(); err == nil || !strings.Contains(err.Error(), "only in the environment configuration") {
 		t.Errorf("traffic nel descrittore: %v", err)
 	}
 }
@@ -91,20 +91,20 @@ func TestMetricGateAnalisi(t *testing.T) {
 		t.Errorf("soglie di default: %g %g", p, m)
 	}
 	cases := map[string]MetricGate{
-		"provider \"grafana\"":      {Name: "a", Query: "x", Max: new(float64), Provider: "grafana"},
-		"richiede compare: stable":  {Name: "a", Query: "x", Max: new(float64), Analysis: AnalysisMannWhitney},
-		"analysis \"bayes\"":        {Name: "a", Query: q, Compare: CompareStable, MaxRatio: new(float64), Analysis: "bayes"},
-		"direction \"giu\"":         {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Direction: "giu"},
-		"alpha deve essere":         {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Alpha: 0.9},
-		"step \"1ms\" non valido":   {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Step: "1ms"},
-		"maxRatio o maxDelta (o an": {Name: "a", Query: q, Compare: CompareStable},
+		"provider \"grafana\"":     {Name: "a", Query: "x", Max: new(float64), Provider: "grafana"},
+		"requires compare: stable": {Name: "a", Query: "x", Max: new(float64), Analysis: AnalysisMannWhitney},
+		"analysis \"bayes\"":       {Name: "a", Query: q, Compare: CompareStable, MaxRatio: new(float64), Analysis: "bayes"},
+		"direction \"giu\"":        {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Direction: "giu"},
+		"alpha must be":            {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Alpha: 0.9},
+		"step \"1ms\"":             {Name: "a", Query: q, Compare: CompareStable, Analysis: AnalysisMannWhitney, Step: "1ms"},
+		"maxRatio or maxDelta (or": {Name: "a", Query: q, Compare: CompareStable},
 	}
 	for want, m := range cases {
 		if err := (&Health{Metrics: []MetricGate{m}}).validate(); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("atteso %q, ricevuto %v", want, err)
 		}
 	}
-	if err := (&Health{Analysis: &CanaryAnalysis{Pass: 50, Marginal: 80}}).validate(); err == nil || !strings.Contains(err.Error(), "marginal non oltre pass") {
+	if err := (&Health{Analysis: &CanaryAnalysis{Pass: 50, Marginal: 80}}).validate(); err == nil || !strings.Contains(err.Error(), "marginal not above pass") {
 		t.Errorf("soglie invertite: %v", err)
 	}
 }

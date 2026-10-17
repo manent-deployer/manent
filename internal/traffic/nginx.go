@@ -45,22 +45,22 @@ type nginxPool struct {
 func validateNginx(s map[string]string) error {
 	var errs []error
 	if len(splitList(s[settingLBHosts])) == 0 {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingLBHosts))
+		errs = append(errs, fmt.Errorf("%s is required", settingLBHosts))
 	}
 	if p := s[settingUpstreamFile]; !path.IsAbs(p) || strings.ContainsAny(p, "'\"$`\\ \n;&|") {
-		errs = append(errs, fmt.Errorf("%s deve essere un percorso assoluto senza spazi né caratteri speciali", settingUpstreamFile))
+		errs = append(errs, fmt.Errorf("%s must be an absolute path without spaces or special characters", settingUpstreamFile))
 	}
 	if s[settingSSHKey] == "" && s[settingSSHPassword] == "" {
-		errs = append(errs, fmt.Errorf("%s o %s obbligatorio", settingSSHKey, settingSSHPassword))
+		errs = append(errs, fmt.Errorf("%s or %s is required", settingSSHKey, settingSSHPassword))
 	}
 	if p := s[settingSSHPort]; p != "" {
 		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
-			errs = append(errs, fmt.Errorf("%s %q non valida", settingSSHPort, p))
+			errs = append(errs, fmt.Errorf("invalid %s %q", settingSSHPort, p))
 		}
 	}
 	if d := s[settingDrainDelay]; d != "" {
 		if v, err := time.ParseDuration(d); err != nil || v < 0 || v > time.Hour {
-			errs = append(errs, fmt.Errorf("%s %q non valido", settingDrainDelay, d))
+			errs = append(errs, fmt.Errorf("invalid %s %q", settingDrainDelay, d))
 		}
 	}
 	return errors.Join(errs...)
@@ -115,7 +115,7 @@ func run(ctx context.Context, c customstep.Conn, cmd string, stdin io.Reader) (s
 		return "", err
 	}
 	if code != 0 {
-		return "", fmt.Errorf("uscita %d: %s", code, strings.TrimSpace(errb.String()))
+		return "", fmt.Errorf("exit %d: %s", code, strings.TrimSpace(errb.String()))
 	}
 	return out.String(), nil
 }
@@ -200,7 +200,7 @@ func (p *nginxPool) read(ctx context.Context, c customstep.Conn) (string, error)
 func (p *nginxPool) edit(ctx context.Context, members []string, down bool) error {
 	for _, h := range p.hosts {
 		if err := p.editHost(ctx, h, members, down); err != nil {
-			return fmt.Errorf("istanza %s: %w", h, err)
+			return fmt.Errorf("instance %s: %w", h, err)
 		}
 	}
 	return nil
@@ -218,14 +218,14 @@ func (p *nginxPool) editHost(ctx context.Context, host string, members []string,
 	}
 	next, missing := setDown(cur, members, down)
 	if len(missing) > 0 {
-		return fmt.Errorf("server assenti da %s: %s", p.file, strings.Join(missing, ", "))
+		return fmt.Errorf("servers missing from %s: %s", p.file, strings.Join(missing, ", "))
 	}
 	if next == cur {
 		return nil
 	}
 	tmp := p.file + ".manent"
 	if _, err := run(ctx, c, "cat > '"+tmp+"' && mv '"+tmp+"' '"+p.file+"' && ("+p.reload+")", strings.NewReader(next)); err != nil {
-		return fmt.Errorf("aggiornamento e ricarica: %w", err)
+		return fmt.Errorf("update and reload: %w", err)
 	}
 	return nil
 }

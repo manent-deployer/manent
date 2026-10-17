@@ -23,7 +23,7 @@ func slotMembers(env Env) (map[string][]string, error) {
 	for _, t := range env.Targets {
 		s := t.Labels[descriptor.SlotLabel]
 		if !descriptor.ValidSlot(s) {
-			return nil, fmt.Errorf("target %s senza etichetta %s (a o b)", t.Host, descriptor.SlotLabel)
+			return nil, fmt.Errorf("target %s without label %s (a or b)", t.Host, descriptor.SlotLabel)
 		}
 		out[s] = append(out[s], env.Member(t))
 	}
@@ -89,7 +89,7 @@ func (r *memberRouter) Weights(ctx context.Context) (map[string]int, error) {
 		for _, m := range ms {
 			w, err := r.get(ctx, m)
 			if err != nil {
-				return nil, fmt.Errorf("peso del server %s: %w", m, err)
+				return nil, fmt.Errorf("weight of server %s: %w", m, err)
 			}
 			weights[m] = w
 		}
@@ -103,7 +103,7 @@ func (r *memberRouter) SetWeights(ctx context.Context, shares map[string]int) er
 			continue
 		}
 		if err := r.set(ctx, m, w); err != nil {
-			return fmt.Errorf("peso del server %s: %w", m, err)
+			return fmt.Errorf("weight of server %s: %w", m, err)
 		}
 	}
 	return nil
@@ -223,7 +223,7 @@ func NewNginxPlusRouter(ctx context.Context, env Env) (Router, error) {
 				return &servers[i], nil
 			}
 		}
-		return nil, errors.New("server assente dall'upstream " + np.upstream)
+		return nil, errors.New("server missing from upstream " + np.upstream)
 	}
 	return &memberRouter{members: members, maxWeight: 100,
 		get: func(ctx context.Context, m string) (int, error) {

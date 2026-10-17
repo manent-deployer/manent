@@ -40,7 +40,7 @@ const pruneBatch = 200
 // not touch running, queued or scheduled workflows, nor the audit file.
 func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, error) {
 	if o.MaxAge <= 0 {
-		return nil, fmt.Errorf("%w: max_age deve essere > 0", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: max_age must be > 0", ErrInvalidRequest)
 	}
 	o.KeepReleases = max(o.KeepReleases, 1)
 	rep := &PruneReport{Cutoff: a.now().Add(-o.MaxAge).UTC(), DryRun: o.DryRun}

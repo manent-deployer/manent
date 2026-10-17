@@ -309,7 +309,7 @@ func TestDeployERollback(t *testing.T) {
 		"---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: shop-extra\n"
 	v2 := request(server, "2.0.0", broken, t)
 	v2.Params[ParamPrune] = "true"
-	if _, err := p.Deploy(ctx, v2); err == nil || !strings.Contains(err.Error(), "rollout bloccato") {
+	if _, err := p.Deploy(ctx, v2); err == nil || !strings.Contains(err.Error(), "rollout stuck") {
 		t.Fatalf("atteso rollout bloccato: %v", err)
 	}
 	if fc.get(pointerPath).str("data", "version") != "1.0.0" || fc.get(extraPath) == nil {
@@ -380,7 +380,7 @@ func TestValidazioneEManifest(t *testing.T) {
 	bad.Params[ParamNamespace], bad.Params[ParamCertSecret], bad.Params[ParamWaitTimeout], bad.Params[ParamKeepReleases] = "Shop_", "cert", "mai", "1"
 	bad.Artifact.LocalPath = "/tmp/shop" + plugin.ImageRefExt
 	err := p.Validate(bad)
-	for _, want := range []string{"artifact.version", "namespace", "token_secret", "wait_timeout", "keep_releases", "immagine"} {
+	for _, want := range []string{"artifact.version", "namespace", "token_secret", "wait_timeout", "keep_releases", "image"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("validazione: manca %q in %v", want, err)
 		}
@@ -389,7 +389,7 @@ func TestValidazioneEManifest(t *testing.T) {
 	// Images not pinned to the digest with require_image_digest.
 	req := request(server, "1.0.0", manifestV1, t)
 	req.Params[ParamRequireDigest] = "true"
-	if _, err := p.Deploy(context.Background(), req); err == nil || !strings.Contains(err.Error(), "non fissata al digest") {
+	if _, err := p.Deploy(context.Background(), req); err == nil || !strings.Contains(err.Error(), "not pinned to the digest") {
 		t.Errorf("atteso errore sul digest: %v", err)
 	}
 

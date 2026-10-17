@@ -62,7 +62,7 @@ type GateResult struct {
 func (g GateResult) Failed() string {
 	var parts []string
 	if g.Score != nil {
-		parts = append(parts, fmt.Sprintf("punteggio %.0f/100", *g.Score))
+		parts = append(parts, fmt.Sprintf("score %.0f/100", *g.Score))
 	}
 	for _, c := range g.Checks {
 		if !c.OK {
@@ -157,11 +157,11 @@ func (c *HTTPChecker) Supports(h *descriptor.Health) error {
 			if p == descriptor.ProviderPrometheus {
 				setting = "rollout.prometheus_url"
 			}
-			errs = append(errs, fmt.Errorf("rollout.health.metrics %q richiede %s nella configurazione di manent", m.Name, setting))
+			errs = append(errs, fmt.Errorf("rollout.health.metrics %q requires %s in the manent configuration", m.Name, setting))
 		}
 	}
 	if h.Alerts != nil && c.AlertmanagerURL == "" {
-		errs = append(errs, errors.New("rollout.health.alerts richiede rollout.alertmanager_url nella configurazione di manent"))
+		errs = append(errs, errors.New("rollout.health.alerts requires rollout.alertmanager_url in the manent configuration"))
 	}
 	return errors.Join(errs...)
 }
@@ -259,7 +259,7 @@ func (c *HTTPChecker) probe(ctx context.Context, pr descriptor.Probe, p Pass, ho
 	resp.Body.Close()
 	r.OK = resp.StatusCode == want
 	if !r.OK {
-		r.Detail = fmt.Sprintf("stato %d, atteso %d", resp.StatusCode, want)
+		r.Detail = fmt.Sprintf("status %d, expected %d", resp.StatusCode, want)
 	}
 	return r
 }
@@ -270,7 +270,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	r := CheckResult{Kind: KindMetric, Name: m.Name, Region: p.Region, AZ: p.AZ}
 	src := c.source(m.ProviderOrDefault())
 	if src == nil {
-		r.Detail = "sorgente " + m.ProviderOrDefault() + " non configurata"
+		r.Detail = "source " + m.ProviderOrDefault() + " not configured"
 		return r
 	}
 	expand := func(q, track string) string {
@@ -281,11 +281,11 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	if m.SamplesQuery != "" && m.MinSamples > 0 {
 		n, err := src.Value(ctx, expand(m.SamplesQuery, in.Track), now)
 		if err != nil {
-			r.Detail = "campioni: " + err.Error()
+			r.Detail = "samples: " + err.Error()
 			return r
 		}
 		if n < m.MinSamples {
-			r.Detail = fmt.Sprintf("campioni insufficienti: %g, minimo %g", n, m.MinSamples)
+			r.Detail = fmt.Sprintf("insufficient samples: %g, minimum %g", n, m.MinSamples)
 			return r
 		}
 	}
@@ -301,7 +301,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	if m.Compare != descriptor.CompareStable {
 		r.OK = (m.Max == nil || v <= *m.Max) && (m.Min == nil || v >= *m.Min)
 		if !r.OK {
-			r.Detail = fmt.Sprintf("valore %g fuori soglia", v)
+			r.Detail = fmt.Sprintf("value %g out of threshold", v)
 		}
 		return r
 	}
@@ -312,20 +312,20 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	}
 	base, err := src.Value(ctx, expand(m.Query, in.StableTrack), now)
 	if err != nil {
-		r.Detail = "versione stabile: " + err.Error()
+		r.Detail = "stable version: " + err.Error()
 		return r
 	}
 	r.Baseline = &base
 	r.OK = true
 	if m.MaxDelta != nil && v-base > *m.MaxDelta {
-		r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile %g: differenza oltre %g", v, base, *m.MaxDelta)
+		r.OK, r.Detail = false, fmt.Sprintf("candidate %g, stable %g: difference over %g", v, base, *m.MaxDelta)
 	}
 	if m.MaxRatio != nil {
 		switch {
 		case base > 0 && v/base > *m.MaxRatio:
-			r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile %g: rapporto %.2f oltre %g", v, base, v/base, *m.MaxRatio)
+			r.OK, r.Detail = false, fmt.Sprintf("candidate %g, stable %g: ratio %.2f over %g", v, base, v/base, *m.MaxRatio)
 		case base == 0 && v > 0 && m.MaxDelta == nil:
-			r.OK, r.Detail = false, fmt.Sprintf("candidata %g, stabile 0", v)
+			r.OK, r.Detail = false, fmt.Sprintf("candidate %g, stable 0", v)
 		}
 	}
 	return r
@@ -355,7 +355,7 @@ func (c *HTTPChecker) mannWhitney(ctx context.Context, src MetricSource, m descr
 	}
 	stable, err := src.Series(ctx, expand(m.Query, in.StableTrack), start, now, step)
 	if err != nil {
-		r.Detail = "versione stabile: " + err.Error()
+		r.Detail = "stable version: " + err.Error()
 		return r
 	}
 	minPoints := m.MinPoints
@@ -364,7 +364,7 @@ func (c *HTTPChecker) mannWhitney(ctx context.Context, src MetricSource, m descr
 	}
 	if len(cand) < minPoints || len(stable) < minPoints {
 		r.Inconclusive, r.OK = true, !in.Final
-		r.Detail = fmt.Sprintf("dati insufficienti: %d e %d punti, minimo %d", len(cand), len(stable), minPoints)
+		r.Detail = fmt.Sprintf("insufficient data: %d and %d points, minimum %d", len(cand), len(stable), minPoints)
 		return r
 	}
 	cm, sm := mean(cand), mean(stable)
@@ -389,7 +389,7 @@ func (c *HTTPChecker) mannWhitney(ctx context.Context, src MetricSource, m descr
 	}
 	worse := (dir != descriptor.DirectionDecrease && rt > maxR) || (dir != descriptor.DirectionIncrease && rt < minR)
 	r.OK = pv >= alpha || !worse
-	r.Detail = fmt.Sprintf("candidata %.4g, stabile %.4g (medie di %d e %d punti): rapporto %.3g, p=%.3g", cm, sm, len(cand), len(stable), rt, pv)
+	r.Detail = fmt.Sprintf("candidate %.4g, stable %.4g (means of %d and %d points): ratio %.3g, p=%.3g", cm, sm, len(cand), len(stable), rt, pv)
 	if !r.OK {
 		r.Detail += fmt.Sprintf(" < %g", alpha)
 	}
@@ -419,7 +419,7 @@ func (c *HTTPChecker) alerts(ctx context.Context, a descriptor.AlertGate, in Gat
 		}
 		for _, p := range in.Passes {
 			if (al.Labels["region"] == "" || al.Labels["region"] == p.Region) && (al.Labels["az"] == "" || al.Labels["az"] == p.AZ) {
-				out = append(out, CheckResult{Kind: KindAlert, Name: al.Labels["alertname"], Region: p.Region, AZ: p.AZ, Detail: "allarme attivo"})
+				out = append(out, CheckResult{Kind: KindAlert, Name: al.Labels["alertname"], Region: p.Region, AZ: p.AZ, Detail: "alert firing"})
 				break
 			}
 		}
@@ -455,7 +455,7 @@ func (c *HTTPChecker) getJSON(ctx context.Context, u string, out any) error {
 		return err
 	}
 	if resp.StatusCode >= 300 && !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
-		return fmt.Errorf("stato %d", resp.StatusCode)
+		return fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return json.Unmarshal(data, out)
 }

@@ -66,37 +66,37 @@ type Vault struct {
 func NewVault(cfg VaultConfig) (*Vault, error) {
 	cfg.Address = strings.TrimRight(cmp.Or(cfg.Address, os.Getenv("VAULT_ADDR")), "/")
 	if cfg.Address == "" {
-		return nil, errors.New("vault: address obbligatorio (o VAULT_ADDR)")
+		return nil, errors.New("vault: address is required (or VAULT_ADDR)")
 	}
 	cfg.Auth = cmp.Or(cfg.Auth, VaultAuthToken)
 	switch cfg.Auth {
 	case VaultAuthToken:
 	case VaultAuthAppRole:
 		if cfg.RoleID == "" || cfg.SecretIDFile == "" {
-			return nil, errors.New("vault: approle richiede role_id e secret_id_file")
+			return nil, errors.New("vault: approle requires role_id and secret_id_file")
 		}
 		cfg.Mount = cmp.Or(cfg.Mount, "approle")
 	case VaultAuthKubernetes:
 		if cfg.Role == "" {
-			return nil, errors.New("vault: kubernetes richiede role")
+			return nil, errors.New("vault: kubernetes requires role")
 		}
 		cfg.JWTFile = cmp.Or(cfg.JWTFile, DefaultJWTFile)
 		cfg.Mount = cmp.Or(cfg.Mount, "kubernetes")
 	default:
-		return nil, fmt.Errorf("vault: auth %q non supportato (token|approle|kubernetes)", cfg.Auth)
+		return nil, fmt.Errorf("vault: auth %q not supported (token|approle|kubernetes)", cfg.Auth)
 	}
 	client := &http.Client{Timeout: cmp.Or(cfg.Timeout, 10*time.Second)}
 	if cfg.CAFile != "" {
 		pem, err := os.ReadFile(cfg.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("vault: lettura ca_file: %w", err)
+			return nil, fmt.Errorf("vault: reading ca_file: %w", err)
 		}
 		pool, err := x509.SystemCertPool()
 		if err != nil {
 			pool = x509.NewCertPool()
 		}
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, errors.New("vault: ca_file non contiene certificati PEM")
+			return nil, errors.New("vault: ca_file contains no PEM certificates")
 		}
 		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}
 	}
@@ -108,10 +108,10 @@ func NewVault(cfg VaultConfig) (*Vault, error) {
 func (v *Vault) Resolve(ctx context.Context, ref string) (string, error) {
 	path, field, ok := strings.Cut(ref, "#")
 	if !ok || path == "" || field == "" {
-		return "", fmt.Errorf("riferimento vault %q non valido: atteso vault:<percorso>#<campo>", ref)
+		return "", fmt.Errorf("invalid vault reference %q: expected vault:<path>#<field>", ref)
 	}
 	if strings.HasPrefix(path, "/") || strings.Contains("/"+path+"/", "/../") {
-		return "", fmt.Errorf("riferimento vault %q non valido", ref)
+		return "", fmt.Errorf("invalid vault reference %q", ref)
 	}
 	val, err := v.read(ctx, path, field)
 	if errors.Is(err, errVaultForbidden) && v.cfg.Auth != VaultAuthToken {
@@ -121,7 +121,7 @@ func (v *Vault) Resolve(ctx context.Context, ref string) (string, error) {
 	return val, err
 }
 
-var errVaultForbidden = errors.New("accesso negato da vault")
+var errVaultForbidden = errors.New("access denied by vault")
 
 func (v *Vault) read(ctx context.Context, path, field string) (string, error) {
 	token, err := v.currentToken(ctx)
@@ -143,12 +143,12 @@ func (v *Vault) read(ctx context.Context, path, field string) (string, error) {
 	}
 	raw, ok := data[field]
 	if !ok {
-		return "", fmt.Errorf("vault %s: campo %q assente", path, field)
+		return "", fmt.Errorf("vault %s: field %q missing", path, field)
 	}
 	if s, ok := raw.(string); ok {
 		return s, nil
 	}
-	return "", fmt.Errorf("vault %s: il campo %q non è una stringa", path, field)
+	return "", fmt.Errorf("vault %s: field %q is not a string", path, field)
 }
 
 // currentToken returns a valid token, logging in if needed.
@@ -158,14 +158,14 @@ func (v *Vault) currentToken(ctx context.Context) (string, error) {
 			// Read again at every use: an external agent (e.g. vault agent) may rotate it.
 			b, err := os.ReadFile(v.cfg.TokenFile)
 			if err != nil {
-				return "", fmt.Errorf("vault: lettura token_file: %w", err)
+				return "", fmt.Errorf("vault: reading token_file: %w", err)
 			}
 			return strings.TrimSpace(string(b)), nil
 		}
 		if t := os.Getenv("VAULT_TOKEN"); t != "" {
 			return t, nil
 		}
-		return "", errors.New("vault: token assente (token_file o VAULT_TOKEN)")
+		return "", errors.New("vault: token missing (token_file or VAULT_TOKEN)")
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -186,7 +186,7 @@ func (v *Vault) currentToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("vault: login %s: %w", v.cfg.Auth, err)
 	}
 	if resp.Auth.ClientToken == "" {
-		return "", errors.New("vault: login senza token")
+		return "", errors.New("vault: login without token")
 	}
 	v.token = resp.Auth.ClientToken
 	v.expiry = time.Time{}
@@ -203,13 +203,13 @@ func (v *Vault) loginPayload() (map[string]string, error) {
 	case VaultAuthAppRole:
 		b, err := os.ReadFile(v.cfg.SecretIDFile)
 		if err != nil {
-			return nil, fmt.Errorf("vault: lettura secret_id_file: %w", err)
+			return nil, fmt.Errorf("vault: reading secret_id_file: %w", err)
 		}
 		return map[string]string{"role_id": v.cfg.RoleID, "secret_id": strings.TrimSpace(string(b))}, nil
 	default:
 		b, err := os.ReadFile(v.cfg.JWTFile)
 		if err != nil {
-			return nil, fmt.Errorf("vault: lettura jwt_file: %w", err)
+			return nil, fmt.Errorf("vault: reading jwt_file: %w", err)
 		}
 		return map[string]string{"role": v.cfg.Role, "jwt": strings.TrimSpace(string(b))}, nil
 	}

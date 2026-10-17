@@ -205,7 +205,7 @@ func TestRolloutGateRossoFerma(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "health gate rosso dopo lo stadio resto/eu-2a+us-1a") {
+	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "health gate red after stage resto/eu-2a+us-1a") {
 		t.Fatalf("atteso stop al gate, ricevuto %v", err)
 	}
 	for _, c := range env.log.get() {
@@ -239,7 +239,7 @@ func TestRolloutRollbackAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = env.e.Wait(ctx, sub.ID)
-	if err == nil || !strings.Contains(err.Error(), "rollback completato") {
+	if err == nil || !strings.Contains(err.Error(), "rollback completed") {
 		t.Fatalf("atteso rollback completato, ricevuto %v", err)
 	}
 	var undo []string
@@ -262,7 +262,7 @@ func TestRolloutRollbackAll(t *testing.T) {
 	d2.Rollout.OnFailure = descriptor.OnFailureRollbackWave
 	if _, err := env.e.Submit(ctx, d2); err == nil {
 		// Without a resolver the check happens in the worker: the deploy fails at once.
-		if _, err := env.e.Wait(ctx, "ondate-rb-2"); err == nil || !strings.Contains(err.Error(), "richiede il rollback attivo") {
+		if _, err := env.e.Wait(ctx, "ondate-rb-2"); err == nil || !strings.Contains(err.Error(), "requires rollback enabled") {
 			t.Errorf("rollback non attivo: %v", err)
 		}
 	}
@@ -394,7 +394,7 @@ func TestRolloutGatePerLottoRossoFerma(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "dopo il lotto eu-1/eu-1/eu-1a#1") {
+	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "after batch eu-1/eu-1/eu-1a#1") {
 		t.Fatalf("atteso il gate rosso dopo il secondo lotto, ricevuto %v", err)
 	}
 	// The third node is never touched.
@@ -483,7 +483,7 @@ func TestRolloutInstradatoPerRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(wctx, sub.ID); err == nil || !strings.Contains(err.Error(), "nessun worker registrato per la region ap-1") {
+	if _, err := e.Wait(wctx, sub.ID); err == nil || !strings.Contains(err.Error(), "no worker registered for region ap-1") {
 		t.Fatalf("region senza worker: %v", err)
 	}
 }
@@ -616,7 +616,7 @@ func TestRolloutInstradatoConRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completato") {
+	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completed") {
 		t.Fatalf("atteso rollback dello stadio, ricevuto %v", err)
 	}
 	var undo []string

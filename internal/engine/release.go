@@ -132,9 +132,9 @@ func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []de
 		var err error
 		switch {
 		case !ok:
-			err = errors.New("servizio non configurato sul worker")
+			err = errors.New("service not configured on the worker")
 		case ctx.Err() != nil || w.cancelled(rs.ID):
-			err = errors.New("release annullata")
+			err = errors.New("release cancelled")
 		default:
 			var sub *Submission
 			if sub, err = eng.submit(pc, &descs[i], submitMeta{kind: KindDeploy, release: rs.ID, prechecked: true}); err == nil {
@@ -144,7 +144,7 @@ func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []de
 			}
 		}
 		w.logger.Error("release: deploy non accodato, la release si ferma", "release", rs.ID, "deploy", out[i].Name, "error", err)
-		out[i].State, out[i].Error = string(dbos.WorkflowStatusError), "deploy non accodato: "+err.Error()
+		out[i].State, out[i].Error = string(dbos.WorkflowStatusError), "deploy not enqueued: "+err.Error()
 		for j := i + 1; j < len(out); j++ {
 			out[j].State = string(dbos.WorkflowStatusCancelled)
 		}
@@ -318,7 +318,7 @@ func releaseError(ds []ReleaseDeployState) string {
 			parts = append(parts, d.Name+": "+d.State)
 		}
 	}
-	return "deploy non riusciti: " + strings.Join(parts, ", ")
+	return "failed deploys: " + strings.Join(parts, ", ")
 }
 
 // rollbackRelease brings the successful deploys back to the previous version, in reverse
@@ -336,7 +336,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 		d.RollbackID = rs.ID + releaseRollbackInfix + d.Name
 		_, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 			if w.service == nil {
-				return "", errors.New("servizio non configurato sul worker")
+				return "", errors.New("service not configured on the worker")
 			}
 			c = auth.WithPrincipal(c, &auth.Principal{Method: method, Subject: subject})
 			_, err := w.service.Rollback(c, RollbackRequest{
@@ -345,7 +345,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 			return "", err
 		}, dbos.WithStepName("rollback:"+d.Name))
 		if err != nil {
-			d.RollbackState, d.Error = string(dbos.WorkflowStatusError), "rollback non avviato: "+err.Error()
+			d.RollbackState, d.Error = string(dbos.WorkflowStatusError), "rollback not started: "+err.Error()
 			log.Error("release: rollback non avviato", "deploy", d.Name, "error", err)
 			return nil
 		}
@@ -411,7 +411,7 @@ func (e *Engine) ReleaseStatus(_ context.Context, id string) (*ReleaseStatus, er
 func (e *Engine) releaseStatus(w dbos.WorkflowStatus) (*ReleaseStatus, error) {
 	var in releaseInput
 	if err := decodeInput(w.Input, &in); err != nil {
-		return nil, fmt.Errorf("input della release %s non leggibile: %w", w.ID, err)
+		return nil, fmt.Errorf("unreadable input of release %s: %w", w.ID, err)
 	}
 	rs := in.Release
 	if ev, err := dbos.GetEvent[ReleaseStatus](e.client, w.ID, releaseEvent, 0); err == nil && ev.ID != "" {

@@ -69,7 +69,7 @@ func CLIPrincipal() *Principal {
 }
 
 // ErrUnauthenticated means missing or invalid credentials.
-var ErrUnauthenticated = errors.New("autenticazione richiesta")
+var ErrUnauthenticated = errors.New("authentication required")
 
 // Authenticator verifies the bearer token of a request.
 type Authenticator interface {

@@ -20,13 +20,13 @@ func ArtifactTypes(cfg map[string]any, def ...string) ([]string, error) {
 	}
 	list, ok := raw.([]any)
 	if !ok {
-		return nil, errors.New("artifact_types deve essere un elenco di stringhe")
+		return nil, errors.New("artifact_types must be a list of strings")
 	}
 	types := make([]string, 0, len(list))
 	for _, t := range list {
 		s, ok := t.(string)
 		if !ok {
-			return nil, errors.New("artifact_types deve contenere stringhe")
+			return nil, errors.New("artifact_types must contain strings")
 		}
 		types = append(types, s)
 	}
@@ -41,7 +41,7 @@ func Duration(params map[string]string, key string, def time.Duration) (time.Dur
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d <= 0 {
-		return 0, fmt.Errorf("%s %q non valido: atteso una durata positiva (es. 10m)", key, raw)
+		return 0, fmt.Errorf("invalid %s %q: expected a positive duration (e.g. 10m)", key, raw)
 	}
 	return d, nil
 }

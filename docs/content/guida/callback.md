@@ -60,7 +60,7 @@ The final event is sent after the working directory is cleaned up. If a step fai
   "application": "myapp",
   "environment": "test",
   "status": "failed",
-  "error": "step \"deploy\": target 192.168.1.10: connessione: …",
+  "error": "step \"deploy\": target 192.168.1.10: connection: …",
   "timestamp": "2026-10-09T10:00:41Z"
 }
 ```

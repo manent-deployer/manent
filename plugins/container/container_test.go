@@ -187,7 +187,7 @@ func TestDeployFallito(t *testing.T) {
 	hosts := map[string]*fakeHost{"vm1": {state: "exited||0"}}
 	p := newPlugin(hosts)
 	req := newRequest(t, "vm1")
-	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "terminato") {
+	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "terminated") {
 		t.Fatalf("atteso container terminato: %v", err)
 	}
 	hosts["vm1"].state = "running|unhealthy|0"
@@ -201,7 +201,7 @@ func TestDeployFallito(t *testing.T) {
 	// Continuous restarts: never stable within the timeout.
 	hosts["vm1"].failPull, hosts["vm1"].image, hosts["vm1"].state = false, "", "restarting||3"
 	req.Params[ParamWaitTimeout] = "100ms"
-	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "non pronto") {
+	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "not ready") {
 		t.Fatalf("atteso timeout: %v", err)
 	}
 }
@@ -230,7 +230,7 @@ func TestLoginEValidazione(t *testing.T) {
 	bad.Artifact.LocalPath, bad.Artifact.Version = "/tmp/app.tar.gz", ""
 	bad.Targets[0].User = ""
 	err := p.Validate(bad)
-	for _, want := range []string{"runtime", "container_name", "artifact.version", "registry_password_secret", "immagine di un registry", "wait_timeout", "user obbligatorio"} {
+	for _, want := range []string{"runtime", "container_name", "artifact.version", "registry_password_secret", "registry image", "wait_timeout", "user is required"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("validazione: manca %q in %v", want, err)
 		}

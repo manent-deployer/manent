@@ -108,13 +108,13 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 	var errs []error
 	for i, r := range rules {
 		if len(r.Applications) == 0 || len(r.Environments) == 0 {
-			errs = append(errs, fmt.Errorf("governance.rules[%d]: applications ed environments obbligatori (\"*\" per tutti)", i))
+			errs = append(errs, fmt.Errorf("governance.rules[%d]: applications and environments are required (\"*\" for all)", i))
 		}
 		if r.Approvals.Required < 0 {
-			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.required deve essere >= 0", i))
+			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.required must be >= 0", i))
 		}
 		if w := r.Approvals.When; w != "" && w != ApprovalsBefore && w != ApprovalsRollout {
-			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.when %q non valido (before o rollout)", i, w))
+			errs = append(errs, fmt.Errorf("invalid governance.rules[%d].approvals.when %q (before or rollout)", i, w))
 		}
 		if r.Approvals.Required > 0 && r.Approvals.Timeout <= 0 {
 			rules[i].Approvals.Timeout = DefaultApprovalTimeout
@@ -123,14 +123,14 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 	for i := range windows {
 		w := &windows[i]
 		if w.Name == "" || len(w.Applications) == 0 || len(w.Environments) == 0 {
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: name, applications ed environments obbligatori", i))
+			errs = append(errs, fmt.Errorf("governance.freezes[%d]: name, applications and environments are required", i))
 		}
 		switch {
 		case w.Cron != "" && (!w.From.IsZero() || !w.To.IsZero()):
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: from/to e cron sono alternativi", i))
+			errs = append(errs, fmt.Errorf("governance.freezes[%d]: from/to and cron are alternatives", i))
 		case w.Cron != "":
 			if w.Duration <= 0 {
-				errs = append(errs, fmt.Errorf("governance.freezes[%d]: duration obbligatoria con cron", i))
+				errs = append(errs, fmt.Errorf("governance.freezes[%d]: duration is required with cron", i))
 			}
 			expr := w.Cron
 			if w.Timezone != "" {
@@ -138,11 +138,11 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 			}
 			s, err := cron.ParseStandard(expr)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("governance.freezes[%d].cron non valido: %w", i, err))
+				errs = append(errs, fmt.Errorf("invalid governance.freezes[%d].cron: %w", i, err))
 			}
 			w.schedule = s
 		case w.From.IsZero() || w.To.IsZero() || !w.To.After(w.From):
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: indicare from e to (to successivo a from) oppure cron e duration", i))
+			errs = append(errs, fmt.Errorf("governance.freezes[%d]: provide from and to (to after from) or cron and duration", i))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {

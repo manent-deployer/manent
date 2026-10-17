@@ -59,7 +59,7 @@ func ParseReleaseJSON(data []byte) (*Release, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&r); err != nil {
-		return nil, fmt.Errorf("release JSON non valida: %w", err)
+		return nil, fmt.Errorf("invalid JSON release: %w", err)
 	}
 	return &r, r.Validate()
 }
@@ -75,7 +75,7 @@ func LoadReleaseYAMLFile(path string) (*Release, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&r); err != nil {
-		return nil, fmt.Errorf("release YAML non valida: %w", err)
+		return nil, fmt.Errorf("invalid YAML release: %w", err)
 	}
 	for i := range r.Deploys {
 		rd := &r.Deploys[i]
@@ -83,7 +83,7 @@ func LoadReleaseYAMLFile(path string) (*Release, error) {
 			continue
 		}
 		if rd.Descriptor != nil {
-			return nil, fmt.Errorf("deploys[%d]: file e descriptor sono alternativi", i)
+			return nil, fmt.Errorf("deploys[%d]: file and descriptor are alternatives", i)
 		}
 		f := rd.File
 		if !filepath.IsAbs(f) {
@@ -103,51 +103,51 @@ func LoadReleaseYAMLFile(path string) (*Release, error) {
 func (r *Release) Validate() error {
 	var errs []error
 	if r.APIVersion != APIVersion {
-		errs = append(errs, fmt.Errorf("apiVersion deve essere %q", APIVersion))
+		errs = append(errs, fmt.Errorf("apiVersion must be %q", APIVersion))
 	}
 	if r.Kind != KindRelease {
-		errs = append(errs, fmt.Errorf("kind deve essere %q", KindRelease))
+		errs = append(errs, fmt.Errorf("kind must be %q", KindRelease))
 	}
 	if !validName(r.ID) {
-		errs = append(errs, fmt.Errorf("id %q non valido (obbligatorio): %s", r.ID, nameRule))
+		errs = append(errs, fmt.Errorf("invalid id %q (required): %s", r.ID, nameRule))
 	}
 	if !slices.Contains([]string{"", ReleaseOnFailureStop, ReleaseOnFailureContinue, ReleaseOnFailureRollback}, r.OnFailure) {
-		errs = append(errs, fmt.Errorf("onFailure %q non valido: stop, continue o rollback", r.OnFailure))
+		errs = append(errs, fmt.Errorf("invalid onFailure %q: stop, continue or rollback", r.OnFailure))
 	}
 	if len(r.Deploys) == 0 || len(r.Deploys) > maxReleaseDeploys {
-		errs = append(errs, fmt.Errorf("deploys: da 1 a %d", maxReleaseDeploys))
+		errs = append(errs, fmt.Errorf("deploys: from 1 to %d", maxReleaseDeploys))
 	}
 	names, ids := map[string]bool{}, map[string]bool{}
 	for i, rd := range r.Deploys {
 		if !validName(rd.Name) || names[rd.Name] {
-			errs = append(errs, fmt.Errorf("deploys[%d]: name %q non valido o duplicato", i, rd.Name))
+			errs = append(errs, fmt.Errorf("deploys[%d]: invalid or duplicate name %q", i, rd.Name))
 		}
 		names[rd.Name] = true
 		if rd.File != "" {
-			errs = append(errs, fmt.Errorf("deploys[%d]: file non risolto, indicare descriptor", i))
+			errs = append(errs, fmt.Errorf("deploys[%d]: file not resolved, provide descriptor", i))
 			continue
 		}
 		d := rd.Descriptor
 		if d == nil {
-			errs = append(errs, fmt.Errorf("deploys[%d]: descriptor obbligatorio", i))
+			errs = append(errs, fmt.Errorf("deploys[%d]: descriptor is required", i))
 			continue
 		}
 		if err := d.Validate(); err != nil {
 			errs = append(errs, fmt.Errorf("deploys[%d] (%s): %w", i, rd.Name, err))
 		}
 		if d.Schedule != nil || d.DryRun {
-			errs = append(errs, fmt.Errorf("deploys[%d] (%s): schedule e dryRun non ammessi in una release", i, rd.Name))
+			errs = append(errs, fmt.Errorf("deploys[%d] (%s): schedule and dryRun not allowed in a release", i, rd.Name))
 		}
 		id := r.DeploymentID(rd)
 		if !validName(id) || ids[id] {
-			errs = append(errs, fmt.Errorf("deploys[%d]: id del deploy %q non valido o duplicato", i, id))
+			errs = append(errs, fmt.Errorf("deploys[%d]: invalid or duplicate deploy id %q", i, id))
 		}
 		ids[id] = true
 	}
 	for i, rd := range r.Deploys {
 		for _, a := range rd.After {
 			if !names[a] || a == rd.Name {
-				errs = append(errs, fmt.Errorf("deploys[%d] (%s): after %q non è un altro deploy della release", i, rd.Name, a))
+				errs = append(errs, fmt.Errorf("deploys[%d] (%s): after %q is not another deploy of the release", i, rd.Name, a))
 			}
 		}
 	}
@@ -202,7 +202,7 @@ func (r *Release) Order() ([]ReleaseDeploy, error) {
 					cycle = append(cycle, rd.Name)
 				}
 			}
-			return nil, fmt.Errorf("deploys: dipendenze circolari tra %v", cycle)
+			return nil, fmt.Errorf("deploys: circular dependencies among %v", cycle)
 		}
 	}
 	return out, nil

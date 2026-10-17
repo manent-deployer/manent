@@ -39,11 +39,11 @@ func (p *SchemeProvider) Register(scheme string, prov Provider) {
 func (p *SchemeProvider) Resolve(ctx context.Context, ref string) (string, error) {
 	scheme, rest, ok := strings.Cut(ref, ":")
 	if !ok {
-		return "", fmt.Errorf("riferimento segreto %q senza schema", ref)
+		return "", fmt.Errorf("secret reference %q without scheme", ref)
 	}
 	prov, ok := p.providers[scheme]
 	if !ok {
-		return "", fmt.Errorf("schema segreto %q non supportato", scheme)
+		return "", fmt.Errorf("secret scheme %q not supported", scheme)
 	}
 	return prov.Resolve(ctx, rest)
 }
@@ -55,7 +55,7 @@ type EnvProvider struct{}
 func (EnvProvider) Resolve(_ context.Context, name string) (string, error) {
 	v, ok := os.LookupEnv(name)
 	if !ok {
-		return "", fmt.Errorf("variabile d'ambiente %q non definita", name)
+		return "", fmt.Errorf("environment variable %q not defined", name)
 	}
 	return v, nil
 }
@@ -83,7 +83,7 @@ type DescriptorResolver struct {
 func (r DescriptorResolver) Secret(ctx context.Context, name string) (string, error) {
 	ref, ok := r.Descriptor.SecretRefByName(name)
 	if !ok {
-		return "", fmt.Errorf("segreto %q non dichiarato nel descrittore", name)
+		return "", fmt.Errorf("secret %q not declared in the descriptor", name)
 	}
 	return r.Provider.Resolve(ctx, ref)
 }

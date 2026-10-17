@@ -11,7 +11,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/depl
 expect_eq "API senza token: 401" "$code" 401
 d=$(descriptor uc2-a uc2-100-test $APP test 1.0.0)
 err=$(as viewer manent_err deploy --no-wait -f "$d")
-expect_match "un viewer non può avviare deploy" "$err" "permesso negato.*deployment.submit"
+expect_match "un viewer non può avviare deploy" "$err" "permission denied.*deployment.submit"
 
 info "-- configurazione di ambiente"
 d=$(descriptor uc2-b uc2-100-conflict $APP test 1.0.0 "deploy:
@@ -20,7 +20,7 @@ err=$(manent_err deploy --no-wait -f "$d")
 expect_match "un parametro in conflitto con l'ambiente è rifiutato" "$err" "dest_dir"
 d=$(descriptor uc2-c uc2-100-prod $APP prod 1.0.0)
 err=$(manent_err deploy --no-wait -f "$d")
-expect_match "prod richiede lo stesso artefatto già rilasciato in test" "$err" "non risulta rilasciato con successo in test"
+expect_match "prod richiede lo stesso artefatto già rilasciato in test" "$err" "was not released successfully in test"
 d=$(descriptor uc2-a uc2-100-test $APP test 1.0.0)
 id=$(submit "$d")
 expect_eq "deploy in test con target e parametri dall'ambiente" "$(wait_state "$id" terminal 60)" SUCCESS
@@ -47,7 +47,7 @@ expect_eq "1.1.0 in test" "$(wait_state "$id" terminal 60)" SUCCESS
 id=$(as admin manent promote -a $APP --from test --to prod --no-wait | jq -r .id)
 expect_eq "seconda promozione (richiesta dall'admin) in attesa" "$(state "$id")" AWAITING_APPROVAL
 err=$(as admin manent_err approve "$id")
-expect_match "nessuno approva il proprio deploy, neanche l'admin" "$err" "non può approvarlo"
+expect_match "nessuno approva il proprio deploy, neanche l'admin" "$err" "cannot approve it"
 expect_eq "l'auto-approvazione non sblocca il deploy" "$(state "$id")" AWAITING_APPROVAL
 as cab manent reject -m "non in questa finestra" "$id" >/dev/null
 expect_eq "promozione rifiutata" "$(wait_state "$id" terminal 30)" REJECTED
@@ -58,7 +58,7 @@ info "-- freeze"
 expect_match "il freeze è elencato" "$(manent freezes -a $APP)" "uc2-congelato"
 d=$(descriptor uc2-e uc2-100-frozen $APP frozen 1.0.0)
 err=$(manent_err deploy --no-wait -f "$d")
-expect_match "deploy in un ambiente congelato rifiutato" "$err" "bloccato dal freeze \"uc2-congelato\""
+expect_match "deploy in un ambiente congelato rifiutato" "$err" "blocked by freeze \"uc2-congelato\""
 d=$(descriptor uc2-f uc2-100-frozen $APP frozen 1.0.0 'freezeOverride: "INC-42: correzione urgente"')
 err=$(manent_err deploy --no-wait -f "$d")
 expect_match "la deroga richiede un permesso che ci non ha" "$err" "deployment.freeze-override"

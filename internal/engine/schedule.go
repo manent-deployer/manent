@@ -42,7 +42,7 @@ type scheduleContext struct {
 func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowInput) (string, error) {
 	sc, err := dbos.DecodeScheduleContext[scheduleContext](in)
 	if err != nil {
-		return "", fmt.Errorf("contesto della schedule non valido: %w", err)
+		return "", fmt.Errorf("invalid schedule context: %w", err)
 	}
 	d := &sc.Request.Descriptor
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")

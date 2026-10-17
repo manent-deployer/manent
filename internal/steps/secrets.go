@@ -29,12 +29,12 @@ func (s Secrets) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, e
 			continue
 		}
 		if _, ok := in.Descriptor.SecretRefByName(cb.Auth.Secret); !ok {
-			return nil, fmt.Errorf("callbacks[%d]: segreto %q non dichiarato in secrets", i, cb.Auth.Secret)
+			return nil, fmt.Errorf("callbacks[%d]: secret %q not declared in secrets", i, cb.Auth.Secret)
 		}
 	}
 	for _, ref := range in.Descriptor.Secrets {
 		if _, err := s.Provider.Resolve(ctx, ref.Ref); err != nil {
-			return nil, fmt.Errorf("segreto %q non disponibile: %w", ref.Name, err)
+			return nil, fmt.Errorf("secret %q not available: %w", ref.Name, err)
 		}
 	}
 	s.Logger.InfoContext(ctx, "segreti verificati", "deployment", in.DeploymentID, "count", len(in.Descriptor.Secrets))

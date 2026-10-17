@@ -65,7 +65,7 @@ type OperationError struct {
 }
 
 func (e *OperationError) Error() string {
-	return fmt.Sprintf("operazione %s fallita: %s", e.Operation, e.Description)
+	return fmt.Sprintf("operation %s failed: %s", e.Operation, e.Description)
 }
 
 // response is the DMR response.
@@ -147,7 +147,7 @@ func (c *httpClient) Upload(ctx context.Context, path string) (string, error) {
 		Bytes string `json:"BYTES_VALUE"`
 	}
 	if err := json.Unmarshal(raw, &h); err != nil || h.Bytes == "" {
-		return "", fmt.Errorf("add-content: hash del contenuto non leggibile: %s", raw)
+		return "", fmt.Errorf("add-content: unreadable content hash: %s", raw)
 	}
 	return h.Bytes, nil
 }
@@ -180,13 +180,13 @@ func (c *httpClient) send(ctx context.Context, path, name string, newBody func()
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			if attempt > 0 || !c.auth.challenge(resp.Header.Values("WWW-Authenticate")) {
-				return nil, errors.New("credenziali di management rifiutate (401)")
+				return nil, errors.New("management credentials rejected (401)")
 			}
 			continue
 		}
 		var r response
 		if err := json.Unmarshal(data, &r); err != nil {
-			return nil, fmt.Errorf("%s: risposta HTTP %d non valida: %.200s", name, resp.StatusCode, data)
+			return nil, fmt.Errorf("%s: invalid HTTP response %d: %.200s", name, resp.StatusCode, data)
 		}
 		if r.Outcome != "success" {
 			return nil, &OperationError{Operation: name, Description: r.failure()}

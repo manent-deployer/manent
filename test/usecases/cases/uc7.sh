@@ -69,7 +69,7 @@ expect_eq "lo storico conserva al più 3 release (keep_releases)" \
 info "-- immagine non fissata al digest"
 id=$(submit "$(desc uc7-e uc7-300-tag prod 3.0.0-tag)")
 expect_eq "deploy rifiutato" "$(wait_state "$id" terminal 120)" ERROR
-expect_match "l'errore indica il digest mancante" "$(manent status "$id" | jq -r .error)" "non fissata al digest"
+expect_match "l'errore indica il digest mancante" "$(manent status "$id" | jq -r .error)" "not pinned to the digest"
 expect_eq "il cluster resta sulla 1.2.0" "$(k8s_image uc7-prod $APP)" "$a120"
 
 info "-- rollback manuale"

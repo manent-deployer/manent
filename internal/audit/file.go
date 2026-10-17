@@ -46,17 +46,17 @@ type FileRecorder struct {
 func NewFileRecorder(path string, opts FileOptions) (*FileRecorder, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("file di audit: %w", err)
+		return nil, fmt.Errorf("audit file: %w", err)
 	}
 	st, err := f.Stat()
 	if err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("file di audit: %w", err)
+		return nil, fmt.Errorf("audit file: %w", err)
 	}
 	prev, err := lastHash(f, st.Size())
 	if err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("file di audit %s: %w", path, err)
+		return nil, fmt.Errorf("audit file %s: %w", path, err)
 	}
 	return &FileRecorder{path: path, opts: opts, file: f, size: st.Size(), prev: prev}, nil
 }
@@ -118,11 +118,11 @@ func (r *FileRecorder) rotate() error {
 		return err
 	}
 	if err := os.Rename(r.path, r.path+"."+time.Now().UTC().Format(rotateSuffix)); err != nil {
-		return fmt.Errorf("rotazione del file di audit: %w", err)
+		return fmt.Errorf("audit file rotation: %w", err)
 	}
 	f, err := os.OpenFile(r.path, os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf("rotazione del file di audit: %w", err)
+		return fmt.Errorf("audit file rotation: %w", err)
 	}
 	r.file, r.size = f, 0
 	return nil
@@ -200,23 +200,23 @@ func Verify(paths []string, key []byte) (Report, error) {
 			body, hash, ok := splitHash(sc.Bytes())
 			if !ok {
 				_ = f.Close()
-				return rep, fmt.Errorf("%s:%d: voce senza hash", p, n)
+				return rep, fmt.Errorf("%s:%d: entry without hash", p, n)
 			}
 			var e Entry
 			if err := json.Unmarshal(body, &e); err != nil {
 				_ = f.Close()
-				return rep, fmt.Errorf("%s:%d: voce non valida: %w", p, n, err)
+				return rep, fmt.Errorf("%s:%d: invalid entry: %w", p, n, err)
 			}
 			if first {
 				rep.Anchor, prev, first = e.PrevHash, e.PrevHash, false
 			}
 			if e.PrevHash != prev {
 				_ = f.Close()
-				return rep, fmt.Errorf("%s:%d: catena interrotta: prev_hash non corrisponde alla voce precedente (voce mancante o inserita)", p, n)
+				return rep, fmt.Errorf("%s:%d: broken chain: prev_hash does not match the previous entry (entry missing or inserted)", p, n)
 			}
 			if chainHash(key, body) != hash {
 				_ = f.Close()
-				return rep, fmt.Errorf("%s:%d: hash non valido: voce modificata (o chiave diversa)", p, n)
+				return rep, fmt.Errorf("%s:%d: invalid hash: entry modified (or different key)", p, n)
 			}
 			prev = hash
 			rep.Entries++

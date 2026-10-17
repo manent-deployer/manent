@@ -56,11 +56,11 @@ const (
 
 var (
 	// ErrNotFound means a deploy or schedule that does not exist.
-	ErrNotFound = errors.New("non trovato")
+	ErrNotFound = errors.New("not found")
 	// ErrInvalidRequest means an unacceptable request (e.g. a time in the past).
-	ErrInvalidRequest = errors.New("richiesta non valida")
+	ErrInvalidRequest = errors.New("invalid request")
 	// ErrForbidden means an action not allowed by the user's permissions.
-	ErrForbidden = errors.New("permesso negato")
+	ErrForbidden = errors.New("permission denied")
 )
 
 // Service is the entry point used by CLI and API.

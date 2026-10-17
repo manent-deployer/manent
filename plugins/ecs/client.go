@@ -108,7 +108,7 @@ func convert(td *types.TaskDefinition, tags []types.Tag) *TaskDefinition {
 func (a sdkAPI) RegisterRevision(ctx context.Context, base *TaskDefinition, container, image string, tags map[string]string) (*TaskDefinition, error) {
 	td, ok := base.Base.(*types.TaskDefinition)
 	if !ok {
-		return nil, errors.New("task definition di base non letta dall'API")
+		return nil, errors.New("base task definition not read from the API")
 	}
 	defs := slices.Clone(td.ContainerDefinitions)
 	for i := range defs {

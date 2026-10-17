@@ -20,7 +20,7 @@ func (fake) Name() string           { return "fake" }
 func (fake) Supports(t string) bool { return t == "application" }
 func (fake) Validate(r *plugin.Request) error {
 	if r.Params["dest"] == "" {
-		return errors.New("parametro dest obbligatorio")
+		return errors.New("dest parameter is required")
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func factory(cfg map[string]any, log *slog.Logger) (plugin.Deployer, error) {
 		return slotFake{fake: fake{log: log}, weight: new(int)}, nil
 	}
 	if v, _ := cfg["fail"].(bool); v {
-		return nil, errors.New("configurazione rifiutata")
+		return nil, errors.New("configuration rejected")
 	}
 	if v, _ := cfg["rollback"].(bool); v {
 		return rbFake{fake{log: log}}, nil

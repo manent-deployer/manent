@@ -96,7 +96,7 @@ func (w *Worker) trafficOp(ctx dbos.Context, ev *events, d *descriptor.Descripto
 func (w *Worker) drainBatch(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, batch []descriptor.Target,
 	suffix string, outputs map[string]pipeline.Output, res *Result, track *passTrack) (*startedStep, error) {
 	if w.traffic == nil {
-		return nil, pipeline.Permanent(errors.New("traffic.pool: integrazione non disponibile su questo server"))
+		return nil, pipeline.Permanent(errors.New("traffic.pool: integration not available on this server"))
 	}
 	cfg := d.Traffic.Pool
 	timeout, _, poll := cfg.Durations()
@@ -117,7 +117,7 @@ func (w *Worker) drainBatch(ctx dbos.Context, id string, ev *events, d *descript
 			break
 		}
 		if waited >= timeout {
-			return nil, fmt.Errorf("svuotamento non eseguito entro %s: %s", timeout, out[steps.OutDetail])
+			return nil, fmt.Errorf("drain not completed within %s: %s", timeout, out[steps.OutDetail])
 		}
 		if _, err := dbos.Sleep(ctx, poll); err != nil {
 			return nil, err
@@ -189,7 +189,7 @@ func (w *Worker) poolWait(ctx dbos.Context, id string, ev *events, d *descriptor
 				w.logger.Warn("svuotamento oltre il timeout: il deploy prosegue", "deployment", id, "pending", out["pending"], "timeout", timeout)
 				return nil
 			}
-			return fmt.Errorf("%s: target non pronti entro %s (%s)", phase, timeout, out["pending"])
+			return fmt.Errorf("%s: targets not ready within %s (%s)", phase, timeout, out["pending"])
 		}
 		wait := poll
 		if out["done"] == "true" && minWait > elapsed {
@@ -260,7 +260,7 @@ type trafficRun struct {
 // scales down the replaced version after scaleDownDelay.
 func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, res *Result) error {
 	if w.traffic == nil {
-		return pipeline.Permanent(errors.New("strategy: traffic non disponibile su questo server"))
+		return pipeline.Permanent(errors.New("strategy: traffic not available on this server"))
 	}
 	plan, err := checkRollout(*d, w.health, w.traffic)
 	if err != nil {
@@ -592,7 +592,7 @@ func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *t
 // service, even if another release changed it meanwhile.
 func (w *Worker) retireWorkflow(ctx dbos.Context, in retireInput) (pipeline.Output, error) {
 	if w.traffic == nil {
-		return nil, errors.New("strategy: traffic non disponibile su questo worker")
+		return nil, errors.New("strategy: traffic not available on this worker")
 	}
 	ev := &events{w: w, ctx: ctx, id: in.DeploymentID, requestedBy: in.RequestedBy, silent: true}
 	var res Result

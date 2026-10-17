@@ -64,12 +64,12 @@ func isChart(file string) (bool, error) {
 	}
 	f, err := os.Open(file)
 	if err != nil {
-		return false, fmt.Errorf("lettura dell'artefatto: %w", err)
+		return false, fmt.Errorf("reading the artifact: %w", err)
 	}
 	defer f.Close()
 	zr, err := gzip.NewReader(f)
 	if err != nil {
-		return false, fmt.Errorf("archivio: %w", err)
+		return false, fmt.Errorf("archive: %w", err)
 	}
 	tr := tar.NewReader(zr)
 	for {
@@ -78,7 +78,7 @@ func isChart(file string) (bool, error) {
 			return false, nil
 		}
 		if err != nil {
-			return false, fmt.Errorf("archivio: %w", err)
+			return false, fmt.Errorf("archive: %w", err)
 		}
 		dir, name := path.Split(path.Clean(h.Name))
 		if name == "Chart.yaml" && dir != "" && !strings.Contains(strings.Trim(dir, "/"), "/") {
@@ -112,7 +112,7 @@ func extractChart(file, dir string) (string, error) {
 		}
 		name := path.Clean(h.Name)
 		if path.IsAbs(name) || name == ".." || strings.HasPrefix(name, "../") {
-			return "", fmt.Errorf("chart: percorso %q non ammesso", h.Name)
+			return "", fmt.Errorf("chart: path %q not allowed", h.Name)
 		}
 		dst := filepath.Join(dir, filepath.FromSlash(name))
 		switch h.Typeflag {
@@ -123,7 +123,7 @@ func extractChart(file, dir string) (string, error) {
 		case tar.TypeReg:
 			total += h.Size
 			if total > maxChartSize {
-				return "", fmt.Errorf("chart oltre %d MiB", maxChartSize>>20)
+				return "", fmt.Errorf("chart over %d MiB", maxChartSize>>20)
 			}
 			if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 				return "", err
@@ -148,7 +148,7 @@ func extractChart(file, dir string) (string, error) {
 		}
 	}
 	if root == "" {
-		return "", errors.New("chart senza Chart.yaml")
+		return "", errors.New("chart without Chart.yaml")
 	}
 	return filepath.Join(dir, root), nil
 }
@@ -159,7 +159,7 @@ func helmValues(params map[string]string) (map[string]any, error) {
 	vals := map[string]any{}
 	if raw := params[ParamHelmValues]; strings.TrimSpace(raw) != "" {
 		if err := yaml.Unmarshal([]byte(raw), &vals); err != nil {
-			return nil, fmt.Errorf("%s non è un documento YAML con una mappa: %w", ParamHelmValues, err)
+			return nil, fmt.Errorf("%s is not a YAML document with a map: %w", ParamHelmValues, err)
 		}
 		if vals == nil {
 			vals = map[string]any{}
@@ -175,11 +175,11 @@ func helmValues(params map[string]string) (map[string]any, error) {
 	for _, k := range keys {
 		p := strings.Split(strings.TrimPrefix(k, ParamHelmValuePrefix), ".")
 		if slices.Contains(p, "") {
-			return nil, fmt.Errorf("parametro %s: percorso non valido", k)
+			return nil, fmt.Errorf("parameter %s: invalid path", k)
 		}
 		var v any
 		if err := yaml.Unmarshal([]byte(params[k]), &v); err != nil {
-			return nil, fmt.Errorf("parametro %s: %w", k, err)
+			return nil, fmt.Errorf("parameter %s: %w", k, err)
 		}
 		cur := vals
 		for _, part := range p[:len(p)-1] {
@@ -199,14 +199,14 @@ func helmValues(params map[string]string) (map[string]any, error) {
 func validateHelm(params map[string]string) []error {
 	var errs []error
 	if r := params[ParamHelmRelease]; r != "" && (len(r) > 53 || !releaseRe.MatchString(r)) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: minuscole, cifre, '-' e '.', al più 53 caratteri", ParamHelmRelease, r))
+		errs = append(errs, fmt.Errorf("invalid %s %q: lowercase letters, digits, '-' and '.', at most 53 characters", ParamHelmRelease, r))
 	}
 	if h := params[ParamHelmHooks]; h != "" && h != "skip" && h != "apply" {
-		errs = append(errs, fmt.Errorf("%s %q non valido (skip|apply)", ParamHelmHooks, h))
+		errs = append(errs, fmt.Errorf("invalid %s %q (skip|apply)", ParamHelmHooks, h))
 	}
 	for _, f := range valuesFiles(params) {
 		if c := path.Clean(f); path.IsAbs(c) || c == ".." || strings.HasPrefix(c, "../") {
-			errs = append(errs, fmt.Errorf("%s: %q deve essere un percorso dentro il chart", ParamHelmValuesFiles, f))
+			errs = append(errs, fmt.Errorf("%s: %q must be a path inside the chart", ParamHelmValuesFiles, f))
 		}
 	}
 	if _, err := helmValues(params); err != nil {
@@ -261,7 +261,7 @@ func (h Helm) Render(ctx context.Context, req *plugin.Request, kubeVersion strin
 	for _, f := range valuesFiles(req.Params) {
 		p := filepath.Join(chart, filepath.FromSlash(path.Clean(f)))
 		if _, err := os.Stat(p); err != nil {
-			return nil, fmt.Errorf("%s: %s assente dal chart", ParamHelmValuesFiles, f)
+			return nil, fmt.Errorf("%s: %s missing from the chart", ParamHelmValuesFiles, f)
 		}
 		args = append(args, "--values", p)
 	}
@@ -299,7 +299,7 @@ func (h Helm) Render(ctx context.Context, req *plugin.Request, kubeVersion strin
 	c.Stdout, c.Stderr = &limitWriter{w: &stdout, n: maxRenderedSize}, &limitWriter{w: &stderr, n: 64 << 10}
 	if err := c.Run(); err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("helm template non concluso entro %s", timeout)
+			return nil, fmt.Errorf("helm template not completed within %s", timeout)
 		}
 		return nil, fmt.Errorf("helm template: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
@@ -314,7 +314,7 @@ func (h Helm) command() (string, error) {
 	}
 	p, err := exec.LookPath(name)
 	if err != nil {
-		return "", fmt.Errorf("binario di Helm %q non trovato: installarlo sul worker o indicare helm.command nella configurazione del plugin", name)
+		return "", fmt.Errorf("Helm binary %q not found: install it on the worker or set helm.command in the plugin configuration", name)
 	}
 	if h.SHA256 == "" {
 		return p, nil
@@ -329,7 +329,7 @@ func (h Helm) command() (string, error) {
 		return "", err
 	}
 	if got := hex.EncodeToString(sum.Sum(nil)); !strings.EqualFold(got, h.SHA256) {
-		return "", fmt.Errorf("sha256 del binario di Helm %s diverso da quello configurato (%s)", got, h.SHA256)
+		return "", fmt.Errorf("sha256 of the Helm binary %s differs from the configured one (%s)", got, h.SHA256)
 	}
 	return p, nil
 }
@@ -342,7 +342,7 @@ type limitWriter struct {
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if len(p) > l.n {
-		return 0, errors.New("output di helm troppo grande")
+		return 0, errors.New("helm output too large")
 	}
 	l.n -= len(p)
 	return l.w.Write(p)

@@ -39,9 +39,9 @@ sequenceDiagram
 
 | Outcome | Message | Meaning |
 |---|---|---|
-| `completed` | `...; rollback completato` | At least one compensation restored the previous state. |
-| `skipped` | `...; rollback: nessuna release da ripristinare` | There was nothing to go back to, for example on the application's first deploy. |
-| `failed` | `...; rollback fallito: ...` | A compensation failed after its retries. Further compensations are not attempted, so the state stays known for manual intervention. The log, including to the SIEM, is at `ERROR` level. |
+| `completed` | `...; rollback completed` | At least one compensation restored the previous state. |
+| `skipped` | `...; rollback: no release to restore` | There was nothing to go back to, for example on the application's first deploy. |
+| `failed` | `...; rollback failed: ...` | A compensation failed after its retries. Further compensations are not attempted, so the state stays known for manual intervention. The log, including to the SIEM, is at `ERROR` level. |
 
 Each compensation uses the `max_retries` of the step it undoes.
 

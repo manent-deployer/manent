@@ -73,7 +73,7 @@ func TestAnalisiCanary(t *testing.T) {
 	// Candidate clearly worse on the critical metric: red whatever the score.
 	set("b", noisy(r, 20, 0.05))
 	res = c.Check(ctx, in)
-	if res.OK || !strings.Contains(res.Failed(), "errors") || !strings.Contains(res.Failed(), "punteggio 0/100") {
+	if res.OK || !strings.Contains(res.Failed(), "errors") || !strings.Contains(res.Failed(), "score 0/100") {
 		t.Fatalf("candidata peggiore: %s", res.Failed())
 	}
 	// Candidate better (lower values) with direction increase: green.

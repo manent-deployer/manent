@@ -290,7 +290,7 @@ func TestDeployERollback(t *testing.T) {
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "2.0.0"}); err != nil || f.traffic() != "shop-00004" {
 		t.Fatalf("rollback senza dettagli: %v, traffico %s", err, f.traffic())
 	}
-	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.1.0"}); err == nil || !strings.Contains(err.Error(), "nessuna revisione") {
+	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.1.0"}); err == nil || !strings.Contains(err.Error(), "no revision") {
 		t.Errorf("versione assente: %v", err)
 	}
 	// After a rollback the next deploy brings traffic back to the latest revision.
@@ -306,7 +306,7 @@ func TestDeployERollback(t *testing.T) {
 		t.Errorf("traffico diviso: %v %+v", err, rel)
 	}
 	f.svc["trafficStatuses"] = []any{Object{"type": trafficRevision, "revision": "shop-00004", "percent": 50.0}, Object{"type": trafficRevision, "revision": "shop-00005", "percent": 50.0}}
-	if _, err := p.CurrentRelease(ctx, req3); err == nil || !strings.Contains(err.Error(), "parti uguali") {
+	if _, err := p.CurrentRelease(ctx, req3); err == nil || !strings.Contains(err.Error(), "split equally") {
 		t.Errorf("traffico diviso a metà: %v", err)
 	}
 }
@@ -332,7 +332,7 @@ func TestDryRunEValidazione(t *testing.T) {
 	}
 	missing := request(t, key, "1.0.0", "europe-docker.pkg.dev/acme/shop/shop@"+digest)
 	missing.Params[ParamService] = "cart"
-	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "assente") {
+	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("servizio assente: %v", err)
 	}
 	badKey := request(t, `{"type":"external_account"}`, "1.0.0", "x")
@@ -347,7 +347,7 @@ func TestDryRunEValidazione(t *testing.T) {
 	bad.Params[ParamProject] = ""
 	bad.Params[ParamWaitTimeout] = "-1s"
 	err = p.Validate(bad)
-	for _, want := range []string{"artifact.version", "immagine di un registry", ParamProject, "Shop_API", "eu-west-1a", ParamWaitTimeout} {
+	for _, want := range []string{"artifact.version", "registry image", ParamProject, "Shop_API", "eu-west-1a", ParamWaitTimeout} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("validazione: manca %q in %v", want, err)
 		}

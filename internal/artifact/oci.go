@@ -64,26 +64,26 @@ func parseOCI(source string) (ociRef, error) {
 	}
 	host, name, ok := strings.Cut(rest, "/")
 	if !ok || host == "" || name == "" {
-		return r, fmt.Errorf("immagine %q non valida: atteso %sregistry/repository:tag", source, SchemeOCI)
+		return r, fmt.Errorf("invalid image %q: expected %sregistry/repository:tag", source, SchemeOCI)
 	}
 	r.registry = host
 	if n, d, ok := strings.Cut(name, "@"); ok {
 		if !strings.HasPrefix(d, "sha256:") || !ociDigestRe.MatchString(strings.TrimPrefix(d, "sha256:")) {
-			return r, fmt.Errorf("immagine %q: digest %q non valido (atteso sha256:<64 cifre esadecimali>)", source, d)
+			return r, fmt.Errorf("image %q: invalid digest %q (expected sha256:<64 hex digits>)", source, d)
 		}
 		name, r.digest = n, strings.TrimPrefix(d, "sha256:")
 	}
 	if i := strings.LastIndex(name, ":"); i >= 0 {
 		name, r.tag = name[:i], name[i+1:]
 		if !ociTagRe.MatchString(r.tag) {
-			return r, fmt.Errorf("immagine %q: tag %q non valido", source, r.tag)
+			return r, fmt.Errorf("image %q: invalid tag %q", source, r.tag)
 		}
 	}
 	if !ociRepoRe.MatchString(name) {
-		return r, fmt.Errorf("immagine %q: repository %q non valido", source, name)
+		return r, fmt.Errorf("image %q: invalid repository %q", source, name)
 	}
 	if r.tag == "" && r.digest == "" {
-		return r, fmt.Errorf("immagine %q: indicare un tag o un digest", source)
+		return r, fmt.Errorf("image %q: provide a tag or a digest", source)
 	}
 	r.repo = name
 	return r, nil
@@ -121,12 +121,12 @@ func (f DefaultFetcher) fetchOCI(ctx context.Context, source, destDir string) (*
 	u := ref.scheme + "://" + ref.apiHost() + "/v2/" + ref.repo + "/manifests/" + want
 	body, err := f.ociGet(ctx, source, ref, u)
 	if err != nil {
-		return nil, fmt.Errorf("manifest dell'immagine %s: %w", strings.TrimPrefix(strings.TrimPrefix(source, SchemeOCIHTTP), SchemeOCI), err)
+		return nil, fmt.Errorf("image manifest %s: %w", strings.TrimPrefix(strings.TrimPrefix(source, SchemeOCIHTTP), SchemeOCI), err)
 	}
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
 	if ref.digest != "" && ref.digest != digest {
-		return nil, fmt.Errorf("il registry ha restituito un manifest con digest sha256:%s invece di sha256:%s", digest, ref.digest)
+		return nil, fmt.Errorf("the registry returned a manifest with digest sha256:%s instead of sha256:%s", digest, ref.digest)
 	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return nil, err
@@ -184,15 +184,15 @@ func (f DefaultFetcher) ociGet(ctx context.Context, source string, ref ociRef, u
 func (f DefaultFetcher) ociToken(ctx context.Context, source string, ref ociRef, challenge string) (string, error) {
 	scheme, params, _ := strings.Cut(challenge, " ")
 	if !strings.EqualFold(scheme, "Bearer") {
-		return "", errors.New("accesso negato dal registry: configurare le credenziali della sorgente in artifacts.sources")
+		return "", errors.New("access denied by the registry: configure the source credentials in artifacts.sources")
 	}
 	p := parseChallenge(params)
 	if p["realm"] == "" {
-		return "", errors.New("challenge del registry senza realm")
+		return "", errors.New("registry challenge without realm")
 	}
 	tu, err := url.Parse(p["realm"])
 	if err != nil {
-		return "", fmt.Errorf("realm del registry non valido: %w", err)
+		return "", fmt.Errorf("invalid registry realm: %w", err)
 	}
 	q := tu.Query()
 	if p["service"] != "" {
@@ -211,24 +211,24 @@ func (f DefaultFetcher) ociToken(ctx context.Context, source string, ref ociRef,
 	}
 	resp, err := f.client(client).Do(req)
 	if err != nil {
-		return "", fmt.Errorf("token del registry: %w", err)
+		return "", fmt.Errorf("registry token: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("token del registry: status %d", resp.StatusCode)
+		return "", fmt.Errorf("registry token: status %d", resp.StatusCode)
 	}
 	var t struct {
 		Token       string `json:"token"`
 		AccessToken string `json:"access_token"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&t); err != nil {
-		return "", fmt.Errorf("token del registry: %w", err)
+		return "", fmt.Errorf("registry token: %w", err)
 	}
 	if t.Token == "" {
 		t.Token = t.AccessToken
 	}
 	if t.Token == "" {
-		return "", errors.New("token del registry vuoto")
+		return "", errors.New("empty registry token")
 	}
 	return t.Token, nil
 }

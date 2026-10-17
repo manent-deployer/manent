@@ -127,14 +127,14 @@ expect_eq "configurazione candidata valida: apply senza deploy" "$(code)" 0
 expect_eq "il data source riporta i target della configurazione" "$(dc --profile terraform run --rm -T terraform output -json checked_targets 2>/dev/null | tr -d ' \n')" '["eu1-b"]'
 tf plan -input=false -var app_version=1.1.0 -var env_config=env-bad.yml
 expect_eq "configurazione candidata non valida: il plan fallisce" "$(code)" 1
-expect_match "l'errore indica l'ambiente" "$(cat "$TF/last.log")" "uc19-shop/prod non valida"
+expect_match "l'errore indica l'ambiente" "$(cat "$TF/last.log")" "invalid configuration of uc19-shop/prod"
 expect_match "l'errore indica il campo" "$(cat "$TF/last.log")" "plugn"
 
 info "-- release difettosa"
 before=$(manent inventory -a $APP -e prod | jq -r '.[0].current.id')
 tf apply -auto-approve -input=false -var app_version=1.2.0
 expect_eq "apply della release difettosa fallisce" "$(code)" 1
-expect_match "l'errore riporta il deploy non riuscito" "$(cat "$TF/last.log")" "non riuscito"
+expect_match "l'errore riporta il deploy non riuscito" "$(cat "$TF/last.log")" "deploy .* failed"
 expect_eq "rollback automatico: eu1-b sulla 1.1.0" "$(current eu1-b $APP)" 1.1.0
 expect_eq "l'inventario resta sul deploy precedente" "$(manent inventory -a $APP -e prod | jq -r '.[0].current.id')" "$before"
 tf plan -detailed-exitcode -input=false -var app_version=1.2.0

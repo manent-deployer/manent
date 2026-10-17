@@ -131,7 +131,7 @@ func (s *Server) submit(c *gin.Context) {
 	if v := c.Query("dry_run"); v != "" {
 		dry, err := strconv.ParseBool(v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "dry_run deve essere un booleano"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "dry_run must be a boolean"})
 			return
 		}
 		d.DryRun = d.DryRun || dry
@@ -170,7 +170,7 @@ func (s *Server) list(c *gin.Context) {
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit deve essere un intero positivo"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
 			return
 		}
 		f.Limit = n
@@ -265,7 +265,7 @@ func (s *Server) decide(approve bool) gin.HandlerFunc {
 		dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "body JSON non valido: " + err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body: " + err.Error()})
 			return
 		}
 		r := engine.DecisionRequest{Approve: approve, Comment: body.Comment}
@@ -347,7 +347,7 @@ func (s *Server) listReleases(c *gin.Context) {
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit deve essere un intero positivo"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
 			return
 		}
 		limit = n
@@ -399,7 +399,7 @@ func readJSON(c *gin.Context, v any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "body JSON non valido: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body: " + err.Error()})
 		return false
 	}
 	return true
@@ -427,7 +427,7 @@ func (s *Server) validateEnvironment(c *gin.Context) {
 		return
 	}
 	if req.Application == "" || req.Environment == "" {
-		writeError(c, fmt.Errorf("%w: application ed environment obbligatori", engine.ErrInvalidRequest))
+		writeError(c, fmt.Errorf("%w: application and environment are required", engine.ErrInvalidRequest))
 		return
 	}
 	if req.Descriptor != nil {
@@ -460,7 +460,7 @@ func (s *Server) logs(c *gin.Context) {
 	if v := c.Query("offset"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "offset deve essere un intero >= 0"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be an integer >= 0"})
 			return
 		}
 		offset = n

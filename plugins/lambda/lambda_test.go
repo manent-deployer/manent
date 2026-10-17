@@ -277,7 +277,7 @@ func TestImmagineERollback(t *testing.T) {
 	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "2.0.0"}); err != nil || f.alias("shop") != "2" {
 		t.Fatalf("rollback senza dettagli: %v, alias %s", err, f.alias("shop"))
 	}
-	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.1.0"}); err == nil || !strings.Contains(err.Error(), "nessuna versione") {
+	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.1.0"}); err == nil || !strings.Contains(err.Error(), "no version") {
 		t.Errorf("versione assente: %v", err)
 	}
 }
@@ -304,7 +304,7 @@ func TestPacchettoZip(t *testing.T) {
 
 	// Zip package on an image function.
 	wrong := request(t, "1.0.0", "shop.zip", "PK")
-	if _, err := p.Deploy(ctx, wrong); err == nil || !strings.Contains(err.Error(), "pacchetti Image") {
+	if _, err := p.Deploy(ctx, wrong); err == nil || !strings.Contains(err.Error(), "uses Image packages") {
 		t.Errorf("tipo di pacchetto: %v", err)
 	}
 }
@@ -325,7 +325,7 @@ func TestDryRunEValidazione(t *testing.T) {
 	}
 	missing := imageRequest(t, "1.0.0", "shop")
 	missing.Params[ParamFunction] = "cart"
-	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "assente") {
+	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("funzione assente: %v", err)
 	}
 

@@ -91,7 +91,7 @@ func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 func (r *deploymentResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	svc, ok := serviceFrom(req.ProviderData)
 	if !ok {
-		resp.Diagnostics.AddError("provider non configurato", fmt.Sprintf("tipo inatteso %T", req.ProviderData))
+		resp.Diagnostics.AddError("provider not configured", fmt.Sprintf("unexpected type %T", req.ProviderData))
 		return
 	}
 	r.svc = svc
@@ -135,7 +135,7 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 	inv, err := r.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
 	if err != nil {
-		resp.Diagnostics.AddError("lettura dell'inventario", err.Error())
+		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
 	}
 	if len(inv) == 0 || inv[0].Current == nil {
@@ -167,7 +167,7 @@ func (r *deploymentResource) Delete(_ context.Context, req resource.DeleteReques
 func (r *deploymentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	app, env, ok := cutPair(req.ID)
 	if !ok {
-		resp.Diagnostics.AddError("ID di importazione non valido", "usare <application>/<environment>")
+		resp.Diagnostics.AddError("invalid import ID", "use <application>/<environment>")
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("application"), app)...)
@@ -181,12 +181,12 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 	var diags diag.Diagnostics
 	d, err := buildDescriptor(m)
 	if err != nil {
-		diags.AddError("descrittore non valido", err.Error())
+		diags.AddError("invalid descriptor", err.Error())
 		return diags
 	}
 	timeout, err := time.ParseDuration(m.Timeout.ValueString())
 	if err != nil || timeout <= 0 {
-		diags.AddError("timeout non valido", fmt.Sprintf("%q: indicare una durata, es. 30m", m.Timeout.ValueString()))
+		diags.AddError("invalid timeout", fmt.Sprintf("%q: provide a duration, e.g. 30m", m.Timeout.ValueString()))
 		return diags
 	}
 	sub, err := r.svc.Submit(ctx, d)
@@ -205,7 +205,7 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 	}
 	m.State, m.OutOfSync = types.StringValue(st.State), types.BoolValue(false)
 	if werr != nil {
-		diags.AddError("deploy "+sub.ID+" non riuscito", werr.Error())
+		diags.AddError("deploy "+sub.ID+" failed", werr.Error())
 	}
 	return diags
 }
@@ -219,7 +219,7 @@ func buildDescriptor(m *deploymentModel) (*descriptor.Descriptor, error) {
 	}
 	app, env := m.Application.ValueString(), m.Environment.ValueString()
 	if d.Application != app || d.Environment != env {
-		return nil, fmt.Errorf("il descrittore è di %s/%s, la risorsa di %s/%s", d.Application, d.Environment, app, env)
+		return nil, fmt.Errorf("the descriptor is for %s/%s, the resource for %s/%s", d.Application, d.Environment, app, env)
 	}
 	d.ID = ""
 	d.Artifact.Version = m.Version.ValueString()
@@ -230,7 +230,7 @@ func buildDescriptor(m *deploymentModel) (*descriptor.Descriptor, error) {
 		d.Artifact.SHA256 = v
 	}
 	if d.Schedule != nil || d.DryRun {
-		return nil, fmt.Errorf("schedule e dryRun non sono ammessi: la risorsa rappresenta la release in esercizio")
+		return nil, fmt.Errorf("schedule and dryRun are not allowed: the resource represents the release in service")
 	}
 	return d, d.Validate()
 }

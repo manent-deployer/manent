@@ -20,13 +20,13 @@ type CustomSteps interface {
 func (w *Worker) stepFor(ps pipeline.PlannedStep, requestedBy string) (pipeline.Step, error) {
 	if ps.IsCustom() {
 		if w.custom == nil {
-			return nil, pipeline.Permanent(fmt.Errorf("step %q personalizzato: worker senza supporto agli step personalizzati", ps.Name))
+			return nil, pipeline.Permanent(fmt.Errorf("custom step %q: worker without support for custom steps", ps.Name))
 		}
 		return w.custom.Build(ps, requestedBy), nil
 	}
 	step, ok := w.steps.Get(ps.Name)
 	if !ok {
-		return nil, fmt.Errorf("step %q non implementato", ps.Name)
+		return nil, fmt.Errorf("step %q not implemented", ps.Name)
 	}
 	return step, nil
 }
@@ -53,7 +53,7 @@ func checkCustomSteps(plan pipeline.Plan, d descriptor.Descriptor, complete bool
 		}
 		for _, n := range doc.DeclaredSecrets() {
 			if _, ok := d.SecretRefByName(n); !ok {
-				errs = append(errs, fmt.Errorf("step %q: segreto %q non dichiarato in secrets", ps.Name, n))
+				errs = append(errs, fmt.Errorf("step %q: secret %q not declared in secrets", ps.Name, n))
 			}
 		}
 	}

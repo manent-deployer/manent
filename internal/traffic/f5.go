@@ -36,21 +36,21 @@ type f5Pool struct {
 func validateF5(s map[string]string) error {
 	var errs []error
 	if s[settingManagementURL] == "" {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingManagementURL))
+		errs = append(errs, fmt.Errorf("%s is required", settingManagementURL))
 	} else if err := checkURL(s, settingManagementURL, s[settingManagementURL]); err != nil {
 		errs = append(errs, err)
 	}
 	if !f5NameRe.MatchString(s[settingPool]) {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingPool))
+		errs = append(errs, fmt.Errorf("%s is required", settingPool))
 	}
 	if p := s[settingPartition]; p != "" && !f5NameRe.MatchString(p) {
-		errs = append(errs, fmt.Errorf("%s %q non valida", settingPartition, p))
+		errs = append(errs, fmt.Errorf("invalid %s %q", settingPartition, p))
 	}
 	if g := s[settingSyncGroup]; g != "" && !f5NameRe.MatchString(g) {
-		errs = append(errs, fmt.Errorf("%s %q non valido", settingSyncGroup, g))
+		errs = append(errs, fmt.Errorf("invalid %s %q", settingSyncGroup, g))
 	}
 	if s[settingCredentials] == "" {
-		errs = append(errs, fmt.Errorf("%s obbligatorio (utente:password)", settingCredentials))
+		errs = append(errs, fmt.Errorf("%s is required (user:password)", settingCredentials))
 	}
 	return errors.Join(errs...)
 }
@@ -136,7 +136,7 @@ func (p *f5Pool) Members(ctx context.Context) ([]Member, error) {
 func (p *f5Pool) patch(ctx context.Context, members []string, body map[string]string) error {
 	for _, m := range members {
 		if err := p.do(ctx, http.MethodPatch, p.membersURL()+"/"+p.ref(m), body, nil); err != nil {
-			return fmt.Errorf("membro %s: %w", m, err)
+			return fmt.Errorf("member %s: %w", m, err)
 		}
 	}
 	return p.configSync(ctx)
@@ -166,11 +166,11 @@ func (p *f5Pool) Connections(ctx context.Context, members []string) (map[string]
 	for _, m := range members {
 		var stats map[string]any
 		if err := p.do(ctx, http.MethodGet, p.membersURL()+"/"+p.ref(m)+"/stats", nil, &stats); err != nil {
-			return nil, fmt.Errorf("statistiche del membro %s: %w", m, err)
+			return nil, fmt.Errorf("statistics of member %s: %w", m, err)
 		}
 		n, ok := findStat(stats, "serverside.curConns")
 		if !ok {
-			return nil, fmt.Errorf("statistiche del membro %s senza serverside.curConns", m)
+			return nil, fmt.Errorf("statistics of member %s without serverside.curConns", m)
 		}
 		out[m] = n
 	}

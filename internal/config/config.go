@@ -642,7 +642,7 @@ func Load(path string) (*Config, error) {
 		dec := yaml.NewDecoder(bytes.NewReader(data))
 		dec.KnownFields(true)
 		if err := dec.Decode(cfg); err != nil {
-			return nil, fmt.Errorf("configurazione non valida: %w", err)
+			return nil, fmt.Errorf("invalid configuration: %w", err)
 		}
 	}
 	cfg.applyDefaults()
@@ -652,7 +652,7 @@ func Load(path string) (*Config, error) {
 	if cfg.DBOS.ExecutorID == "" {
 		host, err := os.Hostname()
 		if err != nil {
-			return nil, fmt.Errorf("dbos.executor_id non impostato e hostname non disponibile: %w", err)
+			return nil, fmt.Errorf("dbos.executor_id not set and hostname not available: %w", err)
 		}
 		cfg.DBOS.ExecutorID = host
 	}
@@ -663,18 +663,18 @@ func Load(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	var errs []error
 	if c.DBOS.DatabaseURL == "" {
-		errs = append(errs, errors.New("dbos.database_url obbligatorio"))
+		errs = append(errs, errors.New("dbos.database_url is required"))
 	}
 	if c.DBOS.Concurrency < 1 || c.DBOS.EnvironmentConcurrency < 1 || c.DBOS.GlobalConcurrency < 0 {
-		errs = append(errs, errors.New("dbos: concurrency ed environment_concurrency devono essere >= 1, global_concurrency >= 0"))
+		errs = append(errs, errors.New("dbos: concurrency and environment_concurrency must be >= 1, global_concurrency >= 0"))
 	}
 	switch c.EnvConfig.Provider {
 	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
 	default:
-		errs = append(errs, fmt.Errorf("envconfig.provider %q non supportato (none|consul|file)", c.EnvConfig.Provider))
+		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file)", c.EnvConfig.Provider))
 	}
 	if c.Callbacks.Timeout <= 0 || c.Callbacks.MaxRetries < 0 {
-		errs = append(errs, errors.New("callbacks: timeout deve essere > 0 e max_retries >= 0"))
+		errs = append(errs, errors.New("callbacks: timeout must be > 0 and max_retries >= 0"))
 	}
 	errs = append(errs, c.validateSecurity()...)
 	errs = append(errs, c.validateOperations()...)
@@ -683,7 +683,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateMetricSources()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
-		errs = append(errs, errors.New("dbos.environment_concurrency non può superare global_concurrency"))
+		errs = append(errs, errors.New("dbos.environment_concurrency cannot exceed global_concurrency"))
 	}
 	seen := map[string]bool{}
 	for _, s := range c.Pipeline.Steps {
@@ -692,21 +692,21 @@ func (c *Config) Validate() error {
 	for _, t := range slices.Sorted(maps.Keys(c.Rollback.ArtifactTypes)) {
 		rt := c.Rollback.ArtifactTypes[t]
 		if rt.Enabled && !rt.Allowed {
-			errs = append(errs, fmt.Errorf("rollback.artifact_types.%s: enabled richiede allowed", t))
+			errs = append(errs, fmt.Errorf("rollback.artifact_types.%s: enabled requires allowed", t))
 		}
 		for _, s := range rt.On {
 			if _, ok := seen[s]; !ok {
-				errs = append(errs, fmt.Errorf("rollback.artifact_types.%s.on: step %q non presente nella pipeline", t, s))
+				errs = append(errs, fmt.Errorf("rollback.artifact_types.%s.on: step %q not in the pipeline", t, s))
 			}
 		}
 	}
 	clear(seen)
 	for _, s := range c.Pipeline.Steps {
 		if s.Mode != ModeMandatory && s.Mode != ModeOptional {
-			errs = append(errs, fmt.Errorf("step %q: mode deve essere %q o %q", s.Name, ModeMandatory, ModeOptional))
+			errs = append(errs, fmt.Errorf("step %q: mode must be %q or %q", s.Name, ModeMandatory, ModeOptional))
 		}
 		if seen[s.Name] {
-			errs = append(errs, fmt.Errorf("step %q duplicato", s.Name))
+			errs = append(errs, fmt.Errorf("duplicate step %q", s.Name))
 		}
 		seen[s.Name] = true
 	}
@@ -721,18 +721,18 @@ func (c *Config) validateSIEM() []error {
 	}
 	targets := c.SIEM.Targets()
 	if len(targets) == 0 {
-		return []error{errors.New("siem: con enabled serve address (udp, tcp) o una destinazione in destinations")}
+		return []error{errors.New("siem: with enabled, address (udp, tcp) or an entry in destinations is required")}
 	}
 	var errs []error
 	for i, d := range targets {
 		switch d.Network {
 		case "udp", "tcp":
 			if d.Address == "" {
-				errs = append(errs, fmt.Errorf("siem: destinazione %d (%s) senza address", i+1, d.Network))
+				errs = append(errs, fmt.Errorf("siem: destination %d (%s) without address", i+1, d.Network))
 			}
 		case "unixgram", "journald":
 		default:
-			errs = append(errs, fmt.Errorf("siem: rete %q non supportata (udp, tcp, unixgram, journald)", d.Network))
+			errs = append(errs, fmt.Errorf("siem: network %q not supported (udp, tcp, unixgram, journald)", d.Network))
 		}
 	}
 	return errs
@@ -743,16 +743,16 @@ func (c *Config) validateMetricSources() []error {
 	var errs []error
 	r := c.Rollout
 	if d := r.Datadog; d != nil && (d.APIKeyRef == "" || d.AppKeyRef == "" || (d.URL != "" && !validURL(d.URL))) {
-		errs = append(errs, errors.New("rollout.datadog: api_key_ref e app_key_ref obbligatori, url http(s) se indicato"))
+		errs = append(errs, errors.New("rollout.datadog: api_key_ref and app_key_ref are required, http(s) url if set"))
 	}
 	if n := r.NewRelic; n != nil && (n.AccountID <= 0 || n.APIKeyRef == "" || (n.URL != "" && !validURL(n.URL))) {
-		errs = append(errs, errors.New("rollout.newrelic: account_id e api_key_ref obbligatori, url http(s) se indicato"))
+		errs = append(errs, errors.New("rollout.newrelic: account_id and api_key_ref are required, http(s) url if set"))
 	}
 	if e := r.Elastic; e != nil && (!validURL(e.URL) || (e.APIKeyRef == "") == (e.Username == "") || (e.Username != "" && e.PasswordRef == "")) {
-		errs = append(errs, errors.New("rollout.elastic: url obbligatorio e api_key_ref oppure username con password_ref"))
+		errs = append(errs, errors.New("rollout.elastic: url is required, plus api_key_ref or username with password_ref"))
 	}
 	if w := r.CloudWatch; w != nil && (w.Region == "" || (w.AccessKeyIDRef == "") != (w.SecretAccessKeyRef == "") || (w.Endpoint != "" && !validURL(w.Endpoint))) {
-		errs = append(errs, errors.New("rollout.cloudwatch: region obbligatoria, access_key_id_ref e secret_access_key_ref insieme, endpoint http(s) se indicato"))
+		errs = append(errs, errors.New("rollout.cloudwatch: region is required, access_key_id_ref and secret_access_key_ref together, http(s) endpoint if set"))
 	}
 	return errs
 }
@@ -760,35 +760,35 @@ func (c *Config) validateMetricSources() []error {
 func (c *Config) validateOperations() []error {
 	var errs []error
 	if c.DBOS.DrainTimeout < 0 {
-		errs = append(errs, errors.New("dbos.drain_timeout deve essere >= 0"))
+		errs = append(errs, errors.New("dbos.drain_timeout must be >= 0"))
 	}
 	r := c.Recovery
 	if r.HeartbeatInterval <= 0 || r.StaleAfter < 2*r.HeartbeatInterval {
-		errs = append(errs, errors.New("recovery: heartbeat_interval deve essere > 0 e stale_after almeno il doppio"))
+		errs = append(errs, errors.New("recovery: heartbeat_interval must be > 0 and stale_after at least twice as long"))
 	}
 	if r.AutoRecoverAfter < 0 || (r.AutoRecoverAfter > 0 && r.AutoRecoverAfter < r.StaleAfter) {
-		errs = append(errs, errors.New("recovery.auto_recover_after deve essere 0 (disattivata) o almeno stale_after"))
+		errs = append(errs, errors.New("recovery.auto_recover_after must be 0 (disabled) or at least stale_after"))
 	}
 	if t := c.Retention; t.MaxAge < 0 || t.KeepReleases < 1 || t.Interval <= 0 {
-		errs = append(errs, errors.New("retention: max_age deve essere >= 0, keep_releases >= 1 e interval > 0"))
+		errs = append(errs, errors.New("retention: max_age must be >= 0, keep_releases >= 1 and interval > 0"))
 	}
 	if t := c.Retention; t.MaxAge > 0 && t.MaxAge < 24*time.Hour {
-		errs = append(errs, errors.New("retention.max_age deve essere almeno 24h"))
+		errs = append(errs, errors.New("retention.max_age must be at least 24h"))
 	}
 	if t := c.Reconcile; t.Interval < 0 || (t.Interval > 0 && t.Interval < 10*time.Second) || t.Timeout <= 0 || t.Concurrency < 1 {
-		errs = append(errs, errors.New("reconcile: interval deve essere 0 (disattivata) o almeno 10s, timeout > 0 e concurrency >= 1"))
+		errs = append(errs, errors.New("reconcile: interval must be 0 (disabled) or at least 10s, timeout > 0 and concurrency >= 1"))
 	}
 	if c.DBOS.Region != "" && !regionRe.MatchString(c.DBOS.Region) {
-		errs = append(errs, fmt.Errorf("dbos.region %q non valida", c.DBOS.Region))
+		errs = append(errs, fmt.Errorf("invalid dbos.region %q", c.DBOS.Region))
 	}
 	if c.Chains.PollInterval < 100*time.Millisecond {
-		errs = append(errs, errors.New("chains.poll_interval deve essere almeno 100ms"))
+		errs = append(errs, errors.New("chains.poll_interval must be at least 100ms"))
 	}
 	if c.Rollout.CheckTimeout <= 0 {
-		errs = append(errs, errors.New("rollout.check_timeout deve essere > 0"))
+		errs = append(errs, errors.New("rollout.check_timeout must be > 0"))
 	}
 	if s := c.Observability.Tracing.SampleRatio; s < 0 || s > 1 {
-		errs = append(errs, errors.New("observability.tracing.sample_ratio deve essere tra 0 e 1"))
+		errs = append(errs, errors.New("observability.tracing.sample_ratio must be between 0 and 1"))
 	}
 	return errs
 }
@@ -806,47 +806,47 @@ func (c *Config) validateSecurity() []error {
 	case AuthModeNone:
 	case AuthModeEnabled:
 		if c.Auth.OIDC == nil && len(c.Auth.Tokens) == 0 && c.Auth.TokensFile == "" {
-			errs = append(errs, errors.New("auth: con mode enabled configurare oidc, tokens o tokens_file"))
+			errs = append(errs, errors.New("auth: with mode enabled configure oidc, tokens or tokens_file"))
 		}
 		if o := c.Auth.OIDC; o != nil && (o.Issuer == "" || o.Audience == "") {
-			errs = append(errs, errors.New("auth.oidc: issuer e audience obbligatori"))
+			errs = append(errs, errors.New("auth.oidc: issuer and audience are required"))
 		}
 		if o := c.Auth.OIDC; o != nil && o.UI != nil {
 			if o.UI.ClientID == "" {
-				errs = append(errs, errors.New("auth.oidc.ui.client_id obbligatorio"))
+				errs = append(errs, errors.New("auth.oidc.ui.client_id is required"))
 			}
 			if p := o.UI.RedirectPath; p != "" && (!strings.HasPrefix(p, "/") || strings.HasPrefix(p, "/api/")) {
-				errs = append(errs, errors.New("auth.oidc.ui.redirect_path deve essere un percorso assoluto fuori da /api/"))
+				errs = append(errs, errors.New("auth.oidc.ui.redirect_path must be an absolute path outside /api/"))
 			}
 		}
 	default:
-		errs = append(errs, fmt.Errorf("auth.mode %q non valido (none|enabled)", c.Auth.Mode))
+		errs = append(errs, fmt.Errorf("auth.mode %q is invalid (none|enabled)", c.Auth.Mode))
 	}
 	names := map[string]bool{}
 	for i, t := range c.Auth.Tokens {
 		if t.Name == "" || names[t.Name] {
-			errs = append(errs, fmt.Errorf("auth.tokens[%d]: name obbligatorio e univoco", i))
+			errs = append(errs, fmt.Errorf("auth.tokens[%d]: name is required and must be unique", i))
 		}
 		names[t.Name] = true
 		if !tokenHashRe.MatchString(t.SHA256) {
-			errs = append(errs, fmt.Errorf("auth.tokens[%d]: sha256 deve essere l'hash esadecimale del token, mai il token", i))
+			errs = append(errs, fmt.Errorf("auth.tokens[%d]: sha256 must be the hex hash of the token, never the token", i))
 		}
 	}
 	if v := c.Secrets.Vault; v.Enabled {
 		switch v.Auth {
 		case "", "token", "approle", "kubernetes":
 		default:
-			errs = append(errs, fmt.Errorf("secrets.vault.auth %q non valido (token|approle|kubernetes)", v.Auth))
+			errs = append(errs, fmt.Errorf("secrets.vault.auth %q is invalid (token|approle|kubernetes)", v.Auth))
 		}
 	}
 	if c.Artifacts.Timeout <= 0 {
-		errs = append(errs, errors.New("artifacts.timeout deve essere > 0"))
+		errs = append(errs, errors.New("artifacts.timeout must be > 0"))
 	}
 	if c.Audit.MaxSizeMB < 0 {
-		errs = append(errs, errors.New("audit.max_size_mb deve essere >= 0"))
+		errs = append(errs, errors.New("audit.max_size_mb must be >= 0"))
 	}
 	if c.Audit.HMACKeyRef != "" && c.Audit.File == "" {
-		errs = append(errs, errors.New("audit.hmac_key_ref richiede audit.file"))
+		errs = append(errs, errors.New("audit.hmac_key_ref requires audit.file"))
 	}
 	return errs
 }

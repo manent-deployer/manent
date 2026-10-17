@@ -59,7 +59,7 @@ func New(baseURL, token string) (*Client, error) {
 func NewWithOptions(o Options) (*Client, error) {
 	u, err := url.Parse(o.Server)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, fmt.Errorf("server %q non valido: indicare un URL http(s)", o.Server)
+		return nil, fmt.Errorf("invalid server %q: provide an http(s) URL", o.Server)
 	}
 	if o.Timeout <= 0 {
 		o.Timeout = 60 * time.Second
@@ -68,11 +68,11 @@ func NewWithOptions(o Options) (*Client, error) {
 	if o.CAFile != "" {
 		pem, err := os.ReadFile(o.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("lettura della CA del server: %w", err)
+			return nil, fmt.Errorf("reading the server CA: %w", err)
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("CA del server %s: nessun certificato PEM", o.CAFile)
+			return nil, fmt.Errorf("server CA %s: no PEM certificate", o.CAFile)
 		}
 		transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 	}
@@ -134,7 +134,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 }
 
 // errAuth means a missing or invalid token.
-var errAuth = errors.New("autenticazione richiesta: indicare un token valido (MANENT_TOKEN o --token-file)")
+var errAuth = errors.New("authentication required: provide a valid token (MANENT_TOKEN or --token-file)")
 
 // statusError carries the server message with the matching engine error.
 // The server message already contains the error prefix, which is not repeated.

@@ -103,7 +103,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 		for _, t := range raw {
 			s, ok := t.(string)
 			if !ok {
-				return nil, fmt.Errorf("artifact_types deve contenere stringhe")
+				return nil, fmt.Errorf("artifact_types must contain strings")
 			}
 			types = append(types, s)
 		}
@@ -128,33 +128,33 @@ func (p *Plugin) Supports(artifactType string) bool {
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if req.Params[ParamDestDir] == "" {
-		errs = append(errs, fmt.Errorf("parametro %q obbligatorio", ParamDestDir))
+		errs = append(errs, fmt.Errorf("parameter %q is required", ParamDestDir))
 	}
 	if req.Params[ParamSSHKeySecret] == "" && req.Params[ParamPasswordSecret] == "" {
-		errs = append(errs, fmt.Errorf("indicare %q o %q", ParamSSHKeySecret, ParamPasswordSecret))
+		errs = append(errs, fmt.Errorf("provide %q or %q", ParamSSHKeySecret, ParamPasswordSecret))
 	}
 	if req.Artifact.LocalPath == "" {
-		errs = append(errs, errors.New("artefatto locale mancante (step artifacts non eseguito?)"))
+		errs = append(errs, errors.New("local artifact missing (artifacts step not run?)"))
 	}
 	for _, t := range req.Targets {
 		if t.User == "" {
-			errs = append(errs, fmt.Errorf("target %s: user obbligatorio", t.Host))
+			errs = append(errs, fmt.Errorf("target %s: user is required", t.Host))
 		}
 	}
 	switch layout(req) {
 	case LayoutFlat:
 		if req.Params[ParamPrepareCommand] != "" {
-			errs = append(errs, fmt.Errorf("%q richiede layout %q", ParamPrepareCommand, LayoutReleases))
+			errs = append(errs, fmt.Errorf("%q requires layout %q", ParamPrepareCommand, LayoutReleases))
 		}
 	case LayoutReleases:
 		if !releaseRe.MatchString(req.Artifact.Version) {
-			errs = append(errs, fmt.Errorf("con layout %q artifact.version è obbligatorio e diventa il nome della directory: ammessi lettere, cifre, '.', '_', '+', '-'", LayoutReleases))
+			errs = append(errs, fmt.Errorf("with layout %q artifact.version is required and becomes the directory name: letters, digits, '.', '_', '+', '-' are allowed", LayoutReleases))
 		}
 		if _, err := keepReleases(req); err != nil {
 			errs = append(errs, err)
 		}
 	default:
-		errs = append(errs, fmt.Errorf("%s %q non valido (%s|%s)", ParamLayout, req.Params[ParamLayout], LayoutFlat, LayoutReleases))
+		errs = append(errs, fmt.Errorf("invalid %s %q (%s|%s)", ParamLayout, req.Params[ParamLayout], LayoutFlat, LayoutReleases))
 	}
 	return errors.Join(errs...)
 }
@@ -175,7 +175,7 @@ func keepReleases(req *plugin.Request) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 2 {
-		return 0, fmt.Errorf("%s deve essere un intero >= 2", ParamKeepReleases)
+		return 0, fmt.Errorf("%s must be an integer >= 2", ParamKeepReleases)
 	}
 	return n, nil
 }
@@ -213,7 +213,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host)
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 
@@ -228,7 +228,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 		}
 	}
 	if _, err := sess.Run(ctx, "mkdir -p "+shellQuote(path.Dir(remote))); err != nil {
-		return nil, fmt.Errorf("creazione directory remota: %w", err)
+		return nil, fmt.Errorf("creating the remote directory: %w", err)
 	}
 	if err := sess.Upload(ctx, req.Artifact.LocalPath, remote); err != nil {
 		return nil, fmt.Errorf("upload: %w", err)
@@ -238,11 +238,11 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 	if req.Params[ParamVerify] != "false" && req.Artifact.SHA256 != "" {
 		out, err := sess.Run(ctx, "sha256sum "+shellQuote(remote))
 		if err != nil {
-			return nil, fmt.Errorf("verifica checksum: %w", err)
+			return nil, fmt.Errorf("checksum verification: %w", err)
 		}
 		got, _, _ := strings.Cut(strings.TrimSpace(out), " ")
 		if !strings.EqualFold(got, req.Artifact.SHA256) {
-			return nil, fmt.Errorf("checksum remoto %s diverso da %s", got, req.Artifact.SHA256)
+			return nil, fmt.Errorf("remote checksum %s differs from %s", got, req.Artifact.SHA256)
 		}
 		details["checksum"] = "verified"
 	}
@@ -295,7 +295,7 @@ func readCurrent(ctx context.Context, sess Session, dest string) (string, error)
 	link := shellQuote(path.Join(dest, currentLink))
 	out, err := sess.Run(ctx, "if [ -L "+link+" ]; then readlink "+link+"; fi")
 	if err != nil {
-		return "", fmt.Errorf("lettura della release corrente: %w", err)
+		return "", fmt.Errorf("reading the current release: %w", err)
 	}
 	if v := strings.TrimSpace(out); v != "" {
 		return path.Base(v), nil
@@ -310,7 +310,7 @@ func switchCurrent(ctx context.Context, sess Session, dest, version string) erro
 	cmd := "ln -sfn " + shellQuote(path.Join(LayoutReleases, version)) + " " + tmp +
 		" && mv -Tf " + tmp + " " + shellQuote(path.Join(dest, currentLink))
 	if _, err := sess.Run(ctx, cmd); err != nil {
-		return fmt.Errorf("switch della release %s: %w", version, err)
+		return fmt.Errorf("switching release %s: %w", version, err)
 	}
 	return nil
 }
@@ -348,7 +348,7 @@ func commandEnv(dest, releaseDir, artifact, version string) string {
 // are an error, because it would be unclear which release to go back to.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	if layout(req) != LayoutReleases {
-		return nil, fmt.Errorf("la release in esercizio si legge solo con %s %q", ParamLayout, LayoutReleases)
+		return nil, fmt.Errorf("the release in service is read only with %s %q", ParamLayout, LayoutReleases)
 	}
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -376,13 +376,13 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	for _, v := range slices.Sorted(maps.Keys(found)) {
 		desc = append(desc, v+" su "+strings.Join(found[v], ","))
 	}
-	return nil, fmt.Errorf("release diverse sui target: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different releases on the targets: %s", strings.Join(desc, "; "))
 }
 
 func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth Auth, dest string) (string, error) {
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return "", fmt.Errorf("connessione: %w", err)
+		return "", fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 	return readCurrent(ctx, sess, dest)
@@ -393,10 +393,10 @@ func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth Auth, dest
 // targets as possible, and reports the errors at the end. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if layout(req) != LayoutReleases {
-		return nil, fmt.Errorf("il rollback richiede %s %q", ParamLayout, LayoutReleases)
+		return nil, fmt.Errorf("rollback requires %s %q", ParamLayout, LayoutReleases)
 	}
 	if !releaseRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida come nome di release", previous.Version)
+		return nil, fmt.Errorf("version %q is not valid as a release name", previous.Version)
 	}
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -420,14 +420,14 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, auth Auth,
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host, "rollback", true)
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 
 	dest := req.Params[ParamDestDir]
 	releaseDir := path.Join(dest, LayoutReleases, version)
 	if _, err := sess.Run(ctx, "test -d "+shellQuote(releaseDir)); err != nil {
-		return nil, fmt.Errorf("release %s assente sul target: %w", version, err)
+		return nil, fmt.Errorf("release %s missing on the target: %w", version, err)
 	}
 	if err := switchCurrent(ctx, sess, dest, version); err != nil {
 		return nil, err
@@ -475,14 +475,14 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, auth Auth, re
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host, "dry_run", true)
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 
 	remote, releaseDir := paths(req)
 	details := map[string]string{"remote_path": remote}
 	if _, err := sess.Run(ctx, writableDirCheck(req.Params[ParamDestDir])); err != nil {
-		return details, fmt.Errorf("directory remota non scrivibile: %w", err)
+		return details, fmt.Errorf("remote directory not writable: %w", err)
 	}
 	details["dest_dir"] = "writable"
 	if releaseDir != "" {
@@ -497,7 +497,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, auth Auth, re
 	}
 	if req.Params[ParamVerify] != "false" && req.Artifact.SHA256 != "" {
 		if _, err := sess.Run(ctx, "command -v sha256sum"); err != nil {
-			return details, fmt.Errorf("sha256sum non disponibile: %w", err)
+			return details, fmt.Errorf("sha256sum not available: %w", err)
 		}
 		details["checksum"] = "available"
 	}

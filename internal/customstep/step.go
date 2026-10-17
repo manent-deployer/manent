@@ -139,7 +139,7 @@ func (s *step) exec(ctx context.Context, in pipeline.Input, dry bool) (pipeline.
 	case customspec.TypeHTTP:
 		raw, err = r.http(ctx)
 	default:
-		err = pipeline.Permanent(fmt.Errorf("tipo di step %q non supportato", s.doc.Type))
+		err = pipeline.Permanent(fmt.Errorf("step type %q not supported", s.doc.Type))
 	}
 	var out pipeline.Output
 	if err == nil {
@@ -169,13 +169,13 @@ func (s *step) verify() error {
 		return s.decodeErr
 	}
 	if s.doc.Name != s.ps.Name {
-		return fmt.Errorf("la specifica appartiene allo step %q, non a %q", s.doc.Name, s.ps.Name)
+		return fmt.Errorf("the specification belongs to step %q, not to %q", s.doc.Name, s.ps.Name)
 	}
 	if err := s.b.Keys.Verify(s.ps.Spec, s.ps.SpecMAC); err != nil {
 		return err
 	}
 	if h := customspec.Hash(s.ps.Spec); slices.Contains(s.b.Revoked, h) {
-		return fmt.Errorf("la specifica %s dello step %q è revocata (pipeline.custom.revoked_specs)", h, s.ps.Name)
+		return fmt.Errorf("specification %s of step %q is revoked (pipeline.custom.revoked_specs)", h, s.ps.Name)
 	}
 	return nil
 }
@@ -184,11 +184,11 @@ func (s *step) verify() error {
 func (s *step) prepare(ctx context.Context, in pipeline.Input, dry bool, log *slog.Logger) (*run, error) {
 	d := in.Descriptor
 	if d.Artifact.Version != "" && !versionRe.MatchString(d.Artifact.Version) {
-		return nil, pipeline.Permanent(fmt.Errorf("versione %q non utilizzabile dagli step personalizzati: %s", d.Artifact.Version, versionRe))
+		return nil, pipeline.Permanent(fmt.Errorf("version %q cannot be used by custom steps: %s", d.Artifact.Version, versionRe))
 	}
 	params, err := s.doc.EffectiveParams(d.StepParams[s.ps.Name], true)
 	if err != nil {
-		return nil, pipeline.Permanent(fmt.Errorf("parametri dello step: %w", err))
+		return nil, pipeline.Permanent(fmt.Errorf("step parameters: %w", err))
 	}
 	action, names := s.doc.Run, s.doc.Secrets
 	if dry {
@@ -203,11 +203,11 @@ func (s *step) prepare(ctx context.Context, in pipeline.Input, dry bool, log *sl
 	res := secrets.DescriptorResolver{Provider: s.b.Secrets, Descriptor: d}
 	for _, n := range all {
 		if _, ok := d.SecretRefByName(n); !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("segreto %q dello step non dichiarato in secrets (descrittore o configurazione di ambiente)", n))
+			return nil, pipeline.Permanent(fmt.Errorf("step secret %q not declared in secrets (descriptor or environment configuration)", n))
 		}
 		v, err := res.Secret(ctx, n)
 		if err != nil {
-			return nil, fmt.Errorf("segreto %q: %w", n, err)
+			return nil, fmt.Errorf("secret %q: %w", n, err)
 		}
 		values = append(values, v)
 		if slices.Contains(names, n) {
@@ -235,7 +235,7 @@ func (r *run) outputs(raw map[string]string) (pipeline.Output, error) {
 	for _, k := range slices.Sorted(maps.Keys(raw)) {
 		spec, ok := r.s.doc.Outputs[k]
 		if !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("output %q non dichiarato dallo step", k))
+			return nil, pipeline.Permanent(fmt.Errorf("output %q not declared by the step", k))
 		}
 		re, err := customspec.Compile(spec.Pattern)
 		if err != nil {
@@ -243,10 +243,10 @@ func (r *run) outputs(raw map[string]string) (pipeline.Output, error) {
 		}
 		v := raw[k]
 		if r.red.contains(v) {
-			return nil, pipeline.Permanent(fmt.Errorf("output %q contiene un segreto: rifiutato", k))
+			return nil, pipeline.Permanent(fmt.Errorf("output %q contains a secret: rejected", k))
 		}
 		if !re.MatchString(v) {
-			return nil, pipeline.Permanent(fmt.Errorf("output %q: valore non conforme al pattern dichiarato", k))
+			return nil, pipeline.Permanent(fmt.Errorf("output %q: value does not match the declared pattern", k))
 		}
 		out[k] = v
 	}

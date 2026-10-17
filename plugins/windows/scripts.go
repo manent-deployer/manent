@@ -78,7 +78,7 @@ try {
   }
 } finally { $fs.Close() }
 $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $part).Hash.ToLowerInvariant()
-if ($got -ne $sha) { Remove-Item -LiteralPath $part -Force; throw "sha256 sul target $got, atteso $sha" }
+if ($got -ne $sha) { Remove-Item -LiteralPath $part -Force; throw "sha256 on the target $got, expected $sha" }
 Move-Item -LiteralPath $part -Destination $zip -Force
 $dir = Join-Path $root $version
 $tmp = $dir + '.tmp'
@@ -98,16 +98,16 @@ Write-Output ('MANENT:dir=' + $dir)
 // Then post_script, with MANENT_VERSION and MANENT_RELEASE_DIR in the environment.
 func activateScript(s settings, version string) string {
 	head := vars("root", s.ReleasesDir, "version", version) + `$dir = Join-Path $root $version
-if (-not (Test-Path -LiteralPath $dir)) { throw "release $version assente sul target ($dir)" }
+if (-not (Test-Path -LiteralPath $dir)) { throw "release $version missing on the target ($dir)" }
 `
 	var body string
 	if s.Mode == ModeIIS {
 		body = vars("site", s.Site, "app", s.App, "pool", s.AppPool, "stop", fmt.Sprint(s.StopAppPool), "timeout", seconds(s.Timeout)) + iisFilter + `
-if ($null -eq (Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter -Name physicalPath)) { throw "applicazione $app del sito $site non trovata" }
+if ($null -eq (Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $filter -Name physicalPath)) { throw "application $app of site $site not found" }
 function Wait-Pool($state) {
   $deadline = (Get-Date).AddSeconds([int]$timeout)
   while ((Get-WebAppPoolState -Name $pool).Value -ne $state) {
-    if ((Get-Date) -gt $deadline) { throw "application pool $pool non $state entro $timeout s" }
+    if ((Get-Date) -gt $deadline) { throw "application pool $pool not $state within $timeout s" }
     Start-Sleep -Milliseconds 500
   }
 }
@@ -122,7 +122,7 @@ if ($pool -ne '') {
 		body = vars("name", s.Service, "binary", s.Binary, "arguments", s.Arguments, "timeout", seconds(s.Timeout)) + `
 $svc = Get-Service -Name $name
 $exe = Join-Path $dir $binary
-if (-not (Test-Path -LiteralPath $exe)) { throw "eseguibile $binary assente nella release $version" }
+if (-not (Test-Path -LiteralPath $exe)) { throw "executable $binary missing in release $version" }
 $wait = [TimeSpan]::FromSeconds([int]$timeout)
 if ($svc.Status -ne 'Stopped') { Stop-Service -Name $name -Force; $svc.WaitForStatus('Stopped', $wait) }
 $bin = '"' + $exe + '"'

@@ -46,7 +46,7 @@ func TestApply(t *testing.T) {
 func TestApplyNonAmmesso(t *testing.T) {
 	p := testPolicy()
 	// migration is excluded by default: requesting rollback is an error, not requesting it is not.
-	if _, err := p.Apply(descriptorOf("migration", &descriptor.Rollback{Enabled: ptr(true)})); err == nil || !strings.Contains(err.Error(), "non ammesso") {
+	if _, err := p.Apply(descriptorOf("migration", &descriptor.Rollback{Enabled: ptr(true)})); err == nil || !strings.Contains(err.Error(), "not allowed") {
 		t.Errorf("atteso rollback non ammesso, ricevuto %v", err)
 	}
 	if d, err := p.Apply(descriptorOf("migration", nil)); err != nil || d.Rollback.IsEnabled() {

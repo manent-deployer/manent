@@ -72,7 +72,7 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 		chg = nil
 	}
 	if rule == nil && chg == nil {
-		return ApprovalState{}, errors.New("approvazione senza regola")
+		return ApprovalState{}, errors.New("approval without rule")
 	}
 	timeout := time.Duration(0)
 	if rule != nil {
@@ -364,11 +364,11 @@ func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error
 		return err
 	}
 	if st.State != StateAwaitingApproval {
-		return fmt.Errorf("%w: il deploy %s non è in attesa di approvazione (stato %s)", ErrInvalidRequest, id, st.State)
+		return fmt.Errorf("%w: deploy %s is not awaiting approval (state %s)", ErrInvalidRequest, id, st.State)
 	}
 	approver := auth.FromContext(ctx).String()
 	if st.Approval != nil && slices.ContainsFunc(st.Approval.Decisions, func(d Decision) bool { return d.Approver == approver }) {
-		return fmt.Errorf("%w: %s ha già espresso una decisione sul deploy %s", ErrInvalidRequest, approver, id)
+		return fmt.Errorf("%w: %s has already given a decision on deploy %s", ErrInvalidRequest, approver, id)
 	}
 	dec := Decision{Approver: approver, Approve: r.Approve, Comment: r.Comment, Time: e.now().UTC()}
 	target, topic := id+approvalSuffix, approvalTopic

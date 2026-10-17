@@ -52,7 +52,7 @@ func TestHealthGate(t *testing.T) {
 		t.Fatalf("gate verde atteso: %+v", r)
 	}
 	errorRate = "0.05"
-	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "error-rate (eu-1/eu-1a): valore 0.05 fuori soglia") {
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "error-rate (eu-1/eu-1a): value 0.05 out of threshold") {
 		t.Fatalf("soglia superata non rilevata: %s", r.Failed())
 	}
 	errorRate = "0.002"
@@ -68,13 +68,13 @@ func TestHealthGate(t *testing.T) {
 	alerts = `[]`
 	// No data: red.
 	in.Passes[0].AZ = "eu-1b"
-	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "nessun dato") {
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "no data") {
 		t.Fatalf("nessun dato accettato: %s", r.Failed())
 	}
 	// Failed probe.
 	in.Passes[0].AZ = "eu-1a"
 	in.Health.Probes[0].URL = "http://{host}/ready"
-	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "stato 503") {
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "status 503") {
 		t.Fatalf("sonda: %s", r.Failed())
 	}
 	if (&HTTPChecker{}).Supports(&h) == nil {
@@ -103,7 +103,7 @@ func TestGateComparativo(t *testing.T) {
 		Compare: descriptor.CompareStable, MaxRatio: &ratio, SamplesQuery: `sum(requests{track="{track}"})`, MinSamples: 200}}}
 	in := GateInput{Application: "shop", Passes: []Pass{{Name: "traffic"}}, Health: h, Track: "b", StableTrack: "a", Version: "2.0.0"}
 	ctx := context.Background()
-	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "rapporto 3.00 oltre 2") {
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "ratio 3.00 over 2") {
 		t.Fatalf("candidata peggiore della stabile non rilevata: %s", r.Failed())
 	}
 	values["b"] = "0.015"
@@ -112,7 +112,7 @@ func TestGateComparativo(t *testing.T) {
 	}
 	// Few samples: the gate cannot say the candidate is healthy.
 	values["samples"] = "50"
-	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "campioni insufficienti") {
+	if r := c.Check(ctx, in); r.OK || !strings.Contains(r.Failed(), "insufficient samples") {
 		t.Fatalf("campioni: %s", r.Failed())
 	}
 	// First release: nothing to compare.

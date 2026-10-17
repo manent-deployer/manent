@@ -33,7 +33,7 @@ func validateNginxPlus(s map[string]string) error {
 	var errs []error
 	urls := splitList(s[settingAPIURLs])
 	if len(urls) == 0 {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingAPIURLs))
+		errs = append(errs, fmt.Errorf("%s is required", settingAPIURLs))
 	}
 	for _, u := range urls {
 		if err := checkURL(s, settingAPIURLs, u); err != nil {
@@ -41,11 +41,11 @@ func validateNginxPlus(s map[string]string) error {
 		}
 	}
 	if !upstreamRe.MatchString(s[settingUpstream]) {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingUpstream))
+		errs = append(errs, fmt.Errorf("%s is required", settingUpstream))
 	}
 	if v := s[settingAPIVer]; v != "" {
 		if n, err := strconv.Atoi(v); err != nil || n < 1 {
-			errs = append(errs, fmt.Errorf("%s %q non valida", settingAPIVer, v))
+			errs = append(errs, fmt.Errorf("invalid %s %q", settingAPIVer, v))
 		}
 	}
 	return errors.Join(errs...)
@@ -158,7 +158,7 @@ func (p *nginxPlusPool) setServers(ctx context.Context, members []string, body [
 				}
 			}
 			if id < 0 {
-				return fmt.Errorf("%s: server %s assente dall'upstream %s", redactURL(base), m, p.upstream)
+				return fmt.Errorf("%s: server %s missing from upstream %s", redactURL(base), m, p.upstream)
 			}
 			if err := p.do(ctx, http.MethodPatch, p.upstreamURL(base)+"/servers/"+strconv.Itoa(id), body, nil); err != nil {
 				return fmt.Errorf("server %s: %w", m, err)

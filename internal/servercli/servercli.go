@@ -205,7 +205,7 @@ func (c *ServeCmd) Execute([]string) error {
 	defer stop()
 	authn, err := app.NewAuthenticator(ctx, a.Config, a.Logger)
 	if err != nil {
-		return fmt.Errorf("autenticazione: %w", err)
+		return fmt.Errorf("authentication: %w", err)
 	}
 	a.WarnInsecure()
 	gin.SetMode(gin.ReleaseMode)
@@ -308,7 +308,7 @@ func (c *AuditVerifyCmd) Execute([]string) error {
 			return err
 		}
 	case len(files) == 0:
-		return errors.New("indicare il file di audit (o audit.file in configurazione)")
+		return errors.New("provide the audit file (or audit.file in the configuration)")
 	}
 	sp, err := app.NewSecretProvider(cfg)
 	if err != nil {
@@ -321,7 +321,7 @@ func (c *AuditVerifyCmd) Execute([]string) error {
 	rep, err := audit.Verify(files, key)
 	if err != nil {
 		_ = cliutil.PrintJSON(rep)
-		return fmt.Errorf("catena di audit non valida: %w", err)
+		return fmt.Errorf("invalid audit chain: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "catena di audit integra")
 	return cliutil.PrintJSON(rep)
@@ -409,7 +409,7 @@ func (c *PruneCmd) Execute([]string) error {
 			o.KeepReleases = c.KeepReleases
 		}
 		if o.MaxAge <= 0 {
-			return errors.New("indicare --max-age o configurare retention.max_age")
+			return errors.New("provide --max-age or configure retention.max_age")
 		}
 		rep, err := adm.Prune(ctx, o)
 		if err != nil {
@@ -434,7 +434,7 @@ func (c *SpecsCmd) Execute([]string) error {
 		for _, h := range c.Hash {
 			h = strings.ToLower(strings.TrimSpace(h))
 			if len(h) != 64 || strings.Trim(h, "0123456789abcdef") != "" {
-				return fmt.Errorf("--hash %q: atteso uno sha256 esadecimale (64 caratteri)", h)
+				return fmt.Errorf("--hash %q: expected a hex sha256 (64 characters)", h)
 			}
 			hashes = append(hashes, h)
 		}
@@ -442,7 +442,7 @@ func (c *SpecsCmd) Execute([]string) error {
 			hashes = a.Config.Pipeline.Custom.RevokedSpecs
 		}
 		if len(hashes) == 0 && !c.All {
-			return errors.New("nessuna specifica revocata in pipeline.custom.revoked_specs: indicare --hash o --all")
+			return errors.New("no revoked specification in pipeline.custom.revoked_specs: provide --hash or --all")
 		}
 		rep, err := adm.Specs(ctx, engine.SpecsOptions{Hashes: hashes, All: c.All})
 		if err != nil {
@@ -481,7 +481,7 @@ func startTelemetry(a *app.App) (func(), error) {
 		return nil, fmt.Errorf("tracing: %w", err)
 	}
 	if err := a.EnableStateMetrics(); err != nil {
-		return nil, fmt.Errorf("metriche: %w", err)
+		return nil, fmt.Errorf("metrics: %w", err)
 	}
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

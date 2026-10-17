@@ -89,7 +89,7 @@ func newRolloutState(p rollout.Plan, r *descriptor.Rollout) *RolloutState {
 func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOps) (rollout.Plan, error) {
 	if d.Traffic != nil {
 		if ops == nil {
-			return rollout.Plan{}, errors.New("traffic: integrazione con load balancer e router non disponibile su questo server")
+			return rollout.Plan{}, errors.New("traffic: load balancer and router integration not available on this server")
 		}
 		if err := ops.Check(&d); err != nil {
 			return rollout.Plan{}, err
@@ -97,11 +97,11 @@ func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOp
 	}
 	if d.Rollout.IsTraffic() {
 		if ops == nil {
-			return rollout.Plan{}, errors.New("strategy: traffic non disponibile su questo server")
+			return rollout.Plan{}, errors.New("strategy: traffic not available on this server")
 		}
 		if h := d.Rollout.Health; h != nil {
 			if health == nil {
-				return rollout.Plan{}, errors.New("rollout.health: health gate non configurato su questo server")
+				return rollout.Plan{}, errors.New("rollout.health: health gate not configured on this server")
 			}
 			if err := health.Supports(h); err != nil {
 				return rollout.Plan{}, err
@@ -114,11 +114,11 @@ func checkRollout(d descriptor.Descriptor, health rollout.Checker, ops TrafficOp
 		return p, err
 	}
 	if d.Rollout.OnFailureOrDefault() != descriptor.OnFailureStop && !d.Rollback.IsEnabled() {
-		return p, fmt.Errorf("rollout.onFailure %s richiede il rollback attivo (rollback.enabled) per il tipo di artefatto %q", d.Rollout.OnFailure, d.Artifact.Type)
+		return p, fmt.Errorf("rollout.onFailure %s requires rollback enabled (rollback.enabled) for artifact type %q", d.Rollout.OnFailure, d.Artifact.Type)
 	}
 	if h := d.Rollout.Health; h != nil {
 		if health == nil {
-			return p, errors.New("rollout.health: health gate non configurato su questo server")
+			return p, errors.New("rollout.health: health gate not configured on this server")
 		}
 		if err := health.Supports(h); err != nil {
 			return p, err
@@ -233,7 +233,7 @@ func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descripto
 		if w.regionRouting && p.Region != "" {
 			childID, h, err := w.startPass(ctx, id, req, d, ev, steps, p, outputs, nil, "")
 			if err != nil {
-				firstErr = cmpErr(firstErr, fmt.Errorf("passo %s: %w", p.Name, err))
+				firstErr = cmpErr(firstErr, fmt.Errorf("pass %s: %w", p.Name, err))
 				continue
 			}
 			run[i].routed = true
@@ -244,7 +244,7 @@ func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descripto
 		run[i].started = st
 		w.passFinished(d, p, err)
 		if err != nil {
-			return run, fmt.Errorf("passo %s: %w", p.Name, err)
+			return run, fmt.Errorf("pass %s: %w", p.Name, err)
 		}
 	}
 	for _, c := range children {
@@ -257,7 +257,7 @@ func (w *Worker) runStage(ctx dbos.Context, id string, req Request, d *descripto
 		}
 		w.passFinished(d, run[c.i].pass, err)
 		if err != nil {
-			firstErr = cmpErr(firstErr, fmt.Errorf("passo %s: %w", run[c.i].pass.Name, err))
+			firstErr = cmpErr(firstErr, fmt.Errorf("pass %s: %w", run[c.i].pass.Name, err))
 		}
 	}
 	return run, firstErr
@@ -379,7 +379,7 @@ func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descript
 	qname := regionQueue(w.queueName, p.Region)
 	q, err := dbos.RetrieveQueue(w.dbos, qname)
 	if err != nil {
-		return "", nil, fmt.Errorf("nessun worker registrato per la region %s (coda %s): %w", p.Region, qname, err)
+		return "", nil, fmt.Errorf("no worker registered for region %s (queue %s): %w", p.Region, qname, err)
 	}
 	kind := "pass"
 	if undo != nil {
@@ -488,9 +488,9 @@ func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descripto
 	case err != nil:
 		return err
 	case stopped:
-		return fmt.Errorf("health gate rosso dopo lo stadio %s: %s", stage.Name, last.Failed())
+		return fmt.Errorf("health gate red after stage %s: %s", stage.Name, last.Failed())
 	case !last.OK:
-		return fmt.Errorf("health gate rosso alla fine del bake dello stadio %s: %s", stage.Name, last.Failed())
+		return fmt.Errorf("health gate red at the end of the bake of stage %s: %s", stage.Name, last.Failed())
 	}
 	rs.Stages[i].Gate = ""
 	return nil
@@ -554,9 +554,9 @@ func (w *Worker) batchGate(ctx dbos.Context, d *descriptor.Descriptor, p rollout
 	case err != nil:
 		return err
 	case stopped:
-		return fmt.Errorf("health gate rosso dopo il lotto %s: %s", label, last.Failed())
+		return fmt.Errorf("health gate red after batch %s: %s", label, last.Failed())
 	case !last.OK:
-		return fmt.Errorf("health gate rosso alla fine del bake del lotto %s: %s", label, last.Failed())
+		return fmt.Errorf("health gate red at the end of the bake of batch %s: %s", label, last.Failed())
 	}
 	return nil
 }
@@ -587,14 +587,14 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 				qname := regionQueue(w.queueName, region)
 				q, err := dbos.RetrieveQueue(w.dbos, qname)
 				if err != nil {
-					return rollout.GateResult{}, fmt.Errorf("nessun worker registrato per la region %s (coda %s): %w", region, qname, err)
+					return rollout.GateResult{}, fmt.Errorf("no worker registered for region %s (queue %s): %w", region, qname, err)
 				}
 				gi := in
 				gi.Passes, gi.Health = byRegion[region], descriptor.Health{Probes: in.Health.Probes}
 				h, err := dbos.RunWorkflow(ctx, w.gateWorkflow, gi, dbos.WithWorkflowID(id+".gate."+label+"."+region),
 					dbos.WithQueue(q), dbos.WithQueuePartitionKey(partitionKey(d)+"/"+region+"/gate"))
 				if err != nil {
-					return rollout.GateResult{}, fmt.Errorf("health gate nella region %s: %w", region, err)
+					return rollout.GateResult{}, fmt.Errorf("health gate in region %s: %w", region, err)
 				}
 				children = append(children, child{region: region, h: h})
 			}
@@ -611,7 +611,7 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 			for _, c := range children {
 				cr, err := c.h.GetResult()
 				if err != nil {
-					return rollout.GateResult{}, fmt.Errorf("health gate nella region %s: %w", c.region, err)
+					return rollout.GateResult{}, fmt.Errorf("health gate in region %s: %w", c.region, err)
 				}
 				parts = append(parts, cr)
 			}
@@ -740,7 +740,7 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 	log.Info("approvazione del rollout conclusa", "status", st.Status)
 	if st.Status != ApprovalApproved {
 		w.publishRollout(ctx, rs)
-		return fmt.Errorf("rollout fermato (%s): approvazione %s", rs.Paused, st.Status)
+		return fmt.Errorf("rollout stopped (%s): approval %s", rs.Paused, st.Status)
 	}
 	rs.Status, rs.Paused = service.RolloutRunning, ""
 	w.publishRollout(ctx, rs)
@@ -811,7 +811,7 @@ func (w *Worker) undoPass(ctx dbos.Context, id string, d *descriptor.Descriptor,
 		return RollbackFailed, err
 	}
 	if out.Rollback == RollbackFailed {
-		return RollbackFailed, errors.New(cmpString(out.Error, "rollback del passo "+pr.pass.Name+" fallito"))
+		return RollbackFailed, errors.New(cmpString(out.Error, "rollback of pass "+pr.pass.Name+" failed"))
 	}
 	return out.Rollback, nil
 }

@@ -33,7 +33,7 @@ func (d *SSHDialer) Dial(ctx context.Context, t descriptor.Target, user string, 
 	if auth.PrivateKey != "" {
 		signer, err := ssh.ParsePrivateKey([]byte(auth.PrivateKey))
 		if err != nil {
-			return nil, errors.New("chiave privata SSH non valida")
+			return nil, errors.New("invalid SSH private key")
 		}
 		methods = append(methods, ssh.PublicKeys(signer))
 	}
@@ -103,7 +103,7 @@ func (c *sshConn) Exec(ctx context.Context, cmd string, stdin io.Reader, stdout,
 			return 0, nil
 		case errors.As(err, &exit):
 			if exit.Signal() != "" {
-				return -1, fmt.Errorf("comando terminato dal segnale %s", exit.Signal())
+				return -1, fmt.Errorf("command terminated by signal %s", exit.Signal())
 			}
 			return exit.ExitStatus(), nil
 		}

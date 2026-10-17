@@ -54,7 +54,7 @@ const (
 const DetailTaskDefinition = "task_definition"
 
 // ErrNotFound means a service or task definition that does not exist.
-var ErrNotFound = errors.New("non trovato")
+var ErrNotFound = errors.New("not found")
 
 // Service is the state of an ECS service.
 type Service struct {
@@ -203,7 +203,7 @@ func parseTarget(t plugin.Target, req *plugin.Request) (target, error) {
 		cluster = defaultCluster
 	}
 	if !awsauth.ValidRegion(region) {
-		return target{}, fmt.Errorf("target %q: atteso region o region/cluster (es. eu-west-1/prod)", t.Host)
+		return target{}, fmt.Errorf("target %q: expected region or region/cluster (e.g. eu-west-1/prod)", t.Host)
 	}
 	return target{host: t.Host, region: region, cluster: cluster}, nil
 }
@@ -219,13 +219,13 @@ func serviceName(req *plugin.Request) string {
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e diventa un tag della task definition: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and becomes a tag of the task definition: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if req.Artifact.LocalPath != "" && !strings.HasSuffix(req.Artifact.LocalPath, plugin.ImageRefExt) {
-		errs = append(errs, errors.New("l'artefatto non è un'immagine di un registry: indicare artifact.source oci://registry/repository:tag"))
+		errs = append(errs, errors.New("the artifact is not a registry image: provide artifact.source oci://registry/repository:tag"))
 	}
 	if serviceName(req) == "" {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", ParamService))
+		errs = append(errs, fmt.Errorf("%s is required", ParamService))
 	}
 	if _, err := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout); err != nil {
 		errs = append(errs, err)
@@ -237,7 +237,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 		errs = append(errs, err)
 	}
 	if len(req.Targets) == 0 {
-		errs = append(errs, errors.New("nessuna region tra i target"))
+		errs = append(errs, errors.New("no region among the targets"))
 	}
 	for _, t := range req.Targets {
 		if _, err := parseTarget(t, req); err != nil {
@@ -254,7 +254,7 @@ func searchLimit(req *plugin.Request) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 {
-		return 0, fmt.Errorf("%s deve essere un intero positivo", ParamSearchRevision)
+		return 0, fmt.Errorf("%s must be a positive integer", ParamSearchRevision)
 	}
 	return n, nil
 }
@@ -276,7 +276,7 @@ func chooseContainer(td *TaskDefinition, req *plugin.Request) (string, error) {
 	if slices.Contains(names, want) {
 		return want, nil
 	}
-	return "", fmt.Errorf("container %q assente dalla task definition %s (container: %s): indicare %q", want, td.ARN, strings.Join(names, ", "), ParamContainer)
+	return "", fmt.Errorf("container %q missing from task definition %s (containers: %s): provide %q", want, td.ARN, strings.Join(names, ", "), ParamContainer)
 }
 
 func (td *TaskDefinition) image(container string) string {
@@ -309,20 +309,20 @@ func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request)
 	}
 	svc, err := api.DescribeService(ctx, tg.cluster, serviceName(req))
 	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("servizio %s assente dal cluster %s: va creato con l'infrastruttura (es. Terraform), manent ne aggiorna l'immagine", serviceName(req), tg.cluster)
+		return nil, fmt.Errorf("service %s missing from cluster %s: it must be created with the infrastructure (e.g. Terraform), manent updates its image", serviceName(req), tg.cluster)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lettura del servizio: %w", err)
+		return nil, fmt.Errorf("reading the service: %w", err)
 	}
 	if svc.Status != "" && svc.Status != "ACTIVE" {
-		return nil, fmt.Errorf("servizio %s nello stato %s", svc.Name, svc.Status)
+		return nil, fmt.Errorf("service %s in state %s", svc.Name, svc.Status)
 	}
 	if svc.Controller != "" && svc.Controller != "ECS" {
-		return nil, fmt.Errorf("servizio %s con deployment controller %s: il plugin gestisce solo il controller ECS", svc.Name, svc.Controller)
+		return nil, fmt.Errorf("service %s with deployment controller %s: the plugin handles only the ECS controller", svc.Name, svc.Controller)
 	}
 	td, err := api.DescribeTaskDefinition(ctx, svc.TaskDefinition)
 	if err != nil {
-		return nil, fmt.Errorf("lettura della task definition %s: %w", svc.TaskDefinition, err)
+		return nil, fmt.Errorf("reading task definition %s: %w", svc.TaskDefinition, err)
 	}
 	container, err := chooseContainer(td, req)
 	if err != nil {
@@ -373,11 +373,11 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 			TagVersion: req.Artifact.Version, TagDeployment: req.DeploymentID,
 		}
 		if td, err = s.api.RegisterRevision(ctx, s.current, s.container, image, tags); err != nil {
-			return details, fmt.Errorf("registrazione della task definition: %w", err)
+			return details, fmt.Errorf("registering the task definition: %w", err)
 		}
 		log.InfoContext(ctx, "task definition registrata", "task_definition", td.ARN, "image", image)
 		if err := s.api.UpdateService(ctx, s.target.cluster, serviceName(req), td.ARN); err != nil {
-			return details, fmt.Errorf("aggiornamento del servizio: %w", err)
+			return details, fmt.Errorf("updating the service: %w", err)
 		}
 	}
 	details[DetailTaskDefinition] = td.ARN
@@ -408,9 +408,9 @@ func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Req
 		svc, err := s.api.DescribeService(ctx, s.target.cluster, serviceName(req))
 		if err != nil {
 			if ctx.Err() != nil {
-				return fmt.Errorf("deployment non completato entro %s (%s)", timeout, last)
+				return fmt.Errorf("deployment not completed within %s (%s)", timeout, last)
 			}
-			return fmt.Errorf("lettura del servizio: %w", err)
+			return fmt.Errorf("reading the service: %w", err)
 		}
 		done, st, err := completed(svc, arn)
 		if err != nil {
@@ -426,7 +426,7 @@ func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Req
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("deployment non completato entro %s (%s)", timeout, last)
+			return fmt.Errorf("deployment not completed within %s (%s)", timeout, last)
 		case <-time.After(p.poll):
 		}
 	}
@@ -442,14 +442,14 @@ func completed(svc *Service, arn string) (bool, string, error) {
 	}
 	if d == nil {
 		if svc.TaskDefinition != arn {
-			return false, "", fmt.Errorf("il servizio usa ora %s: deployment sostituito da un altro aggiornamento", svc.TaskDefinition)
+			return false, "", fmt.Errorf("the service now uses %s: deployment replaced by another update", svc.TaskDefinition)
 		}
 		return false, "in attesa del deployment", nil
 	}
 	progress := fmt.Sprintf("%d/%d task in esecuzione, %d in avvio, %d falliti", d.Running, d.Desired, d.Pending, d.Failed)
 	switch d.RolloutState {
 	case "FAILED":
-		return false, "", fmt.Errorf("deployment fallito: %s (%s)", d.RolloutReason, progress)
+		return false, "", fmt.Errorf("deployment failed: %s (%s)", d.RolloutReason, progress)
 	case "COMPLETED":
 		return true, progress, nil
 	case "":
@@ -496,7 +496,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		desc = append(desc, v+" su "+strings.Join(hosts, ","))
 	}
 	sort.Strings(desc)
-	return nil, fmt.Errorf("versioni diverse sui target: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different versions on the targets: %s", strings.Join(desc, "; "))
 }
 
 // Rollback brings every service back to the task definition of the given release: the one
@@ -504,7 +504,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 // version tag. It continues even if a target fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida", previous.Version)
+		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
 	res := &plugin.Result{Plugin: Name}
 	var errs []error
@@ -536,7 +536,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	details[DetailTaskDefinition] = arn
 	if s.service.TaskDefinition != arn {
 		if err := s.api.UpdateService(ctx, s.target.cluster, serviceName(req), arn); err != nil {
-			return details, fmt.Errorf("aggiornamento del servizio: %w", err)
+			return details, fmt.Errorf("updating the service: %w", err)
 		}
 	}
 	if err := p.wait(ctx, s, arn, req, log); err != nil {
@@ -551,18 +551,18 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, req *plugin.Request
 	limit, _ := searchLimit(req)
 	arns, err := s.api.ListRevisions(ctx, s.current.Family, limit)
 	if err != nil {
-		return "", fmt.Errorf("elenco delle revisioni di %s: %w", s.current.Family, err)
+		return "", fmt.Errorf("listing the revisions of %s: %w", s.current.Family, err)
 	}
 	for _, arn := range arns {
 		td, err := s.api.DescribeTaskDefinition(ctx, arn)
 		if err != nil {
-			return "", fmt.Errorf("lettura della task definition %s: %w", arn, err)
+			return "", fmt.Errorf("reading task definition %s: %w", arn, err)
 		}
 		if td.Tags[TagVersion] == version && td.Tags[TagApplication] == req.Application && td.Tags[TagEnvironment] == req.Environment {
 			return arn, nil
 		}
 	}
-	return "", fmt.Errorf("nessuna revisione di %s con %s=%s tra le ultime %d", s.current.Family, TagVersion, version, limit)
+	return "", fmt.Errorf("no revision of %s with %s=%s among the last %d", s.current.Family, TagVersion, version, limit)
 }
 
 // DryRun checks on every target, without changing it, that service, task definition and

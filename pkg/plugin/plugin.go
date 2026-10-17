@@ -29,7 +29,7 @@ type DryRunner interface {
 
 // ErrDryRunUnsupported can be returned by DryRun when support is known only at runtime (e.g.
 // an external plugin): manent treats it as a plugin without DryRunner.
-var ErrDryRunUnsupported = errors.New("dry-run non supportato dal plugin")
+var ErrDryRunUnsupported = errors.New("dry-run not supported by the plugin")
 
 // Factory builds a Deployer from its application configuration.
 type Factory func(cfg map[string]any, logger *slog.Logger) (Deployer, error)

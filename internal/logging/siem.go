@@ -59,7 +59,7 @@ func NewSender(network, address string) (SIEMSender, error) {
 		return NewJournalSender(address)
 	case NetworkUnixgram:
 		if runtime.GOOS == "windows" {
-			return nil, errors.New("rete SIEM unixgram non supportata su Windows")
+			return nil, errors.New("unixgram SIEM network not supported on Windows")
 		}
 		if address == "" {
 			address = DefaultSyslogSocket()
@@ -103,10 +103,10 @@ type NetSender struct {
 // NewNetSender creates a network sender; the connection is opened at the first Send.
 func NewNetSender(network, address string) (*NetSender, error) {
 	if network != NetworkUDP && network != NetworkTCP && network != NetworkUnixgram {
-		return nil, fmt.Errorf("rete SIEM %q non supportata (udp|tcp|unixgram|journald)", network)
+		return nil, fmt.Errorf("SIEM network %q not supported (udp|tcp|unixgram|journald)", network)
 	}
 	if address == "" {
-		return nil, fmt.Errorf("indirizzo SIEM obbligatorio")
+		return nil, fmt.Errorf("SIEM address is required")
 	}
 	return &NetSender{network: network, address: address, timeout: 5 * time.Second}, nil
 }
@@ -195,7 +195,7 @@ func marshalDatagram(msg rfc5424.Message, limit int) ([]byte, error) {
 	const mark = "… [troncato]"
 	keep := len(msg.Message) - (len(b) - limit) - len(mark)
 	if keep < 0 {
-		return nil, fmt.Errorf("messaggio di %d byte oltre il limite di un datagramma (%d)", len(b), limit)
+		return nil, fmt.Errorf("message of %d bytes over the datagram limit (%d)", len(b), limit)
 	}
 	msg.Message = append(append([]byte(nil), msg.Message[:keep]...), mark...)
 	return msg.MarshalBinary()

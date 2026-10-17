@@ -293,7 +293,7 @@ func TestDeployERollback(t *testing.T) {
 	if f.current() != first {
 		t.Fatalf("rollback senza dettagli su %s, atteso %s", f.current(), first)
 	}
-	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.9.0"}); err == nil || !strings.Contains(err.Error(), "nessuna revisione") {
+	if _, err := p.Rollback(ctx, req2, plugin.Release{Version: "0.9.0"}); err == nil || !strings.Contains(err.Error(), "no revision") {
 		t.Errorf("versione assente: %v", err)
 	}
 }
@@ -315,7 +315,7 @@ func TestDryRunEValidazione(t *testing.T) {
 
 	missing := request(t, "1.0.0", "registry.example.com/shop@"+digest)
 	missing.Params[ParamService] = "cart"
-	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "assente dal cluster") {
+	if _, err := p.DryRun(ctx, missing); err == nil || !strings.Contains(err.Error(), "missing from cluster") {
 		t.Errorf("servizio assente: %v", err)
 	}
 	wrong := request(t, "1.0.0", "registry.example.com/shop@"+digest)
@@ -336,7 +336,7 @@ func TestDryRunEValidazione(t *testing.T) {
 	bad.Params[awsauth.ParamSecretKeySecret] = ""
 	bad.Params[awsauth.ParamRoleARN] = "ruolo"
 	err = p.Validate(bad)
-	for _, want := range []string{"artifact.version", "immagine di un registry", "europa", ParamWaitTimeout, awsauth.ParamSecretKeySecret, awsauth.ParamRoleARN} {
+	for _, want := range []string{"artifact.version", "registry image", "europa", ParamWaitTimeout, awsauth.ParamSecretKeySecret, awsauth.ParamRoleARN} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("validazione: manca %q in %v", want, err)
 		}

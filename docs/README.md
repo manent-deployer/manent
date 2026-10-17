@@ -44,7 +44,7 @@ Il sito è in inglese (lingua di default, alla radice) e in italiano (sotto `/it
 - Il menu (`nav`) è in inglese; le voci in italiano sono in `nav_translations` (`plugins.i18n` di `mkdocs.yml`): una voce nuova del menu va tradotta lì.
 - I link tra pagine sono uguali nelle due lingue (`../guida/callback.md`): il plugin li risolve verso la pagina della stessa lingua.
 - Un titolo inglese a cui puntano link con ancora riporta l'id del titolo italiano, così le ancore valgono in entrambe le lingue: `## URL limits { #limiti-sugli-url }`.
-- Messaggi di errore e output dei comandi restano quelli reali del programma, in italiano.
+- Messaggi di errore e output dei comandi restano quelli reali del programma: gli errori sono in inglese, i log e l'output dei comandi in italiano.
 - `navigation.instant` non è attivo perché impedirebbe al selettore della lingua di restare sulla stessa pagina.
 
 ## Scrivere la documentazione

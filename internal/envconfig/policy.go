@@ -44,7 +44,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 			continue
 		}
 		if !glob.Any(allowed, k) {
-			errs = append(errs, fmt.Errorf("deploy.params.%s non può essere impostato dal descrittore: va definito nella configurazione di ambiente (descriptor_policy.params)", k))
+			errs = append(errs, fmt.Errorf("deploy.params.%s cannot be set by the descriptor: it must be defined in the environment configuration (descriptor_policy.params)", k))
 		}
 	}
 	patterns := make([]string, len(p.SecretRefs))
@@ -56,7 +56,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 			continue
 		}
 		if !glob.Any(patterns, s.Ref) {
-			errs = append(errs, fmt.Errorf("secrets.%s: riferimento non ammesso nei descrittori (descriptor_policy.secret_refs)", s.Name))
+			errs = append(errs, fmt.Errorf("secrets.%s: reference not allowed in descriptors (descriptor_policy.secret_refs)", s.Name))
 		}
 	}
 	for _, step := range slices.Sorted(maps.Keys(d.StepParams)) {
@@ -66,15 +66,15 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 				continue
 			}
 			if !glob.Any(allowed, k) {
-				errs = append(errs, fmt.Errorf("stepParams.%s.%s non può essere impostato dal descrittore: va definito nella configurazione di ambiente (descriptor_policy.step_params)", step, k))
+				errs = append(errs, fmt.Errorf("stepParams.%s.%s cannot be set by the descriptor: it must be defined in the environment configuration (descriptor_policy.step_params)", step, k))
 			}
 		}
 	}
 	if !p.Targets && len(d.Deploy.Targets) > 0 && len(c.Targets) == 0 {
-		errs = append(errs, errors.New("deploy.targets non può essere indicato dal descrittore: va definito nella configurazione di ambiente (descriptor_policy.targets)"))
+		errs = append(errs, errors.New("deploy.targets cannot be set by the descriptor: it must be defined in the environment configuration (descriptor_policy.targets)"))
 	}
 	if err := errors.Join(errs...); err != nil {
-		return fmt.Errorf("descrittore non ammesso dalla policy: %w", err)
+		return fmt.Errorf("descriptor not allowed by the policy: %w", err)
 	}
 	return nil
 }

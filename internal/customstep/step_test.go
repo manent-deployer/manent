@@ -284,7 +284,7 @@ func TestComandoErrori(t *testing.T) {
 	ps := f.planned(t, "db-migrate", f.commandSpec())
 	ok := map[string]string{"database": "shop"}
 
-	if err := run(ps, map[string]string{"database": "shop", "label": "-oProxyCommand=evil"}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "opzione") {
+	if err := run(ps, map[string]string{"database": "shop", "label": "-oProxyCommand=evil"}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "option") {
 		t.Errorf("argument injection: %v", err)
 	}
 	// An empty parameter takes the default; a placeholder without a value is an error, never an
@@ -294,20 +294,20 @@ func TestComandoErrori(t *testing.T) {
 	if err := run(f.planned(t, "db-migrate", s0), map[string]string{"database": "shop", "label": ""}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), `"label"`) {
 		t.Errorf("valore vuoto: %v", err)
 	}
-	if err := run(ps, map[string]string{}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "obbligatorio") {
+	if err := run(ps, map[string]string{}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "required") {
 		t.Errorf("parametro obbligatorio: %v", err)
 	}
 	if err := run(ps, map[string]string{"database": "shop", "code": "75"}); err == nil || errors.Is(err, pipeline.ErrPermanent) {
 		t.Errorf("exit 75 deve essere temporaneo: %v", err)
 	}
-	if err := run(ps, map[string]string{"database": "shop", "code": "3"}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "codice 3") {
+	if err := run(ps, map[string]string{"database": "shop", "code": "3"}); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "code 3") {
 		t.Errorf("exit 3 deve essere permanente: %v", err)
 	}
 
 	// Signature, revocation and ownership of the spec.
 	bad := ps
 	bad.SpecMAC = strings.Repeat("0", 64)
-	if err := run(bad, ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "firma") {
+	if err := run(bad, ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "signature") {
 		t.Errorf("firma non valida: %v", err)
 	}
 	moved := ps
@@ -316,7 +316,7 @@ func TestComandoErrori(t *testing.T) {
 		t.Errorf("specifica di un altro step: %v", err)
 	}
 	f.b.Revoked = []string{ps.SpecHash}
-	if err := run(ps, ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "revocata") {
+	if err := run(ps, ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "revoked") {
 		t.Errorf("specifica revocata: %v", err)
 	}
 	f.b.Revoked = nil
@@ -337,7 +337,7 @@ func TestComandoErrori(t *testing.T) {
 	// Undeclared outputs or outputs with secrets are rejected.
 	s = f.commandSpec()
 	s.Outputs = map[string]customspec.Output{"other": {Pattern: ".*"}}
-	if err := run(f.planned(t, "db-migrate", s), ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "non dichiarato") {
+	if err := run(f.planned(t, "db-migrate", s), ok); !errors.Is(err, pipeline.ErrPermanent) || !strings.Contains(err.Error(), "not declared") {
 		t.Errorf("output non dichiarato: %v", err)
 	}
 
@@ -461,7 +461,7 @@ func TestHTTP(t *testing.T) {
 		permanent bool
 		want      string
 	}{
-		"traversal":    {srv.URL + "/zones/{{ .Params.zone }}/purge", "..", true, "segmento"},
+		"traversal":    {srv.URL + "/zones/{{ .Params.zone }}/purge", "..", true, "path segment"},
 		"servizio giù": {srv.URL + "/fail", "z", false, "503"},
 		"rifiuto":      {srv.URL + "/bad", "z", true, "400"},
 		"redirect":     {srv.URL + "/redirect", "z", true, "302"},

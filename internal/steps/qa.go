@@ -64,7 +64,7 @@ func (ChecksumChecker) Check(_ context.Context, in pipeline.Input) error {
 	}
 	got := in.Outputs["artifacts"][OutSHA256]
 	if !strings.EqualFold(want, got) {
-		return fmt.Errorf("sha256 atteso %s, calcolato %s", want, got)
+		return fmt.Errorf("expected sha256 %s, computed %s", want, got)
 	}
 	return nil
 }
@@ -79,7 +79,7 @@ func (NonEmptyChecker) Name() string { return "non-empty" }
 func (NonEmptyChecker) Check(_ context.Context, in pipeline.Input) error {
 	size := in.Outputs["artifacts"][OutSize]
 	if size == "" || size == "0" {
-		return errors.New("artefatto vuoto o non recuperato")
+		return errors.New("empty or not retrieved artifact")
 	}
 	return nil
 }

@@ -36,9 +36,9 @@ func (p Policy) Allowed(artifactType string) error {
 	tp, known := p.Types[artifactType]
 	switch {
 	case !known:
-		return fmt.Errorf("rollback non ammesso per artefatti di tipo %q: tipo assente in rollback.artifact_types", artifactType)
+		return fmt.Errorf("rollback not allowed for artifacts of type %q: type missing from rollback.artifact_types", artifactType)
 	case !tp.Allowed:
-		return fmt.Errorf("rollback non ammesso per artefatti di tipo %q", artifactType)
+		return fmt.Errorf("rollback not allowed for artifacts of type %q", artifactType)
 	}
 	return nil
 }
@@ -72,12 +72,12 @@ func (p Policy) Apply(d descriptor.Descriptor) (descriptor.Descriptor, error) {
 	}
 	for _, s := range on {
 		if len(p.Steps) > 0 && !slices.Contains(p.Steps, s) {
-			return d, fmt.Errorf("rollback.on: step %q non presente nella pipeline", s)
+			return d, fmt.Errorf("rollback.on: step %q not in the pipeline", s)
 		}
 	}
 	locator := cmp.Or(req.Locator, tp.Locator, p.Locator, "plugin")
 	if len(p.Locators) > 0 && !slices.Contains(p.Locators, locator) {
-		return d, fmt.Errorf("rollback.locator %q sconosciuto (disponibili: %v)", locator, p.Locators)
+		return d, fmt.Errorf("unknown rollback.locator %q (available: %v)", locator, p.Locators)
 	}
 	d.Rollback = &descriptor.Rollback{Enabled: &enabled, On: slices.Clone(on), Locator: locator}
 	return d, nil

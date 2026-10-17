@@ -205,22 +205,22 @@ func TestDeployServizioSSH(t *testing.T) {
 	host.failOn = "MANENT:active"
 	req.Artifact.Version = "2.1.0"
 	res, err := p.Deploy(context.Background(), req)
-	if err == nil || res.Targets[0].Status != plugin.StatusFailed || !strings.Contains(err.Error(), "attivazione") {
+	if err == nil || res.Targets[0].Status != plugin.StatusFailed || !strings.Contains(err.Error(), "activation") {
 		t.Errorf("attivazione fallita: %+v %v", res, err)
 	}
 }
 
 func TestParametriNonValidi(t *testing.T) {
 	for want, params := range map[string]map[string]string{
-		"releases_dir":      {ParamSite: "s", ParamPassword: "p"},
-		"site":              {ParamReleasesDir: `C:\r`, ParamSite: "x'; Remove-Item C:\\", ParamPassword: "p"},
-		"binary":            {ParamMode: ModeService, ParamReleasesDir: `C:\r`, ParamService: "svc", ParamBinary: `..\evil.exe`, ParamPassword: "p"},
-		"password_secret":   {ParamReleasesDir: `C:\r`, ParamSite: "s"},
-		"winrm_https":       {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamAuth: AuthBasic, ParamHTTPS: "false"},
-		"keep_releases":     {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamKeep: "1"},
-		"mode":              {ParamReleasesDir: `C:\r`, ParamMode: "msi", ParamPassword: "p"},
-		"ssh_key_secret":    {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamTransport: TransportSSH},
-		"powershell o pwsh": {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamShell: "bash"},
+		"releases_dir":       {ParamSite: "s", ParamPassword: "p"},
+		"site":               {ParamReleasesDir: `C:\r`, ParamSite: "x'; Remove-Item C:\\", ParamPassword: "p"},
+		"binary":             {ParamMode: ModeService, ParamReleasesDir: `C:\r`, ParamService: "svc", ParamBinary: `..\evil.exe`, ParamPassword: "p"},
+		"password_secret":    {ParamReleasesDir: `C:\r`, ParamSite: "s"},
+		"winrm_https":        {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamAuth: AuthBasic, ParamHTTPS: "false"},
+		"keep_releases":      {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamKeep: "1"},
+		"mode":               {ParamReleasesDir: `C:\r`, ParamMode: "msi", ParamPassword: "p"},
+		"ssh_key_secret":     {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamTransport: TransportSSH},
+		"powershell or pwsh": {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamShell: "bash"},
 	} {
 		if _, err := parse(params); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("atteso errore su %q, ricevuto %v", want, err)

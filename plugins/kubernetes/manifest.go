@@ -89,7 +89,7 @@ func refOf(o Object) ObjectRef {
 func loadManifests(file string) ([]byte, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("lettura dei manifest: %w", err)
+		return nil, fmt.Errorf("reading the manifests: %w", err)
 	}
 	lower := strings.ToLower(file)
 	switch {
@@ -98,13 +98,13 @@ func loadManifests(file string) ([]byte, error) {
 	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
 		return fromArchive(data)
 	}
-	return nil, fmt.Errorf("artefatto %s non supportato: atteso un file .yaml, .yml, .json o un archivio .tar.gz di manifest", path.Base(file))
+	return nil, fmt.Errorf("unsupported artifact %s: expected a .yaml, .yml, .json file or a .tar.gz archive of manifests", path.Base(file))
 }
 
 func fromArchive(data []byte) ([]byte, error) {
 	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("archivio dei manifest: %w", err)
+		return nil, fmt.Errorf("manifest archive: %w", err)
 	}
 	tr := tar.NewReader(zr)
 	files := map[string][]byte{}
@@ -114,7 +114,7 @@ func fromArchive(data []byte) ([]byte, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("archivio dei manifest: %w", err)
+			return nil, fmt.Errorf("manifest archive: %w", err)
 		}
 		name := strings.ToLower(h.Name)
 		if h.Typeflag != tar.TypeReg || strings.HasPrefix(path.Base(h.Name), ".") ||
@@ -128,7 +128,7 @@ func fromArchive(data []byte) ([]byte, error) {
 		files[h.Name] = b
 	}
 	if len(files) == 0 {
-		return nil, errors.New("l'archivio non contiene manifest .yaml, .yml o .json")
+		return nil, errors.New("the archive contains no .yaml, .yml or .json manifests")
 	}
 	names := make([]string, 0, len(files))
 	for n := range files {
@@ -165,7 +165,7 @@ func parseObjects(data []byte) ([]Object, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("documento %d dei manifest: %w", i, err)
+			return nil, fmt.Errorf("manifest document %d: %w", i, err)
 		}
 		if len(doc) == 0 {
 			continue
@@ -176,7 +176,7 @@ func parseObjects(data []byte) ([]Object, error) {
 			for _, it := range items {
 				m, ok := it.(map[string]any)
 				if !ok {
-					return nil, fmt.Errorf("documento %d: elemento della lista non valido", i)
+					return nil, fmt.Errorf("document %d: invalid list item", i)
 				}
 				out = append(out, Object(m))
 			}
@@ -186,11 +186,11 @@ func parseObjects(data []byte) ([]Object, error) {
 	}
 	for _, o := range out {
 		if o.APIVersion() == "" || o.Kind() == "" || o.Name() == "" {
-			return nil, fmt.Errorf("oggetto senza apiVersion, kind o metadata.name: %s", o.Ref())
+			return nil, fmt.Errorf("object without apiVersion, kind or metadata.name: %s", o.Ref())
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("nessun oggetto nei manifest")
+		return nil, errors.New("no object in the manifests")
 	}
 	return out, nil
 }

@@ -156,7 +156,7 @@ func TestPoolSvuotaILotti(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "traffic.pool richiede un rilascio a lotti") {
+	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "traffic.pool requires a batched release") {
 		t.Errorf("pool senza lotti: %v", err)
 	}
 }
@@ -335,7 +335,7 @@ func TestRilascioPerPercentualeGateRosso(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "health gate rosso dopo lo stadio traffic@50") || !strings.Contains(err.Error(), "rollback completato") {
+	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "health gate red after stage traffic@50") || !strings.Contains(err.Error(), "rollback completed") {
 		t.Fatalf("atteso il ritorno alla versione stabile: %v", err)
 	}
 	want := []string{"prepare", "deploy:w1:cluster-1", "testers", "weight:10", "weight:50", "revert"}
@@ -488,7 +488,7 @@ func TestRilascioPerPercentualeAOndateRollbackAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.e.Wait(context.Background(), sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completato") {
+	if _, err := env.e.Wait(context.Background(), sub.ID); err == nil || !strings.Contains(err.Error(), "rollback completed") {
 		t.Fatalf("atteso il ritorno: %v", err)
 	}
 	// The return concerns the failed pass first, then the already promoted one.

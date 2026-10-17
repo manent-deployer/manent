@@ -106,7 +106,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 		for _, t := range raw {
 			s, ok := t.(string)
 			if !ok {
-				return nil, errors.New("artifact_types deve contenere stringhe")
+				return nil, errors.New("artifact_types must contain strings")
 			}
 			types = append(types, s)
 		}
@@ -135,15 +135,15 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	}
 	var errs []error
 	if len(req.Targets) == 0 {
-		errs = append(errs, errors.New("almeno un target"))
+		errs = append(errs, errors.New("at least one target"))
 	}
 	for _, t := range req.Targets {
 		if t.Host == "" || t.User == "" {
-			errs = append(errs, fmt.Errorf("target %q: host e user obbligatori", t.Host))
+			errs = append(errs, fmt.Errorf("target %q: host and user are required", t.Host))
 		}
 	}
 	if !versionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, fmt.Errorf("versione %q non valida come nome di release", req.Artifact.Version))
+		errs = append(errs, fmt.Errorf("version %q is not valid as a release name", req.Artifact.Version))
 	}
 	return errors.Join(errs...)
 }
@@ -158,76 +158,76 @@ func parse(params map[string]string) (settings, error) {
 		Keep: defaultKeep, Timeout: time.Minute,
 	}
 	var errs []error
-	bad := func(k, why string) { errs = append(errs, fmt.Errorf("parametro %s: %s", k, why)) }
+	bad := func(k, why string) { errs = append(errs, fmt.Errorf("parameter %s: %s", k, why)) }
 	if s.ReleasesDir == "" || strings.ContainsAny(s.ReleasesDir, "'\"`$\r\n") {
-		bad(ParamReleasesDir, "obbligatorio, senza apici, $ né a capo")
+		bad(ParamReleasesDir, "required, without quotes, $ or newlines")
 	}
 	switch s.Mode {
 	case ModeIIS:
 		if !nameRe.MatchString(s.Site) {
-			bad(ParamSite, "obbligatorio con mode iis (lettere, cifre, spazi, . _ - ( ))")
+			bad(ParamSite, "required with mode iis (letters, digits, spaces, . _ - ( ))")
 		}
 		if !strings.HasPrefix(s.App, "/") || strings.ContainsAny(s.App, "'\"[]\r\n") {
-			bad(ParamApp, "percorso dell'applicazione che inizia con /")
+			bad(ParamApp, "application path starting with /")
 		}
 		if s.AppPool != "" && !nameRe.MatchString(s.AppPool) {
-			bad(ParamAppPool, "nome non valido")
+			bad(ParamAppPool, "invalid name")
 		}
 		if v := params[ParamStopAppPool]; v != "" {
 			b, err := strconv.ParseBool(v)
 			if err != nil {
-				bad(ParamStopAppPool, "true o false")
+				bad(ParamStopAppPool, "true or false")
 			}
 			s.StopAppPool = b
 		}
 	case ModeService:
 		if !nameRe.MatchString(s.Service) {
-			bad(ParamService, "obbligatorio con mode service")
+			bad(ParamService, "required with mode service")
 		}
 		if s.Binary == "" || strings.ContainsAny(s.Binary, "'\"`$\r\n") || strings.Contains(s.Binary, "..") {
-			bad(ParamBinary, "eseguibile relativo alla release, obbligatorio con mode service")
+			bad(ParamBinary, "executable relative to the release, required with mode service")
 		}
 		if strings.ContainsAny(s.Arguments, "\r\n") {
-			bad(ParamArguments, "senza a capo")
+			bad(ParamArguments, "without newlines")
 		}
 	default:
-		bad(ParamMode, "iis o service")
+		bad(ParamMode, "iis or service")
 	}
 	if v := params[ParamTimeout]; v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
-			bad(ParamTimeout, "durata, es. 2m")
+			bad(ParamTimeout, "duration, e.g. 2m")
 		}
 		s.Timeout = d
 	}
 	if v := params[ParamKeep]; v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 2 {
-			bad(ParamKeep, "numero >= 2 (la release precedente serve al rollback)")
+			bad(ParamKeep, "number >= 2 (the previous release is needed for rollback)")
 		}
 		s.Keep = n
 	}
 	c := Conn{Transport: cmp.Or(params[ParamTransport], TransportWinRM), Shell: cmp.Or(params[ParamShell], "powershell"), HTTPS: true, Auth: cmp.Or(params[ParamAuth], AuthNTLM)}
 	if c.Transport != TransportWinRM && c.Transport != TransportSSH {
-		bad(ParamTransport, "winrm o ssh")
+		bad(ParamTransport, "winrm or ssh")
 	}
 	if c.Shell != "powershell" && c.Shell != "pwsh" {
-		bad(ParamShell, "powershell o pwsh")
+		bad(ParamShell, "powershell or pwsh")
 	}
 	if c.Auth != AuthNTLM && c.Auth != AuthBasic {
-		bad(ParamAuth, "ntlm o basic")
+		bad(ParamAuth, "ntlm or basic")
 	}
 	if v := params[ParamHTTPS]; v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			bad(ParamHTTPS, "true o false")
+			bad(ParamHTTPS, "true or false")
 		}
 		c.HTTPS = b
 	}
 	if v := params[ParamInsecure]; v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			bad(ParamInsecure, "true o false")
+			bad(ParamInsecure, "true or false")
 		}
 		c.Insecure = b
 	}
@@ -238,18 +238,18 @@ func parse(params map[string]string) (settings, error) {
 	if v := params[ParamPort]; v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 65535 {
-			bad(ParamPort, "porta")
+			bad(ParamPort, "port")
 		}
 		c.Port = n
 	}
 	if c.Transport == TransportWinRM && s.PasswordSecret == "" {
-		bad(ParamPassword, "obbligatorio con transport winrm")
+		bad(ParamPassword, "required with transport winrm")
 	}
 	if c.Transport == TransportWinRM && c.Auth == AuthBasic && !c.HTTPS {
-		bad(ParamAuth, "basic solo con winrm_https: la password viaggerebbe in chiaro")
+		bad(ParamAuth, "basic only with winrm_https: the password would travel in clear text")
 	}
 	if c.Transport == TransportSSH && s.PasswordSecret == "" && s.SSHSecret == "" {
-		bad(ParamSSHKey, "ssh_key_secret o password_secret obbligatorio con transport ssh")
+		bad(ParamSSHKey, "ssh_key_secret or password_secret required with transport ssh")
 	}
 	s.Conn = c
 	return s, errors.Join(errs...)
@@ -271,7 +271,7 @@ func (p *Plugin) connect(ctx context.Context, req *plugin.Request, s settings, t
 	}
 	tr, err := p.connector.Connect(ctx, t, c)
 	if err != nil {
-		return nil, fmt.Errorf("target %s: connessione %s: %w", t.Host, c.Transport, err)
+		return nil, fmt.Errorf("target %s: connection %s: %w", t.Host, c.Transport, err)
 	}
 	return tr, nil
 }
@@ -311,7 +311,7 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 	}
 	out, err := tr.Run(ctx, probeScript(s, version, sha), nil)
 	if err != nil {
-		return fmt.Errorf("verifica del target: %w", err)
+		return fmt.Errorf("target check: %w", err)
 	}
 	if results(out)["present"] != "true" {
 		f, err := os.Open(req.Artifact.LocalPath)
@@ -322,13 +322,13 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 		_, err = tr.Run(ctx, uploadScript(s, version, sha), f)
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("copia ed estrazione: %w", err)
+			return fmt.Errorf("copy and extraction: %w", err)
 		}
 	} else {
 		log.InfoContext(ctx, "release già presente sul target, copia saltata")
 	}
 	if _, err := tr.Run(ctx, activateScript(s, version), nil); err != nil {
-		return fmt.Errorf("attivazione: %w", err)
+		return fmt.Errorf("activation: %w", err)
 	}
 	log.InfoContext(ctx, "release in esercizio", "previous", prev)
 	if _, err := tr.Run(ctx, cleanupScript(s, s.Keep, version, prev), nil); err != nil {
@@ -344,14 +344,14 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 func (p *Plugin) current(ctx context.Context, tr Transport, s settings) (string, error) {
 	out, err := tr.Run(ctx, currentScript(s), nil)
 	if err != nil {
-		return "", fmt.Errorf("lettura della release in esercizio: %w", err)
+		return "", fmt.Errorf("reading the release in service: %w", err)
 	}
 	r := results(out)
 	if r["found"] != "true" {
 		if s.Mode == ModeIIS {
-			return "", fmt.Errorf("applicazione %s del sito %s non trovata", s.App, s.Site)
+			return "", fmt.Errorf("application %s of site %s not found", s.App, s.Site)
 		}
-		return "", fmt.Errorf("servizio %s non trovato", s.Service)
+		return "", fmt.Errorf("service %s not found", s.Service)
 	}
 	p0 := r["path"]
 	if s.Mode == ModeService {
@@ -454,7 +454,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	for _, v := range slices.Sorted(maps.Keys(found)) {
 		desc = append(desc, v+" su "+strings.Join(found[v], ","))
 	}
-	return nil, fmt.Errorf("release diverse sui target: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different releases on the targets: %s", strings.Join(desc, "; "))
 }
 
 // Rollback implements plugin.Rollbacker: it puts the kept previous release back in service on
@@ -465,7 +465,7 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 		return nil, err
 	}
 	if !versionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida come nome di release", previous.Version)
+		return nil, fmt.Errorf("version %q is not valid as a release name", previous.Version)
 	}
 	res := &plugin.Result{Plugin: Name}
 	var errs []error

@@ -34,7 +34,7 @@ type JournalSender struct {
 // NewJournalSender creates the sender; the socket is opened at the first send.
 func NewJournalSender(path string) (*JournalSender, error) {
 	if path == "" {
-		return nil, errors.New("socket di journald obbligatorio")
+		return nil, errors.New("journald socket is required")
 	}
 	return &JournalSender{path: path}, nil
 }

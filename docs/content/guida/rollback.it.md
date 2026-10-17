@@ -39,9 +39,9 @@ sequenceDiagram
 
 | Esito | Messaggio | Significato |
 |---|---|---|
-| `completed` | `...; rollback completato` | Almeno una compensazione ha ripristinato lo stato precedente. |
-| `skipped` | `...; rollback: nessuna release da ripristinare` | Non c'era nulla a cui tornare, ad esempio al primo deploy dell'applicazione. |
-| `failed` | `...; rollback fallito: ...` | Una compensazione è fallita dopo i suoi retry. Le compensazioni successive non vengono tentate, così lo stato resta noto per l'intervento manuale. Il log, anche verso il SIEM, è a livello `ERROR`. |
+| `completed` | `...; rollback completed` | Almeno una compensazione ha ripristinato lo stato precedente. |
+| `skipped` | `...; rollback: no release to restore` | Non c'era nulla a cui tornare, ad esempio al primo deploy dell'applicazione. |
+| `failed` | `...; rollback failed: ...` | Una compensazione è fallita dopo i suoi retry. Le compensazioni successive non vengono tentate, così lo stato resta noto per l'intervento manuale. Il log, anche verso il SIEM, è a livello `ERROR`. |
 
 Ogni compensazione usa i `max_retries` dello step che annulla.
 

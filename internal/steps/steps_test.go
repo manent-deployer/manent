@@ -246,7 +246,7 @@ func TestDeployCheckpointECompensate(t *testing.T) {
 
 	// Plugin without Rollbacker: the checkpoint fails before the deploy.
 	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "app", types: []string{"application"}})}
-	if _, err := s.Checkpoint(context.Background(), in); err == nil || !strings.Contains(err.Error(), "non lo supporta") {
+	if _, err := s.Checkpoint(context.Background(), in); err == nil || !strings.Contains(err.Error(), "does not support it") {
 		t.Fatalf("atteso errore di rollback non supportato, ricevuto %v", err)
 	}
 }

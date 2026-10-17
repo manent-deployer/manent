@@ -130,7 +130,7 @@ func (c *Client) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	_, err := c.withSecrets(req, func(r *pb.DeployRequest) (*pb.DeployResponse, error) {
 		resp, err := c.rpc.CurrentRelease(ctx, r)
 		if status.Code(err) == codes.Unimplemented {
-			return nil, fmt.Errorf("il plugin %q non sa leggere la release in esercizio: usare un altro locator", c.name)
+			return nil, fmt.Errorf("plugin %q cannot read the release in service: use another locator", c.name)
 		}
 		if err != nil {
 			return nil, err

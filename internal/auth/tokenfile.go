@@ -46,7 +46,7 @@ func NewTokenFile(path string, logger *slog.Logger) (*TokenFile, error) {
 	f := &TokenFile{Path: path, Logger: logger}
 	st, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("file dei token: %w", err)
+		return nil, fmt.Errorf("token file: %w", err)
 	}
 	ts, err := ParseTokenFile(path)
 	if err != nil {
@@ -60,19 +60,19 @@ func NewTokenFile(path string, logger *slog.Logger) (*TokenFile, error) {
 func ParseTokenFile(path string) (Tokens, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("file dei token: %w", err)
+		return nil, fmt.Errorf("token file: %w", err)
 	}
 	var doc tokenFileDoc
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&doc); err != nil && len(bytes.TrimSpace(data)) > 0 {
-		return nil, fmt.Errorf("file dei token %s non valido: %w", path, err)
+		return nil, fmt.Errorf("invalid token file %s: %w", path, err)
 	}
 	ts := make(Tokens, 0, len(doc.Tokens))
 	names := map[string]bool{}
 	for i, t := range doc.Tokens {
 		if t.Name == "" || names[t.Name] || !validHash(t.SHA256) {
-			return nil, fmt.Errorf("file dei token %s: tokens[%d] deve avere name univoco e sha256 esadecimale", path, i)
+			return nil, fmt.Errorf("token file %s: tokens[%d] must have a unique name and a hex sha256", path, i)
 		}
 		names[t.Name] = true
 		ts = append(ts, StaticToken{Name: t.Name, SHA256: t.SHA256, Groups: t.Groups, ExpiresAt: t.ExpiresAt})

@@ -74,7 +74,7 @@ moved=$(image web 1.0.0 "" 1.0.0-alterata)
 [ "$moved" != "$d100" ] && pass "il tag 1.0.0 punta ora a un'altra immagine" || fail "il tag 1.0.0 non è cambiato"
 id=$(manent promote -a $APP --from test --to prod --no-wait | jq -r .id)
 expect_eq "la promozione della 1.0.0 fallisce" "$(wait_state "$id" terminal 120)" ERROR
-expect_match "il controllo qa confronta i digest" "$(manent status "$id" | jq -r .error)" "sha256 atteso $d100"
+expect_match "il controllo qa confronta i digest" "$(manent status "$id" | jq -r .error)" "expected sha256 $d100"
 expect_eq "il canary non è stato toccato" "$(vm_version vm-a $APP)" 1.0.0
 
 info "-- spegnimento delle VM"

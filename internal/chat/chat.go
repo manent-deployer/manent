@@ -183,7 +183,7 @@ func (n *Notifier) Send(ctx context.Context, route string, msg Message, prev *Re
 	switch {
 	case r.SlackChannel != "":
 		if n.Slack == nil {
-			return nil, errors.New("destinazione Slack senza bot token")
+			return nil, errors.New("Slack destination without bot token")
 		}
 		blocks := slackBlocks(t, msg, link, true)
 		text := headline(t, msg)
@@ -196,7 +196,7 @@ func (n *Notifier) Send(ctx context.Context, route string, msg Message, prev *Re
 	case r.TeamsWebhookRef != "":
 		return nil, n.postWebhook(ctx, r.TeamsWebhookRef, teamsCard(t, msg, link))
 	}
-	return nil, fmt.Errorf("destinazione %s senza canale", route)
+	return nil, fmt.Errorf("destination %s without channel", route)
 }
 
 // link is the link to the deploy in the web interface.
@@ -216,7 +216,7 @@ func (n *Notifier) postWebhook(ctx context.Context, ref string, body any) error 
 	u = strings.TrimSpace(u)
 	if !strings.HasPrefix(u, "https://") {
 		// A retry cannot fix the configured URL.
-		return pipeline.Permanent(errors.New("webhook: è ammesso solo https"))
+		return pipeline.Permanent(errors.New("webhook: only https is allowed"))
 	}
 	_, err = postJSON(ctx, n.Client, u, nil, body, nil)
 	return err

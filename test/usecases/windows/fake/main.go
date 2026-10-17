@@ -240,7 +240,7 @@ func (w *endpoint) start(shellID, line string) (string, error) {
 	sh, ok := w.shells[shellID]
 	if !ok {
 		w.mu.Unlock()
-		return "", fmt.Errorf("shell %s sconosciuta", shellID)
+		return "", fmt.Errorf("unknown shell %s", shellID)
 	}
 	w.seq++
 	id := fmt.Sprintf("cmd-%d", w.seq)

@@ -35,7 +35,7 @@ func validateHAProxy(s map[string]string) error {
 	var errs []error
 	urls := splitList(s[settingDataplaneURLs])
 	if len(urls) == 0 {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingDataplaneURLs))
+		errs = append(errs, fmt.Errorf("%s is required", settingDataplaneURLs))
 	}
 	for _, u := range urls {
 		if err := checkURL(s, settingDataplaneURLs, u); err != nil {
@@ -43,10 +43,10 @@ func validateHAProxy(s map[string]string) error {
 		}
 	}
 	if s[settingBackend] == "" {
-		errs = append(errs, fmt.Errorf("%s obbligatorio", settingBackend))
+		errs = append(errs, fmt.Errorf("%s is required", settingBackend))
 	}
 	if v := s[settingAPIVersion]; v != "" && v != "v2" && v != "v3" {
-		errs = append(errs, fmt.Errorf("%s %q non valido (v2|v3)", settingAPIVersion, v))
+		errs = append(errs, fmt.Errorf("invalid %s %q (v2|v3)", settingAPIVersion, v))
 	}
 	return errors.Join(errs...)
 }
@@ -162,7 +162,7 @@ func (p *haproxyPool) Connections(ctx context.Context, members []string) (map[st
 			}
 			n, err := haproxySessions(raw, m)
 			if err != nil {
-				return nil, fmt.Errorf("%s: statistiche del server %s: %w", base, m, err)
+				return nil, fmt.Errorf("%s: statistics of server %s: %w", base, m, err)
 			}
 			out[m] += n
 		}
@@ -201,7 +201,7 @@ func haproxySessions(raw json.RawMessage, name string) (int, error) {
 		}
 	}
 	if !found {
-		return 0, errors.New("server assente dalle statistiche")
+		return 0, errors.New("server missing from the statistics")
 	}
 	return total, nil
 }
@@ -276,7 +276,7 @@ type StatusError struct {
 }
 
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("%s %s: stato %d: %s", e.Method, e.Path, e.Status, e.Body)
+	return fmt.Sprintf("%s %s: status %d: %s", e.Method, e.Path, e.Status, e.Body)
 }
 
 // redactURL strips credentials and query from a URL for messages.

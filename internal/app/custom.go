@@ -24,7 +24,7 @@ func NewSpecKeys(cfg *config.Config, sp secrets.Provider) (customspec.Keys, erro
 			return nil, fmt.Errorf("pipeline.custom.spec_key_refs[%d]: %w", i, err)
 		}
 		if len(v) < customspec.MinKeyLen {
-			return nil, fmt.Errorf("pipeline.custom.spec_key_refs[%d]: chiave troppo corta (almeno %d byte)", i, customspec.MinKeyLen)
+			return nil, fmt.Errorf("pipeline.custom.spec_key_refs[%d]: key too short (at least %d bytes)", i, customspec.MinKeyLen)
 		}
 		keys = append(keys, []byte(v))
 	}

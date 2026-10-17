@@ -294,25 +294,25 @@ func (r *Rollout) Validate() error {
 	switch r.Strategy {
 	case "", StrategyWaves:
 		if len(r.Waves) == 0 {
-			errs = append(errs, errors.New("rollout.waves: almeno un'ondata"))
+			errs = append(errs, errors.New("rollout.waves: at least one wave"))
 		}
 		if r.Traffic != nil {
-			errs = append(errs, errors.New("rollout.traffic richiede strategy: traffic"))
+			errs = append(errs, errors.New("rollout.traffic requires strategy: traffic"))
 		}
 	case StrategyTraffic:
 		if r.Traffic == nil {
-			errs = append(errs, errors.New("rollout.traffic obbligatorio con strategy: traffic"))
+			errs = append(errs, errors.New("rollout.traffic is required with strategy: traffic"))
 		} else {
 			errs = append(errs, r.Traffic.validate())
 		}
 	default:
-		errs = append(errs, fmt.Errorf("rollout.strategy %q non valida (waves|traffic)", r.Strategy))
+		errs = append(errs, fmt.Errorf("invalid rollout.strategy %q (waves|traffic)", r.Strategy))
 	}
 	names := map[string]bool{}
 	for i, w := range r.Waves {
 		p := fmt.Sprintf("rollout.waves[%d]", i)
 		if !validName(w.Name) || names[w.Name] {
-			errs = append(errs, fmt.Errorf("%s.name %q non valido o duplicato: %s", p, w.Name, nameRule))
+			errs = append(errs, fmt.Errorf("invalid or duplicate %s.name %q: %s", p, w.Name, nameRule))
 		}
 		names[w.Name] = true
 		if _, err := labels.Parse(w.Select); err != nil {
@@ -321,28 +321,28 @@ func (r *Rollout) Validate() error {
 		switch w.By {
 		case ByNone, ByAZ, ByRegion:
 		default:
-			errs = append(errs, fmt.Errorf("%s.by %q non valido (az|region)", p, w.By))
+			errs = append(errs, fmt.Errorf("invalid %s.by %q (az|region)", p, w.By))
 		}
 		if w.ParallelRegions < 0 {
-			errs = append(errs, fmt.Errorf("%s.parallelRegions deve essere >= 0", p))
+			errs = append(errs, fmt.Errorf("%s.parallelRegions must be >= 0", p))
 		}
 		if w.Bake != "" {
 			if d, err := time.ParseDuration(w.Bake); err != nil || d < 0 || d > maxBake {
-				errs = append(errs, fmt.Errorf("%s.bake %q non valido (durata tra 0 e 24h, es. 10m)", p, w.Bake))
+				errs = append(errs, fmt.Errorf("invalid %s.bake %q (duration between 0 and 24h, e.g. 10m)", p, w.Bake))
 			}
 		}
 		if w.BatchBake != "" {
 			if d, err := time.ParseDuration(w.BatchBake); err != nil || d < 0 || d > maxBake {
-				errs = append(errs, fmt.Errorf("%s.batchBake %q non valido (durata tra 0 e 24h, es. 1m)", p, w.BatchBake))
+				errs = append(errs, fmt.Errorf("invalid %s.batchBake %q (duration between 0 and 24h, e.g. 1m)", p, w.BatchBake))
 			}
 			if r.IsTraffic() {
-				errs = append(errs, fmt.Errorf("%s.batchBake non ammesso con strategy: traffic (il passo è un unico lotto)", p))
+				errs = append(errs, fmt.Errorf("%s.batchBake not allowed with strategy: traffic (the pass is a single batch)", p))
 			}
 		}
 		if w.MaxUnavailable != "" {
 			errs = append(errs, validMaxUnavailable(p+".maxUnavailable", w.MaxUnavailable))
 			if r.IsTraffic() {
-				errs = append(errs, fmt.Errorf("%s.maxUnavailable non ammesso con strategy: traffic (il passo è un unico lotto)", p))
+				errs = append(errs, fmt.Errorf("%s.maxUnavailable not allowed with strategy: traffic (the pass is a single batch)", p))
 			}
 		}
 	}
@@ -350,19 +350,19 @@ func (r *Rollout) Validate() error {
 	switch r.OnFailure {
 	case "", OnFailureStop, OnFailureRollbackWave, OnFailureRollbackAll:
 	default:
-		errs = append(errs, fmt.Errorf("rollout.onFailure %q non valido (stop|rollback-wave|rollback-all)", r.OnFailure))
+		errs = append(errs, fmt.Errorf("invalid rollout.onFailure %q (stop|rollback-wave|rollback-all)", r.OnFailure))
 	}
 	for _, a := range r.ApprovalsBetween {
 		if r.IsTraffic() && r.Traffic != nil && slices.Contains(r.Traffic.stageNames(), a) {
 			continue
 		}
 		if !names[a] {
-			errs = append(errs, fmt.Errorf("rollout.approvalsBetween: ondata %q inesistente", a))
+			errs = append(errs, fmt.Errorf("rollout.approvalsBetween: wave %q does not exist", a))
 		}
 	}
 	for i, reg := range r.Regions {
 		if !validName(reg) {
-			errs = append(errs, fmt.Errorf("rollout.regions[%d] %q non valida: %s", i, reg, nameRule))
+			errs = append(errs, fmt.Errorf("invalid rollout.regions[%d] %q: %s", i, reg, nameRule))
 		}
 	}
 	if r.Health != nil {
@@ -379,7 +379,7 @@ func validMaxUnavailable(field, v string) error {
 	}
 	n, err := strconv.Atoi(strings.TrimSuffix(v, "%"))
 	if err != nil || n < 1 || (strings.HasSuffix(v, "%") && n > 100) {
-		return fmt.Errorf("%s %q non valido (numero >= 1 o percentuale 1-100%%)", field, v)
+		return fmt.Errorf("invalid %s %q (number >= 1 or percentage 1-100%%)", field, v)
 	}
 	return nil
 }
@@ -388,54 +388,54 @@ func (h *Health) validate() error {
 	var errs []error
 	if h.Interval != "" {
 		if d, err := time.ParseDuration(h.Interval); err != nil || d < time.Second {
-			errs = append(errs, fmt.Errorf("rollout.health.interval %q non valido (almeno 1s)", h.Interval))
+			errs = append(errs, fmt.Errorf("invalid rollout.health.interval %q (at least 1s)", h.Interval))
 		}
 	}
 	if h.FailuresToStop < 0 {
-		errs = append(errs, errors.New("rollout.health.failuresToStop deve essere >= 0"))
+		errs = append(errs, errors.New("rollout.health.failuresToStop must be >= 0"))
 	}
 	for i, p := range h.Probes {
 		u, err := url.Parse(strings.ReplaceAll(p.URL, "{host}", "target.invalid"))
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !strings.Contains(p.URL, "://{host}") {
-			errs = append(errs, fmt.Errorf("rollout.health.probes[%d].url deve essere http(s)://{host}...: le sonde raggiungono solo i target", i))
+			errs = append(errs, fmt.Errorf("rollout.health.probes[%d].url must be http(s)://{host}...: probes reach only the targets", i))
 		}
 		if p.ExpectStatus != 0 && (p.ExpectStatus < 100 || p.ExpectStatus > 599) {
-			errs = append(errs, fmt.Errorf("rollout.health.probes[%d].expectStatus non valido", i))
+			errs = append(errs, fmt.Errorf("invalid rollout.health.probes[%d].expectStatus", i))
 		}
 	}
 	for i, m := range h.Metrics {
 		switch m.Compare {
 		case "":
 			if !validName(m.Name) || strings.TrimSpace(m.Query) == "" || (m.Max == nil && m.Min == nil) {
-				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: name, query e almeno uno tra min e max obbligatori", i))
+				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: name, query and at least one of min and max are required", i))
 			}
 		case CompareStable:
 			if !validName(m.Name) || !strings.Contains(m.Query, "{track}") || (m.MaxRatio == nil && m.MaxDelta == nil && m.Analysis != AnalysisMannWhitney) {
-				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: con compare: stable servono name, una query con {track} e maxRatio o maxDelta (o analysis: mann-whitney)", i))
+				errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: with compare: stable, name, a query with {track} and maxRatio or maxDelta (or analysis: mann-whitney) are required", i))
 			}
 		default:
-			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d].compare %q non valido (stable)", i, m.Compare))
+			errs = append(errs, fmt.Errorf("invalid rollout.health.metrics[%d].compare %q (stable)", i, m.Compare))
 		}
 		if m.MinSamples < 0 || (m.MinSamples > 0 && strings.TrimSpace(m.SamplesQuery) == "") {
-			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: minSamples richiede samplesQuery", i))
+			errs = append(errs, fmt.Errorf("rollout.health.metrics[%d]: minSamples requires samplesQuery", i))
 		}
 		errs = append(errs, m.validateAnalysis(i)...)
 	}
 	if a := h.Analysis; a != nil {
 		if a.Pass < 0 || a.Pass > 100 || a.Marginal < 0 || a.Marginal > 100 || (a.Pass > 0 && a.Marginal > a.Pass) {
-			errs = append(errs, errors.New("rollout.health.analysis: pass e marginal tra 0 e 100, marginal non oltre pass"))
+			errs = append(errs, errors.New("rollout.health.analysis: pass and marginal between 0 and 100, marginal not above pass"))
 		}
 		if len(h.Metrics) == 0 {
-			errs = append(errs, errors.New("rollout.health.analysis richiede almeno una metrica"))
+			errs = append(errs, errors.New("rollout.health.analysis requires at least one metric"))
 		}
 	}
 	if a := h.Alerts; a != nil {
 		if len(a.BlockOn) == 0 {
-			errs = append(errs, errors.New("rollout.health.alerts.blockOn: almeno una condizione"))
+			errs = append(errs, errors.New("rollout.health.alerts.blockOn: at least one condition"))
 		}
 		for _, c := range a.BlockOn {
 			if k, v, ok := strings.Cut(c, "="); !ok || strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
-				errs = append(errs, fmt.Errorf("rollout.health.alerts.blockOn %q non valido (etichetta=valore)", c))
+				errs = append(errs, fmt.Errorf("invalid rollout.health.alerts.blockOn %q (label=value)", c))
 			}
 		}
 	}
@@ -447,33 +447,33 @@ func (m MetricGate) validateAnalysis(i int) []error {
 	var errs []error
 	p := fmt.Sprintf("rollout.health.metrics[%d]", i)
 	if m.Provider != "" && !slices.Contains(MetricProviders, m.Provider) {
-		errs = append(errs, fmt.Errorf("%s.provider %q non valido (%s)", p, m.Provider, strings.Join(MetricProviders, ", ")))
+		errs = append(errs, fmt.Errorf("invalid %s.provider %q (%s)", p, m.Provider, strings.Join(MetricProviders, ", ")))
 	}
 	switch m.Analysis {
 	case "", AnalysisThreshold:
 	case AnalysisMannWhitney:
 		if m.Compare != CompareStable {
-			errs = append(errs, fmt.Errorf("%s: analysis mann-whitney richiede compare: stable", p))
+			errs = append(errs, fmt.Errorf("%s: analysis mann-whitney requires compare: stable", p))
 		}
 	default:
-		errs = append(errs, fmt.Errorf("%s.analysis %q non valido (threshold, mann-whitney)", p, m.Analysis))
+		errs = append(errs, fmt.Errorf("invalid %s.analysis %q (threshold, mann-whitney)", p, m.Analysis))
 	}
 	if m.Direction != "" && m.Direction != DirectionIncrease && m.Direction != DirectionDecrease && m.Direction != DirectionEither {
-		errs = append(errs, fmt.Errorf("%s.direction %q non valido (increase, decrease, either)", p, m.Direction))
+		errs = append(errs, fmt.Errorf("invalid %s.direction %q (increase, decrease, either)", p, m.Direction))
 	}
 	if m.Alpha < 0 || m.Alpha > 0.5 {
-		errs = append(errs, fmt.Errorf("%s.alpha deve essere tra 0 e 0.5", p))
+		errs = append(errs, fmt.Errorf("%s.alpha must be between 0 and 0.5", p))
 	}
 	for k, v := range map[string]string{"lookback": m.Lookback, "step": m.Step} {
 		if v == "" {
 			continue
 		}
 		if d, err := time.ParseDuration(v); err != nil || d < time.Second {
-			errs = append(errs, fmt.Errorf("%s.%s %q non valido (almeno 1s)", p, k, v))
+			errs = append(errs, fmt.Errorf("invalid %s.%s %q (at least 1s)", p, k, v))
 		}
 	}
 	if m.MinPoints < 0 || (m.Weight != nil && *m.Weight < 0) {
-		errs = append(errs, fmt.Errorf("%s: minPoints e weight non possono essere negativi", p))
+		errs = append(errs, fmt.Errorf("%s: minPoints and weight cannot be negative", p))
 	}
 	return errs
 }

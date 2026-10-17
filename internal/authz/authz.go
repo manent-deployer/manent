@@ -78,24 +78,24 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 	p := Policy{Roles: maps.Clone(BuiltinRoles), Bindings: bindings}
 	for name, acts := range roles {
 		if _, ok := BuiltinRoles[name]; ok {
-			return p, fmt.Errorf("rbac.roles: il ruolo %q è predefinito e non si può ridefinire", name)
+			return p, fmt.Errorf("rbac.roles: role %q is predefined and cannot be redefined", name)
 		}
 		for _, a := range acts {
 			if !slices.Contains(Actions, a) {
-				return p, fmt.Errorf("rbac.roles.%s: azione %q sconosciuta", name, a)
+				return p, fmt.Errorf("rbac.roles.%s: unknown action %q", name, a)
 			}
 		}
 		p.Roles[name] = acts
 	}
 	for i, b := range bindings {
 		if _, ok := p.Roles[b.Role]; !ok {
-			return p, fmt.Errorf("rbac.bindings[%d]: ruolo %q sconosciuto", i, b.Role)
+			return p, fmt.Errorf("rbac.bindings[%d]: unknown role %q", i, b.Role)
 		}
 		if len(b.Subjects) == 0 && len(b.Groups) == 0 {
-			return p, fmt.Errorf("rbac.bindings[%d]: indicare subjects o groups", i)
+			return p, fmt.Errorf("rbac.bindings[%d]: provide subjects or groups", i)
 		}
 		if len(b.Applications) == 0 || len(b.Environments) == 0 {
-			return p, fmt.Errorf("rbac.bindings[%d]: applications ed environments obbligatori (\"*\" per tutti)", i)
+			return p, fmt.Errorf("rbac.bindings[%d]: applications and environments are required (\"*\" for all)", i)
 		}
 	}
 	return p, nil

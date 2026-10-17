@@ -108,7 +108,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 		for _, t := range raw {
 			s, ok := t.(string)
 			if !ok {
-				return nil, errors.New("artifact_types deve contenere stringhe")
+				return nil, errors.New("artifact_types must contain strings")
 			}
 			types = append(types, s)
 		}
@@ -117,14 +117,14 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	if raw, ok := cfg["helm"]; ok {
 		hc, ok := raw.(map[string]any)
 		if !ok {
-			return nil, errors.New("helm deve essere una mappa (command, sha256, timeout)")
+			return nil, errors.New("helm must be a map (command, sha256, timeout)")
 		}
 		p.helm.Command, _ = hc["command"].(string)
 		p.helm.SHA256, _ = hc["sha256"].(string)
 		if t, ok := hc["timeout"].(string); ok {
 			d, err := time.ParseDuration(t)
 			if err != nil || d <= 0 {
-				return nil, fmt.Errorf("helm.timeout %q non valido", t)
+				return nil, fmt.Errorf("invalid helm.timeout %q", t)
 			}
 			p.helm.Timeout = d
 		}
@@ -142,20 +142,20 @@ func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.t
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !versionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e identifica la release nello storico: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and identifies the release in the history: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if ns := namespace(req); !dnsLabelRe.MatchString(ns) {
-		errs = append(errs, fmt.Errorf("%s %q non valido", ParamNamespace, ns))
+		errs = append(errs, fmt.Errorf("invalid %s %q", ParamNamespace, ns))
 	}
 	hasToken := req.Params[ParamTokenSecret] != ""
 	hasCert := req.Params[ParamCertSecret] != "" || req.Params[ParamKeySecret] != ""
 	switch {
 	case hasToken && hasCert:
-		errs = append(errs, fmt.Errorf("indicare %q oppure %q e %q, non entrambi", ParamTokenSecret, ParamCertSecret, ParamKeySecret))
+		errs = append(errs, fmt.Errorf("provide %q or %q and %q, not both", ParamTokenSecret, ParamCertSecret, ParamKeySecret))
 	case !hasToken && !hasCert:
-		errs = append(errs, fmt.Errorf("indicare %q oppure %q e %q", ParamTokenSecret, ParamCertSecret, ParamKeySecret))
+		errs = append(errs, fmt.Errorf("provide %q or %q and %q", ParamTokenSecret, ParamCertSecret, ParamKeySecret))
 	case hasCert && (req.Params[ParamCertSecret] == "" || req.Params[ParamKeySecret] == ""):
-		errs = append(errs, fmt.Errorf("%q e %q vanno indicati insieme", ParamCertSecret, ParamKeySecret))
+		errs = append(errs, fmt.Errorf("%q and %q must be set together", ParamCertSecret, ParamKeySecret))
 	}
 	if _, err := waitTimeout(req); err != nil {
 		errs = append(errs, err)
@@ -164,12 +164,12 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 		errs = append(errs, err)
 	}
 	if strings.HasSuffix(req.Artifact.LocalPath, plugin.ImageRefExt) {
-		errs = append(errs, errors.New("l'artefatto è un'immagine: il plugin kubernetes rilascia manifest (file .yaml o archivio .tar.gz) o chart Helm (.tgz)"))
+		errs = append(errs, errors.New("the artifact is an image: the kubernetes plugin releases manifests (.yaml file or .tar.gz archive) or Helm charts (.tgz)"))
 	}
 	errs = append(errs, validateHelm(req.Params)...)
 	errs = append(errs, validateTraffic(req)...)
 	if len(req.Targets) == 0 {
-		errs = append(errs, errors.New("nessun cluster tra i target"))
+		errs = append(errs, errors.New("no cluster among the targets"))
 	}
 	return errors.Join(errs...)
 }
@@ -190,7 +190,7 @@ func waitTimeout(req *plugin.Request) (time.Duration, error) {
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d <= 0 {
-		return 0, fmt.Errorf("%s %q non valido: atteso una durata positiva (es. 10m)", ParamWaitTimeout, raw)
+		return 0, fmt.Errorf("invalid %s %q: expected a positive duration (e.g. 10m)", ParamWaitTimeout, raw)
 	}
 	return d, nil
 }
@@ -202,7 +202,7 @@ func keepReleases(req *plugin.Request) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 2 {
-		return 0, fmt.Errorf("%s deve essere un intero >= 2", ParamKeepReleases)
+		return 0, fmt.Errorf("%s must be an integer >= 2", ParamKeepReleases)
 	}
 	return n, nil
 }
@@ -226,7 +226,7 @@ func (p *Plugin) connect(ctx context.Context, t plugin.Target, req *plugin.Reque
 	c.Token = strings.TrimSpace(c.Token)
 	api, err := p.connector.Connect(ctx, serverURL(t.Host, t.Port), c)
 	if err != nil {
-		return nil, fmt.Errorf("connessione al cluster: %w", err)
+		return nil, fmt.Errorf("connecting to the cluster: %w", err)
 	}
 	return api, nil
 }
@@ -320,13 +320,13 @@ func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*pr
 		if req.Params[ParamRequireDigest] == "true" {
 			for _, img := range images(o) {
 				if !strings.Contains(img, "@sha256:") {
-					errs = append(errs, fmt.Errorf("%s: immagine %s non fissata al digest (%s)", o.Ref(), img, ParamRequireDigest))
+					errs = append(errs, fmt.Errorf("%s: image %s not pinned to the digest (%s)", o.Ref(), img, ParamRequireDigest))
 				}
 			}
 		}
 		ref := refOf(o)
 		if seen[ref.String()] {
-			errs = append(errs, fmt.Errorf("%s presente più volte nei manifest", o.Ref()))
+			errs = append(errs, fmt.Errorf("%s appears more than once in the manifests", o.Ref()))
 		}
 		seen[ref.String()] = true
 		pr.objects = append(pr.objects, o)
@@ -351,11 +351,11 @@ func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]O
 	if chart {
 		kv, err := api.Version(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("versione del cluster: %w", err)
+			return nil, nil, fmt.Errorf("cluster version: %w", err)
 		}
 		gvs, err := api.GroupVersions(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("API del cluster: %w", err)
+			return nil, nil, fmt.Errorf("cluster API: %w", err)
 		}
 		raw, err := p.helm.Render(ctx, req, kv, gvs)
 		if err != nil {
@@ -363,11 +363,11 @@ func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]O
 		}
 		objs, err := parseObjects(raw)
 		if err != nil {
-			return nil, nil, fmt.Errorf("manifest generati dal chart: %w", err)
+			return nil, nil, fmt.Errorf("manifests generated by the chart: %w", err)
 		}
 		objs, hooks := filterHooks(objs, req.Params)
 		if len(objs) == 0 {
-			return nil, nil, errors.New("il chart non genera oggetti da applicare")
+			return nil, nil, errors.New("the chart generates no objects to apply")
 		}
 		return objs, hooks, nil
 	}
@@ -484,7 +484,7 @@ func (p *Plugin) waitRollout(ctx context.Context, api API, objs []Object, req *p
 			cur, err := api.Get(ctx, o.APIVersion(), o.Kind(), o.Namespace(), o.Name())
 			if err != nil {
 				if ctx.Err() != nil {
-					return fmt.Errorf("%s: rollout non completato entro %s (%s)", o.Ref(), timeout, last)
+					return fmt.Errorf("%s: rollout not completed within %s (%s)", o.Ref(), timeout, last)
 				}
 				return fmt.Errorf("%s: %w", o.Ref(), err)
 			}
@@ -502,7 +502,7 @@ func (p *Plugin) waitRollout(ctx context.Context, api API, objs []Object, req *p
 			}
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("%s: rollout non completato entro %s (%s)", o.Ref(), timeout, last)
+				return fmt.Errorf("%s: rollout not completed within %s (%s)", o.Ref(), timeout, last)
 			case <-time.After(p.poll):
 			}
 		}
@@ -550,7 +550,7 @@ func ready(o Object) (bool, string, error) {
 		for _, c := range conds {
 			m, _ := c.(map[string]any)
 			if m["type"] == "Progressing" && m["status"] == "False" && m["reason"] == "ProgressDeadlineExceeded" {
-				return false, "", fmt.Errorf("rollout bloccato: %v", m["message"])
+				return false, "", fmt.Errorf("rollout stuck: %v", m["message"])
 			}
 		}
 		updated, total, available := num(o, "status", "updatedReplicas"), num(o, "status", "replicas"), num(o, "status", "availableReplicas")
@@ -604,7 +604,7 @@ func readPointer(ctx context.Context, api API, ns string, n names) (*release, er
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lettura della release in esercizio: %w", err)
+		return nil, fmt.Errorf("reading the release in service: %w", err)
 	}
 	v := cm.str("data", dataVersion)
 	if v == "" {
@@ -630,7 +630,7 @@ func readRelease(ctx context.Context, api API, ns string, n names, version strin
 	rel := &release{version: cm.str("data", dataVersion), name: n.release(version)}
 	if raw := cm.str("data", dataObjects); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &rel.objects); err != nil {
-			return nil, fmt.Errorf("storico della release %s non leggibile: %w", version, err)
+			return nil, fmt.Errorf("unreadable history of release %s: %w", version, err)
 		}
 	}
 	return rel, nil
@@ -641,13 +641,13 @@ func loadObjects(ctx context.Context, api API, ns string, n names, version strin
 	cm, err := api.Get(ctx, configMapAPIVersion, "ConfigMap", ns, n.release(version))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return nil, fmt.Errorf("release %s assente dallo storico del cluster", version)
+			return nil, fmt.Errorf("release %s missing from the cluster history", version)
 		}
 		return nil, err
 	}
 	enc := cm.str("binaryData", binaryObjects)
 	if enc == "" {
-		return nil, fmt.Errorf("release %s senza manifest nello storico", version)
+		return nil, fmt.Errorf("release %s without manifests in the history", version)
 	}
 	gz, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
@@ -663,7 +663,7 @@ func loadObjects(ctx context.Context, api API, ns string, n names, version strin
 	}
 	var objs []Object
 	if err := json.Unmarshal(data, &objs); err != nil {
-		return nil, fmt.Errorf("manifest della release %s non leggibili: %w", version, err)
+		return nil, fmt.Errorf("unreadable manifests of release %s: %w", version, err)
 	}
 	return objs, nil
 }
@@ -693,7 +693,7 @@ func saveRelease(ctx context.Context, api API, ns string, n names, req *plugin.R
 		return err
 	}
 	if gz.Len() > 900<<10 {
-		return fmt.Errorf("manifest troppo grandi per lo storico (%d byte compressi, massimo 900 KiB)", gz.Len())
+		return fmt.Errorf("manifests too large for the history (%d compressed bytes, maximum 900 KiB)", gz.Len())
 	}
 	refs, err := json.Marshal(pr.refs)
 	if err != nil {
@@ -712,7 +712,7 @@ func saveRelease(ctx context.Context, api API, ns string, n names, req *plugin.R
 		"binaryData": map[string]any{binaryObjects: base64.StdEncoding.EncodeToString(gz.Bytes())},
 	}
 	if _, err := api.Apply(ctx, cm, false); err != nil {
-		return fmt.Errorf("salvataggio della release nello storico: %w", err)
+		return fmt.Errorf("saving the release in the history: %w", err)
 	}
 	return nil
 }
@@ -734,7 +734,7 @@ func writePointerData(ctx context.Context, api API, ns string, n names, req *plu
 		"data":     data,
 	}
 	if _, err := api.Apply(ctx, cm, false); err != nil {
-		return fmt.Errorf("aggiornamento della release in esercizio: %w", err)
+		return fmt.Errorf("updating the release in service: %w", err)
 	}
 	return nil
 }
@@ -753,7 +753,7 @@ func prune(ctx context.Context, api API, previous, current []ObjectRef) ([]strin
 			continue
 		}
 		if err := api.Delete(ctx, r.APIVersion, r.Kind, r.Namespace, r.Name); err != nil {
-			return removed, fmt.Errorf("eliminazione di %s: %w", r, err)
+			return removed, fmt.Errorf("deleting %s: %w", r, err)
 		}
 		removed = append(removed, r.String())
 	}
@@ -826,7 +826,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		desc = append(desc, v+" su "+strings.Join(hosts, ","))
 	}
 	sort.Strings(desc)
-	return nil, fmt.Errorf("release diverse sui cluster: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different releases on the clusters: %s", strings.Join(desc, "; "))
 }
 
 // Rollback applies again on every cluster the objects of the given release, saved in the
@@ -835,7 +835,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 // is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !versionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida", previous.Version)
+		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
 	res := &plugin.Result{Plugin: Name}
 	var errs []error
@@ -919,7 +919,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 	details := map[string]string{"namespace": namespace(req)}
 	v, err := api.Version(ctx)
 	if err != nil {
-		return details, fmt.Errorf("accesso al cluster: %w", err)
+		return details, fmt.Errorf("cluster access: %w", err)
 	}
 	details["cluster_version"] = v
 	pr, err := p.prepare(ctx, api, req)

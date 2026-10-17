@@ -20,7 +20,7 @@ export function fakeApi(handler: Handler): { api: Api; calls: Call[] } {
     const text = req.method === "GET" ? "" : await req.text();
     const body = text ? (JSON.parse(text) as unknown) : undefined;
     calls.push({ method: req.method, path: url.pathname, body });
-    const res = handler({ method: req.method, path: url.pathname, query: url.searchParams, body }) ?? { status: 404, json: { error: "non trovato" } };
+    const res = handler({ method: req.method, path: url.pathname, query: url.searchParams, body }) ?? { status: 404, json: { error: "not found" } };
     const status = res.status ?? 200;
     return new Response(status === 204 ? null : JSON.stringify(res.json ?? {}), { status, headers: { "Content-Type": "application/json" } });
   };

@@ -37,7 +37,7 @@ func (p *ConsulProvider) Get(ctx context.Context, application, environment strin
 	key := expandKey(p.KeyTemplate, application, environment)
 	u, err := url.Parse(strings.TrimRight(p.Address, "/") + "/v1/kv/" + strings.TrimLeft(key, "/"))
 	if err != nil {
-		return nil, fmt.Errorf("indirizzo Consul non valido: %w", err)
+		return nil, fmt.Errorf("invalid Consul address: %w", err)
 	}
 	if p.Datacenter != "" {
 		u.RawQuery = url.Values{"dc": {p.Datacenter}}.Encode()
@@ -55,7 +55,7 @@ func (p *ConsulProvider) Get(ctx context.Context, application, environment strin
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("lettura da Consul: %w", err)
+		return nil, fmt.Errorf("reading from Consul: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -66,19 +66,19 @@ func (p *ConsulProvider) Get(ctx context.Context, application, environment strin
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, source)
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("lettura da Consul %s: status %d: %s", key, resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("reading from Consul %s: status %d: %s", key, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var kvs []consulKV
 	if err := json.NewDecoder(resp.Body).Decode(&kvs); err != nil {
-		return nil, fmt.Errorf("risposta Consul non valida: %w", err)
+		return nil, fmt.Errorf("invalid Consul response: %w", err)
 	}
 	if len(kvs) == 0 || kvs[0].Value == "" {
-		return nil, fmt.Errorf("%w: %s (chiave vuota)", ErrNotFound, source)
+		return nil, fmt.Errorf("%w: %s (empty key)", ErrNotFound, source)
 	}
 	raw, err := base64.StdEncoding.DecodeString(kvs[0].Value)
 	if err != nil {
-		return nil, fmt.Errorf("valore Consul non valido: %w", err)
+		return nil, fmt.Errorf("invalid Consul value: %w", err)
 	}
 	cfg, err := Parse(raw)
 	if err != nil {

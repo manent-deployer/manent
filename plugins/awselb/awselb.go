@@ -74,14 +74,14 @@ type Connector interface {
 func ValidatePool(s map[string]string) error {
 	var errs []error
 	if !awsauth.ValidRegion(s[SettingRegion]) {
-		errs = append(errs, fmt.Errorf("%s %q non valida", SettingRegion, s[SettingRegion]))
+		errs = append(errs, fmt.Errorf("invalid %s %q", SettingRegion, s[SettingRegion]))
 	}
 	if !tgARNRe.MatchString(s[SettingTargetGroupARN]) {
-		errs = append(errs, fmt.Errorf("%s %q non valido", SettingTargetGroupARN, s[SettingTargetGroupARN]))
+		errs = append(errs, fmt.Errorf("invalid %s %q", SettingTargetGroupARN, s[SettingTargetGroupARN]))
 	}
 	if p := s[SettingPort]; p != "" {
 		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
-			errs = append(errs, fmt.Errorf("%s %q non valida", SettingPort, p))
+			errs = append(errs, fmt.Errorf("invalid %s %q", SettingPort, p))
 		}
 	}
 	errs = append(errs, awsauth.Validate(s))
@@ -166,7 +166,7 @@ func (p *pool) Drain(ctx context.Context, members []string) error {
 			if states[m] == "InService" {
 				ids = append(ids, m)
 			} else if !isStandby(states[m]) {
-				return fmt.Errorf("istanza %s nello stato %q nell'Auto Scaling group %s", m, states[m], p.group)
+				return fmt.Errorf("instance %s in state %q in Auto Scaling group %s", m, states[m], p.group)
 			}
 		}
 		if len(ids) == 0 {

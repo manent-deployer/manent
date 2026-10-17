@@ -178,7 +178,7 @@ func (w *Worker) reconcileEnv(ctx context.Context, ie InventoryEntry) (service.T
 	if w.resolver != nil {
 		eff, _, err := w.resolver.Resolve(ctx, d)
 		if err != nil {
-			st.CheckedAt, st.Error = time.Now().UTC(), "configurazione di ambiente: "+err.Error()
+			st.CheckedAt, st.Error = time.Now().UTC(), "environment configuration: "+err.Error()
 			return st, true
 		}
 		d = eff
@@ -309,4 +309,4 @@ func mergeTargets(recs []cluster.TargetsRecord, deployment string) *service.Targ
 }
 
 // errNoTargetStore means a registry that does not keep the target states.
-var errNoTargetStore = errors.New("registro senza stato dei target")
+var errNoTargetStore = errors.New("registry without target state")

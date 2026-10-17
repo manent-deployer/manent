@@ -113,7 +113,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 		svc["traffic"] = split(req, stable, cand, pct)
 		op, err := s.api.UpdateService(ctx, s.name, svc, false)
 		if err != nil {
-			return details, fmt.Errorf("creazione della revisione candidata: %w", err)
+			return details, fmt.Errorf("creating the candidate revision: %w", err)
 		}
 		if err := p.wait(ctx, s.api, op, timeout); err != nil {
 			return details, err
@@ -122,7 +122,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	// An operation ended without errors guarantees a ready revision; only check that it exists
 	// with the expected name.
 	if _, err := s.api.GetRevision(ctx, s.name+"/revisions/"+cand); err != nil {
-		return details, fmt.Errorf("lettura della revisione %s: %w", cand, err)
+		return details, fmt.Errorf("reading revision %s: %w", cand, err)
 	}
 	p.logger.InfoContext(ctx, "revisione candidata pronta, senza traffico", "deployment", req.DeploymentID, "region", s.region, "revision", cand, "stable", stable)
 	return details, nil
@@ -136,7 +136,7 @@ func (p *Plugin) setTraffic(ctx context.Context, s *state, req *plugin.Request, 
 	s.svc["traffic"] = traffic
 	op, err := s.api.UpdateService(ctx, s.name, s.svc, false)
 	if err != nil {
-		return fmt.Errorf("spostamento del traffico: %w", err)
+		return fmt.Errorf("shifting traffic: %w", err)
 	}
 	return p.wait(ctx, s.api, op, timeout)
 }
@@ -202,7 +202,7 @@ func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 // assigned when the revision was created.
 func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	if req.Traffic == nil || req.Traffic.TesterTag == "" {
-		return nil, errors.New("rollout.traffic.testers.tag obbligatorio con il plugin cloudrun")
+		return nil, errors.New("rollout.traffic.testers.tag is required with the cloudrun plugin")
 	}
 	out := map[string]string{}
 	for _, t := range req.Targets {
@@ -220,7 +220,7 @@ func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[str
 			}
 		}
 		if out["tester_url@"+t.Host] == "" {
-			return nil, fmt.Errorf("region %s: tag %s della revisione candidata senza URL", t.Host, req.Traffic.TesterTag)
+			return nil, fmt.Errorf("region %s: tag %s of the candidate revision without URL", t.Host, req.Traffic.TesterTag)
 		}
 	}
 	return out, nil

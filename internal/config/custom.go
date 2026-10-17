@@ -59,7 +59,7 @@ func (p Pipeline) validateCustom() []error {
 		if s.IsCustom() {
 			for _, std := range standardStep {
 				if s.Name == std {
-					errs = append(errs, fmt.Errorf("step %q: il nome è di uno step standard", s.Name))
+					errs = append(errs, fmt.Errorf("step %q: the name belongs to a standard step", s.Name))
 				}
 			}
 		}
@@ -69,11 +69,11 @@ func (p Pipeline) validateCustom() []error {
 	}
 	for _, h := range p.Custom.RevokedSpecs {
 		if !specHashRe.MatchString(h) {
-			errs = append(errs, fmt.Errorf("pipeline.custom.revoked_specs: %q non è uno sha256 esadecimale minuscolo", h))
+			errs = append(errs, fmt.Errorf("pipeline.custom.revoked_specs: %q is not a lowercase hex sha256", h))
 		}
 	}
 	if d := p.Custom.SecretsDir; d != "" && (!remoteDirRe.MatchString(d) || strings.Contains(d, "..")) {
-		errs = append(errs, fmt.Errorf("pipeline.custom.secrets_dir %q non valida: percorso assoluto senza '..'", d))
+		errs = append(errs, fmt.Errorf("invalid pipeline.custom.secrets_dir %q: absolute path without '..'", d))
 	}
 	return errs
 }

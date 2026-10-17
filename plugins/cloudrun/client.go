@@ -62,7 +62,7 @@ func (c *HTTPConnector) tokenSource(ctx context.Context, req *plugin.Request) (o
 		// call URLs chosen by whoever writes the secret.
 		creds, err := google.CredentialsFromJSONWithType(base, []byte(key), google.ServiceAccount, scope)
 		if err != nil {
-			return nil, fmt.Errorf("credenziali nel segreto %s: %w", name, err)
+			return nil, fmt.Errorf("credentials in secret %s: %w", name, err)
 		}
 		return creds.TokenSource, nil
 	}
@@ -71,7 +71,7 @@ func (c *HTTPConnector) tokenSource(ctx context.Context, req *plugin.Request) (o
 	if c.adc == nil {
 		creds, err := google.FindDefaultCredentials(base, scope)
 		if err != nil {
-			return nil, fmt.Errorf("Application Default Credentials: %w (oppure indicare %q)", err, ParamCredentialsSecret)
+			return nil, fmt.Errorf("Application Default Credentials: %w (or set %q)", err, ParamCredentialsSecret)
 		}
 		c.adc = creds.TokenSource
 	}
@@ -96,7 +96,7 @@ type apiError struct {
 func (a *httpAPI) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
 	tok, err := a.ts.Token()
 	if err != nil {
-		return fmt.Errorf("token di accesso: %w", err)
+		return fmt.Errorf("access token: %w", err)
 	}
 	var rd io.Reader
 	if body != nil {

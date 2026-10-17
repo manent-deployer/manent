@@ -57,11 +57,11 @@ func renderArg(i int, text string, data templateData) (string, error) {
 	case err != nil:
 		return "", err
 	case out == "":
-		return "", fmt.Errorf("%s: il valore sostituito è vuoto", name)
+		return "", fmt.Errorf("%s: the substituted value is empty", name)
 	case strings.ContainsAny(out, "\x00\r\n"):
-		return "", fmt.Errorf("%s: il valore sostituito contiene caratteri di controllo", name)
+		return "", fmt.Errorf("%s: the substituted value contains control characters", name)
 	case strings.HasPrefix(out, "-") && !strings.HasPrefix(text, "-"):
-		return "", fmt.Errorf("%s: il valore sostituito inizia con '-' e sarebbe letto come un'opzione", name)
+		return "", fmt.Errorf("%s: the substituted value starts with '-' and would be read as an option", name)
 	}
 	return out, nil
 }
@@ -83,12 +83,12 @@ func renderURL(name, text string, data templateData, allowHTTP bool) (*url.URL, 
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	if u.Scheme+"://"+u.Host != origin || u.User != nil {
-		return nil, fmt.Errorf("%s: la destinazione non corrisponde a quella della specifica", name)
+		return nil, fmt.Errorf("%s: the destination does not match the one of the specification", name)
 	}
 	// A "." or ".." value would climb the path (path traversal).
 	for _, seg := range strings.Split(u.EscapedPath(), "/") {
 		if v, err := url.PathUnescape(seg); err != nil || v == "." || v == ".." {
-			return nil, fmt.Errorf("%s: segmento del percorso non ammesso", name)
+			return nil, fmt.Errorf("%s: path segment not allowed", name)
 		}
 	}
 	return u, nil
@@ -101,7 +101,7 @@ func renderHeader(name, text string, data templateData) (string, error) {
 		return "", err
 	}
 	if strings.ContainsAny(out, "\x00\r\n") {
-		return "", fmt.Errorf("%s: il valore contiene caratteri di controllo", name)
+		return "", fmt.Errorf("%s: the value contains control characters", name)
 	}
 	return out, nil
 }

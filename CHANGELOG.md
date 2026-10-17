@@ -117,6 +117,11 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- I messaggi di errore sono in inglese: errori restituiti da API (`{"error": ...}`), client e
+  server, step, plugin (compresi gli script PowerShell del plugin `windows`), plugin esterni
+  (gRPC), provider Terraform e motivi dei gate di salute. Log, output dei comandi, notifiche in
+  chat e interfaccia web restano in italiano. Chi confronta il testo degli errori (script, alert)
+  va aggiornato.
 - Nella strategy `traffic` il gradino del 100% e il primo rilascio non valutano più le metriche
   `compare: stable`: la stabile non riceve traffico e il confronto leggerebbe una serie vuota.
 - Governance: `approvals.when: rollout` sposta le approvazioni di una regola nei punti

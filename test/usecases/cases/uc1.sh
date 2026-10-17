@@ -97,7 +97,7 @@ manent rollback -a $APP -e test --to 1.1.0 --timeout 2m >/dev/null
 expect_eq "rollback manuale all'ultima release riuscita (1.1.0)" "$(current eu1-a $APP)" 1.1.0
 healthy eu1-a $APP && pass "healthz di nuovo verde dopo il ripristino" || fail "healthz rosso dopo il ripristino"
 err=$(manent_err rollback -a $APP -e test --to 1.1.0)
-expect_match "dopo il ripristino la 1.1.0 è di nuovo in esercizio" "$err" "già in esercizio"
+expect_match "dopo il ripristino la 1.1.0 è di nuovo in esercizio" "$err" "already in service"
 
 manent rollback -a $APP -e test --timeout 2m >/dev/null
 expect_eq "rollback manuale alla release precedente (1.0.0)" "$(current eu1-a $APP)" 1.0.0

@@ -278,7 +278,7 @@ describe("catene", () => {
       requested_by: "oidc:alice",
       created_at: now,
       updated_at: now,
-      error: "deploy non riusciti: api: ERROR",
+      error: "failed deploys: api: ERROR",
       deploys: [
         { name: "db", deployment_id: "r2.db", application: "db", environment: "prod", version: "2.0.0", state: "SUCCESS", rollback_id: "r2.rollback.db", rollback_state: "SUCCESS" },
         { name: "api", deployment_id: "r2.api", application: "api", environment: "prod", version: "2.0.0", after: ["db"], state: "ERROR" },

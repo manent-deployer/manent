@@ -37,11 +37,11 @@ db=$(submit "$(descriptor uc9-db-110 uc9-db-110 uc9-db prod 1.1.0)")
 api=$(submit "$(descriptor uc9-api-110 uc9-api-110 uc9-api prod 1.1.0 "after: [$db]")")
 expect_eq "il database fallisce" "$(wait_state "$db" terminal 90)" ERROR
 expect_eq "api si conclude in DEPENDENCY_FAILED" "$(wait_state "$api" DEPENDENCY_FAILED 60)" DEPENDENCY_FAILED
-expect_match "il motivo cita la dipendenza" "$(manent status "$api" | jq -r .error)" "$db è concluso in ERROR"
+expect_match "il motivo cita la dipendenza" "$(manent status "$api" | jq -r .error)" "$db ended in ERROR"
 expect_eq "api resta sulla 1.0.0" "$(current eu1-b uc9-api)" 1.0.0
 fault eu1-a uc9-db clear
 expect_match "una dipendenza già fallita è rifiutata all'invio" \
-  "$(manent_err deploy --no-wait -f "$(descriptor uc9-api-111 uc9-api-111 uc9-api prod 1.1.0)" --after "$db")" "concluso in ERROR"
+  "$(manent_err deploy --no-wait -f "$(descriptor uc9-api-111 uc9-api-111 uc9-api prod 1.1.0)" --after "$db")" "ended in ERROR"
 
 info "-- release composta: db, poi api, poi web"
 for n in db api web; do descriptor "uc9-r1-$n" "uc9-r1-$n" "uc9-$n" prod 1.2.0 >/dev/null; done

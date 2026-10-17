@@ -84,7 +84,7 @@ func (a sdkELB) actions(ctx context.Context, arn string) ([]types.Action, error)
 			return nil, err
 		}
 		if len(out.Rules) == 0 {
-			return nil, fmt.Errorf("regola %s non trovata", arn)
+			return nil, fmt.Errorf("rule %s not found", arn)
 		}
 		return out.Rules[0].Actions, nil
 	}
@@ -93,7 +93,7 @@ func (a sdkELB) actions(ctx context.Context, arn string) ([]types.Action, error)
 		return nil, err
 	}
 	if len(out.Listeners) == 0 {
-		return nil, fmt.Errorf("listener %s non trovato", arn)
+		return nil, fmt.Errorf("listener %s not found", arn)
 	}
 	return out.Listeners[0].DefaultActions, nil
 }
@@ -117,7 +117,7 @@ func (a sdkELB) ForwardWeights(ctx context.Context, arn string) (map[string]int3
 		}
 		return out, nil
 	}
-	return nil, errors.New("nessuna azione forward")
+	return nil, errors.New("no forward action")
 }
 
 func (a sdkELB) SetForwardWeights(ctx context.Context, arn string, weights map[string]int32) error {

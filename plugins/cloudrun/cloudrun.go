@@ -54,7 +54,7 @@ const (
 const DetailRevision = "revision"
 
 // ErrNotFound means a service or revision that does not exist.
-var ErrNotFound = errors.New("non trovato")
+var ErrNotFound = errors.New("not found")
 
 var (
 	regionRe  = regexp.MustCompile(`^[a-z]+-[a-z]+[0-9]+$`)
@@ -119,7 +119,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	if raw, ok := cfg["endpoint"]; ok {
 		s, ok := raw.(string)
 		if !ok || !(strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")) {
-			return nil, errors.New("endpoint deve essere un URL http(s)")
+			return nil, errors.New("endpoint must be an http(s) URL")
 		}
 		endpoint = s
 	}
@@ -148,26 +148,26 @@ func resource(req *plugin.Request, region string) string {
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e diventa un'annotazione della revisione: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and becomes an annotation of the revision: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if req.Artifact.LocalPath != "" && !strings.HasSuffix(req.Artifact.LocalPath, plugin.ImageRefExt) {
-		errs = append(errs, errors.New("l'artefatto non è un'immagine di un registry: indicare artifact.source oci://registry/repository:tag"))
+		errs = append(errs, errors.New("the artifact is not a registry image: provide artifact.source oci://registry/repository:tag"))
 	}
 	if pr := req.Params[ParamProject]; !projectRe.MatchString(pr) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: indicare l'ID del progetto Google Cloud", ParamProject, pr))
+		errs = append(errs, fmt.Errorf("invalid %s %q: provide the Google Cloud project ID", ParamProject, pr))
 	}
 	if s := serviceName(req); !serviceRe.MatchString(s) {
-		errs = append(errs, fmt.Errorf("servizio %q non valido: minuscole, cifre e '-', al più 49 caratteri (parametro %q)", s, ParamService))
+		errs = append(errs, fmt.Errorf("invalid service %q: lowercase letters, digits and '-', at most 49 characters (parameter %q)", s, ParamService))
 	}
 	if _, err := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout); err != nil {
 		errs = append(errs, err)
 	}
 	if len(req.Targets) == 0 {
-		errs = append(errs, errors.New("nessuna region tra i target"))
+		errs = append(errs, errors.New("no region among the targets"))
 	}
 	for _, t := range req.Targets {
 		if !regionRe.MatchString(t.Host) {
-			errs = append(errs, fmt.Errorf("target %q: atteso il nome di una region (es. europe-west1)", t.Host))
+			errs = append(errs, fmt.Errorf("target %q: expected the name of a region (e.g. europe-west1)", t.Host))
 		}
 	}
 	return errors.Join(errs...)
@@ -234,7 +234,7 @@ func chooseContainer(svc Object, req *plugin.Request) (Object, error) {
 	if i := slices.Index(names, want); i >= 0 {
 		return list[i], nil
 	}
-	return nil, fmt.Errorf("container %q assente dal servizio (container: %s): indicare %q", want, strings.Join(names, ", "), ParamContainer)
+	return nil, fmt.Errorf("container %q missing from the service (containers: %s): provide %q", want, strings.Join(names, ", "), ParamContainer)
 }
 
 // serving returns the revision receiving traffic ("" if none). With split traffic (e.g. a
@@ -264,7 +264,7 @@ func serving(svc Object) (string, error) {
 		}
 	}
 	if tie {
-		return "", fmt.Errorf("traffico diviso in parti uguali tra più revisioni (%s)", strings.Join(active, ", "))
+		return "", fmt.Errorf("traffic split equally among several revisions (%s)", strings.Join(active, ", "))
 	}
 	return rev, nil
 }
@@ -290,7 +290,7 @@ type state struct {
 
 func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request) (*state, error) {
 	if !regionRe.MatchString(t.Host) {
-		return nil, fmt.Errorf("region %q non valida", t.Host)
+		return nil, fmt.Errorf("invalid region %q", t.Host)
 	}
 	api, err := p.connector.Connect(ctx, req)
 	if err != nil {
@@ -299,10 +299,10 @@ func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request)
 	name := resource(req, t.Host)
 	svc, err := api.GetService(ctx, name)
 	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("servizio %s assente: va creato con l'infrastruttura (es. Terraform), manent ne aggiorna l'immagine", name)
+		return nil, fmt.Errorf("service %s missing: it must be created with the infrastructure (e.g. Terraform), manent updates its image", name)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lettura del servizio: %w", err)
+		return nil, fmt.Errorf("reading the service: %w", err)
 	}
 	return &state{region: t.Host, name: name, api: api, svc: svc}, nil
 }
@@ -315,7 +315,7 @@ func (s *state) version(ctx context.Context) (string, string, error) {
 	}
 	r, err := s.api.GetRevision(ctx, s.name+"/revisions/"+rev)
 	if err != nil {
-		return "", rev, fmt.Errorf("lettura della revisione %s: %w", rev, err)
+		return "", rev, fmt.Errorf("reading revision %s: %w", rev, err)
 	}
 	return str(r, "annotations", AnnotationVersion), rev, nil
 }
@@ -386,7 +386,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		}
 		op, err := s.api.UpdateService(ctx, s.name, svc, false)
 		if err != nil {
-			return details, fmt.Errorf("aggiornamento del servizio: %w", err)
+			return details, fmt.Errorf("updating the service: %w", err)
 		}
 		log.InfoContext(ctx, "servizio aggiornato, in attesa della revisione", "image", image)
 		if err := p.wait(ctx, s.api, op, timeout); err != nil {
@@ -395,14 +395,14 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	}
 	svc, err := s.api.GetService(ctx, s.name)
 	if err != nil {
-		return details, fmt.Errorf("lettura del servizio: %w", err)
+		return details, fmt.Errorf("reading the service: %w", err)
 	}
 	if st := str(svc, "terminalCondition", "state"); st != "" && st != "CONDITION_SUCCEEDED" {
-		return details, fmt.Errorf("servizio nello stato %s: %s", st, str(svc, "terminalCondition", "message"))
+		return details, fmt.Errorf("service in state %s: %s", st, str(svc, "terminalCondition", "message"))
 	}
 	created, ready := short(str(svc, "latestCreatedRevision")), short(str(svc, "latestReadyRevision"))
 	if created != ready {
-		return details, fmt.Errorf("revisione %s non pronta (in esercizio resta %s)", created, ready)
+		return details, fmt.Errorf("revision %s not ready (%s stays in service)", created, ready)
 	}
 	details[DetailRevision] = ready
 	if u := str(svc, "uri"); u != "" {
@@ -418,20 +418,20 @@ func (p *Plugin) wait(ctx context.Context, api API, op *Operation, timeout time.
 	for !op.Done {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("operazione %s non conclusa entro %s", short(op.Name), timeout)
+			return fmt.Errorf("operation %s not completed within %s", short(op.Name), timeout)
 		case <-time.After(p.poll):
 		}
 		next, err := api.GetOperation(ctx, op.Name)
 		if err != nil {
 			if ctx.Err() != nil {
-				return fmt.Errorf("operazione %s non conclusa entro %s", short(op.Name), timeout)
+				return fmt.Errorf("operation %s not completed within %s", short(op.Name), timeout)
 			}
-			return fmt.Errorf("lettura dell'operazione: %w", err)
+			return fmt.Errorf("reading the operation: %w", err)
 		}
 		op = next
 	}
 	if op.Error != nil {
-		return fmt.Errorf("operazione fallita: %s", op.Error.Message)
+		return fmt.Errorf("operation failed: %s", op.Error.Message)
 	}
 	return nil
 }
@@ -469,7 +469,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		desc = append(desc, v+" su "+strings.Join(hosts, ","))
 	}
 	sort.Strings(desc)
-	return nil, fmt.Errorf("versioni diverse tra le region: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different versions across regions: %s", strings.Join(desc, "; "))
 }
 
 // Rollback sends all traffic of every region to the revision of the given release: the one in
@@ -477,7 +477,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 // It continues even if a region fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida", previous.Version)
+		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
 	res := &plugin.Result{Plugin: Name}
 	var errs []error
@@ -513,7 +513,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 		s.svc["traffic"] = []any{Object{"type": trafficRevision, "revision": rev, "percent": 100}}
 		op, err := s.api.UpdateService(ctx, s.name, s.svc, false)
 		if err != nil {
-			return details, fmt.Errorf("spostamento del traffico: %w", err)
+			return details, fmt.Errorf("shifting traffic: %w", err)
 		}
 		if err := p.wait(ctx, s.api, op, timeout); err != nil {
 			return details, err
@@ -528,7 +528,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 func (p *Plugin) findRevision(ctx context.Context, s *state, version string) (string, error) {
 	list, err := s.api.ListRevisions(ctx, s.name)
 	if err != nil {
-		return "", fmt.Errorf("elenco delle revisioni: %w", err)
+		return "", fmt.Errorf("listing the revisions: %w", err)
 	}
 	best, bestTime := "", ""
 	for _, r := range list {
@@ -541,7 +541,7 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, version string) (st
 		}
 	}
 	if best == "" {
-		return "", fmt.Errorf("nessuna revisione del servizio con la versione %s", version)
+		return "", fmt.Errorf("no revision of the service with version %s", version)
 	}
 	return best, nil
 }
@@ -584,7 +584,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 		return details, err
 	}
 	if _, err := s.api.UpdateService(ctx, s.name, svc, true); err != nil {
-		return details, fmt.Errorf("verifica dell'aggiornamento: %w", err)
+		return details, fmt.Errorf("checking the update: %w", err)
 	}
 	p.logger.InfoContext(ctx, "servizio pronto per il deploy", "deployment", req.DeploymentID, "region", s.region, "service", serviceName(req), "dry_run", true)
 	return details, nil

@@ -87,7 +87,7 @@ func TestRollbackDopoFallimento(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = e.Wait(ctx, sub.ID)
-	if err == nil || !strings.Contains(err.Error(), "rollback completato") {
+	if err == nil || !strings.Contains(err.Error(), "rollback completed") {
 		t.Fatalf("atteso errore con rollback completato, ricevuto %v", err)
 	}
 	// Compensations in reverse order, failed step included; b is not compensable.
@@ -131,7 +131,7 @@ func TestRollbackFallitoSiFerma(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "rollback fallito") {
+	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "rollback failed") {
 		t.Fatalf("atteso rollback fallito, ricevuto %v", err)
 	}
 	// a's compensation is not attempted after c's failed one.
@@ -150,7 +150,7 @@ func TestRollbackNienteDaRipristinare(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "nessuna release da ripristinare") {
+	if _, err := e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "no release to restore") {
 		t.Fatalf("atteso rollback senza release, ricevuto %v", err)
 	}
 }

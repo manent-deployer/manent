@@ -65,7 +65,7 @@ if command -v timeout >/dev/null 2>&1; then timeout -k 10 %d "$@"; else "$@"; fi
 func (r *run) command(ctx context.Context) (map[string]string, error) {
 	targets := slices.Clone(r.d.Deploy.Targets)
 	if len(targets) == 0 {
-		return nil, permanent("nessun target su cui eseguire il comando")
+		return nil, permanent("no target to run the command on")
 	}
 	if r.action.RunOnce {
 		targets = targets[:1]
@@ -105,7 +105,7 @@ func (r *run) sshAuth(ctx context.Context) (SSHAuth, error) {
 		ref, _ := r.d.SecretRefByName(name)
 		v, err := res.Resolve(ctx, ref)
 		if err != nil {
-			return a, fmt.Errorf("credenziali SSH: %w", err)
+			return a, fmt.Errorf("SSH credentials: %w", err)
 		}
 		*dst = v
 	}
@@ -120,11 +120,11 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 		user = r.s.doc.SSH.User
 	}
 	if user == "" {
-		return nil, permanent("utente SSH non indicato (target.user o ssh.user)")
+		return nil, permanent("SSH user not set (target.user or ssh.user)")
 	}
 	conn, err := r.s.b.Dialer.Dial(ctx, t, user, auth)
 	if err != nil {
-		return nil, temporary("connessione SSH: %w", err)
+		return nil, temporary("SSH connection: %w", err)
 	}
 	defer conn.Close()
 
@@ -138,7 +138,7 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 			r.log.WarnContext(ctx, "pulizia della directory dei segreti fallita: verrà ripetuta al prossimo tentativo", "target", t.Host, "code", code, "error", err)
 		}
 	}()
-	if err := r.exec(ctx, conn, "umask 077 && rm -rf -- "+Quote(base)+" && mkdir -p -- "+Quote(path.Join(dir, "secrets")), nil, "preparazione della directory"); err != nil {
+	if err := r.exec(ctx, conn, "umask 077 && rm -rf -- "+Quote(base)+" && mkdir -p -- "+Quote(path.Join(dir, "secrets")), nil, "preparing the directory"); err != nil {
 		return nil, err
 	}
 	if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "env")), strings.NewReader(r.envFile(t, dir)), "scrittura dell'ambiente"); err != nil {
@@ -172,15 +172,15 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	stderr.flush()
 	switch {
 	case ctx.Err() != nil:
-		return nil, temporary("comando interrotto: %w", ctx.Err())
+		return nil, temporary("command interrupted: %w", ctx.Err())
 	case err != nil:
-		return nil, temporary("esecuzione del comando: %w", err)
+		return nil, temporary("running the command: %w", err)
 	case code == exitTimeout:
-		return nil, temporary("comando terminato per timeout dopo %ds", timeout)
+		return nil, temporary("command terminated by timeout after %ds", timeout)
 	case code == ExitTempFail:
-		return nil, temporary("il comando ha chiesto un nuovo tentativo (exit %d)", code)
+		return nil, temporary("the command asked for a retry (exit %d)", code)
 	case code != 0:
-		return nil, permanent("il comando è uscito con codice %d", code)
+		return nil, permanent("the command exited with code %d", code)
 	}
 	r.log.InfoContext(ctx, "comando completato", "target", t.Host)
 	if len(r.s.doc.Outputs) == 0 {
@@ -189,10 +189,10 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	var buf bytes.Buffer
 	w := &limitedWriter{w: &buf, left: maxOutputFile + 1}
 	if code, err := conn.Exec(ctx, "cat -- "+Quote(path.Join(dir, "output")), nil, w, io.Discard); err != nil || code != 0 {
-		return nil, temporary("lettura degli output: codice %d, %v", code, err)
+		return nil, temporary("reading the outputs: code %d, %v", code, err)
 	}
 	if buf.Len() > maxOutputFile {
-		return nil, permanent("output oltre %d byte", maxOutputFile)
+		return nil, permanent("output over %d bytes", maxOutputFile)
 	}
 	return parseOutputs(buf.String())
 }
@@ -206,7 +206,7 @@ func (r *run) exec(ctx context.Context, conn Conn, cmd string, stdin io.Reader, 
 	case err != nil:
 		return temporary("%s: %w", what, err)
 	case code != 0:
-		return permanent("%s: codice %d: %s", what, code, strings.TrimSpace(r.red.apply(stderr.String())))
+		return permanent("%s: code %d: %s", what, code, strings.TrimSpace(r.red.apply(stderr.String())))
 	}
 	return nil
 }
@@ -218,11 +218,11 @@ func (r *run) verifyBinary(ctx context.Context, conn Conn, bin, want string) err
 	cmd := "if command -v sha256sum >/dev/null 2>&1; then sha256sum -- " + q + "; else shasum -a 256 -- " + q + "; fi"
 	code, err := conn.Exec(ctx, cmd, nil, &limitedWriter{w: &out, left: 4096}, io.Discard)
 	if err != nil {
-		return temporary("verifica del binario: %w", err)
+		return temporary("checking the binary: %w", err)
 	}
 	got, _, _ := strings.Cut(strings.TrimSpace(out.String()), " ")
 	if code != 0 || !strings.EqualFold(got, want) {
-		return permanent("lo sha256 di %s sul target non corrisponde a quello della specifica", bin)
+		return permanent("the sha256 of %s on the target does not match the one of the specification", bin)
 	}
 	return nil
 }
@@ -289,10 +289,10 @@ func parseOutputs(s string) (map[string]string, error) {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok || k == "" {
-			return nil, permanent("output non valido: righe chiave=valore")
+			return nil, permanent("invalid output: key=value lines")
 		}
 		if _, dup := out[k]; dup {
-			return nil, permanent("output %q ripetuto", k)
+			return nil, permanent("output %q repeated", k)
 		}
 		out[k] = v
 	}
@@ -324,7 +324,7 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 func nonce() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		panic(errors.New("generatore casuale non disponibile"))
+		panic(errors.New("random generator not available"))
 	}
 	return hex.EncodeToString(b)
 }

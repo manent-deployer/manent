@@ -89,5 +89,5 @@ func ParseSince(v string, now time.Time) (time.Time, error) {
 	if d, err := time.ParseDuration(v); err == nil && d > 0 {
 		return now.Add(-d), nil
 	}
-	return time.Time{}, errors.New("since deve essere una data RFC 3339, una durata (720h) o un numero di giorni (30d)")
+	return time.Time{}, errors.New("since must be an RFC 3339 date, a duration (720h) or a number of days (30d)")
 }

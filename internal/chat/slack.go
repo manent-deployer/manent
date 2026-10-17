@@ -39,7 +39,7 @@ func (s *SlackAPI) endpoint(method string) string {
 func (s *SlackAPI) call(ctx context.Context, method string, body any, out any) error {
 	tok, err := s.Secrets.Resolve(ctx, s.TokenRef)
 	if err != nil {
-		return fmt.Errorf("token di Slack: %w", err)
+		return fmt.Errorf("Slack token: %w", err)
 	}
 	var resp struct {
 		OK    bool   `json:"ok"`
@@ -79,7 +79,7 @@ func (s *SlackAPI) Update(ctx context.Context, ref Ref, text string, blocks []an
 func (s *SlackAPI) UserEmail(ctx context.Context, user string) (string, error) {
 	tok, err := s.Secrets.Resolve(ctx, s.TokenRef)
 	if err != nil {
-		return "", fmt.Errorf("token di Slack: %w", err)
+		return "", fmt.Errorf("Slack token: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.endpoint("users.info")+"?"+url.Values{"user": {user}}.Encode(), nil)
 	if err != nil {
@@ -108,7 +108,7 @@ func (s *SlackAPI) UserEmail(ctx context.Context, user string) (string, error) {
 		return "", fmt.Errorf("slack users.info: %s", out.Error)
 	}
 	if out.User.Deleted || out.User.Profile.Email == "" {
-		return "", errors.New("utente Slack senza email")
+		return "", errors.New("Slack user without email")
 	}
 	return out.User.Profile.Email, nil
 }
@@ -151,7 +151,7 @@ func postJSON(ctx context.Context, client HTTPDoer, u string, headers map[string
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
-			return nil, fmt.Errorf("%s: risposta non valida: %w", req.URL.Host, err)
+			return nil, fmt.Errorf("%s: invalid response: %w", req.URL.Host, err)
 		}
 	}
 	return raw, nil
@@ -163,14 +163,14 @@ func VerifySlackSignature(secret string, header http.Header, body []byte, now ti
 	ts := header.Get("X-Slack-Request-Timestamp")
 	sec, err := strconv.ParseInt(ts, 10, 64)
 	if err != nil {
-		return errors.New("timestamp di Slack mancante")
+		return errors.New("missing Slack timestamp")
 	}
 	if d := now.Sub(time.Unix(sec, 0)); d > 5*time.Minute || d < -5*time.Minute {
-		return errors.New("richiesta di Slack scaduta")
+		return errors.New("Slack request expired")
 	}
 	want := "v0=" + hmacHex(secret, "v0:"+ts+":"+string(body))
 	if !hmacEqual(want, header.Get("X-Slack-Signature")) {
-		return errors.New("firma di Slack non valida")
+		return errors.New("invalid Slack signature")
 	}
 	return nil
 }

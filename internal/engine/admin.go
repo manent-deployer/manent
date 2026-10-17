@@ -170,7 +170,7 @@ type RecoverReport struct {
 }
 
 // ErrExecutorAlive means the executor to recover still looks alive.
-var ErrExecutorAlive = errors.New("executor attivo")
+var ErrExecutorAlive = errors.New("executor active")
 
 // Recover runs the selected workflows again, on any worker.
 //
@@ -184,11 +184,11 @@ var ErrExecutorAlive = errors.New("executor attivo")
 // cannot overlap, nor with its restart.
 func (a *Admin) Recover(ctx context.Context, o RecoverOptions) (*RecoverReport, error) {
 	if o.Executor == "" && o.FromVersion == "" {
-		return nil, fmt.Errorf("%w: indicare l'executor o la versione dei workflow da recuperare", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: provide the executor or the workflow version to recover", ErrInvalidRequest)
 	}
 	o.ToVersion = cmp.Or(o.ToVersion, a.version)
 	if o.ToVersion == "" {
-		return nil, fmt.Errorf("%w: versione di destinazione sconosciuta", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: unknown target version", ErrInvalidRequest)
 	}
 	if err := a.checkRecover(ctx, o); err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func (a *Admin) Recover(ctx context.Context, o RecoverOptions) (*RecoverReport, 
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("%w: executor %s attivo o già recuperato (verificare con manent admin executors; --force per procedere comunque)", ErrExecutorAlive, o.Executor)
+			return nil, fmt.Errorf("%w: executor %s active or already recovered (check with manent admin executors; --force to proceed anyway)", ErrExecutorAlive, o.Executor)
 		}
 		claimed = true
 	}
@@ -229,7 +229,7 @@ func (a *Admin) checkRecover(ctx context.Context, o RecoverOptions) error {
 		return nil
 	}
 	if a.registry == nil {
-		return fmt.Errorf("%w: registro degli executor non disponibile: verificare che l'executor sia fermo e usare --force", ErrInvalidRequest)
+		return fmt.Errorf("%w: executor registry not available: make sure the executor is stopped and use --force", ErrInvalidRequest)
 	}
 	es, err := a.registry.List(ctx)
 	if err != nil {
@@ -242,15 +242,15 @@ func (a *Admin) checkRecover(ctx context.Context, o RecoverOptions) error {
 		if e.ID == o.Executor {
 			known = true
 			if alive {
-				return fmt.Errorf("%w: %s ha inviato un heartbeat %s fa", ErrExecutorAlive, e.ID, now.Sub(e.HeartbeatAt).Round(time.Second))
+				return fmt.Errorf("%w: %s sent a heartbeat %s ago", ErrExecutorAlive, e.ID, now.Sub(e.HeartbeatAt).Round(time.Second))
 			}
 		}
 		if o.FromVersion != "" && e.Version == o.FromVersion && alive {
-			return fmt.Errorf("%w: %s esegue ancora la versione %s: va arrestato prima di migrarne i workflow", ErrExecutorAlive, e.ID, o.FromVersion)
+			return fmt.Errorf("%w: %s still runs version %s: stop it before migrating its workflows", ErrExecutorAlive, e.ID, o.FromVersion)
 		}
 	}
 	if o.Executor != "" && !known {
-		return fmt.Errorf("%w: executor %s non registrato: verificare che sia fermo e usare --force", ErrInvalidRequest, o.Executor)
+		return fmt.Errorf("%w: executor %s not registered: make sure it is stopped and use --force", ErrInvalidRequest, o.Executor)
 	}
 	return nil
 }

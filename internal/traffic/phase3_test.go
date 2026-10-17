@@ -87,7 +87,7 @@ func TestNginxPoolViaSSH(t *testing.T) {
 	if ok, _ := p.Healthy(ctx, []string{"10.0.0.1:80"}); !ok["10.0.0.1:80"] {
 		t.Error("server rientrato non in servizio")
 	}
-	if err := p.Drain(ctx, []string{"10.0.0.9:80"}); err == nil || !strings.Contains(err.Error(), "assenti") {
+	if err := p.Drain(ctx, []string{"10.0.0.9:80"}); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("server assente: %v", err)
 	}
 }

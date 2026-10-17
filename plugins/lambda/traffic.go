@@ -37,7 +37,7 @@ func (p *Plugin) PrepareSlots(ctx context.Context, req *plugin.Request) (map[str
 			continue
 		}
 		if len(s.alias.Weights) > 0 {
-			return nil, fmt.Errorf("region %s: l'alias %s divide già il traffico (%v): concludere prima il rilascio in corso", t.Host, aliasName(req), s.alias.Weights)
+			return nil, fmt.Errorf("region %s: alias %s already splits traffic (%v): finish the release in progress first", t.Host, aliasName(req), s.alias.Weights)
 		}
 		state[stateKey(stateStable, t)], state[stateKey(stateStableDesc, t)] = s.alias.FunctionVersion, s.alias.Description
 		has = true
@@ -79,7 +79,7 @@ func (p *Plugin) candidate(ctx context.Context, s *state, req *plugin.Request) (
 		return "", err
 	}
 	if dep != req.DeploymentID {
-		return "", fmt.Errorf("la versione %s della funzione è stata pubblicata da un altro deploy (%s)", v, dep)
+		return "", fmt.Errorf("version %s of the function was published by another deploy (%s)", v, dep)
 	}
 	return v, nil
 }
@@ -121,7 +121,7 @@ func (p *Plugin) setWeight(ctx context.Context, t plugin.Target, req *plugin.Req
 		err = s.api.RouteAlias(ctx, name, alias, stable, req.Traffic.State[stateKey(stateStableDesc, t)], map[string]float64{cand: float64(percent) / 100})
 	}
 	if err != nil {
-		return fmt.Errorf("aggiornamento dell'alias %s: %w", alias, err)
+		return fmt.Errorf("updating alias %s: %w", alias, err)
 	}
 	p.logger.InfoContext(ctx, "traffico dell'alias aggiornato", "deployment", req.DeploymentID, "region", t.Host, "alias", alias, "candidate", cand, "percent", percent)
 	return nil

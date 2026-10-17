@@ -52,7 +52,7 @@ expect_match "la richiesta di approvazione su Slack ha i pulsanti con l'ID del d
 # from a secret), refuses it without retries and the approval goes on.
 expect_eq "il webhook di Teams in http non riceve nulla" "$(records teams | jq length)" 0
 expect_match "la notifica a Teams è rifiutata senza tentativi ripetuti" \
-  "$(dc logs worker-1 worker-2 2>/dev/null | grep "notify:uc13-teams:approval_requested" | grep -c 'retrying' | tr -d ' ') $(dc logs worker-1 worker-2 2>/dev/null | grep -c 'notifica in chat non inviata.*route=uc13-teams.*solo https' | tr -d ' ')" "^0 [1-9]"
+  "$(dc logs worker-1 worker-2 2>/dev/null | grep "notify:uc13-teams:approval_requested" | grep -c 'retrying' | tr -d ' ') $(dc logs worker-1 worker-2 2>/dev/null | grep -c 'notifica in chat non inviata.*route=uc13-teams.*only https' | tr -d ' ')" "^0 [1-9]"
 
 info "-- approvazioni dai pulsanti di Slack"
 expect_eq "un clic con firma valida è accettato da manent" "$(slack_click U0CI manent_approve "$id")" 200

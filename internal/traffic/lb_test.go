@@ -176,7 +176,7 @@ func TestNginxPlusPool(t *testing.T) {
 	if ok, _ := p.Healthy(ctx, []string{"10.0.0.1:80", "10.0.0.9:80"}); !ok["10.0.0.1:80"] || ok["10.0.0.9:80"] {
 		t.Errorf("salute: %v", ok)
 	}
-	if err := p.Drain(ctx, []string{"10.0.0.9:80"}); err == nil || !strings.Contains(err.Error(), "assente") {
+	if err := p.Drain(ctx, []string{"10.0.0.9:80"}); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("server assente: %v", err)
 	}
 }

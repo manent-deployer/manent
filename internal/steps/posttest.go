@@ -42,7 +42,7 @@ func (p PostTest) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, 
 		}
 		resp.Body.Close()
 		if resp.StatusCode != want {
-			return nil, fmt.Errorf("post-test %s: status %d, atteso %d", c.URL, resp.StatusCode, want)
+			return nil, fmt.Errorf("post-test %s: status %d, expected %d", c.URL, resp.StatusCode, want)
 		}
 		out[c.URL] = "passed"
 	}

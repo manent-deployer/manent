@@ -29,10 +29,10 @@ func (p DefaultPolicy) Select(d *descriptor.Descriptor) (plugin.Deployer, error)
 	if name := d.Deploy.Plugin; name != "" {
 		dep, ok := p.Plugins.Get(name)
 		if !ok {
-			return nil, fmt.Errorf("plugin %q non attivo", name)
+			return nil, fmt.Errorf("plugin %q not active", name)
 		}
 		if !dep.Supports(d.Artifact.Type) {
-			return nil, fmt.Errorf("plugin %q non supporta artefatti di tipo %q", name, d.Artifact.Type)
+			return nil, fmt.Errorf("plugin %q does not support artifacts of type %q", name, d.Artifact.Type)
 		}
 		return dep, nil
 	}
@@ -42,7 +42,7 @@ func (p DefaultPolicy) Select(d *descriptor.Descriptor) (plugin.Deployer, error)
 			return dep, nil
 		}
 	}
-	return nil, fmt.Errorf("nessun plugin attivo supporta artefatti di tipo %q", d.Artifact.Type)
+	return nil, fmt.Errorf("no active plugin supports artifacts of type %q", d.Artifact.Type)
 }
 
 // Deploy selects the plugin through the policies and runs its deploy.
@@ -74,7 +74,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		// Percentage rollout: the new version goes next to the stable one, without traffic.
 		sd, ok := dep.(plugin.SlotDeployer)
 		if !ok {
-			return nil, pipeline.Permanent(fmt.Errorf("il plugin %q non sa rilasciare una versione affiancata", dep.Name()))
+			return nil, pipeline.Permanent(fmt.Errorf("plugin %q cannot release a side-by-side version", dep.Name()))
 		}
 		deploy = sd.DeployCandidate
 	}
@@ -150,7 +150,7 @@ func (s Deploy) selectPlugin(in pipeline.Input) (plugin.Deployer, *slog.Logger, 
 	d := in.Descriptor
 	pol, ok := s.Policies[d.Deploy.Policy]
 	if !ok {
-		return nil, nil, fmt.Errorf("policy di deploy %q sconosciuta", d.Deploy.Policy)
+		return nil, nil, fmt.Errorf("unknown deploy policy %q", d.Deploy.Policy)
 	}
 	dep, err := pol.Select(d)
 	if err != nil {
@@ -184,7 +184,7 @@ func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string
 	if err := dep.Validate(req); err != nil {
 		// Not marked permanent: an external plugin can fail Validate because the process is
 		// unreachable, and that case must be retried.
-		return nil, fmt.Errorf("richiesta non valida per il plugin %q: %w", dep.Name(), err)
+		return nil, fmt.Errorf("invalid request for plugin %q: %w", dep.Name(), err)
 	}
 	return req, nil
 }
@@ -209,15 +209,15 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 	}
 	ok, err := plugin.CanRollback(ctx, dep)
 	if err != nil {
-		return nil, fmt.Errorf("verifica del supporto al rollback del plugin %q: %w", dep.Name(), err)
+		return nil, fmt.Errorf("checking rollback support of plugin %q: %w", dep.Name(), err)
 	}
 	if !ok {
-		return nil, pipeline.Permanent(fmt.Errorf("rollback attivo ma il plugin %q non lo supporta", dep.Name()))
+		return nil, pipeline.Permanent(fmt.Errorf("rollback enabled but plugin %q does not support it", dep.Name()))
 	}
 	name := in.Descriptor.Rollback.Locator
 	loc, ok := s.Locators[name]
 	if !ok {
-		return nil, fmt.Errorf("locator di rollback %q sconosciuto", name)
+		return nil, fmt.Errorf("unknown rollback locator %q", name)
 	}
 	// The artifact is not needed to read the release in service: the recorded path is enough.
 	req, err := s.request(dep, in, in.Outputs["artifacts"][OutLocalPath])
@@ -226,7 +226,7 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 	}
 	rel, err := loc.Current(ctx, dep, req)
 	if err != nil {
-		return nil, fmt.Errorf("lettura della release in esercizio (locator %q): %w", name, err)
+		return nil, fmt.Errorf("reading the release in service (locator %q): %w", name, err)
 	}
 	out := pipeline.Output{"plugin": dep.Name(), OutLocator: name, OutPreviousVersion: ""}
 	if rel != nil {
@@ -256,11 +256,11 @@ func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.O
 	}
 	var prev plugin.Release
 	if err := json.Unmarshal([]byte(cp[OutPrevious]), &prev); err != nil {
-		return nil, fmt.Errorf("release precedente non leggibile: %w", err)
+		return nil, fmt.Errorf("unreadable previous release: %w", err)
 	}
 	rb, ok := dep.(plugin.Rollbacker)
 	if !ok {
-		return nil, fmt.Errorf("il plugin %q non supporta il rollback", dep.Name())
+		return nil, fmt.Errorf("plugin %q does not support rollback", dep.Name())
 	}
 	req, err := s.request(dep, in, in.Outputs["artifacts"][OutLocalPath])
 	if err != nil {

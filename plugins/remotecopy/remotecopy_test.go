@@ -231,7 +231,7 @@ func TestCurrentRelease(t *testing.T) {
 	}
 
 	d.hosts["h2"].current = "releases/1.0.0"
-	if _, err := p.CurrentRelease(context.Background(), req); err == nil || !strings.Contains(err.Error(), "release diverse") {
+	if _, err := p.CurrentRelease(context.Background(), req); err == nil || !strings.Contains(err.Error(), "different releases") {
 		t.Errorf("atteso errore per release diverse, ricevuto %v", err)
 	}
 

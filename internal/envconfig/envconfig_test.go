@@ -340,7 +340,7 @@ func TestMergeTraffic(t *testing.T) {
 	}
 	// The descriptor cannot define load balancers and routers.
 	d.Traffic = &descriptor.TrafficConfig{Pool: &descriptor.PoolConfig{Provider: "haproxy"}}
-	if _, err := Merge(d, cfg); err == nil || !strings.Contains(err.Error(), "solo nella configurazione di ambiente") {
+	if _, err := Merge(d, cfg); err == nil || !strings.Contains(err.Error(), "only in the environment configuration") {
 		t.Errorf("traffic nel descrittore: %v", err)
 	}
 	cfg.Traffic.Pool.OnTimeout = "boh"

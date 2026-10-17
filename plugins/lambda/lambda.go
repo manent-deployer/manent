@@ -53,7 +53,7 @@ const (
 const DetailFunctionVersion = "function_version"
 
 // ErrNotFound means a function, version or alias that does not exist.
-var ErrNotFound = errors.New("non trovato")
+var ErrNotFound = errors.New("not found")
 
 var (
 	functionRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -163,16 +163,16 @@ func isImage(a plugin.Artifact) bool { return strings.HasSuffix(a.LocalPath, plu
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e identifica la versione della funzione: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and identifies the function version: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if req.Artifact.LocalPath != "" && !isImage(req.Artifact) && !strings.HasSuffix(strings.ToLower(req.Artifact.LocalPath), ".zip") {
-		errs = append(errs, errors.New("l'artefatto deve essere un pacchetto .zip o un'immagine di un registry (artifact.source oci://…)"))
+		errs = append(errs, errors.New("the artifact must be a .zip package or a registry image (artifact.source oci://…)"))
 	}
 	if !functionRe.MatchString(functionName(req)) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: ammessi lettere, cifre, '_', '-' (al più 64)", ParamFunction, functionName(req)))
+		errs = append(errs, fmt.Errorf("invalid %s %q: letters, digits, '_', '-' are allowed (at most 64)", ParamFunction, functionName(req)))
 	}
 	if a := aliasName(req); !aliasRe.MatchString(a) || numericRe.MatchString(a) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: lettere, cifre, '_', '-', non solo cifre", ParamAlias, a))
+		errs = append(errs, fmt.Errorf("invalid %s %q: letters, digits, '_', '-', not only digits", ParamAlias, a))
 	}
 	if _, err := pluginutil.Duration(req.Params, ParamWaitTimeout, defaultWaitTimeout); err != nil {
 		errs = append(errs, err)
@@ -181,11 +181,11 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 		errs = append(errs, err)
 	}
 	if len(req.Targets) == 0 {
-		errs = append(errs, errors.New("nessuna region tra i target"))
+		errs = append(errs, errors.New("no region among the targets"))
 	}
 	for _, t := range req.Targets {
 		if !awsauth.ValidRegion(t.Host) {
-			errs = append(errs, fmt.Errorf("target %q: atteso il nome di una region (es. eu-west-1)", t.Host))
+			errs = append(errs, fmt.Errorf("target %q: expected the name of a region (e.g. eu-west-1)", t.Host))
 		}
 	}
 	return errors.Join(errs...)
@@ -211,7 +211,7 @@ func code(a plugin.Artifact, region string) (Code, error) {
 		return Code{}, err
 	}
 	if st.Size() > maxZipSize {
-		return Code{}, fmt.Errorf("pacchetto di %d MiB: Lambda accetta al più 50 MiB caricati direttamente, usare un'immagine di container", st.Size()>>20)
+		return Code{}, fmt.Errorf("package of %d MiB: Lambda accepts at most 50 MiB uploaded directly, use a container image", st.Size()>>20)
 	}
 	b, err := os.ReadFile(a.LocalPath)
 	if err != nil {
@@ -252,7 +252,7 @@ type state struct {
 
 func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request) (*state, error) {
 	if !awsauth.ValidRegion(t.Host) {
-		return nil, fmt.Errorf("region %q non valida", t.Host)
+		return nil, fmt.Errorf("invalid region %q", t.Host)
 	}
 	api, err := p.connector.Connect(ctx, t.Host, req)
 	if err != nil {
@@ -261,21 +261,21 @@ func (p *Plugin) read(ctx context.Context, t plugin.Target, req *plugin.Request)
 	name := functionName(req)
 	fn, err := api.GetFunction(ctx, name, "")
 	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("funzione %s assente: va creata con l'infrastruttura (es. Terraform), manent ne aggiorna il codice", name)
+		return nil, fmt.Errorf("function %s missing: it must be created with the infrastructure (e.g. Terraform), manent updates its code", name)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("lettura della funzione %s: %w", name, err)
+		return nil, fmt.Errorf("reading function %s: %w", name, err)
 	}
 	want := PackageZip
 	if isImage(req.Artifact) {
 		want = PackageImage
 	}
 	if req.Artifact.LocalPath != "" && fn.PackageType != "" && fn.PackageType != want {
-		return nil, fmt.Errorf("la funzione %s usa pacchetti %s, l'artefatto è di tipo %s", name, fn.PackageType, want)
+		return nil, fmt.Errorf("function %s uses %s packages, the artifact is of type %s", name, fn.PackageType, want)
 	}
 	alias, err := api.GetAlias(ctx, name, aliasName(req))
 	if err != nil && !errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("lettura dell'alias %s: %w", aliasName(req), err)
+		return nil, fmt.Errorf("reading alias %s: %w", aliasName(req), err)
 	}
 	return &state{region: t.Host, api: api, fn: fn, alias: alias}, nil
 }
@@ -329,7 +329,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		return details, err
 	}
 	if err := s.api.PutAlias(ctx, name, aliasName(req), v, description(req.Artifact.Version, req.DeploymentID), s.alias == nil); err != nil {
-		return details, fmt.Errorf("aggiornamento dell'alias %s: %w", aliasName(req), err)
+		return details, fmt.Errorf("updating alias %s: %w", aliasName(req), err)
 	}
 	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "alias", aliasName(req), "function_version", v)
 	return details, nil
@@ -350,7 +350,7 @@ func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, det
 		return "", err
 	}
 	if _, err := s.api.UpdateCode(ctx, name, c, false); err != nil {
-		return "", fmt.Errorf("aggiornamento del codice: %w", err)
+		return "", fmt.Errorf("updating the code: %w", err)
 	}
 	if c.ImageURI != "" {
 		details["image"] = c.ImageURI
@@ -361,13 +361,13 @@ func (p *Plugin) publish(ctx context.Context, s *state, req *plugin.Request, det
 	}
 	if c.ZipFile != nil {
 		if want, err := hexToBase64(req.Artifact.SHA256); err == nil && want != "" && fn.CodeSha256 != want {
-			return "", fmt.Errorf("sha256 del codice caricato (%s) diverso da quello dell'artefatto (%s)", fn.CodeSha256, want)
+			return "", fmt.Errorf("sha256 of the uploaded code (%s) differs from that of the artifact (%s)", fn.CodeSha256, want)
 		}
 	}
 	// CodeSha256 prevents publishing code changed meanwhile by another update.
 	v, err := s.api.PublishVersion(ctx, name, fn.CodeSha256, description(req.Artifact.Version, req.DeploymentID))
 	if err != nil {
-		return "", fmt.Errorf("pubblicazione della versione: %w", err)
+		return "", fmt.Errorf("publishing the version: %w", err)
 	}
 	details[DetailFunctionVersion] = v.Version
 	if _, err := p.waitFunction(ctx, s.api, name, v.Version, timeout, true, log); err != nil {
@@ -399,15 +399,15 @@ func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier stri
 		fn, err := api.GetFunction(ctx, name, qualifier)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil, fmt.Errorf("%s non pronta entro %s (%s)", what, timeout, last)
+				return nil, fmt.Errorf("%s not ready within %s (%s)", what, timeout, last)
 			}
-			return nil, fmt.Errorf("lettura della %s: %w", what, err)
+			return nil, fmt.Errorf("reading %s: %w", what, err)
 		}
 		switch {
 		case fn.State == "Failed":
-			return nil, fmt.Errorf("%s nello stato Failed: %s", what, fn.StateReason)
+			return nil, fmt.Errorf("%s in state Failed: %s", what, fn.StateReason)
 		case strict && fn.LastUpdateStatus == "Failed":
-			return nil, fmt.Errorf("aggiornamento della %s fallito: %s", what, fn.LastUpdateReason)
+			return nil, fmt.Errorf("update of %s failed: %s", what, fn.LastUpdateReason)
 		case fn.State != "Pending" && fn.LastUpdateStatus != "InProgress":
 			return fn, nil
 		}
@@ -418,7 +418,7 @@ func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier stri
 		}
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("%s non pronta entro %s (%s)", what, timeout, last)
+			return nil, fmt.Errorf("%s not ready within %s (%s)", what, timeout, last)
 		case <-time.After(p.poll):
 		}
 	}
@@ -457,7 +457,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		desc = append(desc, v+" su "+strings.Join(hosts, ","))
 	}
 	sort.Strings(desc)
-	return nil, fmt.Errorf("versioni diverse tra le region: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different versions across regions: %s", strings.Join(desc, "; "))
 }
 
 // Rollback moves every region's alias back to the function version of the given release: the
@@ -465,7 +465,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 // It continues even if a region fails. It is idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida", previous.Version)
+		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
 	res := &plugin.Result{Plugin: Name}
 	var errs []error
@@ -489,14 +489,14 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	details := s.details(req)
 	name := functionName(req)
 	if s.alias == nil {
-		return details, fmt.Errorf("alias %s assente: nessuna versione da ripristinare", aliasName(req))
+		return details, fmt.Errorf("alias %s missing: no version to restore", aliasName(req))
 	}
 	fv := previous.Details[DetailFunctionVersion+"@"+t.Host]
 	depID := ""
 	if fv != "" {
 		v, err := s.api.GetFunction(ctx, name, fv)
 		if err != nil {
-			return details, fmt.Errorf("lettura della versione %s: %w", fv, err)
+			return details, fmt.Errorf("reading version %s: %w", fv, err)
 		}
 		_, depID = parseDescription(v.Description)
 	} else {
@@ -507,7 +507,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	details[DetailFunctionVersion] = fv
 	if s.alias.FunctionVersion != fv {
 		if err := s.api.PutAlias(ctx, name, aliasName(req), fv, description(previous.Version, depID), false); err != nil {
-			return details, fmt.Errorf("aggiornamento dell'alias %s: %w", aliasName(req), err)
+			return details, fmt.Errorf("updating alias %s: %w", aliasName(req), err)
 		}
 	}
 	p.logger.WarnContext(ctx, "release precedente ripristinata", "deployment", req.DeploymentID, "region", s.region,
@@ -519,7 +519,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 func (p *Plugin) findVersion(ctx context.Context, api API, name, version string) (string, string, error) {
 	list, err := api.ListVersions(ctx, name)
 	if err != nil {
-		return "", "", fmt.Errorf("elenco delle versioni di %s: %w", name, err)
+		return "", "", fmt.Errorf("listing the versions of %s: %w", name, err)
 	}
 	best, bestN, depID := "", -1, ""
 	for _, f := range list {
@@ -531,7 +531,7 @@ func (p *Plugin) findVersion(ctx context.Context, api API, name, version string)
 		best, bestN, depID = f.Version, n, dep
 	}
 	if best == "" {
-		return "", "", fmt.Errorf("nessuna versione di %s pubblicata con la versione %s", name, version)
+		return "", "", fmt.Errorf("no version of %s published with version %s", name, version)
 	}
 	return best, depID, nil
 }
@@ -571,7 +571,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 		details["image"] = c.ImageURI
 	}
 	if _, err := s.api.UpdateCode(ctx, functionName(req), c, true); err != nil {
-		return details, fmt.Errorf("verifica dell'aggiornamento del codice: %w", err)
+		return details, fmt.Errorf("checking the code update: %w", err)
 	}
 	p.logger.InfoContext(ctx, "funzione pronta per il deploy", "deployment", req.DeploymentID, "region", s.region, "function", functionName(req), "dry_run", true)
 	return details, nil

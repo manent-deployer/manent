@@ -162,7 +162,7 @@ func Read(c dbos.Client, workflowID string, offset int) (Page, error) {
 func Copy(ctx context.Context, src dbos.Client, workflowID string) (int, error) {
 	dc, ok := ctx.(dbos.Context)
 	if !ok {
-		return 0, fmt.Errorf("deploylog.Copy: serve il context di uno step DBOS")
+		return 0, fmt.Errorf("deploylog.Copy: requires the context of a DBOS step")
 	}
 	lines, _, err := dbos.ReadStream[Line](src, workflowID, StreamKey, dbos.WithReadStreamSnapshot())
 	if err != nil {

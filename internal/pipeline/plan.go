@@ -68,17 +68,17 @@ func (p ConfigPlanner) Plan(d *descriptor.Descriptor) (Plan, error) {
 	for name, enabled := range d.Steps {
 		s, ok := known[name]
 		if !ok {
-			errs = append(errs, fmt.Errorf("step %q sconosciuto", name))
+			errs = append(errs, fmt.Errorf("unknown step %q", name))
 			continue
 		}
 		if s.Mode == config.ModeMandatory && !enabled {
-			errs = append(errs, fmt.Errorf("step %q è obbligatorio e non può essere disattivato", name))
+			errs = append(errs, fmt.Errorf("step %q is mandatory and cannot be disabled", name))
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(d.StepParams)) {
 		s, ok := known[name]
 		if !ok || !s.IsCustom() {
-			errs = append(errs, fmt.Errorf("stepParams.%s: %q non è uno step personalizzato della pipeline", name, name))
+			errs = append(errs, fmt.Errorf("stepParams.%s: %q is not a custom step of the pipeline", name, name))
 			continue
 		}
 		if _, err := s.EffectiveParams(d.StepParams[name], false); err != nil {
@@ -110,7 +110,7 @@ func (p ConfigPlanner) Plan(d *descriptor.Descriptor) (Plan, error) {
 			continue
 		}
 		if _, ok := p.Registry.Get(s.Name); !ok {
-			return nil, fmt.Errorf("step %q configurato ma non implementato", s.Name)
+			return nil, fmt.Errorf("step %q configured but not implemented", s.Name)
 		}
 		plan = append(plan, PlannedStep{Name: s.Name, MaxRetries: s.MaxRetries})
 	}

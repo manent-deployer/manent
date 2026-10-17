@@ -27,7 +27,7 @@ func (r *Registry) Register(name string, f Factory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.factories[name]; ok {
-		return fmt.Errorf("plugin %q già registrato", name)
+		return fmt.Errorf("plugin %q already registered", name)
 	}
 	r.factories[name] = f
 	return nil
@@ -39,11 +39,11 @@ func (r *Registry) Activate(name string, cfg map[string]any, logger *slog.Logger
 	defer r.mu.Unlock()
 	f, ok := r.factories[name]
 	if !ok {
-		return fmt.Errorf("plugin %q non registrato", name)
+		return fmt.Errorf("plugin %q not registered", name)
 	}
 	d, err := f(cfg, logger.With("plugin", name))
 	if err != nil {
-		return fmt.Errorf("attivazione plugin %q: %w", name, err)
+		return fmt.Errorf("activating plugin %q: %w", name, err)
 	}
 	r.active[name] = d
 	return nil

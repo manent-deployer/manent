@@ -127,7 +127,7 @@ Every target that becomes `drifted` or `missing` produces a warning log (`target
 `requires` lists the environments in which **the same artifact** must already have been released successfully: same application, same name and same version and, if the descriptor sets `artifact.sha256`, same hash. A deploy that does not respect the rule is rejected at enqueue time (`422`):
 
 ```text
-richiesta non valida: myapp 2.0.0 non risulta rilasciato con successo in preprod: va promosso da lì (governance)
+invalid request: myapp 2.0.0 was not released successfully in preprod: it must be promoted from there (governance)
 ```
 
 The simplest way to respect it is to promote:

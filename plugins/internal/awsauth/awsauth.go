@@ -41,16 +41,16 @@ func ValidRegion(s string) bool { return regionRe.MatchString(s) }
 func Validate(params map[string]string) error {
 	var errs []error
 	if (params[ParamAccessKeySecret] == "") != (params[ParamSecretKeySecret] == "") {
-		errs = append(errs, fmt.Errorf("%q e %q vanno indicati insieme", ParamAccessKeySecret, ParamSecretKeySecret))
+		errs = append(errs, fmt.Errorf("%q and %q must be set together", ParamAccessKeySecret, ParamSecretKeySecret))
 	}
 	if params[ParamSessionTokenSecret] != "" && params[ParamAccessKeySecret] == "" {
-		errs = append(errs, fmt.Errorf("%q richiede %q e %q", ParamSessionTokenSecret, ParamAccessKeySecret, ParamSecretKeySecret))
+		errs = append(errs, fmt.Errorf("%q requires %q and %q", ParamSessionTokenSecret, ParamAccessKeySecret, ParamSecretKeySecret))
 	}
 	if r := params[ParamRoleARN]; r != "" && !roleARNRe.MatchString(r) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: atteso arn:aws:iam::<account>:role/<nome>", ParamRoleARN, r))
+		errs = append(errs, fmt.Errorf("invalid %s %q: expected arn:aws:iam::<account>:role/<name>", ParamRoleARN, r))
 	}
 	if params[ParamExternalID] != "" && params[ParamRoleARN] == "" {
-		errs = append(errs, fmt.Errorf("%q richiede %q", ParamExternalID, ParamRoleARN))
+		errs = append(errs, fmt.Errorf("%q requires %q", ParamExternalID, ParamRoleARN))
 	}
 	return errors.Join(errs...)
 }
@@ -78,7 +78,7 @@ func Config(ctx context.Context, region string, req *plugin.Request) (aws.Config
 	}
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
-		return aws.Config{}, fmt.Errorf("configurazione AWS: %w", err)
+		return aws.Config{}, fmt.Errorf("AWS configuration: %w", err)
 	}
 	if role := req.Params[ParamRoleARN]; role != "" {
 		ext := req.Params[ParamExternalID]
@@ -111,7 +111,7 @@ func Endpoint(cfg map[string]any) (*string, error) {
 	}
 	s, ok := raw.(string)
 	if !ok || !(strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")) {
-		return nil, errors.New("endpoint deve essere un URL http(s)")
+		return nil, errors.New("endpoint must be an http(s) URL")
 	}
 	return aws.String(s), nil
 }

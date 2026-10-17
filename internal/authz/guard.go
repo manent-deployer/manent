@@ -42,7 +42,7 @@ func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	if g.Policy.Allowed(p, a, t.application, t.environment) {
 		return nil
 	}
-	err := fmt.Errorf("%w: %s non può eseguire %s su %s/%s", engine.ErrForbidden, actor(p), a, t.application, t.environment)
+	err := fmt.Errorf("%w: %s cannot perform %s on %s/%s", engine.ErrForbidden, actor(p), a, t.application, t.environment)
 	g.record(ctx, a, t, audit.OutcomeDenied, err)
 	return err
 }
@@ -328,7 +328,7 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	}
 	p := auth.FromContext(ctx)
 	if r.Approve && st.RequestedBy == p.String() && (st.Approval == nil || !st.Approval.AllowSelf) {
-		err := fmt.Errorf("%w: %s ha richiesto il deploy %s e non può approvarlo", engine.ErrForbidden, actor(p), id)
+		err := fmt.Errorf("%w: %s requested deploy %s and cannot approve it", engine.ErrForbidden, actor(p), id)
 		g.record(ctx, act, t, audit.OutcomeDenied, err)
 		return err
 	}
@@ -464,7 +464,7 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	p := auth.FromContext(ctx)
 	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
-		err := fmt.Errorf("%w: %s non può eseguire %s", engine.ErrForbidden, actor(p), PlatformRead)
+		err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), PlatformRead)
 		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
 		return nil, err
 	}

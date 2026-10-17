@@ -271,7 +271,7 @@ func TestHelmValuesEValidazione(t *testing.T) {
 		t.Error("chart non riconosciuto")
 	}
 	evil := writeChart(t, map[string]string{"shop/Chart.yaml": "name: shop", "../../fuori.yaml": "x"})
-	if _, err := extractChart(evil, t.TempDir()); err == nil || !strings.Contains(err.Error(), "non ammesso") {
+	if _, err := extractChart(evil, t.TempDir()); err == nil || !strings.Contains(err.Error(), "not allowed") {
 		t.Errorf("percorso esterno: %v", err)
 	}
 }

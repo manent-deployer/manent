@@ -59,20 +59,20 @@ func TestValidazione(t *testing.T) {
 		edit func(*Spec)
 		want string
 	}{
-		"campi senza type":         {func(s *Spec) { s.Type = "" }, "richiedono type"},
-		"binario relativo":         {func(s *Spec) { s.Run.Command[0] = "migrate" }, "percorso assoluto"},
-		"binario da segnaposto":    {func(s *Spec) { s.Run.Command[0] = "/opt/{{ .Params.database }}" }, "percorso assoluto"},
-		"radice sconosciuta":       {func(s *Spec) { s.Run.Command[3] = "{{ .Env.HOME }}" }, "segnaposto .Env sconosciuto"},
-		"parametro non dichiarato": {func(s *Spec) { s.Run.Command[3] = "{{ .Params.other }}" }, `parametro "other" non dichiarato`},
+		"campi senza type":         {func(s *Spec) { s.Type = "" }, "require type"},
+		"binario relativo":         {func(s *Spec) { s.Run.Command[0] = "migrate" }, "absolute path"},
+		"binario da segnaposto":    {func(s *Spec) { s.Run.Command[0] = "/opt/{{ .Params.database }}" }, "absolute path"},
+		"radice sconosciuta":       {func(s *Spec) { s.Run.Command[3] = "{{ .Env.HOME }}" }, "unknown placeholder .Env"},
+		"parametro non dichiarato": {func(s *Spec) { s.Run.Command[3] = "{{ .Params.other }}" }, `parameter "other" not declared`},
 		"sintassi":                 {func(s *Spec) { s.Run.Command[3] = "{{ .Version " }, "command[3]"},
-		"pattern mancante":         {func(s *Spec) { s.Params["x"] = Param{} }, "params.x.pattern obbligatorio"},
-		"default non conforme":     {func(s *Spec) { s.Params["x"] = Param{Pattern: "[0-9]+", Default: "a"} }, "default non rispetta"},
+		"pattern mancante":         {func(s *Spec) { s.Params["x"] = Param{} }, "params.x.pattern is required"},
+		"default non conforme":     {func(s *Spec) { s.Params["x"] = Param{Pattern: "[0-9]+", Default: "a"} }, "default does not match"},
 		"output senza run_once":    {func(s *Spec) { s.Run.RunOnce = false }, "run_once"},
 		"senza credenziali":        {func(s *Spec) { s.SSH = nil }, "ssh.key_secret"},
-		"campi http":               {func(s *Spec) { s.Run.URL = "https://x/" }, "campi http"},
-		"segreti di run":           {func(s *Spec) { s.Run.Secrets = []string{"x"} }, "dentro dry_run"},
+		"campi http":               {func(s *Spec) { s.Run.URL = "https://x/" }, "http fields"},
+		"segreti di run":           {func(s *Spec) { s.Run.Secrets = []string{"x"} }, "inside dry_run"},
 		"timeout":                  {func(s *Spec) { s.Timeout = 7 * time.Hour }, "timeout"},
-		"nome segreto":             {func(s *Spec) { s.Secrets = []string{"a b"} }, "non valido"},
+		"nome segreto":             {func(s *Spec) { s.Secrets = []string{"a b"} }, "invalid"},
 	}
 	for name, c := range cases {
 		s := commandSpec()
@@ -87,18 +87,18 @@ func TestValidazione(t *testing.T) {
 		edit func(*Spec)
 		want string
 	}{
-		"host da segnaposto":   {func(s *Spec) { s.Run.URL = "https://{{ .Params.zone }}.example.com/" }, "senza segnaposto"},
-		"host senza barra":     {func(s *Spec) { s.Run.URL = "https://api.example.com{{ .Params.zone }}" }, "seguito da '/'"},
-		"http in chiaro":       {func(s *Spec) { s.Run.URL = "http://api.example.com/" }, `schema "http" non ammesso`},
-		"header riservato":     {func(s *Spec) { s.Run.Headers = map[string]string{"Host": "x"} }, "nome non ammesso"},
-		"authorization doppia": {func(s *Spec) { s.Run.Headers = map[string]string{"Authorization": "x"} }, "già impostato da auth"},
+		"host da segnaposto":   {func(s *Spec) { s.Run.URL = "https://{{ .Params.zone }}.example.com/" }, "without placeholders"},
+		"host senza barra":     {func(s *Spec) { s.Run.URL = "https://api.example.com{{ .Params.zone }}" }, "followed by '/'"},
+		"http in chiaro":       {func(s *Spec) { s.Run.URL = "http://api.example.com/" }, `scheme "http" not allowed`},
+		"header riservato":     {func(s *Spec) { s.Run.Headers = map[string]string{"Host": "x"} }, "name not allowed"},
+		"authorization doppia": {func(s *Spec) { s.Run.Headers = map[string]string{"Authorization": "x"} }, "already set by auth"},
 		"auth non dichiarata":  {func(s *Spec) { s.Secrets = nil }, "run.auth.secret"},
-		"output senza path":    {func(s *Spec) { s.Outputs["x"] = Output{Pattern: ".*"} }, "path obbligatorio"},
-		"path non valido":      {func(s *Spec) { s.Outputs["x"] = Output{Pattern: ".*", Path: "a.b"} }, "inizia con $"},
-		"response fuori poll":  {func(s *Spec) { s.Run.URL = "https://api.cdn.example.com/{{ .Response.id }}" }, ".Response sconosciuto"},
-		"json con GET":         {func(s *Spec) { s.Run.Method = "GET" }, "json non ammesso"},
+		"output senza path":    {func(s *Spec) { s.Outputs["x"] = Output{Pattern: ".*"} }, "path is required"},
+		"path non valido":      {func(s *Spec) { s.Outputs["x"] = Output{Pattern: ".*", Path: "a.b"} }, "starts with $"},
+		"response fuori poll":  {func(s *Spec) { s.Run.URL = "https://api.cdn.example.com/{{ .Response.id }}" }, "unknown placeholder .Response"},
+		"json con GET":         {func(s *Spec) { s.Run.Method = "GET" }, "json not allowed"},
 		"poll oltre timeout":   {func(s *Spec) { s.Run.Poll.Timeout = time.Hour }, "poll.timeout"},
-		"ssh su http":          {func(s *Spec) { s.SSH = &SSH{KeySecret: "k"} }, "ssh si usa solo"},
+		"ssh su http":          {func(s *Spec) { s.SSH = &SSH{KeySecret: "k"} }, "ssh is used only"},
 	}
 	for name, c := range httpCases {
 		s := httpSpec()

@@ -23,7 +23,7 @@ import (
 const FieldManager = "manent"
 
 // ErrNotFound means an object or resource that does not exist in the cluster.
-var ErrNotFound = errors.New("non trovato")
+var ErrNotFound = errors.New("not found")
 
 // Credentials are the cluster access credentials, resolved at use time.
 type Credentials struct {
@@ -76,23 +76,23 @@ func (c HTTPConnector) Connect(_ context.Context, server string, creds Credentia
 	if c.CAFile != "" {
 		pem, err := os.ReadFile(c.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("lettura ca_file: %w", err)
+			return nil, fmt.Errorf("reading ca_file: %w", err)
 		}
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, errors.New("ca_file non contiene certificati PEM")
+			return nil, errors.New("ca_file contains no PEM certificates")
 		}
 	}
 	if creds.CA != "" {
 		pool = x509.NewCertPool()
 		if !pool.AppendCertsFromPEM([]byte(creds.CA)) {
-			return nil, errors.New("la CA del cluster non contiene certificati PEM")
+			return nil, errors.New("the cluster CA contains no PEM certificates")
 		}
 	}
 	tc.RootCAs = pool
 	if creds.ClientCert != "" || creds.ClientKey != "" {
 		cert, err := tls.X509KeyPair([]byte(creds.ClientCert), []byte(creds.ClientKey))
 		if err != nil {
-			return nil, fmt.Errorf("certificato client non valido: %w", err)
+			return nil, fmt.Errorf("invalid client certificate: %w", err)
 		}
 		tc.Certificates = []tls.Certificate{cert}
 	}
@@ -162,9 +162,9 @@ func (a *httpAPI) Resource(ctx context.Context, apiVersion, kind string) (string
 		}
 		if err := a.do(ctx, http.MethodGet, groupPath(apiVersion), "", nil, &list); err != nil {
 			if errors.Is(err, ErrNotFound) {
-				return "", false, fmt.Errorf("apiVersion %s non disponibile nel cluster", apiVersion)
+				return "", false, fmt.Errorf("apiVersion %s not available in the cluster", apiVersion)
 			}
-			return "", false, fmt.Errorf("discovery di %s: %w", apiVersion, err)
+			return "", false, fmt.Errorf("discovery of %s: %w", apiVersion, err)
 		}
 		for _, r := range list.Resources {
 			if strings.Contains(r.Name, "/") { // subresources (status, scale)
@@ -176,7 +176,7 @@ func (a *httpAPI) Resource(ctx context.Context, apiVersion, kind string) (string
 	}
 	r, ok := a.cache[key]
 	if !ok {
-		return "", false, fmt.Errorf("kind %s non disponibile in %s", kind, apiVersion)
+		return "", false, fmt.Errorf("kind %s not available in %s", kind, apiVersion)
 	}
 	return r.name, r.namespaced, nil
 }
@@ -190,7 +190,7 @@ func (a *httpAPI) path(ctx context.Context, apiVersion, kind, namespace, name st
 	p := groupPath(apiVersion)
 	if namespaced {
 		if namespace == "" {
-			return "", fmt.Errorf("%s %s: namespace mancante", kind, name)
+			return "", fmt.Errorf("%s %s: missing namespace", kind, name)
 		}
 		p += "/namespaces/" + url.PathEscape(namespace)
 	}
@@ -350,7 +350,7 @@ func (a *httpAPI) do(ctx context.Context, method, path, contentType string, body
 		if resp.StatusCode == http.StatusNotFound {
 			return fmt.Errorf("%w: %s", ErrNotFound, msg)
 		}
-		return fmt.Errorf("API %s %s: stato %d: %s", method, strings.SplitN(path, "?", 2)[0], resp.StatusCode, msg)
+		return fmt.Errorf("API %s %s: status %d: %s", method, strings.SplitN(path, "?", 2)[0], resp.StatusCode, msg)
 	}
 	if out == nil {
 		return nil

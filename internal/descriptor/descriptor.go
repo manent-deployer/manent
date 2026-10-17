@@ -93,12 +93,12 @@ func (r *Rollback) validate() error {
 	seen := map[string]bool{}
 	for i, s := range r.On {
 		if s == "" || seen[s] {
-			errs = append(errs, fmt.Errorf("rollback.on[%d]: nome di step vuoto o duplicato", i))
+			errs = append(errs, fmt.Errorf("rollback.on[%d]: empty or duplicate step name", i))
 		}
 		seen[s] = true
 	}
 	if r.Locator != "" && !validName(r.Locator) {
-		errs = append(errs, fmt.Errorf("rollback.locator %q non valido: %s", r.Locator, nameRule))
+		errs = append(errs, fmt.Errorf("invalid rollback.locator %q: %s", r.Locator, nameRule))
 	}
 	return errors.Join(errs...)
 }
@@ -150,14 +150,14 @@ func (c Callback) validate(i int) error {
 	u, err := url.Parse(c.URL)
 	switch {
 	case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
-		errs = append(errs, fmt.Errorf("callbacks[%d].url deve essere un URL http(s) assoluto", i))
+		errs = append(errs, fmt.Errorf("callbacks[%d].url must be an absolute http(s) URL", i))
 	case u.User != nil:
 		// Credentials in the URL would be persisted: pass them with auth.
-		errs = append(errs, fmt.Errorf("callbacks[%d].url non deve contenere credenziali, usare auth", i))
+		errs = append(errs, fmt.Errorf("callbacks[%d].url must not contain credentials, use auth", i))
 	}
 	for _, e := range c.Events {
 		if e != CallbackEventStep && e != CallbackEventDeployment {
-			errs = append(errs, fmt.Errorf("callbacks[%d].events: %q non valido (step|deployment)", i, e))
+			errs = append(errs, fmt.Errorf("callbacks[%d].events: invalid %q (step|deployment)", i, e))
 		}
 	}
 	if a := c.Auth; a != nil {
@@ -165,17 +165,17 @@ func (c Callback) validate(i int) error {
 		case CallbackAuthBearer, CallbackAuthHMAC:
 		case CallbackAuthBasic:
 			if a.Username == "" {
-				errs = append(errs, fmt.Errorf("callbacks[%d].auth.username obbligatorio con basic", i))
+				errs = append(errs, fmt.Errorf("callbacks[%d].auth.username is required with basic", i))
 			}
 		case CallbackAuthHeader:
 			if a.Header == "" {
-				errs = append(errs, fmt.Errorf("callbacks[%d].auth.header obbligatorio con header", i))
+				errs = append(errs, fmt.Errorf("callbacks[%d].auth.header is required with header", i))
 			}
 		default:
-			errs = append(errs, fmt.Errorf("callbacks[%d].auth.type %q non valido (bearer|basic|header|hmac)", i, a.Type))
+			errs = append(errs, fmt.Errorf("callbacks[%d].auth.type %q is invalid (bearer|basic|header|hmac)", i, a.Type))
 		}
 		if a.Secret == "" {
-			errs = append(errs, fmt.Errorf("callbacks[%d].auth.secret obbligatorio: nome di un segreto della sezione secrets", i))
+			errs = append(errs, fmt.Errorf("callbacks[%d].auth.secret is required: name of a secret of the secrets section", i))
 		}
 	}
 	return errors.Join(errs...)
@@ -252,7 +252,7 @@ func ParseYAML(data []byte) (*Descriptor, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&d); err != nil {
-		return nil, fmt.Errorf("descrittore YAML non valido: %w", err)
+		return nil, fmt.Errorf("invalid YAML descriptor: %w", err)
 	}
 	return &d, d.Validate()
 }
@@ -263,7 +263,7 @@ func ParseJSON(data []byte) (*Descriptor, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&d); err != nil {
-		return nil, fmt.Errorf("descrittore JSON non valido: %w", err)
+		return nil, fmt.Errorf("invalid JSON descriptor: %w", err)
 	}
 	return &d, d.Validate()
 }
@@ -281,20 +281,20 @@ func LoadYAMLFile(path string) (*Descriptor, error) {
 func (d *Descriptor) Validate() error {
 	var errs []error
 	if d.APIVersion != APIVersion {
-		errs = append(errs, fmt.Errorf("apiVersion deve essere %q", APIVersion))
+		errs = append(errs, fmt.Errorf("apiVersion must be %q", APIVersion))
 	}
 	if !validName(d.Application) {
-		errs = append(errs, fmt.Errorf("application %q non valido: %s", d.Application, nameRule))
+		errs = append(errs, fmt.Errorf("invalid application %q: %s", d.Application, nameRule))
 	}
 	if !validName(d.Environment) {
-		errs = append(errs, fmt.Errorf("environment %q non valido: %s", d.Environment, nameRule))
+		errs = append(errs, fmt.Errorf("invalid environment %q: %s", d.Environment, nameRule))
 	}
 	if d.Artifact.Type == "" || d.Artifact.Name == "" || d.Artifact.Source == "" {
-		errs = append(errs, errors.New("artifact.type, artifact.name e artifact.source obbligatori"))
+		errs = append(errs, errors.New("artifact.type, artifact.name and artifact.source are required"))
 	}
 	for i, t := range d.Deploy.Targets {
 		if t.Host == "" {
-			errs = append(errs, fmt.Errorf("deploy.targets[%d].host obbligatorio", i))
+			errs = append(errs, fmt.Errorf("deploy.targets[%d].host is required", i))
 		}
 		if err := labels.ValidLabels(t.Labels); err != nil {
 			errs = append(errs, fmt.Errorf("deploy.targets[%d]: %w", i, err))
@@ -304,27 +304,27 @@ func (d *Descriptor) Validate() error {
 		errs = append(errs, d.Rollout.Validate())
 	}
 	if d.Traffic != nil {
-		errs = append(errs, errors.New("traffic si configura solo nella configurazione di ambiente, non nel descrittore"))
+		errs = append(errs, errors.New("traffic is configured only in the environment configuration, not in the descriptor"))
 	}
 	seen := map[string]bool{}
 	for i, s := range d.Secrets {
 		if s.Name == "" || s.Ref == "" {
-			errs = append(errs, fmt.Errorf("secrets[%d]: name e ref obbligatori", i))
+			errs = append(errs, fmt.Errorf("secrets[%d]: name and ref are required", i))
 		}
 		if seen[s.Name] {
-			errs = append(errs, fmt.Errorf("secrets[%d]: nome %q duplicato", i, s.Name))
+			errs = append(errs, fmt.Errorf("secrets[%d]: duplicate name %q", i, s.Name))
 		}
 		seen[s.Name] = true
 	}
 	for _, step := range slices.Sorted(maps.Keys(d.StepParams)) {
 		for k, v := range d.StepParams[step] {
 			if k == "" || len(v) > maxStepParam || strings.ContainsRune(v, 0) {
-				errs = append(errs, fmt.Errorf("stepParams.%s.%s: nome vuoto o valore non valido (max %d caratteri)", step, k, maxStepParam))
+				errs = append(errs, fmt.Errorf("stepParams.%s.%s: empty name or invalid value (max %d characters)", step, k, maxStepParam))
 			}
 		}
 	}
 	if len(d.Callbacks) > maxCallbacks {
-		errs = append(errs, fmt.Errorf("callbacks: al massimo %d", maxCallbacks))
+		errs = append(errs, fmt.Errorf("callbacks: at most %d", maxCallbacks))
 	}
 	for i, c := range d.Callbacks {
 		errs = append(errs, c.validate(i))
@@ -333,22 +333,22 @@ func (d *Descriptor) Validate() error {
 		errs = append(errs, d.Rollback.validate())
 	}
 	if len(d.FreezeOverride) > maxOverride {
-		errs = append(errs, fmt.Errorf("freezeOverride: al massimo %d caratteri", maxOverride))
+		errs = append(errs, fmt.Errorf("freezeOverride: at most %d characters", maxOverride))
 	}
 	if d.FreezeOverride != "" && d.Schedule != nil && d.Schedule.Cron != "" {
-		errs = append(errs, errors.New("freezeOverride non ammesso con schedule.cron: la deroga vale per un singolo deploy"))
+		errs = append(errs, errors.New("freezeOverride not allowed with schedule.cron: the override applies to a single deploy"))
 	}
 	if d.ID != "" && !validName(d.ID) {
-		errs = append(errs, fmt.Errorf("id %q non valido: %s", d.ID, nameRule))
+		errs = append(errs, fmt.Errorf("invalid id %q: %s", d.ID, nameRule))
 	}
 	errs = append(errs, d.validateAfter())
 	if d.Schedule != nil {
 		if d.DryRun {
-			errs = append(errs, errors.New("dryRun non ammesso con schedule: il dry-run viene eseguito subito"))
+			errs = append(errs, errors.New("dryRun not allowed with schedule: the dry-run runs immediately"))
 		}
 		errs = append(errs, d.Schedule.validate(d.ID))
 		if d.Schedule.Cron != "" && !validName(d.ScheduleName()) {
-			errs = append(errs, fmt.Errorf("nome schedule %q non valido: %s", d.ScheduleName(), nameRule))
+			errs = append(errs, fmt.Errorf("invalid schedule name %q: %s", d.ScheduleName(), nameRule))
 		}
 	}
 	return errors.Join(errs...)
@@ -366,31 +366,31 @@ const (
 func (d *Descriptor) validateAfter() error {
 	if len(d.After) == 0 {
 		if d.AfterTimeout != "" {
-			return errors.New("afterTimeout si usa solo con after")
+			return errors.New("afterTimeout is used only with after")
 		}
 		return nil
 	}
 	var errs []error
 	if len(d.After) > maxAfter {
-		errs = append(errs, fmt.Errorf("after: al massimo %d dipendenze", maxAfter))
+		errs = append(errs, fmt.Errorf("after: at most %d dependencies", maxAfter))
 	}
 	seen := map[string]bool{}
 	for i, id := range d.After {
 		switch {
 		case !validName(id):
-			errs = append(errs, fmt.Errorf("after[%d] %q non valido: %s", i, id, nameRule))
+			errs = append(errs, fmt.Errorf("invalid after[%d] %q: %s", i, id, nameRule))
 		case seen[id]:
-			errs = append(errs, fmt.Errorf("after[%d]: %q duplicato", i, id))
+			errs = append(errs, fmt.Errorf("after[%d]: duplicate %q", i, id))
 		case d.ID != "" && id == d.ID:
-			errs = append(errs, fmt.Errorf("after[%d]: un deploy non può dipendere da se stesso", i))
+			errs = append(errs, fmt.Errorf("after[%d]: a deploy cannot depend on itself", i))
 		}
 		seen[id] = true
 	}
 	if d.DryRun {
-		errs = append(errs, errors.New("after non ammesso con dryRun: il dry-run viene eseguito subito"))
+		errs = append(errs, errors.New("after not allowed with dryRun: the dry-run runs immediately"))
 	}
 	if d.Schedule != nil && d.Schedule.Cron != "" {
-		errs = append(errs, errors.New("after non ammesso con schedule.cron"))
+		errs = append(errs, errors.New("after not allowed with schedule.cron"))
 	}
 	if _, err := d.AfterWait(); err != nil {
 		errs = append(errs, err)
@@ -405,7 +405,7 @@ func (d *Descriptor) AfterWait() (time.Duration, error) {
 	}
 	t, err := time.ParseDuration(d.AfterTimeout)
 	if err != nil || t < time.Minute || t > maxAfterTimeout {
-		return 0, fmt.Errorf("afterTimeout %q non valido: durata tra 1m e %s", d.AfterTimeout, maxAfterTimeout)
+		return 0, fmt.Errorf("invalid afterTimeout %q: duration between 1m and %s", d.AfterTimeout, maxAfterTimeout)
 	}
 	return t, nil
 }
@@ -430,20 +430,20 @@ func validName(s string) bool { return nameRe.MatchString(s) }
 func (s *Schedule) validate(id string) error {
 	switch {
 	case s.At == nil && s.Cron == "":
-		return errors.New("schedule: indicare at oppure cron")
+		return errors.New("schedule: provide at or cron")
 	case s.At != nil && s.Cron != "":
-		return errors.New("schedule: at e cron sono alternativi")
+		return errors.New("schedule: at and cron are alternatives")
 	case s.At != nil && (s.Timezone != "" || s.Name != ""):
-		return errors.New("schedule: timezone e name si usano solo con cron")
+		return errors.New("schedule: timezone and name are used only with cron")
 	case s.Cron != "" && id != "":
-		return errors.New("schedule: id non ammesso con cron, ogni esecuzione riceve un ID derivato dal nome della schedule")
+		return errors.New("schedule: id not allowed with cron, every run gets an ID derived from the schedule name")
 	case s.Cron != "":
 		expr := s.CronExpr()
 		if s.Timezone != "" {
 			expr = "CRON_TZ=" + s.Timezone + " " + expr
 		}
 		if _, err := cronParser.Parse(expr); err != nil {
-			return fmt.Errorf("schedule.cron non valido: %w", err)
+			return fmt.Errorf("invalid schedule.cron: %w", err)
 		}
 	}
 	return nil

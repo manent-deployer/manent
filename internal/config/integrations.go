@@ -159,48 +159,48 @@ func (c *Config) validateIntegrations() []error {
 	var errs []error
 	if in.PublicURL != "" {
 		if u, err := url.Parse(in.PublicURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-			errs = append(errs, fmt.Errorf("integrations.public_url %q non valido", in.PublicURL))
+			errs = append(errs, fmt.Errorf("invalid integrations.public_url %q", in.PublicURL))
 		}
 	}
 	if in.Language != "" && in.Language != "en" && in.Language != "it" {
-		errs = append(errs, fmt.Errorf("integrations.language %q non valido (en|it)", in.Language))
+		errs = append(errs, fmt.Errorf("invalid integrations.language %q (en|it)", in.Language))
 	}
 	seen := map[string]bool{}
 	for i, n := range in.Notifications {
 		p := fmt.Sprintf("integrations.notifications[%d]", i)
 		if !notificationNameRe.MatchString(n.Name) {
-			errs = append(errs, fmt.Errorf("%s.name %q non valido: minuscole, cifre e '-'", p, n.Name))
+			errs = append(errs, fmt.Errorf("invalid %s.name %q: lowercase letters, digits and '-'", p, n.Name))
 		}
 		if seen[n.Name] {
-			errs = append(errs, fmt.Errorf("%s.name %q duplicato", p, n.Name))
+			errs = append(errs, fmt.Errorf("duplicate %s.name %q", p, n.Name))
 		}
 		seen[n.Name] = true
 		if len(n.Applications) == 0 || len(n.Environments) == 0 {
-			errs = append(errs, fmt.Errorf("%s: applications ed environments obbligatori (\"*\" per tutti)", p))
+			errs = append(errs, fmt.Errorf("%s: applications and environments are required (\"*\" for all)", p))
 		}
 		for _, e := range n.Events {
 			if e != NotifyDeployment && e != NotifyApproval {
-				errs = append(errs, fmt.Errorf("%s.events: %q sconosciuto (deployment|approval)", p, e))
+				errs = append(errs, fmt.Errorf("%s.events: unknown %q (deployment|approval)", p, e))
 			}
 		}
 		switch {
 		case (n.Slack == nil) == (n.Teams == nil):
-			errs = append(errs, fmt.Errorf("%s: indicare slack oppure teams", p))
+			errs = append(errs, fmt.Errorf("%s: provide slack or teams", p))
 		case n.Slack != nil && (n.Slack.Channel == "") == (n.Slack.WebhookRef == ""):
-			errs = append(errs, fmt.Errorf("%s.slack: indicare channel (con integrations.slack.bot_token_ref) oppure webhook_ref", p))
+			errs = append(errs, fmt.Errorf("%s.slack: provide channel (with integrations.slack.bot_token_ref) or webhook_ref", p))
 		case n.Slack != nil && n.Slack.Channel != "" && in.Slack.BotTokenRef == "":
-			errs = append(errs, fmt.Errorf("%s.slack.channel richiede integrations.slack.bot_token_ref", p))
+			errs = append(errs, fmt.Errorf("%s.slack.channel requires integrations.slack.bot_token_ref", p))
 		case n.Teams != nil && n.Teams.WebhookRef == "":
-			errs = append(errs, fmt.Errorf("%s.teams.webhook_ref obbligatorio", p))
+			errs = append(errs, fmt.Errorf("%s.teams.webhook_ref is required", p))
 		}
 	}
 	for id, ident := range in.Slack.Identities {
 		if !subjectRe.MatchString(ident.Subject) {
-			errs = append(errs, fmt.Errorf("integrations.slack.identities.%s: subject nella forma <metodo>:<nome> (es. oidc:alice)", id))
+			errs = append(errs, fmt.Errorf("integrations.slack.identities.%s: subject in the form <method>:<name> (e.g. oidc:alice)", id))
 		}
 	}
 	if in.Slack.SigningSecretRef != "" && in.Slack.BotTokenRef == "" {
-		errs = append(errs, errors.New("integrations.slack.signing_secret_ref richiede bot_token_ref"))
+		errs = append(errs, errors.New("integrations.slack.signing_secret_ref requires bot_token_ref"))
 	}
 	errs = append(errs, c.validateChange()...)
 	return errs
@@ -213,36 +213,36 @@ func (c *Config) validateChange() []error {
 	switch ch.Provider {
 	case "":
 		if rulesWithChange {
-			errs = append(errs, errors.New("governance.rules[].change richiede integrations.change.provider"))
+			errs = append(errs, errors.New("governance.rules[].change requires integrations.change.provider"))
 		}
 		return errs
 	case ChangeServiceNow:
 		s := ch.ServiceNow
 		if !validURL(s.URL) {
-			errs = append(errs, errors.New("integrations.change.servicenow.url obbligatorio (https://<istanza>.service-now.com)"))
+			errs = append(errs, errors.New("integrations.change.servicenow.url is required (https://<instance>.service-now.com)"))
 		}
 		if (s.Username != "" && s.PasswordRef != "") == (s.TokenRef != "") {
-			errs = append(errs, errors.New("integrations.change.servicenow: indicare username e password_ref oppure token_ref"))
+			errs = append(errs, errors.New("integrations.change.servicenow: provide username and password_ref or token_ref"))
 		}
 	case ChangeJira:
 		j := ch.Jira
 		if !validURL(j.URL) {
-			errs = append(errs, errors.New("integrations.change.jira.url obbligatorio"))
+			errs = append(errs, errors.New("integrations.change.jira.url is required"))
 		}
 		if j.TokenRef == "" || j.Project == "" || j.IssueType == "" {
-			errs = append(errs, errors.New("integrations.change.jira: token_ref, project e issue_type obbligatori"))
+			errs = append(errs, errors.New("integrations.change.jira: token_ref, project and issue_type are required"))
 		}
 		for k := range j.Transitions {
 			if k != "start" && k != "success" && k != "failure" {
-				errs = append(errs, fmt.Errorf("integrations.change.jira.transitions.%s sconosciuta (start|success|failure)", k))
+				errs = append(errs, fmt.Errorf("unknown integrations.change.jira.transitions.%s (start|success|failure)", k))
 			}
 		}
 		needsApproval := slices.ContainsFunc(c.Governance.Rules, func(r GovernanceRule) bool { return r.Change != nil && r.Change.Approval })
 		if needsApproval && len(j.ApprovedStatuses) == 0 {
-			errs = append(errs, errors.New("integrations.change.jira.approved_statuses obbligatorio con governance.rules[].change.approval"))
+			errs = append(errs, errors.New("integrations.change.jira.approved_statuses is required with governance.rules[].change.approval"))
 		}
 	default:
-		errs = append(errs, fmt.Errorf("integrations.change.provider %q sconosciuto (servicenow|jira)", ch.Provider))
+		errs = append(errs, fmt.Errorf("unknown integrations.change.provider %q (servicenow|jira)", ch.Provider))
 	}
 	return errs
 }

@@ -65,14 +65,14 @@ func (e *Engine) checkAfter(ctx context.Context, d *descriptor.Descriptor) (bool
 		st, err := e.Status(ctx, id)
 		switch {
 		case errors.Is(err, ErrNotFound):
-			return false, fmt.Errorf("%w: after: il deploy %s non esiste", ErrInvalidRequest, id)
+			return false, fmt.Errorf("%w: after: deploy %s does not exist", ErrInvalidRequest, id)
 		case err != nil:
 			return false, err
 		case st.DryRun:
-			return false, fmt.Errorf("%w: after: %s è un dry-run", ErrInvalidRequest, id)
+			return false, fmt.Errorf("%w: after: %s is a dry-run", ErrInvalidRequest, id)
 		case st.State == StateSuccess:
 		case Terminal(st.State):
-			return false, fmt.Errorf("%w: after: il deploy %s è concluso in %s", ErrInvalidRequest, id, st.State)
+			return false, fmt.Errorf("%w: after: deploy %s ended in %s", ErrInvalidRequest, id, st.State)
 		default:
 			done = false
 		}
@@ -128,7 +128,7 @@ func (w *Worker) afterWorkflow(ctx dbos.Context, in afterInput) (AfterState, err
 		case check.Done:
 			st.Status = service.AfterSatisfied
 		case !check.Now.Before(expires):
-			st.Status, st.Reason = service.AfterExpired, "attesa delle dipendenze scaduta"
+			st.Status, st.Reason = service.AfterExpired, "wait for dependencies expired"
 		}
 		if st.Status != service.AfterWaiting {
 			break
@@ -190,12 +190,12 @@ func (w *Worker) readDependencies(_ context.Context, ids []string) afterCheck {
 		switch {
 		case err != nil:
 		case !ok:
-			c.Failed = cmpString(c.Failed, "il deploy "+id+" non esiste più")
+			c.Failed = cmpString(c.Failed, "deploy "+id+" no longer exists")
 		case st.State == StateSuccess && !st.DryRun:
 			state = st.State
 		case Terminal(st.State):
 			state = st.State
-			c.Failed = cmpString(c.Failed, fmt.Sprintf("il deploy %s è concluso in %s", id, st.State))
+			c.Failed = cmpString(c.Failed, fmt.Sprintf("deploy %s ended in %s", id, st.State))
 		default:
 			state = st.State
 		}

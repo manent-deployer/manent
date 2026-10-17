@@ -211,7 +211,7 @@ func TestRouterALB(t *testing.T) {
 		t.Errorf("tester: %v %v", f.weights[rule], err)
 	}
 	bad := map[string]string{SettingRegion: "eu-west-1", SettingForwardARN: tg, SettingTargetGroupA: tgA, SettingTargetGroupB: tgA}
-	if err := ValidateRouter(bad); err == nil || !strings.Contains(err.Error(), "diversi") || !strings.Contains(err.Error(), SettingForwardARN) {
+	if err := ValidateRouter(bad); err == nil || !strings.Contains(err.Error(), "different") || !strings.Contains(err.Error(), SettingForwardARN) {
 		t.Errorf("validazione: %v", err)
 	}
 }

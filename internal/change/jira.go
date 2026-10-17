@@ -111,7 +111,7 @@ func (j *Jira) Open(ctx context.Context, r Request) (Ticket, error) {
 	}
 	found, err := j.search(ctx, auth, r.DeploymentID)
 	if err != nil {
-		return Ticket{}, fmt.Errorf("ricerca dell'issue: %w", err)
+		return Ticket{}, fmt.Errorf("searching the issue: %w", err)
 	}
 	if found != nil {
 		return j.Refresh(ctx, j.ticket(*found))
@@ -128,7 +128,7 @@ func (j *Jira) Open(ctx context.Context, r Request) (Ticket, error) {
 	}
 	var created jiraIssue
 	if _, err := doJSON(ctx, j.Client, http.MethodPost, j.api("/issue"), auth, map[string]any{"fields": fields}, &created); err != nil {
-		return Ticket{}, fmt.Errorf("creazione dell'issue: %w", err)
+		return Ticket{}, fmt.Errorf("creating the issue: %w", err)
 	}
 	return j.Refresh(ctx, Ticket{ID: created.ID, Number: created.Key})
 }
@@ -141,7 +141,7 @@ func (j *Jira) Refresh(ctx context.Context, t Ticket) (Ticket, error) {
 	}
 	var i jiraIssue
 	if _, err := doJSON(ctx, j.Client, http.MethodGet, j.api("/issue/"+url.PathEscape(t.Number)+"?fields=status"), auth, nil, &i); err != nil {
-		return t, fmt.Errorf("lettura dell'issue %s: %w", t.Number, err)
+		return t, fmt.Errorf("reading issue %s: %w", t.Number, err)
 	}
 	return j.ticket(i), nil
 }
@@ -180,13 +180,13 @@ func (j *Jira) transition(ctx context.Context, t Ticket, event string) error {
 	if err == nil && strings.EqualFold(cur.State, name) {
 		return nil
 	}
-	return fmt.Errorf("%w: transizione %q non disponibile per %s nello stato %q", ErrPermanent, name, t.Number, cur.State)
+	return fmt.Errorf("%w: transition %q not available for %s in state %q", ErrPermanent, name, t.Number, cur.State)
 }
 
 // Start runs the start transition.
 func (j *Jira) Start(ctx context.Context, t Ticket) error {
 	if err := j.transition(ctx, t, "start"); err != nil {
-		return fmt.Errorf("avvio dell'issue %s: %w", t.Number, err)
+		return fmt.Errorf("starting issue %s: %w", t.Number, err)
 	}
 	return nil
 }
@@ -199,14 +199,14 @@ func (j *Jira) Close(ctx context.Context, t Ticket, o Outcome) error {
 	}
 	if _, err := doJSON(ctx, j.Client, http.MethodPost, j.api("/issue/"+url.PathEscape(t.Number)+"/comment"), auth,
 		map[string]any{"body": closeNotes(o)}, nil); err != nil {
-		return fmt.Errorf("commento sull'issue %s: %w", t.Number, err)
+		return fmt.Errorf("commenting on issue %s: %w", t.Number, err)
 	}
 	event := "success"
 	if !o.Success {
 		event = "failure"
 	}
 	if err := j.transition(ctx, t, event); err != nil {
-		return fmt.Errorf("chiusura dell'issue %s: %w", t.Number, err)
+		return fmt.Errorf("closing issue %s: %w", t.Number, err)
 	}
 	return nil
 }

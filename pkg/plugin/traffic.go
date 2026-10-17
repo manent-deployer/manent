@@ -80,7 +80,7 @@ type TrafficChecker interface {
 }
 
 // ErrTrafficUnsupported means a plugin that does not support a percentage rollout operation.
-var ErrTrafficUnsupported = errors.New("operazione dei rilasci per percentuale non supportata dal plugin")
+var ErrTrafficUnsupported = errors.New("percentage release operation not supported by the plugin")
 
 // SupportsTraffic reports the percentage rollout interfaces supported by the Deployer.
 func SupportsTraffic(ctx context.Context, d Deployer) (TrafficSupport, error) {

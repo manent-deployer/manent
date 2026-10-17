@@ -71,7 +71,7 @@ func (s *server) Configure(_ context.Context, r *pb.ConfigureRequest) (*pb.Confi
 	cfg := map[string]any{}
 	if len(r.GetConfigJson()) > 0 {
 		if err := json.Unmarshal(r.GetConfigJson(), &cfg); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "configurazione non valida: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %v", err)
 		}
 	}
 	d, err := s.factory(cfg, Logger())
@@ -89,7 +89,7 @@ func (s *server) get() (plugin.Deployer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.deployer == nil {
-		return nil, status.Error(codes.FailedPrecondition, "plugin non configurato")
+		return nil, status.Error(codes.FailedPrecondition, "plugin not configured")
 	}
 	return s.deployer, nil
 }
@@ -140,7 +140,7 @@ func (s *server) CurrentRelease(ctx context.Context, r *pb.DeployRequest) (*pb.C
 	}
 	ins, ok := d.(plugin.ReleaseInspector)
 	if !ok {
-		return nil, status.Error(codes.Unimplemented, "release in esercizio non leggibile dal plugin")
+		return nil, status.Error(codes.Unimplemented, "the plugin cannot read the release in service")
 	}
 	var rel *plugin.Release
 	if _, err := s.call(ctx, r, func(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {

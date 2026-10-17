@@ -193,79 +193,79 @@ var reservedHeaders = []string{"host", "content-length", "content-type", "transf
 func (s Spec) Validate(name string, allowHTTP bool) error {
 	if !s.IsCustom() {
 		if !s.IsZero() {
-			return fmt.Errorf("step %q: i campi degli step personalizzati richiedono type", name)
+			return fmt.Errorf("step %q: custom step fields require type", name)
 		}
 		return nil
 	}
 	var errs []error
 	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
 	if !stepNameRe.MatchString(name) {
-		add("nome non valido: minuscole, cifre e '-' (max 63, iniziale una lettera)")
+		add("invalid name: lowercase letters, digits and '-' (max 63, starting with a letter)")
 	}
 	if s.Type != TypeCommand && s.Type != TypeHTTP {
-		add("type %q non valido (command|http)", s.Type)
+		add("invalid type %q (command|http)", s.Type)
 	}
 	if s.Timeout < time.Second || s.Timeout > MaxTimeout {
-		add("timeout %s non valido: tra 1s e %s", s.Timeout, MaxTimeout)
+		add("invalid timeout %s: between 1s and %s", s.Timeout, MaxTimeout)
 	}
 	errs = append(errs, checkSecretNames("secrets", s.Secrets))
 	if len(s.Params) > maxParams {
-		add("params: al massimo %d", maxParams)
+		add("params: at most %d", maxParams)
 	}
 	for _, k := range slices.Sorted(maps.Keys(s.Params)) {
 		p := s.Params[k]
 		if !keyRe.MatchString(k) {
-			add("params.%s: nome non valido (minuscole, cifre e '_', max 31)", k)
+			add("params.%s: invalid name (lowercase letters, digits and '_', max 31)", k)
 		}
 		re, err := Compile(p.Pattern)
 		switch {
 		case p.Pattern == "":
-			add("params.%s.pattern obbligatorio", k)
+			add("params.%s.pattern is required", k)
 		case err != nil:
 			add("params.%s.pattern: %v", k, err)
 		case p.Default != "" && !re.MatchString(p.Default):
-			add("params.%s.default non rispetta il pattern", k)
+			add("params.%s.default does not match the pattern", k)
 		}
 	}
 	if len(s.Outputs) > MaxOutputs {
-		add("outputs: al massimo %d", MaxOutputs)
+		add("outputs: at most %d", MaxOutputs)
 	}
 	for _, k := range slices.Sorted(maps.Keys(s.Outputs)) {
 		o := s.Outputs[k]
 		if !keyRe.MatchString(k) {
-			add("outputs.%s: nome non valido (minuscole, cifre e '_', max 31)", k)
+			add("outputs.%s: invalid name (lowercase letters, digits and '_', max 31)", k)
 		}
 		if o.Pattern == "" {
-			add("outputs.%s.pattern obbligatorio", k)
+			add("outputs.%s.pattern is required", k)
 		} else if _, err := Compile(o.Pattern); err != nil {
 			add("outputs.%s.pattern: %v", k, err)
 		}
 		switch {
 		case s.Type == TypeHTTP && o.Path == "":
-			add("outputs.%s.path obbligatorio per gli step http", k)
+			add("outputs.%s.path is required for http steps", k)
 		case s.Type == TypeHTTP:
 			if _, err := ParsePath(o.Path); err != nil {
 				add("outputs.%s.path: %v", k, err)
 			}
 		case o.Path != "":
-			add("outputs.%s.path si usa solo con gli step http", k)
+			add("outputs.%s.path is used only with http steps", k)
 		}
 	}
 	if s.Run == nil {
-		add("run obbligatorio")
+		add("run is required")
 	}
 	tc := templateCheck{params: s.Params}
 	switch s.Type {
 	case TypeCommand:
 		if s.SSH == nil || (s.SSH.KeySecret == "" && s.SSH.PasswordSecret == "") {
-			add("ssh.key_secret o ssh.password_secret obbligatorio per gli step command")
+			add("ssh.key_secret or ssh.password_secret is required for command steps")
 		} else {
 			errs = append(errs, checkSecretNames("ssh", nonEmpty(s.SSH.KeySecret, s.SSH.PasswordSecret)))
 		}
 		if s.Run != nil {
 			errs = append(errs, prefixed("run", s.Run.validateCommand(tc, false)))
 			if len(s.Outputs) > 0 && !s.Run.RunOnce {
-				add("outputs richiede run.run_once: con più target gli output sarebbero ambigui")
+				add("outputs requires run.run_once: with several targets the outputs would be ambiguous")
 			}
 		}
 		if s.DryRun != nil {
@@ -273,7 +273,7 @@ func (s Spec) Validate(name string, allowHTTP bool) error {
 		}
 	case TypeHTTP:
 		if s.SSH != nil {
-			add("ssh si usa solo con gli step command")
+			add("ssh is used only with command steps")
 		}
 		if s.Run != nil {
 			errs = append(errs, prefixed("run", s.Run.validateHTTP(tc, allowHTTP, false, s.Timeout)))
@@ -293,30 +293,30 @@ func (a *Action) validateCommand(tc templateCheck, dry bool) error {
 	var errs []error
 	add := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 	if a.On != OnTargets {
-		add("on %q non valido: in questa versione solo targets", a.On)
+		add("invalid on %q: in this version only targets", a.On)
 	}
 	if a.Method != "" || a.URL != "" || len(a.Headers) > 0 || a.Auth != nil || a.JSON != nil || len(a.Expect) > 0 || a.Poll != nil {
-		add("i campi http non si usano con gli step command")
+		add("http fields are not used with command steps")
 	}
 	switch {
 	case len(a.Command) == 0:
-		add("command obbligatorio")
+		add("command is required")
 	case len(a.Command) > maxCommandArgs:
-		add("command: al massimo %d argomenti", maxCommandArgs)
+		add("command: at most %d arguments", maxCommandArgs)
 	case !strings.HasPrefix(a.Command[0], "/") || strings.Contains(a.Command[0], "{{"):
-		add("command[0] deve essere un percorso assoluto, senza segnaposto")
+		add("command[0] must be an absolute path, without placeholders")
 	}
 	for i, arg := range a.Command {
 		if strings.ContainsAny(arg, "\x00\r\n") {
-			add("command[%d]: caratteri di controllo non ammessi", i)
+			add("command[%d]: control characters not allowed", i)
 		}
 		errs = append(errs, tc.check(fmt.Sprintf("command[%d]", i), arg, false))
 	}
 	if a.SHA256 != "" && !sha256Re.MatchString(a.SHA256) {
-		add("sha256 non valido: 64 cifre esadecimali minuscole")
+		add("invalid sha256: 64 lowercase hex digits")
 	}
 	if !dry && len(a.Secrets) > 0 {
-		add("secrets si indica a livello di step; dentro dry_run elenca i segreti del dry-run")
+		add("secrets is set at step level; inside dry_run it lists the secrets of the dry-run")
 	}
 	errs = append(errs, checkSecretNames("secrets", a.Secrets))
 	return errors.Join(errs...)
@@ -326,12 +326,12 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 	var errs []error
 	add := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 	if a.On != "" || a.RunOnce || len(a.Command) > 0 || a.SHA256 != "" {
-		add("i campi dei comandi non si usano con gli step http")
+		add("command fields are not used with http steps")
 	}
 	switch a.Method {
 	case "GET", "POST", "PUT", "PATCH", "DELETE":
 	default:
-		add("method %q non valido", a.Method)
+		add("invalid method %q", a.Method)
 	}
 	if _, err := LiteralOrigin(a.URL, allowHTTP); err != nil {
 		add("url: %v", err)
@@ -339,10 +339,10 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 	errs = append(errs, tc.check("url", a.URL, false))
 	for _, h := range slices.Sorted(maps.Keys(a.Headers)) {
 		if !headerRe.MatchString(h) || slices.Contains(reservedHeaders, strings.ToLower(h)) {
-			add("headers.%s: nome non ammesso", h)
+			add("headers.%s: name not allowed", h)
 		}
 		if a.Auth != nil && (strings.EqualFold(h, "authorization") || strings.EqualFold(h, a.Auth.Header)) {
-			add("headers.%s: già impostato da auth", h)
+			add("headers.%s: already set by auth", h)
 		}
 		errs = append(errs, tc.check("headers."+h, a.Headers[h], false))
 	}
@@ -351,29 +351,29 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 		case "bearer":
 		case "basic":
 			if au.Username == "" {
-				add("auth.username obbligatorio con basic")
+				add("auth.username is required with basic")
 			}
 		case "header":
 			if !headerRe.MatchString(au.Header) || slices.Contains(reservedHeaders, strings.ToLower(au.Header)) {
-				add("auth.header non valido")
+				add("invalid auth.header")
 			}
 		default:
-			add("auth.type %q non valido (bearer|basic|header)", au.Type)
+			add("invalid auth.type %q (bearer|basic|header)", au.Type)
 		}
 		errs = append(errs, checkSecretNames("auth.secret", []string{au.Secret}))
 	}
 	if a.JSON != nil {
 		if a.Method == "GET" || a.Method == "DELETE" {
-			add("json non ammesso con %s", a.Method)
+			add("json not allowed with %s", a.Method)
 		}
 		errs = append(errs, walkStrings(a.JSON, "json", func(path, v string) error { return tc.check(path, v, false) }))
 		if _, err := json.Marshal(a.JSON); err != nil {
-			add("json non serializzabile: %v", err)
+			add("json cannot be serialized: %v", err)
 		}
 	}
 	for _, c := range a.Expect {
 		if c < 100 || c > 599 {
-			add("expect: status %d non valido", c)
+			add("expect: invalid status %d", c)
 		}
 	}
 	if p := a.Poll; p != nil {
@@ -382,10 +382,10 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 		}
 		errs = append(errs, tc.check("poll.url", p.URL, true))
 		if p.Interval < time.Second {
-			add("poll.interval: almeno 1s")
+			add("poll.interval: at least 1s")
 		}
 		if p.Timeout < p.Interval || p.Timeout > timeout {
-			add("poll.timeout: tra poll.interval e il timeout dello step (%s)", timeout)
+			add("poll.timeout: between poll.interval and the step timeout (%s)", timeout)
 		}
 		for name, c := range map[string]*Condition{"until": &p.Until, "fail": p.Fail} {
 			if c == nil {
@@ -395,16 +395,16 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 				add("poll.%s.path: %v", name, err)
 			}
 			if len(c.In) == 0 {
-				add("poll.%s.in obbligatorio", name)
+				add("poll.%s.in is required", name)
 			}
 		}
 	}
 	if !dry && len(a.Secrets) > 0 {
-		add("secrets si indica a livello di step; dentro dry_run elenca i segreti del dry-run")
+		add("secrets is set at step level; inside dry_run it lists the secrets of the dry-run")
 	}
 	errs = append(errs, checkSecretNames("secrets", a.Secrets))
 	if dry && a.Auth != nil && !slices.Contains(a.Secrets, a.Auth.Secret) {
-		add("auth.secret deve essere tra i segreti del dry-run (dry_run.secrets)")
+		add("auth.secret must be among the secrets of the dry-run (dry_run.secrets)")
 	}
 	return errors.Join(errs...)
 }
@@ -412,7 +412,7 @@ func (a *Action) validateHTTP(tc templateCheck, allowHTTP, dry bool, timeout tim
 // authSecretDeclared checks that run's HTTP authentication uses a declared secret.
 func (s Spec) authSecretDeclared() error {
 	if s.Type == TypeHTTP && s.Run != nil && s.Run.Auth != nil && !slices.Contains(s.Secrets, s.Run.Auth.Secret) {
-		return errors.New("run.auth.secret deve essere tra i segreti dello step (secrets)")
+		return errors.New("run.auth.secret must be among the step secrets (secrets)")
 	}
 	return nil
 }
@@ -426,23 +426,23 @@ func LiteralOrigin(raw string, allowHTTP bool) (string, error) {
 	}
 	scheme, rest, ok := strings.Cut(lit, "://")
 	if !ok {
-		return "", errors.New("schema e host vanno scritti per intero, senza segnaposto")
+		return "", errors.New("scheme and host must be written in full, without placeholders")
 	}
 	host, _, hasPath := strings.Cut(rest, "/")
 	if host == "" {
-		return "", errors.New("schema e host vanno scritti per intero, senza segnaposto")
+		return "", errors.New("scheme and host must be written in full, without placeholders")
 	}
 	if !hasPath && len(lit) < len(raw) {
-		return "", errors.New("l'host deve essere seguito da '/' prima di qualunque segnaposto")
+		return "", errors.New("the host must be followed by '/' before any placeholder")
 	}
 	u, err := url.Parse(scheme + "://" + host + "/")
 	switch {
 	case err != nil:
 		return "", err
 	case u.Host == "" || u.User != nil:
-		return "", errors.New("host mancante o con credenziali")
+		return "", errors.New("host missing or with credentials")
 	case u.Scheme != "https" && !(allowHTTP && u.Scheme == "http"):
-		return "", fmt.Errorf("schema %q non ammesso (https, o http con pipeline.custom.allow_http)", u.Scheme)
+		return "", fmt.Errorf("scheme %q not allowed (https, or http with pipeline.custom.allow_http)", u.Scheme)
 	}
 	return u.Scheme + "://" + u.Host, nil
 }
@@ -455,12 +455,12 @@ func Compile(pattern string) (*regexp.Regexp, error) {
 func checkSecretNames(field string, names []string) error {
 	var errs []error
 	if len(names) > maxSecrets {
-		errs = append(errs, fmt.Errorf("%s: al massimo %d", field, maxSecrets))
+		errs = append(errs, fmt.Errorf("%s: at most %d", field, maxSecrets))
 	}
 	seen := map[string]bool{}
 	for _, n := range names {
 		if !secretNameRe.MatchString(n) || seen[n] {
-			errs = append(errs, fmt.Errorf("%s: nome di segreto %q non valido o duplicato", field, n))
+			errs = append(errs, fmt.Errorf("%s: invalid or duplicate secret name %q", field, n))
 		}
 		seen[n] = true
 	}
@@ -524,10 +524,10 @@ func (tc templateCheck) check(field, text string, response bool) error {
 		switch {
 		case root == "Response" && response:
 		case !slices.Contains(templateRoots, root):
-			errs = append(errs, fmt.Errorf("%s: segnaposto .%s sconosciuto", field, root))
+			errs = append(errs, fmt.Errorf("%s: unknown placeholder .%s", field, root))
 		case root == "Params" && len(idents) > 1:
 			if _, ok := tc.params[idents[1]]; !ok {
-				errs = append(errs, fmt.Errorf("%s: parametro %q non dichiarato in params", field, idents[1]))
+				errs = append(errs, fmt.Errorf("%s: parameter %q not declared in params", field, idents[1]))
 			}
 		}
 	})

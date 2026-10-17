@@ -242,7 +242,7 @@ type DecideCmd struct {
 // Execute implements flags.Commander.
 func (c *DecideCmd) Execute([]string) error {
 	if !c.approve && c.Comment == "" {
-		return errors.New("indicare il motivo del rifiuto con --comment")
+		return errors.New("give the reason for the rejection with --comment")
 	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		if err := svc.Decide(ctx, c.Args.ID, service.DecisionRequest{Approve: c.approve, Comment: c.Comment}); err != nil {
@@ -294,7 +294,7 @@ func (c *PromoteCmd) Execute([]string) error {
 		dec := yaml.NewDecoder(bytes.NewReader(data))
 		dec.KnownFields(true)
 		if err := dec.Decode(&dep); err != nil {
-			return fmt.Errorf("%s: sezione deploy non valida: %w", c.DeployFile, err)
+			return fmt.Errorf("%s: invalid deploy section: %w", c.DeployFile, err)
 		}
 		r.Deploy = &dep
 	}

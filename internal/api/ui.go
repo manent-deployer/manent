@@ -48,7 +48,7 @@ func (s *Server) mountUI(r *gin.Engine, o Options) {
 	r.NoRoute(func(c *gin.Context) {
 		if o.UI == nil || strings.HasPrefix(c.Request.URL.Path, "/api/") ||
 			(c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "risorsa non trovata"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "resource not found"})
 			return
 		}
 		o.UI.ServeHTTP(c.Writer, c.Request)
@@ -95,7 +95,7 @@ func (s *Server) events(c *gin.Context) {
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "offset deve essere un intero >= 0"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be an integer >= 0"})
 			return
 		}
 		offset = n

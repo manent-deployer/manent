@@ -26,21 +26,21 @@ var forwardARNRe = regexp.MustCompile(`^arn:aws[a-z-]*:elasticloadbalancing:[a-z
 func ValidateRouter(s map[string]string) error {
 	var errs []error
 	if !awsauth.ValidRegion(s[SettingRegion]) {
-		errs = append(errs, fmt.Errorf("%s %q non valida", SettingRegion, s[SettingRegion]))
+		errs = append(errs, fmt.Errorf("invalid %s %q", SettingRegion, s[SettingRegion]))
 	}
 	if !forwardARNRe.MatchString(s[SettingForwardARN]) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: listener o regola di un Application Load Balancer", SettingForwardARN, s[SettingForwardARN]))
+		errs = append(errs, fmt.Errorf("invalid %s %q: listener or rule of an Application Load Balancer", SettingForwardARN, s[SettingForwardARN]))
 	}
 	if r := s[SettingTesterRuleARN]; r != "" && !forwardARNRe.MatchString(r) {
-		errs = append(errs, fmt.Errorf("%s %q non valido", SettingTesterRuleARN, r))
+		errs = append(errs, fmt.Errorf("invalid %s %q", SettingTesterRuleARN, r))
 	}
 	for _, k := range []string{SettingTargetGroupA, SettingTargetGroupB} {
 		if !tgARNRe.MatchString(s[k]) {
-			errs = append(errs, fmt.Errorf("%s %q non valido", k, s[k]))
+			errs = append(errs, fmt.Errorf("invalid %s %q", k, s[k]))
 		}
 	}
 	if s[SettingTargetGroupA] != "" && s[SettingTargetGroupA] == s[SettingTargetGroupB] {
-		errs = append(errs, errors.New("i target group dei due slot devono essere diversi"))
+		errs = append(errs, errors.New("the target groups of the two slots must be different"))
 	}
 	errs = append(errs, awsauth.Validate(s))
 	return errors.Join(errs...)
@@ -100,7 +100,7 @@ func (r *router) SetWeights(ctx context.Context, weights map[string]int) error {
 func (r *router) RouteTesters(ctx context.Context, slot string) (map[string]string, error) {
 	rule := r.s[SettingTesterRuleARN]
 	if rule == "" {
-		return nil, fmt.Errorf("%s non configurato: nessuna regola per i tester", SettingTesterRuleARN)
+		return nil, fmt.Errorf("%s not configured: no rule for the testers", SettingTesterRuleARN)
 	}
 	if err := r.api.SetForwardWeights(ctx, rule, map[string]int32{r.tg[slot]: 1}); err != nil {
 		return nil, err

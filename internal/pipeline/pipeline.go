@@ -59,7 +59,7 @@ const (
 
 // ErrPermanent marks the errors a retry cannot fix (e.g. a policy violation or an invalid
 // request): the step fails at once, without DBOS retries.
-var ErrPermanent = errors.New("errore permanente")
+var ErrPermanent = errors.New("permanent error")
 
 // permanentError keeps the message of the original error.
 type permanentError struct{ err error }
@@ -94,7 +94,7 @@ func NewRegistry(steps ...Step) (*Registry, error) {
 	r := &Registry{steps: map[string]Step{}}
 	for _, s := range steps {
 		if _, ok := r.steps[s.Name()]; ok {
-			return nil, fmt.Errorf("step %q registrato due volte", s.Name())
+			return nil, fmt.Errorf("step %q registered twice", s.Name())
 		}
 		r.steps[s.Name()] = s
 	}

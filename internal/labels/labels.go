@@ -50,12 +50,12 @@ var (
 func Parse(text string) (Selector, error) {
 	s := Selector{text: strings.TrimSpace(text)}
 	if s.text == "" {
-		return s, errors.New("selettore vuoto")
+		return s, errors.New("empty selector")
 	}
 	for _, part := range splitTop(s.text) {
 		r, err := parseRequirement(strings.TrimSpace(part))
 		if err != nil {
-			return s, fmt.Errorf("selettore %q: %w", s.text, err)
+			return s, fmt.Errorf("selector %q: %w", s.text, err)
 		}
 		s.reqs = append(s.reqs, r)
 	}
@@ -84,7 +84,7 @@ func splitTop(s string) []string {
 
 func parseRequirement(p string) (requirement, error) {
 	if p == "" {
-		return requirement{}, errors.New("condizione vuota")
+		return requirement{}, errors.New("empty condition")
 	}
 	if k, rest, ok := cutWord(p, " notin "); ok {
 		return setRequirement(k, opNotIn, rest)
@@ -98,7 +98,7 @@ func parseRequirement(p string) (requirement, error) {
 			return r, r.check()
 		}
 	}
-	return requirement{}, fmt.Errorf("condizione %q non valida (chiave=valore, chiave!=valore, chiave in (a, b), chiave notin (a, b))", p)
+	return requirement{}, fmt.Errorf("invalid condition %q (key=value, key!=value, key in (a, b), key notin (a, b))", p)
 }
 
 func cutWord(p, word string) (string, string, bool) {
@@ -112,7 +112,7 @@ func cutWord(p, word string) (string, string, bool) {
 func setRequirement(key, op, rest string) (requirement, error) {
 	rest = strings.TrimSpace(rest)
 	if !strings.HasPrefix(rest, "(") || !strings.HasSuffix(rest, ")") {
-		return requirement{}, fmt.Errorf("%s richiede un elenco tra parentesi", op)
+		return requirement{}, fmt.Errorf("%s requires a list in parentheses", op)
 	}
 	r := requirement{key: strings.TrimSpace(key), op: op}
 	for _, v := range strings.Split(rest[1:len(rest)-1], ",") {
@@ -123,15 +123,15 @@ func setRequirement(key, op, rest string) (requirement, error) {
 
 func (r requirement) check() error {
 	if !keyRe.MatchString(r.key) {
-		return fmt.Errorf("chiave %q non valida", r.key)
+		return fmt.Errorf("invalid key %q", r.key)
 	}
 	for _, v := range r.values {
 		if !valueRe.MatchString(v) {
-			return fmt.Errorf("valore %q non valido", v)
+			return fmt.Errorf("invalid value %q", v)
 		}
 	}
 	if (r.op == opIn || r.op == opNotIn) && (len(r.values) == 0 || slices.Contains(r.values, "")) {
-		return fmt.Errorf("%s: elenco vuoto o con valori vuoti", r.op)
+		return fmt.Errorf("%s: empty list or with empty values", r.op)
 	}
 	return nil
 }
@@ -166,7 +166,7 @@ func (s Selector) Matches(l map[string]string) bool {
 func ValidLabels(l map[string]string) error {
 	for k, v := range l {
 		if !keyRe.MatchString(k) || !valueRe.MatchString(v) {
-			return fmt.Errorf("etichetta %s=%s non valida", k, v)
+			return fmt.Errorf("invalid label %s=%s", k, v)
 		}
 	}
 	return nil

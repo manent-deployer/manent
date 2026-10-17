@@ -57,20 +57,20 @@ func validateTraffic(req *plugin.Request) []error {
 	switch r := router(req); r {
 	case RouterGatewayAPI:
 		if !dnsLabelRe.MatchString(req.Params[ParamTrafficService]) {
-			errs = append(errs, fmt.Errorf("%s obbligatorio con %s %s (nome base dei Service <nome>-a e <nome>-b)", ParamTrafficService, ParamTrafficRouter, r))
+			errs = append(errs, fmt.Errorf("%s is required with %s %s (base name of the Services <name>-a and <name>-b)", ParamTrafficService, ParamTrafficRouter, r))
 		}
 		if k := req.Params[ParamTrafficRouteKind]; k != "" && k != "HTTPRoute" && k != "GRPCRoute" {
-			errs = append(errs, fmt.Errorf("%s %q non valido (HTTPRoute|GRPCRoute)", ParamTrafficRouteKind, k))
+			errs = append(errs, fmt.Errorf("invalid %s %q (HTTPRoute|GRPCRoute)", ParamTrafficRouteKind, k))
 		}
 	case RouterIstio:
 	default:
-		errs = append(errs, fmt.Errorf("%s %q non valido (%s|%s)", ParamTrafficRouter, r, RouterGatewayAPI, RouterIstio))
+		errs = append(errs, fmt.Errorf("invalid %s %q (%s|%s)", ParamTrafficRouter, r, RouterGatewayAPI, RouterIstio))
 	}
 	if !dnsLabelRe.MatchString(req.Params[ParamTrafficRoute]) {
-		errs = append(errs, fmt.Errorf("%s obbligatorio: la route che divide il traffico tra gli slot", ParamTrafficRoute))
+		errs = append(errs, fmt.Errorf("%s is required: the route that splits traffic between the slots", ParamTrafficRoute))
 	}
 	if ns := req.Params[ParamTrafficRouteNamespace]; ns != "" && !dnsLabelRe.MatchString(ns) {
-		errs = append(errs, fmt.Errorf("%s %q non valido", ParamTrafficRouteNamespace, ns))
+		errs = append(errs, fmt.Errorf("invalid %s %q", ParamTrafficRouteNamespace, ns))
 	}
 	return errs
 }
@@ -106,7 +106,7 @@ func slotObjects(objs []Object, slot string, services, rename bool) ([]Object, e
 		if renamed[o.Kind()+"/"+o.Name()] {
 			name := o.Name() + suffix
 			if len(name) > 63 {
-				errs = append(errs, fmt.Errorf("%s: nome %q troppo lungo per lo slot (massimo 63 caratteri)", o.Ref(), name))
+				errs = append(errs, fmt.Errorf("%s: name %q too long for the slot (maximum 63 characters)", o.Ref(), name))
 			}
 			o.metadata()["name"] = name
 		} else if !slices.Contains(slotted, o.Kind()) {
@@ -200,11 +200,11 @@ func otherSlot(s string) string {
 // slots returns the stable and candidate slots of a cluster from the recorded state.
 func slots(req *plugin.Request, t plugin.Target) (string, string, error) {
 	if req.Traffic == nil {
-		return "", "", errors.New("rilascio per percentuale senza stato degli slot")
+		return "", "", errors.New("percentage release without slot state")
 	}
 	cand := req.Traffic.State[stateKey(stateCandidate, t)]
 	if cand != "a" && cand != "b" {
-		return "", "", fmt.Errorf("cluster %s: slot candidato sconosciuto (stato del rilascio incompleto)", t.Host)
+		return "", "", fmt.Errorf("cluster %s: unknown candidate slot (incomplete release state)", t.Host)
 	}
 	return req.Traffic.State[stateKey(stateStable, t)], cand, nil
 }
@@ -331,7 +331,7 @@ func (p *Plugin) CandidateWeight(ctx context.Context, req *plugin.Request) (int,
 // to the candidate.
 func (p *Plugin) RouteTesters(ctx context.Context, req *plugin.Request) (map[string]string, error) {
 	if req.Traffic == nil || req.Traffic.TesterHeader == "" {
-		return nil, errors.New("rollout.traffic.testers.header obbligatorio con il plugin kubernetes")
+		return nil, errors.New("rollout.traffic.testers.header is required with the kubernetes plugin")
 	}
 	for _, t := range req.Targets {
 		_, cand, err := slots(req, t)
@@ -579,7 +579,7 @@ func (p *Plugin) route(ctx context.Context, api API, req *plugin.Request) (Objec
 	ed := p.editor(req)
 	o, err := api.Get(ctx, ed.apiVersion(), ed.kind(req), routeNamespace(req), req.Params[ParamTrafficRoute])
 	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("%s %s/%s assente: va creata con l'infrastruttura, manent ne cambia solo i pesi", ed.kind(req), routeNamespace(req), req.Params[ParamTrafficRoute])
+		return nil, fmt.Errorf("%s %s/%s missing: it must be created with the infrastructure, manent changes only its weights", ed.kind(req), routeNamespace(req), req.Params[ParamTrafficRoute])
 	}
 	return o, err
 }
@@ -690,7 +690,7 @@ func (istioEditor) weight(vs Object, req *plugin.Request, cand string) (int, err
 		w = pct
 	}
 	if w == -2 {
-		return 0, errors.New("il VirtualService non ha route verso i subset a e b")
+		return 0, errors.New("the VirtualService has no routes to subsets a and b")
 	}
 	return w, nil
 }
@@ -725,7 +725,7 @@ func (istioEditor) setWeights(vs Object, req *plugin.Request, stable, cand strin
 		}
 	}
 	if !found {
-		return nil, false, fmt.Errorf("il VirtualService %s non ha route verso i subset a e b", vs.Name())
+		return nil, false, fmt.Errorf("VirtualService %s has no routes to subsets a and b", vs.Name())
 	}
 	return routePatch(vs, "http", entries), changed, nil
 }
@@ -760,7 +760,7 @@ func (istioEditor) testers(vs Object, req *plugin.Request, slot string) (map[str
 		entry["route"] = []any{route}
 	}
 	if !found {
-		return nil, fmt.Errorf("il VirtualService %s non ha una voce http con match sull'header dei tester (%s)", vs.Name(), req.Traffic.TesterHeader)
+		return nil, fmt.Errorf("VirtualService %s has no http entry matching the testers header (%s)", vs.Name(), req.Traffic.TesterHeader)
 	}
 	return routePatch(vs, "http", entries), nil
 }
@@ -855,7 +855,7 @@ func (g gatewayEditor) weight(route Object, req *plugin.Request, cand string) (i
 		w = pct
 	}
 	if w == -2 {
-		return 0, fmt.Errorf("la route non ha backendRefs %s-a e %s-b", g.service, g.service)
+		return 0, fmt.Errorf("the route has no backendRefs %s-a and %s-b", g.service, g.service)
 	}
 	return w, nil
 }
@@ -900,7 +900,7 @@ func (g gatewayEditor) setWeights(route Object, req *plugin.Request, stable, can
 		}
 	}
 	if !found {
-		return nil, false, fmt.Errorf("la route %s non ha backendRefs %s-a e %s-b", route.Name(), g.service, g.service)
+		return nil, false, fmt.Errorf("route %s has no backendRefs %s-a and %s-b", route.Name(), g.service, g.service)
 	}
 	return routePatch(route, "rules", rules), changed, nil
 }
@@ -928,7 +928,7 @@ func (g gatewayEditor) testers(route Object, req *plugin.Request, slot string) (
 		rule["backendRefs"] = []any{ref}
 	}
 	if !found {
-		return nil, fmt.Errorf("la route %s non ha una regola con match sull'header dei tester (%s)", route.Name(), req.Traffic.TesterHeader)
+		return nil, fmt.Errorf("route %s has no rule matching the testers header (%s)", route.Name(), req.Traffic.TesterHeader)
 	}
 	return routePatch(route, "rules", rules), nil
 }

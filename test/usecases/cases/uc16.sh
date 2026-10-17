@@ -65,7 +65,7 @@ id=$(submit "$(descriptor uc16-c uc16-web-300 $APP prod 3.0.0)")
 expect_eq "deploy in errore" "$(wait_state "$id" terminal 120)" ERROR
 st=$(manent status "$id")
 expect_eq "punteggio 50 sotto la soglia di superamento" "$(echo "$st" | jq -r '.rollout.stages[0].score')" 50
-expect_match "il gate cita le due metriche peggiori" "$(echo "$st" | jq -r '.error')" "punteggio 50/100; metric dd-errori.*metric nr-durata"
+expect_match "il gate cita le due metriche peggiori" "$(echo "$st" | jq -r '.error')" "score 50/100; metric dd-errori.*metric nr-durata"
 expect_eq "il traffico è tornato allo slot b" "$(uc16_weights)" "0 256"
 
 info "-- metrica critica peggiore su CloudWatch: stop immediato"
@@ -73,7 +73,7 @@ slot a low low low high
 id=$(submit "$(descriptor uc16-d uc16-web-400 $APP prod 4.0.0)")
 expect_eq "deploy in errore" "$(wait_state "$id" terminal 120)" ERROR
 st=$(manent status "$id")
-expect_match "fermato dalla metrica critica prima della fine del bake" "$(echo "$st" | jq -r '.error')" "dopo lo stadio .*metric cw-errori"
+expect_match "fermato dalla metrica critica prima della fine del bake" "$(echo "$st" | jq -r '.error')" "after stage .*metric cw-errori"
 expect_eq "il traffico è tornato allo slot b" "$(uc16_weights)" "0 256"
 expect_eq "la 2.0.0 resta in esercizio" "$(current eu1-b $APP)" 2.0.0
 

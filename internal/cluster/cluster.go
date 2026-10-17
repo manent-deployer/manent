@@ -104,12 +104,12 @@ type InUseError struct {
 }
 
 func (e *InUseError) Error() string {
-	return fmt.Sprintf("executor_id %q già in uso da un worker attivo (host %s, avviato %s, ultimo heartbeat %s): ogni worker deve avere un dbos.executor_id univoco (es. DBOS__VMID)",
+	return fmt.Sprintf("executor_id %q already in use by an active worker (host %s, started %s, last heartbeat %s): every worker must have a unique dbos.executor_id (e.g. DBOS__VMID)",
 		e.ID, e.Hostname, e.StartedAt.Format(time.RFC3339), e.HeartbeatAt.Format(time.RFC3339))
 }
 
 // ErrReplaced means another startup registered with the same executor_id.
-var ErrReplaced = errors.New("un altro processo si è registrato con lo stesso executor_id")
+var ErrReplaced = errors.New("another process registered with the same executor_id")
 
 // ClaimTimeout is the time after which a recovery not marked as done (e.g. because whoever
 // ran it crashed) no longer blocks the executor's registration.
@@ -138,7 +138,7 @@ func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 	}
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("registro executor: %w", err)
+		return nil, fmt.Errorf("executor registry: %w", err)
 	}
 	r := &SQL{db: db, now: time.Now}
 	if postgres {
@@ -168,7 +168,7 @@ func dataSource(url string) (driver, dsn string, postgres bool, err error) {
 			path = path[2:]
 		}
 		if path == "" || strings.Contains(path, ":memory:") {
-			return "", "", false, errors.New("registro executor: SQLite in memoria non supportato")
+			return "", "", false, errors.New("executor registry: in-memory SQLite not supported")
 		}
 		sep := "?"
 		if strings.Contains(path, "?") {
@@ -177,7 +177,7 @@ func dataSource(url string) (driver, dsn string, postgres bool, err error) {
 		// The file is shared with DBOS: wait for the lock instead of failing at once.
 		return "sqlite", path + sep + "_pragma=busy_timeout(10000)", false, nil
 	}
-	return "", "", false, fmt.Errorf("registro executor: database_url %q non supportato", url)
+	return "", "", false, fmt.Errorf("executor registry: database_url %q not supported", url)
 }
 
 // migrate creates schema and tables. Several workers started together can conflict on
@@ -219,7 +219,7 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 		}
 		time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
 	}
-	return fmt.Errorf("registro executor: creazione tabelle: %w", err)
+	return fmt.Errorf("executor registry: creating tables: %w", err)
 }
 
 // addColumns adds the columns introduced after the first registry version.
@@ -307,7 +307,7 @@ func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration
 			return false, nil
 		}
 	}
-	return false, fmt.Errorf("registro executor: registrazione di %q contesa da un altro processo", e.ID)
+	return false, fmt.Errorf("executor registry: registration of %q contended by another process", e.ID)
 }
 
 // Heartbeat implements Registry.

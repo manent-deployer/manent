@@ -76,13 +76,13 @@ type slackPayload struct {
 func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
-		http.Error(w, "richiesta non leggibile", http.StatusBadRequest)
+		http.Error(w, "unreadable request", http.StatusBadRequest)
 		return
 	}
 	secret, err := h.Secrets.Resolve(r.Context(), h.SigningSecretRef)
 	if err != nil {
 		h.Logger.Error("signing secret di Slack non disponibile", "error", err)
-		http.Error(w, "configurazione non disponibile", http.StatusServiceUnavailable)
+		http.Error(w, "configuration not available", http.StatusServiceUnavailable)
 		return
 	}
 	now := time.Now
@@ -96,12 +96,12 @@ func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	form, err := url.ParseQuery(string(body))
 	if err != nil {
-		http.Error(w, "payload non valido", http.StatusBadRequest)
+		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	var p slackPayload
 	if err := json.Unmarshal([]byte(form.Get("payload")), &p); err != nil {
-		http.Error(w, "payload non valido", http.StatusBadRequest)
+		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -157,7 +157,7 @@ func (h *Interactions) identity(ctx context.Context, user string) (Identity, err
 		return id, nil
 	}
 	if h.EmailIdentity == "" || h.API == nil {
-		return Identity{}, errors.New("utente non associato in integrations.slack.identities")
+		return Identity{}, errors.New("user not mapped in integrations.slack.identities")
 	}
 	email, err := h.API.UserEmail(ctx, user)
 	if err != nil {
@@ -170,7 +170,7 @@ func (h *Interactions) identity(ctx context.Context, user string) (Identity, err
 func (h *Interactions) respond(ctx context.Context, responseURL, text string) error {
 	u, err := url.Parse(responseURL)
 	if err != nil || u.Scheme != "https" && !(len(h.ResponseHosts) > 0 && u.Scheme == "http") {
-		return errors.New("response_url non valido")
+		return errors.New("invalid response_url")
 	}
 	hosts := h.ResponseHosts
 	if len(hosts) == 0 {
@@ -181,7 +181,7 @@ func (h *Interactions) respond(ctx context.Context, responseURL, text string) er
 		ok = ok || strings.EqualFold(u.Host, host)
 	}
 	if !ok {
-		return fmt.Errorf("response_url verso %s non ammesso", u.Host)
+		return fmt.Errorf("response_url to %s not allowed", u.Host)
 	}
 	_, err = postJSON(ctx, h.Client, responseURL, nil, map[string]any{
 		"response_type": "ephemeral", "replace_original": false, "text": text,

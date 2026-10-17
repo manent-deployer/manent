@@ -142,11 +142,11 @@ func TestDipendenze(t *testing.T) {
 	submit(f)
 	waitState(t, e, "f", StateWaitingDependency, nil)
 	close(step.gate("d"))
-	if _, err := e.Wait(ctx, "f"); err == nil || !strings.Contains(err.Error(), "dipendenze failed") {
+	if _, err := e.Wait(ctx, "f"); err == nil || !strings.Contains(err.Error(), "dependencies failed") {
 		t.Fatalf("atteso deploy non eseguito: %v", err)
 	}
 	st = waitState(t, e, "f", StateDependencyFailed, nil)
-	if !strings.Contains(st.Error, "d è concluso in ERROR") {
+	if !strings.Contains(st.Error, "d ended in ERROR") {
 		t.Errorf("motivo: %+v", st)
 	}
 

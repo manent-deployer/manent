@@ -154,7 +154,7 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 		pc := cfg.Plugins[name]
 		if extplugin.IsExternal(pc) {
 			if err := reg.Register(name, extplugin.NewFactory(name)); err != nil {
-				return nil, fmt.Errorf("plugin esterno: %w", err)
+				return nil, fmt.Errorf("external plugin: %w", err)
 			}
 		}
 		if err := reg.Activate(name, pc, log); err != nil {
@@ -329,7 +329,7 @@ func AuditKey(cfg *config.Config, sp secrets.Provider) ([]byte, error) {
 		return nil, fmt.Errorf("audit.hmac_key_ref: %w", err)
 	}
 	if len(v) < 16 {
-		return nil, errors.New("audit.hmac_key_ref: chiave troppo corta (almeno 16 byte)")
+		return nil, errors.New("audit.hmac_key_ref: key too short (at least 16 bytes)")
 	}
 	return []byte(v), nil
 }
@@ -386,7 +386,7 @@ func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker,
 				pool = x509.NewCertPool()
 			}
 			if !pool.AppendCertsFromPEM(pem) {
-				return nil, fmt.Errorf("rollout.elastic.ca_file %s: nessun certificato PEM", e.CAFile)
+				return nil, fmt.Errorf("rollout.elastic.ca_file %s: no PEM certificate", e.CAFile)
 			}
 			tr := http.DefaultTransport.(*http.Transport).Clone()
 			tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
@@ -424,7 +424,7 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 		if ec.Consul.TokenFile != "" {
 			b, err := os.ReadFile(ec.Consul.TokenFile)
 			if err != nil {
-				return r, fmt.Errorf("lettura token Consul: %w", err)
+				return r, fmt.Errorf("reading the Consul token: %w", err)
 			}
 			token = strings.TrimSpace(string(b))
 		}
@@ -668,7 +668,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		if reg != nil {
 			_ = reg.Close()
 		}
-		return nil, fmt.Errorf("avvio DBOS: %w", err)
+		return nil, fmt.Errorf("starting DBOS: %w", err)
 	}
 	svc := c.guard(eng)
 	return &App{
@@ -701,10 +701,10 @@ func NewClient(cfg *config.Config) (*App, error) {
 		// starts before the workers, it creates it as a worker would and retries. With the schema
 		// already there this is not needed: a role without DDL permissions never gets here.
 		if merr := engine.Migrate(cfg.DBOS.DatabaseURL, dbosLog); merr != nil {
-			return nil, fmt.Errorf("connessione al database DBOS: %w (creazione dello schema: %v)", err, merr)
+			return nil, fmt.Errorf("connecting to the DBOS database: %w (schema creation: %v)", err, merr)
 		}
 		if client, err = dbos.NewClient(context.Background(), clientCfg); err != nil {
-			return nil, fmt.Errorf("connessione al database DBOS: %w", err)
+			return nil, fmt.Errorf("connecting to the DBOS database: %w", err)
 		}
 	}
 	a := &App{
@@ -777,7 +777,7 @@ func (a *App) EnableStateMetrics() error {
 // Ready checks that the process can serve: it is not stopping and it reaches the database.
 func (a *App) Ready(context.Context) error {
 	if a.draining.Load() {
-		return errors.New("in arresto")
+		return errors.New("shutting down")
 	}
 	_, err := dbos.ListWorkflows(a.dbosClient(), dbos.WithFilterLimit(1), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	return err

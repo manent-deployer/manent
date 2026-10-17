@@ -482,7 +482,7 @@ func TestContenutoDiversoStessaVersione(t *testing.T) {
 	if err := os.WriteFile(req.Artifact.LocalPath, []byte("ricostruito"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "nuova versione") {
+	if _, err := p.Deploy(ctx, req); err == nil || !strings.Contains(err.Error(), "new version") {
 		t.Fatalf("atteso rifiuto: %v", err)
 	}
 	eq(t, "stato", f.state(), map[string]string{"shop-1.0.war": "on"})

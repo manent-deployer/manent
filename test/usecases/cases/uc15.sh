@@ -62,7 +62,7 @@ info "-- release difettosa: più errori 4xx sulla candidata, il gate la respinge
 id=$(submit "$(descriptor uc15-c uc15-web-300 $APP prod 3.0.0)")
 expect_eq "deploy in errore" "$(wait_state "$id" terminal 180)" ERROR
 st=$(manent status "$id")
-expect_match "il gate riporta la metrica critica con il p-value" "$(echo "$st" | jq -r '.error')" "metric errori[^;]*: candidata .* p=[0-9.e-]+ < 0\\.05"
+expect_match "il gate riporta la metrica critica con il p-value" "$(echo "$st" | jq -r '.error')" "metric errori[^;]*: candidate .* p=[0-9.e-]+ < 0\\.05"
 expect_eq "il traffico è tornato tutto allo slot b" "$(uc15_weights)" "0 256"
 expect_eq "ritorno alla versione stabile completato" "$(echo "$st" | jq -r '.rollout.rollback')" completed
 

@@ -106,7 +106,7 @@ func (s *ServiceNow) Open(ctx context.Context, r Request) (Ticket, error) {
 		Result []snRecord `json:"result"`
 	}
 	if _, err := doJSON(ctx, s.Client, http.MethodGet, s.base()+"?"+q.Encode(), auth, nil, &found); err != nil {
-		return Ticket{}, fmt.Errorf("ricerca del change: %w", err)
+		return Ticket{}, fmt.Errorf("searching the change: %w", err)
 	}
 	if len(found.Result) > 0 {
 		return s.ticket(found.Result[0]), nil
@@ -124,7 +124,7 @@ func (s *ServiceNow) Open(ctx context.Context, r Request) (Ticket, error) {
 		Result snRecord `json:"result"`
 	}
 	if _, err := doJSON(ctx, s.Client, http.MethodPost, s.base()+"?sysparm_fields="+snFields, auth, body, &created); err != nil {
-		return Ticket{}, fmt.Errorf("creazione del change: %w", err)
+		return Ticket{}, fmt.Errorf("creating the change: %w", err)
 	}
 	return s.ticket(created.Result), nil
 }
@@ -139,7 +139,7 @@ func (s *ServiceNow) Refresh(ctx context.Context, t Ticket) (Ticket, error) {
 		Result snRecord `json:"result"`
 	}
 	if _, err := doJSON(ctx, s.Client, http.MethodGet, s.base()+"/"+url.PathEscape(t.ID)+"?sysparm_fields="+snFields, auth, nil, &got); err != nil {
-		return t, fmt.Errorf("lettura del change %s: %w", t.Number, err)
+		return t, fmt.Errorf("reading change %s: %w", t.Number, err)
 	}
 	return s.ticket(got.Result), nil
 }
@@ -159,7 +159,7 @@ func (s *ServiceNow) Start(ctx context.Context, t Ticket) error {
 		return nil
 	}
 	if err := s.patch(ctx, t, map[string]any{"state": s.StartState, "work_notes": "Deployment started by manent."}); err != nil {
-		return fmt.Errorf("avvio del change %s: %w", t.Number, err)
+		return fmt.Errorf("starting change %s: %w", t.Number, err)
 	}
 	return nil
 }
@@ -189,7 +189,7 @@ func (s *ServiceNow) Close(ctx context.Context, t Ticket, o Outcome) error {
 			body["work_notes"] = notes
 		}
 		if err := s.patch(ctx, t, body); err != nil {
-			return fmt.Errorf("chiusura del change %s (stato %s): %w", t.Number, st, err)
+			return fmt.Errorf("closing change %s (state %s): %w", t.Number, st, err)
 		}
 	}
 	return nil

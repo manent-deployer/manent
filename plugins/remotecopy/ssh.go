@@ -34,7 +34,7 @@ func (d *SSHDialer) Dial(ctx context.Context, t plugin.Target, auth Auth) (Sessi
 	if auth.PrivateKey != "" {
 		signer, err := ssh.ParsePrivateKey([]byte(auth.PrivateKey))
 		if err != nil {
-			return nil, fmt.Errorf("chiave privata non valida: %w", err)
+			return nil, fmt.Errorf("invalid private key: %w", err)
 		}
 		methods = append(methods, ssh.PublicKeys(signer))
 	}

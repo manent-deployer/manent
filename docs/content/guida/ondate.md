@@ -156,7 +156,7 @@ dbos:
 
 - Regions of the same stage are updated in parallel; each pass downloads and verifies the artifact on its region's worker.
 - The orchestrator waits for the children durably: if it goes down, whoever resumes it finds the passes already started and does not repeat them. A lost region worker is resumed by [recovery](../operazioni/affidabilita.md) on the same queue, hence by another worker of the same region.
-- A region with no registered workers makes the pass fail with `nessun worker registrato per la region <region>`.
+- A region with no registered workers makes the pass fail with `no worker registered for region <region>`.
 - The health gate's HTTP probes (`probes`) on a region's targets are also run by a worker in that region, with a child workflow (`manent.gate-probe`) for each reading; metrics and alerts are read by the orchestrator, which therefore only needs to reach Prometheus and Alertmanager. As with passes, if the region has no active workers the reading waits for them to come back.
 - Logs written in the passes reach the deploy log at the end of each pass.
 - In multi-region setups all workers must have `region_routing: true` (and normally a `region`): a worker without routing would also listen to the region queues.

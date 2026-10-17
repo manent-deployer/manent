@@ -135,7 +135,7 @@ func loadConfig(path string) (ClientConfig, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		return cfg, fmt.Errorf("%s: configurazione del client non valida: %w", path, err)
+		return cfg, fmt.Errorf("%s: invalid client configuration: %w", path, err)
 	}
 	cfg.TokenFile, cfg.CAFile = expandHome(cfg.TokenFile), expandHome(cfg.CAFile)
 	return cfg, nil
@@ -163,7 +163,7 @@ func newClient(g *GlobalOptions) (*apiclient.Client, error) {
 	if tf := firstNonEmpty(g.TokenFile, cfg.TokenFile); tf != "" && (token == "" || g.TokenFile != "") {
 		b, err := os.ReadFile(tf)
 		if err != nil {
-			return nil, fmt.Errorf("lettura del token: %w", err)
+			return nil, fmt.Errorf("reading the token: %w", err)
 		}
 		token = strings.TrimSpace(string(b))
 	}
@@ -215,7 +215,7 @@ func follow(ctx context.Context, svc service.Service, sub *service.Submission, n
 	}
 	res, err := svc.Wait(ctx, sub.ID)
 	if err != nil {
-		return fmt.Errorf("%s %s fallito: %w", kind, sub.ID, err)
+		return fmt.Errorf("%s %s failed: %w", kind, sub.ID, err)
 	}
 	return cliutil.PrintJSON(res)
 }

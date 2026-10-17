@@ -87,7 +87,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 		for _, t := range raw {
 			s, ok := t.(string)
 			if !ok {
-				return nil, errors.New("artifact_types deve contenere stringhe")
+				return nil, errors.New("artifact_types must contain strings")
 			}
 			types = append(types, s)
 		}
@@ -105,22 +105,22 @@ func (p *Plugin) Supports(artifactType string) bool { return slices.Contains(p.t
 func (p *Plugin) Validate(req *plugin.Request) error {
 	var errs []error
 	if r := req.Params[ParamRuntime]; r != "" && r != "docker" && r != "podman" {
-		errs = append(errs, fmt.Errorf("%s %q non valido (docker|podman)", ParamRuntime, r))
+		errs = append(errs, fmt.Errorf("invalid %s %q (docker|podman)", ParamRuntime, r))
 	}
 	if !nameRe.MatchString(containerName(req)) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: ammessi lettere, cifre, '_', '.', '-'", ParamContainerName, containerName(req)))
+		errs = append(errs, fmt.Errorf("invalid %s %q: letters, digits, '_', '.', '-' are allowed", ParamContainerName, containerName(req)))
 	}
 	if !versionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e diventa un'etichetta del container: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and becomes a label of the container: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if req.Params[ParamSSHKeySecret] == "" && req.Params[ParamPasswordSecret] == "" {
-		errs = append(errs, fmt.Errorf("indicare %q o %q", ParamSSHKeySecret, ParamPasswordSecret))
+		errs = append(errs, fmt.Errorf("provide %q or %q", ParamSSHKeySecret, ParamPasswordSecret))
 	}
 	if (req.Params[ParamRegistryUser] == "") != (req.Params[ParamRegistrySecret] == "") {
-		errs = append(errs, fmt.Errorf("%q e %q vanno indicati insieme", ParamRegistryUser, ParamRegistrySecret))
+		errs = append(errs, fmt.Errorf("%q and %q must be set together", ParamRegistryUser, ParamRegistrySecret))
 	}
 	if req.Artifact.LocalPath != "" && !strings.HasSuffix(req.Artifact.LocalPath, plugin.ImageRefExt) {
-		errs = append(errs, errors.New("l'artefatto non è un'immagine di un registry: indicare artifact.source oci://registry/repository:tag"))
+		errs = append(errs, errors.New("the artifact is not a registry image: provide artifact.source oci://registry/repository:tag"))
 	}
 	for _, k := range []string{ParamWaitTimeout, ParamStableFor} {
 		if _, err := duration(req, k, 0); err != nil {
@@ -129,7 +129,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	}
 	for _, t := range req.Targets {
 		if t.User == "" {
-			errs = append(errs, fmt.Errorf("target %s: user obbligatorio", t.Host))
+			errs = append(errs, fmt.Errorf("target %s: user is required", t.Host))
 		}
 	}
 	return errors.Join(errs...)
@@ -149,7 +149,7 @@ func duration(req *plugin.Request, key string, def time.Duration) (time.Duration
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d <= 0 {
-		return 0, fmt.Errorf("%s %q non valido: atteso una durata positiva (es. 90s)", key, raw)
+		return 0, fmt.Errorf("invalid %s %q: expected a positive duration (e.g. 90s)", key, raw)
 	}
 	return d, nil
 }
@@ -180,7 +180,7 @@ func inspect(ctx context.Context, sess remotecopy.Session, rt, name string) (*ru
 	out, err := sess.Run(ctx, "if "+rt+" container inspect "+q(name)+" >/dev/null 2>&1; then "+
 		rt+" container inspect -f "+q(format)+" "+q(name)+"; fi")
 	if err != nil {
-		return nil, fmt.Errorf("lettura del container %s: %w", name, err)
+		return nil, fmt.Errorf("reading container %s: %w", name, err)
 	}
 	line := strings.TrimSpace(out)
 	if line == "" {
@@ -188,7 +188,7 @@ func inspect(ctx context.Context, sess remotecopy.Session, rt, name string) (*ru
 	}
 	parts := strings.SplitN(line, "|", 3)
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("stato del container %s non leggibile: %q", name, line)
+		return nil, fmt.Errorf("unreadable state of container %s: %q", name, line)
 	}
 	return &running{Version: parts[0], Image: parts[1], Status: parts[2]}, nil
 }
@@ -222,7 +222,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host, "rollback", rollback)
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 
@@ -249,7 +249,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	}
 	out, err := sess.Run(ctx, rt+" pull "+q(image))
 	if err != nil {
-		return details, fmt.Errorf("pull di %s: %w", image, err)
+		return details, fmt.Errorf("pulling %s: %w", image, err)
 	}
 	log.InfoContext(ctx, "immagine scaricata", "image", image, "output", lastLine(out))
 	run := []string{rt, "run", "-d", "--name", q(name), "--restart", "unless-stopped",
@@ -266,7 +266,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	}
 	// The previous container is removed only after a successful pull, to reduce downtime.
 	if _, err := sess.Run(ctx, rt+" rm -f "+q(name)+" >/dev/null 2>&1; "+strings.Join(run, " ")); err != nil {
-		return details, fmt.Errorf("avvio del container %s: %w", name, err)
+		return details, fmt.Errorf("starting container %s: %w", name, err)
 	}
 	log.InfoContext(ctx, "container avviato", "container", name, "image", image, "version", version)
 	state, err := p.wait(ctx, sess, rt, name, req)
@@ -289,7 +289,7 @@ func (p *Plugin) login(ctx context.Context, sess remotecopy.Session, rt string, 
 	}
 	sr, ok := sess.(remotecopy.StdinRunner)
 	if !ok {
-		return errors.New("la sessione SSH non supporta il login al registry")
+		return errors.New("the SSH session does not support registry login")
 	}
 	pw, err := req.Secrets.Secret(ctx, req.Params[ParamRegistrySecret])
 	if err != nil {
@@ -298,7 +298,7 @@ func (p *Plugin) login(ctx context.Context, sess remotecopy.Session, rt string, 
 	registry, _, _ := strings.Cut(image, "/")
 	q := remotecopy.ShellQuote
 	if _, err := sr.RunStdin(ctx, rt+" login -u "+q(user)+" --password-stdin "+q(registry), strings.NewReader(pw)); err != nil {
-		return fmt.Errorf("login al registry %s: %w", registry, err)
+		return fmt.Errorf("registry login %s: %w", registry, err)
 	}
 	return nil
 }
@@ -318,9 +318,9 @@ func (p *Plugin) wait(ctx context.Context, sess remotecopy.Session, rt, name str
 		out, err := sess.Run(ctx, rt+" container inspect -f "+q(format)+" "+q(name))
 		if err != nil {
 			if ctx.Err() != nil {
-				return last, fmt.Errorf("container %s non pronto entro %s (stato %s)", name, timeout, last)
+				return last, fmt.Errorf("container %s not ready within %s (state %s)", name, timeout, last)
 			}
-			return last, fmt.Errorf("stato del container %s: %w", name, err)
+			return last, fmt.Errorf("state of container %s: %w", name, err)
 		}
 		parts := strings.SplitN(strings.TrimSpace(out), "|", 3)
 		for len(parts) < 3 {
@@ -330,9 +330,9 @@ func (p *Plugin) wait(ctx context.Context, sess remotecopy.Session, rt, name str
 		last = strings.Trim(status+" "+health, " ")
 		switch {
 		case status == "exited" || status == "dead":
-			return last, fmt.Errorf("il container %s è terminato (stato %s)", name, status)
+			return last, fmt.Errorf("container %s has terminated (state %s)", name, status)
 		case health == "unhealthy":
-			return last, fmt.Errorf("il container %s è unhealthy", name)
+			return last, fmt.Errorf("container %s is unhealthy", name)
 		case status == "running" && health == "healthy":
 			return last, nil
 		case status == "running" && health == "":
@@ -346,7 +346,7 @@ func (p *Plugin) wait(ctx context.Context, sess remotecopy.Session, rt, name str
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("container %s non pronto entro %s (stato %s)", name, timeout, last)
+			return last, fmt.Errorf("container %s not ready within %s (state %s)", name, timeout, last)
 		case <-time.After(p.poll):
 		}
 	}
@@ -388,13 +388,13 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		desc = append(desc, r.version+" ("+r.image+") su "+strings.Join(hosts, ","))
 	}
 	slices.Sort(desc)
-	return nil, fmt.Errorf("release diverse sui target: %s", strings.Join(desc, "; "))
+	return nil, fmt.Errorf("different releases on the targets: %s", strings.Join(desc, "; "))
 }
 
 func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth remotecopy.Auth, req *plugin.Request) (*running, error) {
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 	return inspect(ctx, sess, runtime(req), containerName(req))
@@ -406,10 +406,10 @@ func (p *Plugin) currentOn(ctx context.Context, t plugin.Target, auth remotecopy
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	image := previous.Details[DetailImage]
 	if image == "" || !strings.Contains(image, "@sha256:") {
-		return nil, fmt.Errorf("release %s senza immagine fissata al digest: rollback impossibile", previous.Version)
+		return nil, fmt.Errorf("release %s without image pinned to the digest: rollback impossible", previous.Version)
 	}
 	if !versionRe.MatchString(previous.Version) {
-		return nil, fmt.Errorf("versione %q non valida", previous.Version)
+		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
 	auth, err := p.resolveAuth(ctx, req)
 	if err != nil {
@@ -454,14 +454,14 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 func (p *Plugin) check(ctx context.Context, t plugin.Target, auth remotecopy.Auth, req *plugin.Request) (map[string]string, error) {
 	sess, err := p.dialer.Dial(ctx, t, auth)
 	if err != nil {
-		return nil, fmt.Errorf("connessione: %w", err)
+		return nil, fmt.Errorf("connection: %w", err)
 	}
 	defer sess.Close()
 	rt := runtime(req)
 	details := map[string]string{"container": containerName(req)}
 	out, err := sess.Run(ctx, rt+" version --format '{{.Server.Version}}'")
 	if err != nil {
-		return details, fmt.Errorf("runtime %s non utilizzabile dall'utente %s: %w", rt, t.User, err)
+		return details, fmt.Errorf("runtime %s not usable by user %s: %w", rt, t.User, err)
 	}
 	details["runtime_version"] = strings.TrimSpace(out)
 	cur, err := inspect(ctx, sess, rt, containerName(req))

@@ -102,7 +102,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 			pool = x509.NewCertPool()
 		}
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("ca_file %s: nessun certificato PEM", f)
+			return nil, fmt.Errorf("ca_file %s: no PEM certificate", f)
 		}
 		tlsCfg.RootCAs = pool
 	}
@@ -112,7 +112,7 @@ func Factory(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, error) {
 	timeout := 10 * time.Minute
 	if s, _ := cfg["request_timeout"].(string); s != "" {
 		if timeout, err = time.ParseDuration(s); err != nil || timeout <= 0 {
-			return nil, fmt.Errorf("request_timeout %q non valido", s)
+			return nil, fmt.Errorf("invalid request_timeout %q", s)
 		}
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -146,7 +146,7 @@ func parse(req *plugin.Request) (options, error) {
 	var errs []error
 	o := options{username: req.Params[ParamUsername], passwordSecret: req.Params[ParamPasswordSecret], prefix: req.Application + "-"}
 	if o.username == "" || o.passwordSecret == "" {
-		errs = append(errs, fmt.Errorf("%s e %s obbligatori", ParamUsername, ParamPasswordSecret))
+		errs = append(errs, fmt.Errorf("%s and %s are required", ParamUsername, ParamPasswordSecret))
 	}
 	boolean := func(key string, def bool) bool {
 		raw := req.Params[key]
@@ -155,7 +155,7 @@ func parse(req *plugin.Request) (options, error) {
 		}
 		v, err := strconv.ParseBool(raw)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s %q non valido: atteso true o false", key, raw))
+			errs = append(errs, fmt.Errorf("invalid %s %q: expected true or false", key, raw))
 		}
 		return v
 	}
@@ -164,7 +164,7 @@ func parse(req *plugin.Request) (options, error) {
 	o.reload = boolean(ParamReload, false)
 	o.restart = boolean(ParamRestart, false)
 	if o.reload && o.restart {
-		errs = append(errs, fmt.Errorf("%s e %s sono alternativi: il restart ricarica già il server", ParamReload, ParamRestart))
+		errs = append(errs, fmt.Errorf("%s and %s are alternatives: restart already reloads the server", ParamReload, ParamRestart))
 	}
 	for _, g := range strings.Split(req.Params[ParamServerGroups], ",") {
 		if g = strings.TrimSpace(g); g != "" {
@@ -181,26 +181,26 @@ func parse(req *plugin.Request) (options, error) {
 	o.keep = defaultKeepReleases
 	if raw := req.Params[ParamKeepReleases]; raw != "" {
 		if o.keep, err = strconv.Atoi(raw); err != nil || o.keep < 2 {
-			errs = append(errs, fmt.Errorf("%s %q non valido: almeno 2, per conservare la versione precedente", ParamKeepReleases, raw))
+			errs = append(errs, fmt.Errorf("invalid %s %q: at least 2, to keep the previous version", ParamKeepReleases, raw))
 		}
 	}
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
-		errs = append(errs, errors.New("artifact.version è obbligatorio e diventa parte del nome del deployment: ammessi lettere, cifre, '.', '_', '+', '-'"))
+		errs = append(errs, errors.New("artifact.version is required and becomes part of the deployment name: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
 	if !pluginutil.VersionRe.MatchString(req.Application) {
-		errs = append(errs, fmt.Errorf("application %q non valida come nome di deployment", req.Application))
+		errs = append(errs, fmt.Errorf("application %q is not valid as a deployment name", req.Application))
 	}
 	o.ext = artifactExt(req.Artifact)
 	if o.ext == "" {
-		errs = append(errs, fmt.Errorf("estensione dell'artefatto non riconosciuta: ammesse %s (dal file o da artifact.type)", strings.Join(extensions, ", ")))
+		errs = append(errs, fmt.Errorf("unrecognized artifact extension: allowed %s (from the file or from artifact.type)", strings.Join(extensions, ", ")))
 	}
 	o.runtimeName = cmp.Or(req.Params[ParamRuntimeName], req.Application+o.ext)
 	if strings.ContainsAny(o.runtimeName, "/\\") || !slices.Contains(extensions, strings.ToLower(filepath.Ext(o.runtimeName))) {
-		errs = append(errs, fmt.Errorf("%s %q non valido: un nome di file con estensione %s", ParamRuntimeName, o.runtimeName, strings.Join(extensions, ", ")))
+		errs = append(errs, fmt.Errorf("invalid %s %q: a file name with extension %s", ParamRuntimeName, o.runtimeName, strings.Join(extensions, ", ")))
 	}
 	for _, t := range req.Targets {
 		if t.Host == "" || strings.ContainsAny(t.Host, "/?#@") {
-			errs = append(errs, fmt.Errorf("target %q non valido: host dell'interfaccia di management", t.Host))
+			errs = append(errs, fmt.Errorf("invalid target %q: host of the management interface", t.Host))
 		}
 	}
 	return o, errors.Join(errs...)
@@ -275,7 +275,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 		return nil, err
 	}
 	if len(req.Targets) == 0 {
-		return nil, errors.New("nessun target")
+		return nil, errors.New("no target")
 	}
 	s, err := p.open(ctx, req, o, req.Targets[0])
 	if err != nil {
@@ -313,7 +313,7 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 			}
 			details["server_state"] = state
 			if state != "running" {
-				return details, fmt.Errorf("server nello stato %q", state)
+				return details, fmt.Errorf("server in state %q", state)
 			}
 		}
 		deps, err := s.deployments(ctx)
@@ -366,11 +366,11 @@ func (s *session) mode() string {
 // open connects to the target, detects the mode and checks the server groups.
 func (p *Plugin) open(ctx context.Context, req *plugin.Request, o options, t plugin.Target) (*session, error) {
 	if req.Secrets == nil {
-		return nil, errors.New("secret resolver non disponibile")
+		return nil, errors.New("secret resolver not available")
 	}
 	pass, err := req.Secrets.Secret(ctx, o.passwordSecret)
 	if err != nil {
-		return nil, fmt.Errorf("segreto %s: %w", o.passwordSecret, err)
+		return nil, fmt.Errorf("secret %s: %w", o.passwordSecret, err)
 	}
 	scheme, port := "https", 9993
 	if !o.tls {
@@ -382,19 +382,19 @@ func (p *Plugin) open(ctx context.Context, req *plugin.Request, o options, t plu
 	base := scheme + "://" + net.JoinHostPort(t.Host, strconv.Itoa(port))
 	c, err := p.connector.Connect(ctx, base, o.username, pass)
 	if err != nil {
-		return nil, fmt.Errorf("connessione a %s: %w", base, err)
+		return nil, fmt.Errorf("connecting to %s: %w", base, err)
 	}
 	s := &session{c: c, groups: o.groups, host: t.Host, poll: p.poll,
 		log: p.logger.With("deployment", req.DeploymentID, "host", t.Host)}
 	launch, err := s.attribute(ctx, nil, "launch-type")
 	if err != nil {
-		return nil, fmt.Errorf("interfaccia di management %s: %w", base, err)
+		return nil, fmt.Errorf("management interface %s: %w", base, err)
 	}
 	switch launch {
 	case "DOMAIN":
 		s.domain = true
 		if len(o.groups) == 0 {
-			return nil, fmt.Errorf("%s è un domain controller: indicare %s", t.Host, ParamServerGroups)
+			return nil, fmt.Errorf("%s is a domain controller: provide %s", t.Host, ParamServerGroups)
 		}
 		for _, g := range o.groups {
 			if _, err := s.c.Execute(ctx, op("read-resource", Address{{"server-group", g}})); err != nil {
@@ -403,10 +403,10 @@ func (p *Plugin) open(ctx context.Context, req *plugin.Request, o options, t plu
 		}
 	case "STANDALONE":
 		if len(o.groups) > 0 {
-			return nil, fmt.Errorf("%s è un server standalone: %s vale solo in domain mode", t.Host, ParamServerGroups)
+			return nil, fmt.Errorf("%s is a standalone server: %s applies only in domain mode", t.Host, ParamServerGroups)
 		}
 	default:
-		return nil, fmt.Errorf("launch-type %q non supportato", launch)
+		return nil, fmt.Errorf("launch-type %q not supported", launch)
 	}
 	return s, nil
 }
@@ -419,7 +419,7 @@ func (s *session) attribute(ctx context.Context, addr Address, name string) (str
 	}
 	var v string
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return "", fmt.Errorf("attributo %s non leggibile: %s", name, raw)
+		return "", fmt.Errorf("unreadable attribute %s: %s", name, raw)
 	}
 	return v, nil
 }
@@ -454,7 +454,7 @@ func (s *session) deployments(ctx context.Context) (map[string]*deployment, erro
 		}
 		out := map[string]dmrDeployment{}
 		if err := json.Unmarshal(raw, &out); err != nil {
-			return nil, fmt.Errorf("elenco dei deployment non leggibile: %w", err)
+			return nil, fmt.Errorf("unreadable deployment list: %w", err)
 		}
 		return out, nil
 	}
@@ -539,12 +539,12 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 	target := deps[name]
 	switch {
 	case target == nil && sum == "":
-		return details, fmt.Errorf("il deployment %s non è più presente: impossibile riattivarlo", name)
+		return details, fmt.Errorf("deployment %s is no longer present: it cannot be reactivated", name)
 	case target != nil && sum != "" && target.Hash != sum:
 		// Same name but different content (e.g. artifact rebuilt with the same version): never
 		// replace the content of the active deployment without going through a version switch.
 		if target == cur {
-			return details, fmt.Errorf("il deployment attivo %s ha un contenuto diverso dall'artefatto: usare una nuova versione", name)
+			return details, fmt.Errorf("the active deployment %s has content different from the artifact: use a new version", name)
 		}
 		if err := s.remove(ctx, target); err != nil {
 			return details, err
@@ -561,7 +561,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 		}
 		target = deps[name]
 		if target == nil {
-			return details, fmt.Errorf("deployment %s non presente dopo il caricamento", name)
+			return details, fmt.Errorf("deployment %s not present after the upload", name)
 		}
 	}
 
@@ -578,7 +578,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 			// The server rolled the switch back: put the previous version back in service.
 			if rerr := s.resume(ctx); rerr != nil {
 				s.log.ErrorContext(ctx, "resume dopo un cambio di versione fallito", "error", rerr)
-				err = fmt.Errorf("%w; resume fallito: %v", err, rerr)
+				err = fmt.Errorf("%w; resume failed: %v", err, rerr)
 			}
 		}
 		return details, err
@@ -613,7 +613,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 func (s *session) add(ctx context.Context, path, name, runtimeName string) error {
 	hash, err := s.c.Upload(ctx, path)
 	if err != nil {
-		return fmt.Errorf("caricamento di %s: %w", filepath.Base(path), err)
+		return fmt.Errorf("uploading %s: %w", filepath.Base(path), err)
 	}
 	content := []map[string]any{{"hash": map[string]string{"BYTES_VALUE": hash}}}
 	params := []any{"content", content, "runtime-name", runtimeName}
@@ -677,7 +677,7 @@ func (s *session) swap(ctx context.Context, deps map[string]*deployment, runtime
 	}
 	_, err := s.c.Execute(ctx, op("composite", nil, "steps", steps))
 	if err != nil {
-		return fmt.Errorf("cambio di versione: %w", err)
+		return fmt.Errorf("version switch: %w", err)
 	}
 	return nil
 }
@@ -689,7 +689,7 @@ func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 	if s.domain {
 		for _, g := range s.groups {
 			if _, err := s.c.Execute(ctx, op("suspend-servers", Address{{"server-group", g}}, "suspend-timeout", secs)); err != nil {
-				return fmt.Errorf("suspend del server group %s: %w", g, err)
+				return fmt.Errorf("suspend of server group %s: %w", g, err)
 			}
 		}
 		s.log.InfoContext(ctx, "server group sospesi", "groups", s.groups)
@@ -722,7 +722,7 @@ func (s *session) resume(ctx context.Context) error {
 	if s.domain {
 		for _, g := range s.groups {
 			if _, err := s.c.Execute(ctx, op("resume-servers", Address{{"server-group", g}})); err != nil {
-				return fmt.Errorf("resume del server group %s: %w", g, err)
+				return fmt.Errorf("resume of server group %s: %w", g, err)
 			}
 		}
 		return nil
@@ -760,7 +760,7 @@ func (s *session) restartServer(ctx context.Context, wait time.Duration) error {
 func (s *session) groupOp(ctx context.Context, name string) error {
 	for _, g := range s.groups {
 		if _, err := s.c.Execute(ctx, op(name, Address{{"server-group", g}}, "blocking", true)); err != nil {
-			return fmt.Errorf("%s del server group %s: %w", name, g, err)
+			return fmt.Errorf("%s of server group %s: %w", name, g, err)
 		}
 	}
 	s.log.InfoContext(ctx, name+" completato", "groups", s.groups)
@@ -783,9 +783,9 @@ func (s *session) waitRunning(ctx context.Context, wait time.Duration) error {
 		}
 		if time.Now().After(deadline) {
 			if err != nil {
-				return fmt.Errorf("server non tornato in esecuzione entro %s: %w", wait, err)
+				return fmt.Errorf("server not running again within %s: %w", wait, err)
 			}
-			return fmt.Errorf("server non tornato in esecuzione entro %s: stato %q", wait, state)
+			return fmt.Errorf("server not running again within %s: state %q", wait, state)
 		}
 		if err := sleep(ctx, s.poll); err != nil {
 			return err
@@ -797,11 +797,11 @@ func (s *session) waitRunning(ctx context.Context, wait time.Duration) error {
 func (s *session) remove(ctx context.Context, d *deployment) error {
 	for g := range d.Groups {
 		if _, err := s.c.Execute(ctx, op("remove", Address{{"server-group", g}, {"deployment", d.Name}})); err != nil {
-			return fmt.Errorf("rimozione di %s dal server group %s: %w", d.Name, g, err)
+			return fmt.Errorf("removing %s from server group %s: %w", d.Name, g, err)
 		}
 	}
 	if _, err := s.c.Execute(ctx, op("remove", Address{{"deployment", d.Name}})); err != nil {
-		return fmt.Errorf("rimozione di %s: %w", d.Name, err)
+		return fmt.Errorf("removing %s: %w", d.Name, err)
 	}
 	return nil
 }
@@ -848,12 +848,12 @@ func (s *session) cleanup(ctx context.Context, o options, current, previous stri
 func contentHash(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("artefatto: %w", err)
+		return "", fmt.Errorf("artifact: %w", err)
 	}
 	defer f.Close()
 	h := sha1.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return "", fmt.Errorf("artefatto: %w", err)
+		return "", fmt.Errorf("artifact: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }

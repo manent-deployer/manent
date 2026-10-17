@@ -180,7 +180,7 @@ type Worker struct {
 // NewWorker creates the DBOS context and registers workflows and queue. Call Launch before use.
 func NewWorker(opts WorkerOptions) (*Worker, error) {
 	if opts.ExecutorID == "" {
-		return nil, fmt.Errorf("ExecutorID obbligatorio")
+		return nil, fmt.Errorf("ExecutorID is required")
 	}
 	ctx, err := newContextWithRetry(dbos.Config{
 		AppName:                  opts.AppName,
@@ -191,7 +191,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		SchedulerPollingInterval: opts.SchedulePollInterval,
 	}, opts.Logger)
 	if err != nil {
-		return nil, fmt.Errorf("inizializzazione DBOS: %w", err)
+		return nil, fmt.Errorf("DBOS initialization: %w", err)
 	}
 	w := &Worker{
 		dbos:            ctx,
@@ -251,17 +251,17 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		qopts = append(qopts, dbos.WithGlobalConcurrency(q.GlobalConcurrency))
 	}
 	if w.queue, err = dbos.RegisterQueue(ctx, q.Name, qopts...); err != nil {
-		return nil, fmt.Errorf("registrazione coda %q: %w", q.Name, err)
+		return nil, fmt.Errorf("registering queue %q: %w", q.Name, err)
 	}
 	if _, err = dbos.RegisterQueue(ctx, approvalQueue(q.Name)); err != nil {
-		return nil, fmt.Errorf("registrazione coda %q: %w", approvalQueue(q.Name), err)
+		return nil, fmt.Errorf("registering queue %q: %w", approvalQueue(q.Name), err)
 	}
 	if w.region != "" {
 		// The region's rollout passes: one at a time per application/environment/region.
 		rq := regionQueue(q.Name, w.region)
 		if _, err = dbos.RegisterQueue(ctx, rq, dbos.WithWorkerConcurrency(q.WorkerConcurrency),
 			dbos.WithPartitionConcurrency(1)); err != nil {
-			return nil, fmt.Errorf("registrazione coda %q: %w", rq, err)
+			return nil, fmt.Errorf("registering queue %q: %w", rq, err)
 		}
 	}
 	return w, nil
@@ -363,7 +363,7 @@ func (w *Worker) register() error {
 		switch {
 		case errors.As(err, &inUse):
 			if time.Now().After(inUseDeadline) {
-				return fmt.Errorf("registrazione del worker: %w", err)
+				return fmt.Errorf("worker registration: %w", err)
 			}
 			if !warned {
 				w.logger.Warn("executor_id registrato da un altro processo non arrestato: attesa che risulti perso (se è ancora attivo, assegnare un dbos.executor_id diverso)",
@@ -371,11 +371,11 @@ func (w *Worker) register() error {
 				warned = true
 			}
 		case err != nil:
-			return fmt.Errorf("registrazione del worker: %w", err)
+			return fmt.Errorf("worker registration: %w", err)
 		case ok:
 			return nil
 		case time.Now().After(deadline):
-			return errors.New("registrazione del worker: recovery dei suoi workflow ancora in corso")
+			return errors.New("worker registration: recovery of its workflows still in progress")
 		default:
 			w.logger.Warn("recovery dei workflow di questo executor in corso su un altro worker: attesa")
 		}
@@ -781,7 +781,7 @@ func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, app
 		}
 	}
 	if d.Traffic != nil && d.Traffic.Pool != nil && d.Rollout == nil {
-		return resolvedConfig{}, pipeline.Permanent(errors.New("traffic.pool richiede un rilascio a lotti (rollout.waves con maxUnavailable): senza, tutti i target verrebbero svuotati insieme"))
+		return resolvedConfig{}, pipeline.Permanent(errors.New("traffic.pool requires a batched release (rollout.waves with maxUnavailable): without it, all targets would be drained together"))
 	}
 	if d.Rollout != nil {
 		p, err := checkRollout(d, w.health, w.traffic)
@@ -854,11 +854,11 @@ type RollbackError struct {
 func (e *RollbackError) Error() string {
 	switch e.Status {
 	case RollbackFailed:
-		return fmt.Sprintf("%v; rollback fallito: %v", e.Err, e.Cause)
+		return fmt.Sprintf("%v; rollback failed: %v", e.Err, e.Cause)
 	case RollbackSkipped:
-		return fmt.Sprintf("%v; rollback: nessuna release da ripristinare", e.Err)
+		return fmt.Sprintf("%v; rollback: no release to restore", e.Err)
 	}
-	return fmt.Sprintf("%v; rollback completato", e.Err)
+	return fmt.Sprintf("%v; rollback completed", e.Err)
 }
 
 // Unwrap exposes both the step error and the rollback error.

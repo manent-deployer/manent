@@ -53,26 +53,26 @@ func validateHealthFlag(s map[string]string) error {
 	switch s[settingMode] {
 	case "", "http":
 		if !strings.Contains(s[settingDrainURL], "{host}") {
-			errs = append(errs, fmt.Errorf("%s obbligatorio, con {host}", settingDrainURL))
+			errs = append(errs, fmt.Errorf("%s is required, with {host}", settingDrainURL))
 		} else if err := checkURL(s, settingDrainURL, s[settingDrainURL]); err != nil {
 			errs = append(errs, err)
 		}
 	case "file":
 		if p := s[settingFlagPath]; !path.IsAbs(p) || strings.ContainsAny(p, "'\"$`\\ \n") {
-			errs = append(errs, fmt.Errorf("%s deve essere un percorso assoluto senza spazi né caratteri speciali", settingFlagPath))
+			errs = append(errs, fmt.Errorf("%s must be an absolute path without spaces or special characters", settingFlagPath))
 		}
 		if s[settingSSHKey] == "" && s[settingSSHPassword] == "" {
-			errs = append(errs, fmt.Errorf("%s o %s obbligatorio", settingSSHKey, settingSSHPassword))
+			errs = append(errs, fmt.Errorf("%s or %s is required", settingSSHKey, settingSSHPassword))
 		}
 	default:
-		errs = append(errs, fmt.Errorf("%s %q non valido (http|file)", settingMode, s[settingMode]))
+		errs = append(errs, fmt.Errorf("invalid %s %q (http|file)", settingMode, s[settingMode]))
 	}
 	if u := s[settingHealthURL]; u != "" && !strings.Contains(u, "://{host}") {
-		errs = append(errs, fmt.Errorf("%s deve essere http(s)://{host}...", settingHealthURL))
+		errs = append(errs, fmt.Errorf("%s must be http(s)://{host}...", settingHealthURL))
 	}
 	if d := s[settingDrainDelay]; d != "" {
 		if v, err := time.ParseDuration(d); err != nil || v < 0 || v > time.Hour {
-			errs = append(errs, fmt.Errorf("%s %q non valido", settingDrainDelay, d))
+			errs = append(errs, fmt.Errorf("invalid %s %q", settingDrainDelay, d))
 		}
 	}
 	return errors.Join(errs...)
@@ -132,7 +132,7 @@ func (p *healthFlagPool) each(ctx context.Context, members []string, drain bool)
 	for _, m := range members {
 		t, ok := p.targets[m]
 		if !ok {
-			return fmt.Errorf("membro %s non corrisponde ad alcun target", m)
+			return fmt.Errorf("member %s matches no target", m)
 		}
 		var err error
 		if p.s[settingMode] == "file" {
@@ -207,7 +207,7 @@ func (p *healthFlagPool) flagFile(ctx context.Context, t descriptor.Target, drai
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("%s: uscita %d: %s", cmd, code, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("%s: exit %d: %s", cmd, code, strings.TrimSpace(stderr.String()))
 	}
 	return nil
 }
@@ -218,7 +218,7 @@ func (p *healthFlagPool) Healthy(ctx context.Context, members []string) (map[str
 	for _, m := range members {
 		t, ok := p.targets[m]
 		if !ok {
-			return nil, fmt.Errorf("membro %s non corrisponde ad alcun target", m)
+			return nil, fmt.Errorf("member %s matches no target", m)
 		}
 		if p.s[settingHealthURL] == "" {
 			out[m] = true

@@ -132,7 +132,7 @@ func (d DefaultConnector) Connect(ctx context.Context, t plugin.Target, c Conn) 
 	}
 	client, err := winrm.NewClientWithParameters(ep, t.User, c.Password, params)
 	if err != nil {
-		return nil, fmt.Errorf("client WinRM: %w", err)
+		return nil, fmt.Errorf("WinRM client: %w", err)
 	}
 	return &winrmTransport{client: client, shell: c.Shell}, nil
 }
@@ -145,7 +145,7 @@ type sshTransport struct {
 func (s *sshTransport) Run(ctx context.Context, script string, data io.Reader) (string, error) {
 	sr, ok := s.sess.(remotecopy.StdinRunner)
 	if !ok {
-		return "", errors.New("sessione SSH senza stdin")
+		return "", errors.New("SSH session without stdin")
 	}
 	return sr.RunStdin(ctx, bootstrap(s.shell), stdin(script, data))
 }
@@ -164,7 +164,7 @@ func (w *winrmTransport) Run(ctx context.Context, script string, data io.Reader)
 		return stdout.String(), fmt.Errorf("WinRM: %w", err)
 	}
 	if code != 0 {
-		return stdout.String(), fmt.Errorf("uscita %d: %s", code, strings.TrimSpace(stderr.String()))
+		return stdout.String(), fmt.Errorf("exit %d: %s", code, strings.TrimSpace(stderr.String()))
 	}
 	return stdout.String(), nil
 }

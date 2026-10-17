@@ -109,7 +109,7 @@ func TestDeploy(t *testing.T) {
 	if p.Name() != "fake-ext" || !p.Supports("application") || p.Supports("container") {
 		t.Fatal("nome o tipi supportati inattesi")
 	}
-	if err := p.Validate(request(nil)); err == nil || !strings.Contains(err.Error(), "dest obbligatorio") {
+	if err := p.Validate(request(nil)); err == nil || !strings.Contains(err.Error(), "dest parameter is required") {
 		t.Fatalf("errore di validazione non propagato: %v", err)
 	}
 	res, err := p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "tok"}))
@@ -236,7 +236,7 @@ func TestAttivazioneErrori(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.(*Process).Close()
-	if err := d.Validate(request(nil)); err == nil || !strings.Contains(err.Error(), "configurazione rifiutata") {
+	if err := d.Validate(request(nil)); err == nil || !strings.Contains(err.Error(), "configuration rejected") {
 		t.Errorf("errore di configurazione non propagato: %v", err)
 	}
 }

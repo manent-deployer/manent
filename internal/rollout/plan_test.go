@@ -75,21 +75,21 @@ func TestPianoNonValido(t *testing.T) {
 	ts := topology()
 	r := designRollout()
 	r.Waves = r.Waves[:2] // eu-2 and us-1 without a wave
-	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "non appartiene ad alcuna ondata") {
+	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "belongs to no wave") {
 		t.Errorf("target scoperti: %v", err)
 	}
 	r = designRollout()
 	r.Waves[1].Select = "region=eu-1" // the canary is in two waves
-	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "sia da") {
+	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "both by") {
 		t.Errorf("sovrapposizione: %v", err)
 	}
 	r = designRollout()
 	r.Waves = append(r.Waves, descriptor.Wave{Name: "vuota", Select: "region=ap-1"})
-	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "non seleziona") {
+	if _, err := Build(ts, r); err == nil || !strings.Contains(err.Error(), "selects no target") {
 		t.Errorf("ondata vuota: %v", err)
 	}
 	ts[3].Labels = map[string]string{"region": "us-1"} // without az
-	if _, err := Build(ts, designRollout()); err == nil || !strings.Contains(err.Error(), "etichette") {
+	if _, err := Build(ts, designRollout()); err == nil || !strings.Contains(err.Error(), "region and az labels") {
 		t.Errorf("etichette mancanti: %v", err)
 	}
 	r = designRollout()

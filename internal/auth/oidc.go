@@ -40,20 +40,20 @@ type OIDC struct {
 // change (rotation).
 func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 	if cfg.Issuer == "" || cfg.Audience == "" {
-		return nil, errors.New("oidc: issuer e audience obbligatori")
+		return nil, errors.New("oidc: issuer and audience are required")
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	if cfg.CAFile != "" {
 		pem, err := os.ReadFile(cfg.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("oidc: lettura ca_file: %w", err)
+			return nil, fmt.Errorf("oidc: reading ca_file: %w", err)
 		}
 		pool, err := x509.SystemCertPool()
 		if err != nil {
 			pool = x509.NewCertPool()
 		}
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, errors.New("oidc: ca_file non contiene certificati PEM")
+			return nil, errors.New("oidc: ca_file contains no PEM certificates")
 		}
 		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}
 	}
@@ -61,7 +61,7 @@ func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 	ctx = oidc.ClientContext(context.WithoutCancel(ctx), client)
 	provider, err := oidc.NewProvider(ctx, cfg.Issuer)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: discovery di %s: %w", cfg.Issuer, err)
+		return nil, fmt.Errorf("oidc: discovery of %s: %w", cfg.Issuer, err)
 	}
 	o := &OIDC{
 		verifier:      provider.Verifier(&oidc.Config{ClientID: cfg.Audience}),
@@ -85,11 +85,11 @@ func (o *OIDC) Authenticate(ctx context.Context, token string) (*Principal, erro
 	}
 	tok, err := o.verifier.Verify(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("token OIDC non valido: %w", err)
+		return nil, fmt.Errorf("invalid OIDC token: %w", err)
 	}
 	var claims map[string]any
 	if err := tok.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("claim OIDC non leggibili: %w", err)
+		return nil, fmt.Errorf("unreadable OIDC claims: %w", err)
 	}
 	p := &Principal{Subject: tok.Subject, Method: MethodOIDC}
 	if v, ok := claims[o.usernameClaim].(string); ok && v != "" {

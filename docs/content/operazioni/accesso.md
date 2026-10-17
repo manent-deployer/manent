@@ -202,7 +202,7 @@ The `comment` field holds the comment of an approval or the reason for a freeze 
 ```json title="Audit entry"
 {"time": "2026-10-09T21:42:46.02513Z", "actor": "token:ci-pipeline", "action": "deployment.submit",
  "outcome": "denied", "application": "myapp", "environment": "prod",
- "reason": "permesso negato: token:ci-pipeline non può eseguire deployment.submit su myapp/prod"}
+ "reason": "permission denied: token:ci-pipeline cannot perform deployment.submit on myapp/prod"}
 ```
 
 Entries go:

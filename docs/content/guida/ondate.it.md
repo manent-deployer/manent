@@ -156,7 +156,7 @@ dbos:
 
 - Le region dello stesso stadio sono aggiornate in parallelo; ogni passo scarica e verifica l'artefatto sul worker della sua region.
 - L'orchestratore attende i figli in modo durevole: se cade, chi lo riprende ritrova i passi già avviati e non li ripete. Un worker di region perso viene ripreso dalla [recovery](../operazioni/affidabilita.md) sulla stessa coda, quindi da un altro worker della stessa region.
-- Una region senza worker registrati fa fallire il passo con `nessun worker registrato per la region <region>`.
+- Una region senza worker registrati fa fallire il passo con `no worker registered for region <region>`.
 - Anche le sonde HTTP dell'health gate (`probes`) sui target di una region sono eseguite da un worker di quella region, con un workflow figlio (`manent.gate-probe`) per ogni lettura; metriche e allarmi li legge l'orchestratore, che quindi deve raggiungere solo Prometheus e Alertmanager. Come per i passi, se la region non ha worker attivi la lettura attende il loro ritorno.
 - I log scritti nei passi arrivano al log del deploy alla fine di ciascun passo.
 - In multi-region tutti i worker devono avere `region_routing: true` (e di norma una `region`): un worker senza instradamento ascolterebbe anche le code delle region.

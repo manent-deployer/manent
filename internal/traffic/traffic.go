@@ -140,7 +140,7 @@ func (p *Providers) Check(c *descriptor.TrafficConfig) error {
 	if c.Pool != nil {
 		pr, ok := p.Pools[c.Pool.Provider]
 		if !ok {
-			errs = append(errs, fmt.Errorf("traffic.pool.provider %q sconosciuto (%s)", c.Pool.Provider, strings.Join(slices.Sorted(maps.Keys(p.Pools)), ", ")))
+			errs = append(errs, fmt.Errorf("unknown traffic.pool.provider %q (%s)", c.Pool.Provider, strings.Join(slices.Sorted(maps.Keys(p.Pools)), ", ")))
 		} else if pr.Validate != nil {
 			if err := pr.Validate(c.Pool.Settings); err != nil {
 				errs = append(errs, fmt.Errorf("traffic.pool (%s): %w", c.Pool.Provider, err))
@@ -150,7 +150,7 @@ func (p *Providers) Check(c *descriptor.TrafficConfig) error {
 	if c.Router != nil {
 		pr, ok := p.Routers[c.Router.Provider]
 		if !ok {
-			errs = append(errs, fmt.Errorf("traffic.router.provider %q sconosciuto (%s)", c.Router.Provider, strings.Join(slices.Sorted(maps.Keys(p.Routers)), ", ")))
+			errs = append(errs, fmt.Errorf("unknown traffic.router.provider %q (%s)", c.Router.Provider, strings.Join(slices.Sorted(maps.Keys(p.Routers)), ", ")))
 		} else if pr.Validate != nil {
 			if err := pr.Validate(c.Router.Settings); err != nil {
 				errs = append(errs, fmt.Errorf("traffic.router (%s): %w", c.Router.Provider, err))
@@ -164,7 +164,7 @@ func (p *Providers) Check(c *descriptor.TrafficConfig) error {
 func (p *Providers) Pool(ctx context.Context, c *descriptor.PoolConfig, env Env) (Pool, error) {
 	pr, ok := p.Pools[c.Provider]
 	if !ok {
-		return nil, fmt.Errorf("traffic.pool.provider %q sconosciuto", c.Provider)
+		return nil, fmt.Errorf("unknown traffic.pool.provider %q", c.Provider)
 	}
 	env.Settings = c.Settings
 	env.Member = c.MemberName
@@ -175,7 +175,7 @@ func (p *Providers) Pool(ctx context.Context, c *descriptor.PoolConfig, env Env)
 func (p *Providers) Router(ctx context.Context, c *descriptor.RouterConfig, env Env) (Router, error) {
 	pr, ok := p.Routers[c.Provider]
 	if !ok {
-		return nil, fmt.Errorf("traffic.router.provider %q sconosciuto", c.Provider)
+		return nil, fmt.Errorf("unknown traffic.router.provider %q", c.Provider)
 	}
 	env.Settings = c.Settings
 	// The server name of a target in load balancer routers (member setting, default "{host}").
@@ -194,7 +194,7 @@ func Capacity(all []Member, drain []string, minHealthy int) error {
 		}
 	}
 	if in < minHealthy {
-		return fmt.Errorf("capacità insufficiente: svuotando %s resterebbero in servizio %d membri sani su %d, minimo %d",
+		return fmt.Errorf("insufficient capacity: draining %s would leave %d healthy members in service out of %d, minimum %d",
 			strings.Join(drain, ", "), in, len(all), minHealthy)
 	}
 	return nil
@@ -221,7 +221,7 @@ func httpClient(settings map[string]string, timeout time.Duration) (*http.Client
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("ca_file %s: nessun certificato", f)
+			return nil, fmt.Errorf("ca_file %s: no certificate", f)
 		}
 		tc.RootCAs = pool
 	}
@@ -245,7 +245,7 @@ func checkURL(settings map[string]string, key, u string) error {
 	case strings.HasPrefix(u, "http://") && settings["allow_http"] == "true":
 		return nil
 	}
-	return fmt.Errorf("%s %q: serve un URL https (http solo con allow_http: \"true\")", key, u)
+	return fmt.Errorf("%s %q: an https URL is required (http only with allow_http: \"true\")", key, u)
 }
 
 // splitList reads a comma-separated list.

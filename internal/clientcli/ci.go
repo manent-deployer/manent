@@ -32,7 +32,7 @@ func (c *DeployCmd) report() (ciReport, error) {
 	case os.Getenv("GITLAB_CI") == "true":
 		r.outputs = cmp.Or(r.outputs, os.Getenv("MANENT_DOTENV"), "manent.env")
 	default:
-		return r, errors.New("--ci: né GitHub Actions (GITHUB_ACTIONS) né GitLab CI (GITLAB_CI) riconosciuti")
+		return r, errors.New("--ci: neither GitHub Actions (GITHUB_ACTIONS) nor GitLab CI (GITLAB_CI) detected")
 	}
 	return r, nil
 }
@@ -61,7 +61,7 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 		}
 		for _, l := range lines {
 			if strings.ContainsAny(l, "\r\n") {
-				return fmt.Errorf("valore non scrivibile in %s: %q", r.outputs, l)
+				return fmt.Errorf("value cannot be written to %s: %q", r.outputs, l)
 			}
 		}
 		errs = append(errs, appendFile(r.outputs, strings.Join(lines, "\n")+"\n"))
@@ -92,7 +92,7 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 func appendFile(path, text string) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("file degli esiti %s: %w", path, err)
+		return fmt.Errorf("outputs file %s: %w", path, err)
 	}
 	_, err = f.WriteString(text)
 	return errors.Join(err, f.Close())

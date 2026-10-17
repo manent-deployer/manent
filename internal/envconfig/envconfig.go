@@ -20,7 +20,7 @@ import (
 )
 
 // ErrNotFound means the application/environment has no configuration.
-var ErrNotFound = errors.New("configurazione di ambiente non trovata")
+var ErrNotFound = errors.New("environment configuration not found")
 
 // EnvConfig is the deploy configuration of an environment: plugin, targets and plugin
 // parameters. It must not contain secret values, only references: DBOS persists it as step output.
@@ -62,7 +62,7 @@ func Parse(data []byte) (EnvConfig, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&c); err != nil {
-		return c, fmt.Errorf("configurazione di ambiente non valida: %w", err)
+		return c, fmt.Errorf("invalid environment configuration: %w", err)
 	}
 	return c, nil
 }
@@ -80,7 +80,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	var errs []error
 	pick := func(field, env, desc string) string {
 		if env != "" && desc != "" && env != desc {
-			errs = append(errs, fmt.Errorf("%s: %q nella configurazione di ambiente, %q nel descrittore", field, env, desc))
+			errs = append(errs, fmt.Errorf("%s: %q in the environment configuration, %q in the descriptor", field, env, desc))
 		}
 		if env != "" {
 			return env
@@ -92,7 +92,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 
 	if len(c.Targets) > 0 {
 		if len(d.Deploy.Targets) > 0 && !slices.EqualFunc(c.Targets, d.Deploy.Targets, descriptor.Target.Equal) {
-			errs = append(errs, errors.New("deploy.targets definiti sia nella configurazione di ambiente sia nel descrittore"))
+			errs = append(errs, errors.New("deploy.targets defined both in the environment configuration and in the descriptor"))
 		}
 		d.Deploy.Targets = slices.Clone(c.Targets)
 	}
@@ -103,7 +103,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	}
 	for _, k := range slices.Sorted(maps.Keys(c.Params)) {
 		if v, ok := params[k]; ok && v != c.Params[k] {
-			errs = append(errs, fmt.Errorf("deploy.params.%s: valore diverso tra configurazione di ambiente e descrittore", k))
+			errs = append(errs, fmt.Errorf("deploy.params.%s: value differs between environment configuration and descriptor", k))
 		}
 		params[k] = c.Params[k]
 	}
@@ -120,7 +120,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 			}
 			for _, k := range slices.Sorted(maps.Keys(c.StepParams[step])) {
 				if v, ok := sp[step][k]; ok && v != c.StepParams[step][k] {
-					errs = append(errs, fmt.Errorf("stepParams.%s.%s: valore diverso tra configurazione di ambiente e descrittore", step, k))
+					errs = append(errs, fmt.Errorf("stepParams.%s.%s: value differs between environment configuration and descriptor", step, k))
 				}
 				sp[step][k] = c.StepParams[step][k]
 			}
@@ -135,7 +135,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		case i < 0:
 			secrets = append(secrets, s)
 		case secrets[i].Ref != s.Ref:
-			errs = append(errs, fmt.Errorf("secrets.%s: riferimento diverso tra configurazione di ambiente e descrittore", s.Name))
+			errs = append(errs, fmt.Errorf("secrets.%s: reference differs between environment configuration and descriptor", s.Name))
 		}
 	}
 	d.Secrets = secrets
@@ -147,13 +147,13 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		}
 		if e := c.Rollback.Enabled; e != nil {
 			if rb.Enabled != nil && *rb.Enabled != *e {
-				errs = append(errs, fmt.Errorf("rollback.enabled: %t nella configurazione di ambiente, %t nel descrittore", *e, *rb.Enabled))
+				errs = append(errs, fmt.Errorf("rollback.enabled: %t in the environment configuration, %t in the descriptor", *e, *rb.Enabled))
 			}
 			rb.Enabled = e
 		}
 		if len(c.Rollback.On) > 0 {
 			if len(rb.On) > 0 && !slices.Equal(rb.On, c.Rollback.On) {
-				errs = append(errs, errors.New("rollback.on definito sia nella configurazione di ambiente sia nel descrittore"))
+				errs = append(errs, errors.New("rollback.on defined both in the environment configuration and in the descriptor"))
 			}
 			rb.On = slices.Clone(c.Rollback.On)
 		}
@@ -164,14 +164,14 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	if c.Rollout != nil {
 		// The environment strategy is authoritative: the descriptor can only repeat it unchanged.
 		if d.Rollout != nil && !reflect.DeepEqual(*d.Rollout, *c.Rollout) {
-			errs = append(errs, errors.New("rollout definito sia nella configurazione di ambiente sia nel descrittore"))
+			errs = append(errs, errors.New("rollout defined both in the environment configuration and in the descriptor"))
 		}
 		r := *c.Rollout
 		d.Rollout = &r
 	}
 	// Load balancers and routers are infrastructure: only the environment configuration defines them.
 	if d.Traffic != nil {
-		errs = append(errs, errors.New("traffic si configura solo nella configurazione di ambiente, non nel descrittore"))
+		errs = append(errs, errors.New("traffic is configured only in the environment configuration, not in the descriptor"))
 	}
 	d.Traffic = nil
 	if c.Traffic != nil {
@@ -182,10 +182,10 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		d.Traffic = &t
 	}
 	if len(d.Deploy.Targets) == 0 {
-		errs = append(errs, errors.New("nessun target di deploy: né nella configurazione di ambiente né nel descrittore"))
+		errs = append(errs, errors.New("no deploy targets: neither in the environment configuration nor in the descriptor"))
 	}
 	if err := errors.Join(errs...); err != nil {
-		return d, fmt.Errorf("configurazione di ambiente incompatibile con il descrittore: %w", err)
+		return d, fmt.Errorf("environment configuration incompatible with the descriptor: %w", err)
 	}
 	return d, nil
 }

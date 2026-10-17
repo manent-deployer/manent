@@ -49,7 +49,7 @@ func (c *ReleaseSubmitCmd) Execute([]string) error {
 			return err
 		}
 		if rs.State != service.StateSuccess {
-			return fmt.Errorf("release %s conclusa in %s: %s", rs.ID, rs.State, rs.Error)
+			return fmt.Errorf("release %s ended in %s: %s", rs.ID, rs.State, rs.Error)
 		}
 		return nil
 	})
@@ -77,7 +77,7 @@ func followRelease(ctx context.Context, svc service.Service, rs *service.Release
 		}
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("release %s ancora in corso: %w", rs.ID, ctx.Err())
+			return nil, fmt.Errorf("release %s still running: %w", rs.ID, ctx.Err())
 		case <-t.C:
 		}
 		next, err := svc.ReleaseStatus(ctx, rs.ID)

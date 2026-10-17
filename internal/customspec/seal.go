@@ -35,7 +35,7 @@ func Decode(doc string) (Document, error) {
 	dec := json.NewDecoder(strings.NewReader(doc))
 	dec.UseNumber() // numbers of the JSON body stay exact
 	if err := dec.Decode(&d); err != nil {
-		return d, fmt.Errorf("specifica dello step non leggibile: %w", err)
+		return d, fmt.Errorf("unreadable step specification: %w", err)
 	}
 	return d, nil
 }
@@ -70,14 +70,14 @@ func (k Keys) Verify(doc, sig string) error {
 		return nil
 	}
 	if sig == "" {
-		return errors.New("specifica dello step non firmata: con pipeline.custom.spec_key_refs ogni specifica deve essere firmata")
+		return errors.New("unsigned step specification: with pipeline.custom.spec_key_refs every specification must be signed")
 	}
 	for _, key := range k {
 		if hmac.Equal([]byte(mac(key, doc)), []byte(sig)) {
 			return nil
 		}
 	}
-	return errors.New("firma della specifica dello step non valida: il piano è stato alterato o la chiave non è più tra quelle configurate")
+	return errors.New("invalid step specification signature: the plan was altered or the key is no longer among the configured ones")
 }
 
 func mac(key []byte, doc string) string {
@@ -95,7 +95,7 @@ func (s Spec) EffectiveParams(values map[string]string, complete bool) (map[stri
 	var errs []error
 	for _, k := range slices.Sorted(maps.Keys(values)) {
 		if _, ok := s.Params[k]; !ok {
-			errs = append(errs, fmt.Errorf("parametro %q non dichiarato dallo step", k))
+			errs = append(errs, fmt.Errorf("parameter %q not declared by the step", k))
 		}
 	}
 	for _, k := range slices.Sorted(maps.Keys(s.Params)) {
@@ -106,17 +106,17 @@ func (s Spec) EffectiveParams(values map[string]string, complete bool) (map[stri
 		}
 		if v == "" {
 			if p.Required && complete {
-				errs = append(errs, fmt.Errorf("parametro %q obbligatorio", k))
+				errs = append(errs, fmt.Errorf("parameter %q is required", k))
 			}
 			continue
 		}
 		re, err := Compile(p.Pattern)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("parametro %q: %w", k, err))
+			errs = append(errs, fmt.Errorf("parameter %q: %w", k, err))
 			continue
 		}
 		if !re.MatchString(v) {
-			errs = append(errs, fmt.Errorf("parametro %q: valore non conforme al pattern dello step", k))
+			errs = append(errs, fmt.Errorf("parameter %q: value does not match the step pattern", k))
 			continue
 		}
 		out[k] = v
@@ -148,7 +148,7 @@ type PathStep struct {
 // wildcards, so the extracted value is always a single one.
 func ParsePath(p string) ([]PathStep, error) {
 	if !strings.HasPrefix(p, "$") {
-		return nil, errors.New("il percorso inizia con $")
+		return nil, errors.New("the path starts with $")
 	}
 	var out []PathStep
 	rest := p[1:]
@@ -161,34 +161,34 @@ func ParsePath(p string) ([]PathStep, error) {
 			}
 			key := rest[1 : end+1]
 			if key == "" || key == "*" {
-				return nil, fmt.Errorf("chiave vuota o non ammessa in %q", p)
+				return nil, fmt.Errorf("empty or disallowed key in %q", p)
 			}
 			out = append(out, PathStep{Key: key, IsKey: true})
 			rest = rest[end+1:]
 		case strings.HasPrefix(rest, `["`):
 			end := strings.Index(rest, `"]`)
 			if end < 2 {
-				return nil, fmt.Errorf("chiave tra parentesi non chiusa in %q", p)
+				return nil, fmt.Errorf("unclosed bracketed key in %q", p)
 			}
 			out = append(out, PathStep{Key: rest[2:end], IsKey: true})
 			rest = rest[end+2:]
 		case rest[0] == '[':
 			end := strings.Index(rest, "]")
 			if end < 0 {
-				return nil, fmt.Errorf("indice non chiuso in %q", p)
+				return nil, fmt.Errorf("unclosed index in %q", p)
 			}
 			i, err := strconv.Atoi(rest[1:end])
 			if err != nil || i < 0 {
-				return nil, fmt.Errorf("indice non valido in %q", p)
+				return nil, fmt.Errorf("invalid index in %q", p)
 			}
 			out = append(out, PathStep{Index: i})
 			rest = rest[end+1:]
 		default:
-			return nil, fmt.Errorf("percorso non valido: %q", p)
+			return nil, fmt.Errorf("invalid path: %q", p)
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("il percorso deve indicare almeno un campo")
+		return nil, errors.New("the path must name at least one field")
 	}
 	return out, nil
 }

@@ -67,7 +67,7 @@ func (e *Engine) Steps(_ context.Context, id string) ([]StepRecord, error) {
 // Logs implements InsightService.
 func (e *Engine) Logs(_ context.Context, id string, offset int) (*deploylog.Page, error) {
 	if offset < 0 {
-		return nil, fmt.Errorf("%w: offset negativo", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: negative offset", ErrInvalidRequest)
 	}
 	w, err := e.workflowFor(id)
 	if err != nil {

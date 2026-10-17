@@ -78,13 +78,13 @@ func (p *manentProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	if file := cmp.Or(m.TokenFile.ValueString(), os.Getenv("MANENT_TOKEN_FILE")); token == "" && file != "" {
 		raw, err := os.ReadFile(file)
 		if err != nil {
-			resp.Diagnostics.AddError("token_file non leggibile", err.Error())
+			resp.Diagnostics.AddError("unreadable token_file", err.Error())
 			return
 		}
 		token = strings.TrimSpace(string(raw))
 	}
 	if server == "" {
-		resp.Diagnostics.AddError("server mancante", "indicare server nel provider o la variabile MANENT_SERVER")
+		resp.Diagnostics.AddError("missing server", "set server in the provider or the MANENT_SERVER variable")
 		return
 	}
 	c, err := apiclient.NewWithOptions(apiclient.Options{Server: server, Token: token, CAFile: cmp.Or(m.CAFile.ValueString(), os.Getenv("MANENT_CA_FILE"))})

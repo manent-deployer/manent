@@ -61,7 +61,7 @@ func (f DefaultFetcher) Fetch(ctx context.Context, source, destDir string) (*Fet
 		err = cerr
 	}
 	if err != nil {
-		return nil, fmt.Errorf("copia artefatto: %w", err)
+		return nil, fmt.Errorf("copying the artifact: %w", err)
 	}
 	if err := os.Rename(tmp.Name(), dest); err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 		}
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
-			return nil, "", fmt.Errorf("download artefatto: status %d", resp.StatusCode)
+			return nil, "", fmt.Errorf("artifact download: status %d", resp.StatusCode)
 		}
 		return resp.Body, filepath.Base(req.URL.Path), nil
 	}
@@ -137,10 +137,10 @@ func (s *Store) Ensure(ctx context.Context, deploymentID, source, localPath, sha
 	}
 	f, err := s.Fetch(ctx, deploymentID, source)
 	if err != nil {
-		return "", false, fmt.Errorf("artefatto assente sul worker, nuovo download fallito: %w", err)
+		return "", false, fmt.Errorf("artifact missing on the worker, new download failed: %w", err)
 	}
 	if !strings.EqualFold(f.SHA256, sha256) {
-		return "", false, fmt.Errorf("artefatto riscaricato con sha256 %s diverso da quello registrato %s: la sorgente è cambiata", f.SHA256, sha256)
+		return "", false, fmt.Errorf("artifact downloaded again with sha256 %s, different from the recorded %s: the source has changed", f.SHA256, sha256)
 	}
 	return f.LocalPath, true, nil
 }
@@ -148,7 +148,7 @@ func (s *Store) Ensure(ctx context.Context, deploymentID, source, localPath, sha
 // Cleanup removes the deploy's working directory from the current worker.
 func (s *Store) Cleanup(_ context.Context, deploymentID string) error {
 	if deploymentID == "" || strings.ContainsAny(deploymentID, `/\`) || deploymentID == "." || deploymentID == ".." {
-		return fmt.Errorf("ID di deploy %q non utilizzabile come directory", deploymentID)
+		return fmt.Errorf("deploy ID %q cannot be used as a directory", deploymentID)
 	}
 	return os.RemoveAll(s.dir(deploymentID))
 }

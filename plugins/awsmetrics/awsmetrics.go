@@ -59,7 +59,7 @@ func (s *Source) client(ctx context.Context) (API, error) {
 		// The client lives longer than the gate read that creates it.
 		cfg, err := awsauth.Config(context.WithoutCancel(ctx), s.Region, req)
 		if err != nil {
-			s.err = fmt.Errorf("cloudwatch: credenziali: %w", err)
+			s.err = fmt.Errorf("cloudwatch: credentials: %w", err)
 			return
 		}
 		s.api = cloudwatch.NewFromConfig(cfg, func(o *cloudwatch.Options) {

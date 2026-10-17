@@ -54,7 +54,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	}
 	exp, err := otlptracehttp.New(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("exporter OTLP: %w", err)
+		return nil, fmt.Errorf("OTLP exporter: %w", err)
 	}
 	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
 		attribute.String("service.name", cfg.Service),

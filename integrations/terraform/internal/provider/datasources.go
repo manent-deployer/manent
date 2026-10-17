@@ -66,7 +66,7 @@ func (d *inventoryDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 func (d *inventoryDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	svc, ok := serviceFrom(req.ProviderData)
 	if !ok {
-		resp.Diagnostics.AddError("provider non configurato", fmt.Sprintf("tipo inatteso %T", req.ProviderData))
+		resp.Diagnostics.AddError("provider not configured", fmt.Sprintf("unexpected type %T", req.ProviderData))
 		return
 	}
 	d.svc = svc
@@ -81,7 +81,7 @@ func (d *inventoryDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 	inv, err := d.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
 	if err != nil {
-		resp.Diagnostics.AddError("lettura dell'inventario", err.Error())
+		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
 	}
 	m.Entries = []inventoryEntry{}
@@ -148,7 +148,7 @@ func (d *environmentCheckDataSource) Schema(_ context.Context, _ datasource.Sche
 func (d *environmentCheckDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	svc, ok := serviceFrom(req.ProviderData)
 	if !ok {
-		resp.Diagnostics.AddError("provider non configurato", fmt.Sprintf("tipo inatteso %T", req.ProviderData))
+		resp.Diagnostics.AddError("provider not configured", fmt.Sprintf("unexpected type %T", req.ProviderData))
 		return
 	}
 	d.svc = svc
@@ -165,14 +165,14 @@ func (d *environmentCheckDataSource) Read(ctx context.Context, req datasource.Re
 	if raw := m.Descriptor.ValueString(); raw != "" {
 		ex, err := descriptor.ParseYAML([]byte(raw))
 		if err != nil {
-			resp.Diagnostics.AddError("descrittore di esempio non valido", err.Error())
+			resp.Diagnostics.AddError("invalid example descriptor", err.Error())
 			return
 		}
 		check.Descriptor = ex
 	}
 	v, err := d.svc.ValidateEnvironment(ctx, check)
 	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf("configurazione di %s/%s non valida", check.Application, check.Environment), err.Error())
+		resp.Diagnostics.AddError(fmt.Sprintf("invalid configuration of %s/%s", check.Application, check.Environment), err.Error())
 		return
 	}
 	m.Valid = types.BoolValue(v.Valid)

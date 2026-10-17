@@ -127,7 +127,7 @@ Ogni target che passa a `drifted` o `missing` produce un log di livello warning 
 `requires` elenca gli ambienti in cui **lo stesso artefatto** deve essere già stato rilasciato con successo: stessa applicazione, stesso nome e stessa versione e, se il descrittore indica `artifact.sha256`, stesso hash. Un deploy che non rispetta la regola viene rifiutato all'accodamento (`422`):
 
 ```text
-richiesta non valida: myapp 2.0.0 non risulta rilasciato con successo in preprod: va promosso da lì (governance)
+invalid request: myapp 2.0.0 was not released successfully in preprod: it must be promoted from there (governance)
 ```
 
 Il modo più semplice di rispettarla è promuovere:

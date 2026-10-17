@@ -164,7 +164,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	// Missing required parameters and secrets are rejected at submission.
 	bad := appDescriptor("prod", "1.4.1")
 	bad.Deploy.Targets = d.Deploy.Targets
-	if _, err := e.Submit(alice, bad); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), `parametro "database" obbligatorio`) || !strings.Contains(err.Error(), `segreto "ssh-key"`) {
+	if _, err := e.Submit(alice, bad); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), `parameter "database" is required`) || !strings.Contains(err.Error(), `secret "ssh-key"`) {
 		t.Errorf("accodamento senza parametri e segreti: %v", err)
 	}
 	bad.StepParams = map[string]map[string]string{"db-migrate": {"database": "Shop; drop"}}
@@ -180,7 +180,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Wait(alice, sub.ID); err == nil || !strings.Contains(err.Error(), "revocata") {
+	if _, err := e.Wait(alice, sub.ID); err == nil || !strings.Contains(err.Error(), "revoked") {
 		t.Errorf("specifica revocata eseguita: %v", err)
 	}
 

@@ -75,7 +75,7 @@ func NewFactory(name string) plugin.Factory {
 		delete(rest, Key)
 		configJSON, err := json.Marshal(rest)
 		if err != nil {
-			return nil, fmt.Errorf("configurazione del plugin non serializzabile in JSON: %w", err)
+			return nil, fmt.Errorf("plugin configuration cannot be serialized to JSON: %w", err)
 		}
 		if c.SHA256 == "" {
 			logger.Warn("plugin esterno senza sha256: il binario non viene verificato", "command", c.Command)
@@ -99,17 +99,17 @@ func parseConfig(raw any) (Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&c); err != nil {
-		return c, fmt.Errorf("sezione %s non valida: %w", Key, err)
+		return c, fmt.Errorf("invalid section %s: %w", Key, err)
 	}
 	if c.Command == "" {
-		return c, fmt.Errorf("%s.command obbligatorio", Key)
+		return c, fmt.Errorf("%s.command is required", Key)
 	}
 	if c.Command, err = filepath.Abs(c.Command); err != nil {
 		return c, err
 	}
 	if c.SHA256 != "" {
 		if b, err := hex.DecodeString(c.SHA256); err != nil || len(b) != sha256.Size {
-			return c, fmt.Errorf("%s.sha256 non valido", Key)
+			return c, fmt.Errorf("invalid %s.sha256", Key)
 		}
 	}
 	return c, nil
@@ -119,10 +119,10 @@ func parseConfig(raw any) (Config, error) {
 func (c Config) checkBinary() error {
 	fi, err := os.Stat(c.Command)
 	if err != nil {
-		return fmt.Errorf("binario del plugin: %w", err)
+		return fmt.Errorf("plugin binary: %w", err)
 	}
 	if !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
-		return fmt.Errorf("binario del plugin %s non eseguibile", c.Command)
+		return fmt.Errorf("plugin binary %s is not executable", c.Command)
 	}
 	if c.SHA256 == "" {
 		return nil
@@ -137,7 +137,7 @@ func (c Config) checkBinary() error {
 		return err
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, c.SHA256) {
-		return fmt.Errorf("sha256 del binario %s è %s, atteso %s", c.Command, got, c.SHA256)
+		return fmt.Errorf("sha256 of binary %s is %s, expected %s", c.Command, got, c.SHA256)
 	}
 	return nil
 }
@@ -325,7 +325,7 @@ func (p *Process) conn() (*external.Client, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
-		return nil, errors.New("plugin esterno arrestato")
+		return nil, errors.New("external plugin stopped")
 	}
 	if p.client != nil && !p.client.Exited() && p.alive() {
 		return p.rpc, nil
@@ -368,7 +368,7 @@ func (p *Process) start() (*external.Client, error) {
 	rpc, err := p.handshake(client)
 	if err != nil {
 		client.Kill()
-		return nil, fmt.Errorf("avvio del plugin esterno %q: %w", p.name, err)
+		return nil, fmt.Errorf("starting external plugin %q: %w", p.name, err)
 	}
 	p.client, p.rpc = client, rpc
 	return rpc, nil
@@ -385,13 +385,13 @@ func (p *Process) handshake(client *goplugin.Client) (*external.Client, error) {
 	}
 	rpc, ok := raw.(*external.Client)
 	if !ok {
-		return nil, fmt.Errorf("tipo di client inatteso %T", raw)
+		return nil, fmt.Errorf("unexpected client type %T", raw)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
 	defer cancel()
 	remote, err := rpc.Configure(ctx, p.configJSON)
 	if err != nil {
-		return nil, fmt.Errorf("configurazione: %w", err)
+		return nil, fmt.Errorf("configuration: %w", err)
 	}
 	p.logger.Info("plugin esterno avviato", "command", p.cfg.Command, "remote_name", remote, "protocol", client.NegotiatedVersion())
 	return rpc, nil

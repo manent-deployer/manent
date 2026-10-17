@@ -99,7 +99,7 @@ func changeErr(err error) error {
 }
 
 // errNoChange is the error of a deploy requiring a change without a configured system.
-var errNoChange = pipeline.Permanent(errors.New("il deploy richiede un ticket di change ma integrations.change non è configurato su questo worker"))
+var errNoChange = pipeline.Permanent(errors.New("the deploy requires a change ticket but integrations.change is not configured on this worker"))
 
 // openChange opens (or finds) the deploy's change ticket and moves it to implementation, in
 // the change:open DBOS step. The deploy does not start without a ticket. The ticket is

@@ -83,10 +83,10 @@ type Policy struct {
 func (p Policy) Check(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("URL di callback non valido: %w", err)
+		return fmt.Errorf("invalid callback URL: %w", err)
 	}
 	if u.Scheme != "https" && !(p.AllowHTTP && u.Scheme == "http") {
-		return fmt.Errorf("callback %s: schema %q non ammesso", u.Host, u.Scheme)
+		return fmt.Errorf("callback %s: scheme %q not allowed", u.Host, u.Scheme)
 	}
 	if len(p.AllowedHosts) == 0 {
 		return nil
@@ -98,7 +98,7 @@ func (p Policy) Check(raw string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("callback: host %q non ammesso dalla configurazione", host)
+	return fmt.Errorf("callback: host %q not allowed by the configuration", host)
 }
 
 // HTTPDoer abstracts the HTTP client to ease testing.
@@ -169,7 +169,7 @@ func (n HTTPNotifier) authorize(ctx context.Context, d *descriptor.Descriptor, a
 	}
 	secret, err := secrets.DescriptorResolver{Provider: n.Secrets, Descriptor: d}.Secret(ctx, a.Secret)
 	if err != nil {
-		return fmt.Errorf("autenticazione callback: %w", err)
+		return fmt.Errorf("callback authentication: %w", err)
 	}
 	secret = strings.TrimSpace(secret)
 	switch a.Type {
@@ -184,7 +184,7 @@ func (n HTTPNotifier) authorize(ctx context.Context, d *descriptor.Descriptor, a
 		req.Header.Set(HeaderTimestamp, unix)
 		req.Header.Set(HeaderSignature, "sha256="+Sign(secret, unix, body))
 	default:
-		return errors.New("tipo di autenticazione callback non supportato: " + a.Type)
+		return errors.New("unsupported callback authentication type: " + a.Type)
 	}
 	return nil
 }

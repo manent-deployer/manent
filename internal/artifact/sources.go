@@ -56,21 +56,21 @@ func NewSources(list []Source, allowUnlisted bool, sp secrets.Provider, client *
 	s := &Sources{AllowUnlisted: allowUnlisted, Secrets: sp, Client: client}
 	for i, src := range list {
 		if !strings.HasPrefix(src.Prefix, "https://") && !strings.HasPrefix(src.Prefix, "http://") && !strings.HasPrefix(src.Prefix, "file:///") && !IsOCI(src.Prefix) {
-			return nil, fmt.Errorf("artifacts.sources[%d]: prefix deve iniziare con https://, http://, file:///, oci:// o oci+http://", i)
+			return nil, fmt.Errorf("artifacts.sources[%d]: prefix must start with https://, http://, file:///, oci:// or oci+http://", i)
 		}
 		if a := src.Auth; a != nil {
 			if strings.HasPrefix(src.Prefix, "file:") {
-				return nil, fmt.Errorf("artifacts.sources[%d]: auth non applicabile a una sorgente file", i)
+				return nil, fmt.Errorf("artifacts.sources[%d]: auth does not apply to a file source", i)
 			}
 			switch {
 			case a.Type != AuthBasic && a.Type != AuthBearer && a.Type != AuthHeader:
-				return nil, fmt.Errorf("artifacts.sources[%d].auth.type %q non valido (basic|bearer|header)", i, a.Type)
+				return nil, fmt.Errorf("artifacts.sources[%d].auth.type %q is invalid (basic|bearer|header)", i, a.Type)
 			case a.SecretRef == "":
-				return nil, fmt.Errorf("artifacts.sources[%d].auth.secret_ref obbligatorio", i)
+				return nil, fmt.Errorf("artifacts.sources[%d].auth.secret_ref is required", i)
 			case a.Type == AuthBasic && a.Username == "":
-				return nil, fmt.Errorf("artifacts.sources[%d].auth.username obbligatorio con basic", i)
+				return nil, fmt.Errorf("artifacts.sources[%d].auth.username is required with basic", i)
 			case a.Type == AuthHeader && a.Header == "":
-				return nil, fmt.Errorf("artifacts.sources[%d].auth.header obbligatorio con header", i)
+				return nil, fmt.Errorf("artifacts.sources[%d].auth.header is required with header", i)
 			}
 		}
 		if src.CAFile != "" {
@@ -89,14 +89,14 @@ func NewSources(list []Source, allowUnlisted bool, sp secrets.Provider, client *
 func clientWithCA(base *http.Client, caFile string) (*http.Client, error) {
 	pem, err := os.ReadFile(caFile)
 	if err != nil {
-		return nil, fmt.Errorf("lettura ca_file: %w", err)
+		return nil, fmt.Errorf("reading ca_file: %w", err)
 	}
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		pool = x509.NewCertPool()
 	}
 	if !pool.AppendCertsFromPEM(pem) {
-		return nil, errors.New("ca_file non contiene certificati PEM")
+		return nil, errors.New("ca_file contains no PEM certificates")
 	}
 	c := &http.Client{}
 	if base != nil {
@@ -144,7 +144,7 @@ func (s *Sources) Check(source string) error {
 		return err
 	}
 	if src == nil && !s.AllowUnlisted {
-		return fmt.Errorf("sorgente dell'artefatto non ammessa: non corrisponde a nessuna voce di artifacts.sources")
+		return fmt.Errorf("artifact source not allowed: it matches no entry of artifacts.sources")
 	}
 	return nil
 }
@@ -168,7 +168,7 @@ func (s *Sources) prepare(ctx context.Context, req *http.Request, source string)
 	if a := src.Auth; a != nil {
 		secret, err := s.Secrets.Resolve(ctx, a.SecretRef)
 		if err != nil {
-			return nil, fmt.Errorf("credenziali della sorgente %s: %w", src.Prefix, err)
+			return nil, fmt.Errorf("credentials of source %s: %w", src.Prefix, err)
 		}
 		switch a.Type {
 		case AuthBasic:

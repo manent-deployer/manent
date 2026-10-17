@@ -235,7 +235,7 @@ func (e *Engine) loadRequest(id string) (Request, error) {
 	}
 	var req Request
 	if err := decodeInput(ws[0].Input, &req); err != nil {
-		return req, fmt.Errorf("input del deploy %s non leggibile: %w", id, err)
+		return req, fmt.Errorf("unreadable input of deploy %s: %w", id, err)
 	}
 	return req, nil
 }
@@ -256,7 +256,7 @@ func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 // A promotion is a deploy like the others: policies, approvals and freezes apply.
 func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, error) {
 	if r.Application == "" || r.From == "" || r.To == "" || r.From == r.To {
-		return nil, fmt.Errorf("%w: application, from e to obbligatori, from diverso da to", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: application, from and to are required, from different from to", ErrInvalidRequest)
 	}
 	src, err := e.findRelease(ctx, r.Application, r.From, func(s Status) bool { return r.Version == "" || s.Version == r.Version })
 	if err != nil {
@@ -264,7 +264,7 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 	}
 	if src == nil {
 		v := cmp.Or(r.Version, "alcuna versione")
-		return nil, fmt.Errorf("%w: %s: %s non risulta rilasciata con successo in %s", ErrInvalidRequest, r.Application, v, r.From)
+		return nil, fmt.Errorf("%w: %s: %s was not released successfully in %s", ErrInvalidRequest, r.Application, v, r.From)
 	}
 	req, err := e.loadRequest(src.ID)
 	if err != nil {
@@ -293,7 +293,7 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 // rollback restores it, and it can be given with --to.
 func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, error) {
 	if r.Application == "" || r.Environment == "" {
-		return nil, fmt.Errorf("%w: application ed environment obbligatori", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: application and environment are required", ErrInvalidRequest)
 	}
 	var current, target, failed *Status
 	err := e.scan(nil, func(s Status) bool {
@@ -324,12 +324,12 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	case err != nil:
 		return nil, err
 	case current == nil:
-		return nil, fmt.Errorf("%w: nessun deploy riuscito di %s in %s", ErrInvalidRequest, r.Application, r.Environment)
+		return nil, fmt.Errorf("%w: no successful deploy of %s in %s", ErrInvalidRequest, r.Application, r.Environment)
 	case target == nil && r.Version == current.Version:
-		return nil, fmt.Errorf("%w: la versione %s è già in esercizio in %s", ErrInvalidRequest, r.Version, r.Environment)
+		return nil, fmt.Errorf("%w: version %s is already in service in %s", ErrInvalidRequest, r.Version, r.Environment)
 	case target == nil:
 		v := cmp.Or(r.Version, "una versione precedente a "+current.Version)
-		return nil, fmt.Errorf("%w: %s non risulta rilasciata con successo in %s", ErrInvalidRequest, v, r.Environment)
+		return nil, fmt.Errorf("%w: %s was not released successfully in %s", ErrInvalidRequest, v, r.Environment)
 	}
 	req, err := e.loadRequest(target.ID)
 	if err != nil {
@@ -338,7 +338,7 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	d := req.Descriptor
 	if e.rollback != nil {
 		if err := e.rollback.Allowed(d.Artifact.Type); err != nil {
-			return nil, fmt.Errorf("%w: rollback manuale non ammesso: %w", ErrInvalidRequest, err)
+			return nil, fmt.Errorf("%w: manual rollback not allowed: %w", ErrInvalidRequest, err)
 		}
 	}
 	applyRedeploy(r.Redeploy, &d, target)

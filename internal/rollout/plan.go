@@ -101,19 +101,19 @@ func Build(targets []descriptor.Target, r *descriptor.Rollout) (Plan, error) {
 				continue
 			}
 			if owner[ti] >= 0 {
-				errs = append(errs, fmt.Errorf("rollout: il target %s è selezionato sia da %q sia da %q", t.Host, r.Waves[owner[ti]].Name, w.Name))
+				errs = append(errs, fmt.Errorf("rollout: target %s is selected both by %q and by %q", t.Host, r.Waves[owner[ti]].Name, w.Name))
 				continue
 			}
 			owner[ti] = wi
 			waveTargets[wi] = append(waveTargets[wi], t)
 		}
 		if len(waveTargets[wi]) == 0 {
-			errs = append(errs, fmt.Errorf("rollout: l'ondata %q (%s) non seleziona alcun target", w.Name, w.Select))
+			errs = append(errs, fmt.Errorf("rollout: wave %q (%s) selects no target", w.Name, w.Select))
 		}
 	}
 	for ti, o := range owner {
 		if o < 0 {
-			errs = append(errs, fmt.Errorf("rollout: il target %s non appartiene ad alcuna ondata", targets[ti].Host))
+			errs = append(errs, fmt.Errorf("rollout: target %s belongs to no wave", targets[ti].Host))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
@@ -144,7 +144,7 @@ func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout
 	for _, t := range ts {
 		reg, az := t.Labels[labels.Region], t.Labels[labels.AZ]
 		if reg == "" || (w.By == descriptor.ByAZ && az == "") {
-			return nil, fmt.Errorf("rollout: l'ondata %q divide per %s ma il target %s non ha le etichette region e az", w.Name, w.By, t.Host)
+			return nil, fmt.Errorf("rollout: wave %q splits by %s but target %s does not have the region and az labels", w.Name, w.By, t.Host)
 		}
 		byRegion[reg] = append(byRegion[reg], t)
 	}

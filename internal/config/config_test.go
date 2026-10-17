@@ -104,9 +104,9 @@ siem:
 		t.Error("SIEM disattivato con destinazioni attive")
 	}
 	for in, want := range map[string]string{
-		"siem: {enabled: true}\n":                                     "serve address",
-		"siem: {enabled: true, network: syslog, address: x}\n":        `rete "syslog" non supportata`,
-		"siem: {enabled: true, destinations: [{network: tcp}]}\n":     "senza address",
+		"siem: {enabled: true}\n":                                     "address (udp, tcp)",
+		"siem: {enabled: true, network: syslog, address: x}\n":        `network "syslog" not supported`,
+		"siem: {enabled: true, destinations: [{network: tcp}]}\n":     "without address",
 		"siem: {enabled: true, network: unixgram}\n":                  "",
 		"siem: {enabled: true, network: journald, address: /tmp/j}\n": "",
 	} {
@@ -145,7 +145,7 @@ governance:
 	}
 	for in, want := range map[string]string{
 		"integrations: {notifications: [{name: Prod, applications: ['*'], environments: ['*'], teams: {webhook_ref: x}}]}\n":                                                                                                    "name",
-		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*']}]}\n":                                                                                                                                "slack oppure teams",
+		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*']}]}\n":                                                                                                                                "slack or teams",
 		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*'], slack: {channel: C1}}]}\n":                                                                                                          "bot_token_ref",
 		"integrations: {notifications: [{name: a, applications: ['*'], environments: ['*'], events: [deploy], teams: {webhook_ref: x}}]}\n":                                                                                     "events",
 		"integrations: {slack: {bot_token_ref: x, identities: {U1: {subject: alice}}}}\n":                                                                                                                                       "U1",
@@ -227,7 +227,7 @@ pipeline:
     - {name: hook, mode: optional, type: http, run: {url: "http://example.com/x"}}
     - {name: qa, mode: optional, timeout: 1m}
 `)
-	for _, want := range []string{`step "deploy": il nome è di uno step standard`, `schema "http" non ammesso`, "richiedono type", "revoked_specs", "secrets_dir"} {
+	for _, want := range []string{`step "deploy": the name belongs to a standard step`, `scheme "http" not allowed`, "require type", "revoked_specs", "secrets_dir"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("atteso errore %q, ricevuto %v", want, err)
 		}

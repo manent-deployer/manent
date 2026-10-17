@@ -159,13 +159,13 @@ func (c credentials) resolve(ctx context.Context, ref string) (string, error) {
 	}
 	v, err := c.Secrets.Resolve(ctx, ref)
 	if err != nil {
-		return "", fmt.Errorf("credenziali ITSM: %w", err)
+		return "", fmt.Errorf("ITSM credentials: %w", err)
 	}
 	return strings.TrimSpace(v), nil
 }
 
 // ErrPermanent marks the errors a retry cannot fix (e.g. 400, 401, 403).
-var ErrPermanent = errors.New("errore permanente del sistema ITSM")
+var ErrPermanent = errors.New("permanent error of the ITSM system")
 
 // doJSON runs a JSON request and decodes the response into out. 4xx statuses (except 408
 // and 429) are permanent errors.

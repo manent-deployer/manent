@@ -120,7 +120,7 @@ func TestTrafficConIlPlugin(t *testing.T) {
 		t.Errorf("chiamate: %v", dep.calls)
 	}
 	// Testers require a plugin able to route them.
-	if _, err := tr.Testers(ctx, in); err == nil || !strings.Contains(err.Error(), "non sa instradare i tester") {
+	if _, err := tr.Testers(ctx, in); err == nil || !strings.Contains(err.Error(), "cannot route the testers") {
 		t.Errorf("tester: %v", err)
 	}
 	// A plugin without side-by-side versions requires an environment router.
