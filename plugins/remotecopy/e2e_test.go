@@ -135,7 +135,7 @@ func TestE2EChecksumErrato(t *testing.T) {
 		Params:       map[string]string{ParamDestDir: "/home/" + target.User + "/e2e-checksum", ParamSSHKeySecret: "key"},
 		Secrets:      secrets,
 	}
-	if _, err := p.Deploy(context.Background(), req); err == nil || !strings.Contains(err.Error(), "checksum remoto") {
+	if _, err := p.Deploy(context.Background(), req); err == nil || !strings.Contains(err.Error(), "remote checksum") {
 		t.Fatalf("atteso errore di checksum, ricevuto %v", err)
 	}
 }
