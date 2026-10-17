@@ -25,6 +25,8 @@ func TestRolloutTraffic(t *testing.T) {
 		"approvalsBetween: ondata \"50\"":  {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
 		"richiede strategy: traffic":       {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
 		"strategy \"blu\"":                 {Strategy: "blu"},
+		"batchBake non ammesso":            {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "1m"}}},
+		"batchBake \"presto\" non valido":  {Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "presto"}}},
 	}
 	for want, r := range cases {
 		if err := r.Validate(); err == nil || !strings.Contains(err.Error(), want) {

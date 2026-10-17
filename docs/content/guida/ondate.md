@@ -64,6 +64,7 @@ rollout:
 | `waves[].by` | no split | `az`: one pass per AZ; `region`: one pass per region. |
 | `waves[].parallelRegions` | `1` | Regions updated together in the same stage. With `by: az`, stage k contains AZ k of each region (in alphabetical order). |
 | `waves[].bake` | `0s` | Bake time after each stage of the wave (at most 24h). |
+| `waves[].batchBake` | no gate | If set, a gate after every batch of a pass but the last: the probes read the batch's targets for this time (`0s`: a single reading). See [batch gate](#batch-gate). |
 | `maxUnavailable` | `1` | Targets updated together within a pass: a number or a percentage of the pass's targets. |
 | `onFailure` | `stop` | What to do if a pass or a gate fails (see below). |
 | `approvalsBetween` | | Waves after which the rollout waits for an approval. |
@@ -94,6 +95,28 @@ After each stage the worker waits for the bake time, reading the checks every `i
 | `alerts` | Alertmanager (`rollout.alertmanager_url`), active alerts | An alert matches all the `blockOn` conditions and concerns the application (`application` or `app`), the region (`region`) and the AZ (`az`) of the stage; a label missing from the alert matches everything. |
 
 The rollout status reports the last red gate: `stages[].gate`, for example `metric error-rate (us-1/us-1a): valore 0.2 fuori soglia`.
+
+### Batch gate { #batch-gate }
+
+The stage gate comes after the last batch: with many targets in an AZ, a defect that shows up immediately is only detected once the whole AZ is updated. With `batchBake` the worker checks every batch before moving to the next one:
+
+```yaml
+rollout:
+  waves:
+    - {name: eu-1, select: "region=eu-1", by: az, bake: 10m, batchBake: 1m}
+  maxUnavailable: 25%
+  health:
+    interval: 15s
+    failuresToStop: 2
+    probes:
+      - url: "http://{host}:8080/healthz"
+```
+
+- After every batch but the last (followed by the stage gate), the `probes` read **only the batch's targets** every `interval` for `batchBake`, with the same rules as the stage gate: `failuresToStop` consecutive red readings stop the pass, and the last reading must be green. With a pool the gate starts once the batch is back in service.
+- `metrics` and `alerts` stay with the stage gate: they describe the whole pass and are read by the orchestrator. Without `probes`, `batchBake` is only a durable wait between batches.
+- A red batch gate is a failed pass: `onFailure` applies, and the following batches are not touched.
+- With `dbos.region_routing` the gate runs in the pass's child workflow, on the region's worker.
+- The readings are `gate@<pass>#<batch>.<n>` steps. It is not allowed with `strategy: traffic` and does not run in dry-run.
 
 ## Failures and rollback
 

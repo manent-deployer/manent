@@ -14,6 +14,9 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Gate per lotto nei rilasci a ondate: con `waves[].batchBake` le sonde leggono i target di
+  ogni lotto (tranne l'ultimo, seguito dal gate dello stadio) prima del lotto successivo, con
+  `interval` e `failuresToStop` del gate; anche nei passi eseguiti nella region.
 - Analisi canary alla Kayenta nei gate di salute: `analysis: mann-whitney` confronta le serie di
   candidata e stabile con il test U di Mann-Whitney (`direction`, `alpha`, `maxRatio`/`minRatio`,
   `step`, `lookback`, `minPoints`), `health.analysis` calcola un punteggio pesato 0–100 con

@@ -336,6 +336,13 @@ func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.
 				return started, err
 			}
 		}
+		// The batch is back in service: check it before touching the next one. The last batch is
+		// left to the stage gate.
+		if p.BatchGate && !d.DryRun && b < len(p.Batches)-1 {
+			if err := w.batchGate(ctx, d, p, b); err != nil {
+				return started, err
+			}
+		}
 	}
 	return started, nil
 }
@@ -463,43 +470,94 @@ func (w *Worker) healthGate(ctx dbos.Context, id string, d *descriptor.Descripto
 	if tracks != nil {
 		in.Track, in.StableTrack, in.Version = tracks.Track, tracks.StableTrack, tracks.Version
 	}
-	interval, limit := h.IntervalDuration(), max(1, h.FailuresToStop)
-	fails, n := 0, 0
-	var last rollout.GateResult
-	for elapsed := time.Duration(0); ; {
-		if wait := min(interval, bake-elapsed); wait > 0 {
-			if _, err := dbos.Sleep(ctx, wait); err != nil {
-				return err
-			}
-			elapsed += wait
-		}
-		n++
+	last, stopped, err := observe(ctx, bake, h, func(n int, elapsed time.Duration, final bool) (rollout.GateResult, error) {
 		// Elapsed and Final come from the workflow, not from a clock: the read stays deterministic.
-		in.Elapsed, in.Final = elapsed, elapsed >= bake
+		in.Elapsed, in.Final = elapsed, final
 		r, err := w.readGate(ctx, id, d, in, stage.Name+"#"+strconv.Itoa(n))
 		if err != nil {
-			return err
+			return r, err
 		}
-		last = r
 		rs.Stages[i].Score = r.Score
-		if r.OK {
-			fails = 0
-		} else {
-			fails++
+		if !r.OK {
 			rs.Stages[i].Gate = r.Failed()
 			w.publishRollout(ctx, rs)
 		}
-		if fails >= limit {
-			return fmt.Errorf("health gate rosso dopo lo stadio %s: %s", stage.Name, r.Failed())
-		}
-		if elapsed >= bake {
-			break
-		}
-	}
-	if !last.OK {
+		return r, nil
+	})
+	switch {
+	case err != nil:
+		return err
+	case stopped:
+		return fmt.Errorf("health gate rosso dopo lo stadio %s: %s", stage.Name, last.Failed())
+	case !last.OK:
 		return fmt.Errorf("health gate rosso alla fine del bake dello stadio %s: %s", stage.Name, last.Failed())
 	}
 	rs.Stages[i].Gate = ""
+	return nil
+}
+
+// observe runs the bake loop shared by the stage and batch gates: a durable sleep of at most
+// one interval, then a read, until the bake is over. It stops early (stopped) as soon as
+// consecutive red reads reach failuresToStop; otherwise the caller requires the last read to
+// be green.
+func observe(ctx dbos.Context, bake time.Duration, h *descriptor.Health,
+	read func(n int, elapsed time.Duration, final bool) (rollout.GateResult, error)) (last rollout.GateResult, stopped bool, err error) {
+	interval, limit := h.IntervalDuration(), max(1, h.FailuresToStop)
+	fails := 0
+	for n, elapsed := 1, time.Duration(0); ; n++ {
+		if wait := min(interval, bake-elapsed); wait > 0 {
+			if _, err := dbos.Sleep(ctx, wait); err != nil {
+				return last, false, err
+			}
+			elapsed += wait
+		}
+		if last, err = read(n, elapsed, elapsed >= bake); err != nil {
+			return last, false, err
+		}
+		if last.OK {
+			fails = 0
+		} else if fails++; fails >= limit {
+			return last, true, nil
+		}
+		if elapsed >= bake {
+			return last, false, nil
+		}
+	}
+}
+
+// batchGate observes a batch before the next one of the same pass: the probes read the batch
+// targets for the pass's BatchBake. Metrics and alerts stay with the stage gate: they describe
+// the whole pass, and are read by the orchestrator even when the pass runs in its region.
+// Without probes the gate is only a durable wait. Read steps: gate@<pass>#<batch>.<n>.
+func (w *Worker) batchGate(ctx dbos.Context, d *descriptor.Descriptor, p rollout.Pass, b int) error {
+	var h descriptor.Health
+	if d.Rollout.Health != nil {
+		h = descriptor.Health{Probes: d.Rollout.Health.Probes, Interval: d.Rollout.Health.Interval, FailuresToStop: d.Rollout.Health.FailuresToStop}
+	}
+	if len(h.Probes) == 0 {
+		if p.BatchBake > 0 {
+			_, err := dbos.Sleep(ctx, p.BatchBake)
+			return err
+		}
+		return nil
+	}
+	label := p.Name + "#" + strconv.Itoa(b)
+	bp := p
+	bp.Targets, bp.Batches = p.Batches[b], nil
+	in := rollout.GateInput{Application: d.Application, Environment: d.Environment, Stage: label, Passes: []rollout.Pass{bp}, Health: h}
+	last, stopped, err := observe(ctx, p.BatchBake, &h, func(n int, elapsed time.Duration, final bool) (rollout.GateResult, error) {
+		in.Elapsed, in.Final = elapsed, final
+		// Already on the pass's worker (orchestrator or region): the probes are read here.
+		return w.checkGate(ctx, "gate@"+label+"."+strconv.Itoa(n), in)
+	})
+	switch {
+	case err != nil:
+		return err
+	case stopped:
+		return fmt.Errorf("health gate rosso dopo il lotto %s: %s", label, last.Failed())
+	case !last.OK:
+		return fmt.Errorf("health gate rosso alla fine del bake del lotto %s: %s", label, last.Failed())
+	}
 	return nil
 }
 

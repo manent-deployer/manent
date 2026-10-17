@@ -110,3 +110,24 @@ func TestPianoSenzaDivisione(t *testing.T) {
 		t.Errorf("piano inatteso: %+v", p.Stages)
 	}
 }
+
+func TestPianoGatePerLotto(t *testing.T) {
+	r := designRollout()
+	r.Waves[1].BatchBake = "1m"
+	r.Waves[2].BatchBake = "0s"
+	p, err := Build(topology(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, st := range p.Stages {
+		for _, ps := range st.Passes {
+			want, bake := ps.Wave != "canary", time.Duration(0)
+			if ps.Wave == "eu-1" {
+				bake = time.Minute
+			}
+			if ps.BatchGate != want || ps.BatchBake != bake {
+				t.Errorf("passo %s: gate %v bake %s", ps.Name, ps.BatchGate, ps.BatchBake)
+			}
+		}
+	}
+}

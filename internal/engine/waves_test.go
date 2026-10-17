@@ -82,6 +82,8 @@ type fakeChecker struct {
 	mu   sync.Mutex
 	red  map[string]bool
 	seen []string
+	// redHosts makes the probes red on these targets.
+	redHosts map[string]bool
 }
 
 func (c *fakeChecker) Check(_ context.Context, in rollout.GateInput) rollout.GateResult {
@@ -91,6 +93,11 @@ func (c *fakeChecker) Check(_ context.Context, in rollout.GateInput) rollout.Gat
 	for _, p := range in.Passes {
 		if c.red[p.Region] {
 			return rollout.GateResult{Checks: []rollout.CheckResult{{Kind: rollout.KindMetric, Name: "error-rate", Region: p.Region, Detail: "valore 0.2 fuori soglia"}}}
+		}
+		for _, t := range p.Targets {
+			if c.redHosts[t.Host] {
+				return rollout.GateResult{Checks: []rollout.CheckResult{{Kind: rollout.KindProbe, Name: "health", Host: t.Host, Detail: "stato 503"}}}
+			}
 		}
 	}
 	return rollout.GateResult{OK: true}
@@ -339,6 +346,64 @@ func TestRolloutBake(t *testing.T) {
 	}
 }
 
+// batchDescriptor deploys three nodes of one AZ one at a time, with a gate after every batch.
+func batchDescriptor(id string) *descriptor.Descriptor {
+	d := waveDescriptor(id)
+	d.Deploy.Targets = nil
+	for _, h := range []string{"n1", "n2", "n3"} {
+		d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: h, Labels: map[string]string{"region": "eu-1", "az": "eu-1a"}})
+	}
+	d.Rollout.Regions = nil
+	d.Rollout.Waves = []descriptor.Wave{{Name: "eu-1", Select: "region=eu-1", By: "az", BatchBake: "0s"}}
+	d.Rollout.Health = &descriptor.Health{Probes: []descriptor.Probe{{URL: "http://{host}/health"}}}
+	return d
+}
+
+func TestRolloutGatePerLotto(t *testing.T) {
+	env := newWaveEngine(t, "", nil)
+	ctx := context.Background()
+	sub, err := env.e.Submit(ctx, batchDescriptor("lotti-ok"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	// One read per batch but the last, then the stage gate on the whole pass.
+	want := []string{"eu-1/eu-1/eu-1a#0", "eu-1/eu-1/eu-1a#1", "eu-1/eu-1a"}
+	if got := env.checker.seen; !slices.Equal(got, want) {
+		t.Errorf("letture del gate: %v, attese %v", got, want)
+	}
+	steps, err := env.e.Steps(ctx, sub.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(steps, func(s StepRecord) bool { return s.Name == "gate@eu-1/eu-1/eu-1a#1.1" }) {
+		t.Errorf("step del gate per lotto assente: %+v", steps)
+	}
+}
+
+func TestRolloutGatePerLottoRossoFerma(t *testing.T) {
+	env := newWaveEngine(t, "", nil)
+	env.checker.redHosts = map[string]bool{"n2": true}
+	ctx := context.Background()
+	d := batchDescriptor("lotti-rosso")
+	d.Rollout.Health.Interval, d.Rollout.Health.FailuresToStop = "1s", 2
+	d.Rollout.Waves[0].BatchBake = "2s"
+	sub, err := env.e.Submit(ctx, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.e.Wait(ctx, sub.ID); err == nil || !strings.Contains(err.Error(), "dopo il lotto eu-1/eu-1/eu-1a#1") {
+		t.Fatalf("atteso il gate rosso dopo il secondo lotto, ricevuto %v", err)
+	}
+	// The third node is never touched.
+	want := []string{"deploy:w1:n1", "activation:w1:n1", "deploy:w1:n2", "activation:w1:n2"}
+	if got := env.log.get(); !slices.Equal(got, want) {
+		t.Errorf("esecuzioni: %v, attese %v", got, want)
+	}
+}
+
 // waitDeployState waits until the deploy reaches the given state.
 func waitDeployState(t *testing.T, e *Engine, id, state string) *Status {
 	t.Helper()
@@ -489,6 +554,41 @@ func TestRolloutSondeNellaRegion(t *testing.T) {
 			}
 		}
 		c.mu.Unlock()
+	}
+}
+
+func TestRolloutGatePerLottoNellaRegion(t *testing.T) {
+	l := &waveLog{}
+	sl := slog.New(deploylog.NewHandler(slog.NewTextHandler(io.Discard, nil)))
+	db := testdb.URL(t)
+	checkers := map[string]*regionChecker{}
+	var e *Engine
+	for _, region := range []string{"eu-1", "us-1"} {
+		reg, planner := testRegistry(t, waveStep{name: "deploy", worker: region, log: l, slog: sl}, waveStep{name: "activation", worker: region, log: l, slog: sl})
+		checkers[region] = &regionChecker{region: region}
+		opts := workerOpts(db, "w-"+region, reg)
+		opts.Health, opts.Region, opts.RegionRouting = checkers[region], region, true
+		w := startWorker(t, opts)
+		if e == nil {
+			e = NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: checkers[region]})
+		}
+	}
+	ctx := context.Background()
+	sub, err := e.Submit(ctx, batchDescriptor("lotti-region"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if _, err := e.Wait(wctx, sub.ID); err != nil {
+		t.Fatalf("le sonde dei lotti devono essere eseguite nella region del passo: %v", err)
+	}
+	// Batch gates on n1 and n2, then the stage gate on the three nodes: all in eu-1.
+	if got := checkers["eu-1"].probed; !slices.Equal(got, []string{"n1", "n2", "n1", "n2", "n3"}) {
+		t.Errorf("sonde in eu-1: %v", got)
+	}
+	if got := checkers["us-1"].probed; len(got) != 0 {
+		t.Errorf("sonde in us-1: %v", got)
 	}
 }
 

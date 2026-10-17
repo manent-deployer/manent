@@ -43,6 +43,9 @@ type Pass struct {
 	Targets []descriptor.Target `json:"targets"`
 	// Batches splits the targets into groups updated together (max_unavailable).
 	Batches [][]descriptor.Target `json:"batches"`
+	// BatchGate enables the gate after every batch but the last, observed for BatchBake.
+	BatchGate bool          `json:"batch_gate,omitempty"`
+	BatchBake time.Duration `json:"batch_bake,omitempty"`
 }
 
 // Hosts returns the hosts of the pass, with the port if given.
@@ -134,7 +137,7 @@ func Build(targets []descriptor.Target, r *descriptor.Rollout) (Plan, error) {
 func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout) ([]Stage, error) {
 	bake := w.BakeDuration()
 	if w.By == descriptor.ByNone {
-		p := pass(w.Name, "", "", ts, r)
+		p := pass(w, "", "", ts, r)
 		return []Stage{{Name: w.Name, Wave: w.Name, Passes: []Pass{p}, Bake: bake}}, nil
 	}
 	byRegion := map[string][]descriptor.Target{}
@@ -153,7 +156,7 @@ func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout
 		if w.By == descriptor.ByRegion {
 			st := Stage{Name: w.Name + "/" + strings.Join(group, "+"), Wave: w.Name, Bake: bake}
 			for _, reg := range group {
-				st.Passes = append(st.Passes, pass(w.Name, reg, "", byRegion[reg], r))
+				st.Passes = append(st.Passes, pass(w, reg, "", byRegion[reg], r))
 			}
 			stages = append(stages, st)
 			continue
@@ -186,7 +189,7 @@ func waveStages(w descriptor.Wave, ts []descriptor.Target, r *descriptor.Rollout
 						sel = append(sel, t)
 					}
 				}
-				st.Passes = append(st.Passes, pass(w.Name, reg, az, sel, r))
+				st.Passes = append(st.Passes, pass(w, reg, az, sel, r))
 				names = append(names, az)
 			}
 			st.Name = w.Name + "/" + strings.Join(names, "+")
@@ -213,8 +216,8 @@ func orderRegions(found, order []string) []string {
 	return out
 }
 
-func pass(wave, region, az string, ts []descriptor.Target, r *descriptor.Rollout) Pass {
-	name := wave
+func pass(w descriptor.Wave, region, az string, ts []descriptor.Target, r *descriptor.Rollout) Pass {
+	wave, name := w.Name, w.Name
 	if region != "" {
 		name += "/" + region
 	}
@@ -231,6 +234,7 @@ func pass(wave, region, az string, ts []descriptor.Target, r *descriptor.Rollout
 	for i := 0; i < len(ts); i += size {
 		p.Batches = append(p.Batches, ts[i:min(i+size, len(ts))])
 	}
+	p.BatchBake, p.BatchGate = w.BatchGate()
 	return p
 }
 

@@ -64,6 +64,7 @@ rollout:
 | `waves[].by` | nessuna divisione | `az`: un passo per AZ; `region`: un passo per region. |
 | `waves[].parallelRegions` | `1` | Region aggiornate insieme nello stesso stadio. Con `by: az`, lo stadio k contiene l'AZ k di ciascuna region (in ordine alfabetico). |
 | `waves[].bake` | `0s` | Tempo di osservazione dopo ogni stadio dell'ondata (al massimo 24h). |
+| `waves[].batchBake` | nessun gate | Se presente, gate dopo ogni lotto di un passo tranne l'ultimo: le sonde leggono i target del lotto per questo tempo (`0s`: una sola lettura). Vedi [gate per lotto](#gate-per-lotto). |
 | `maxUnavailable` | `1` | Target aggiornati insieme dentro un passo: un numero o una percentuale dei target del passo. |
 | `onFailure` | `stop` | Cosa fare se un passo o un gate fallisce (vedi sotto). |
 | `approvalsBetween` | | Ondate dopo le quali il rollout attende un'approvazione. |
@@ -94,6 +95,28 @@ Dopo ogni stadio il worker attende il tempo di osservazione leggendo i controlli
 | `alerts` | Alertmanager (`rollout.alertmanager_url`), allarmi attivi | Un allarme soddisfa tutte le condizioni di `blockOn` e riguarda l'applicazione (`application` o `app`), la region (`region`) e l'AZ (`az`) dello stadio; un'etichetta assente nell'allarme vale per tutti. |
 
 Lo stato del rollout riporta l'ultimo gate rosso: `stages[].gate`, ad esempio `metric error-rate (us-1/us-1a): valore 0.2 fuori soglia`.
+
+### Gate per lotto { #gate-per-lotto }
+
+Il gate dello stadio arriva dopo l'ultimo lotto: con molti target in un'AZ, un difetto che si vede subito viene rilevato solo quando l'intera AZ è aggiornata. Con `batchBake` il worker controlla ogni lotto prima di passare al successivo:
+
+```yaml
+rollout:
+  waves:
+    - {name: eu-1, select: "region=eu-1", by: az, bake: 10m, batchBake: 1m}
+  maxUnavailable: 25%
+  health:
+    interval: 15s
+    failuresToStop: 2
+    probes:
+      - url: "http://{host}:8080/healthz"
+```
+
+- Dopo ogni lotto, tranne l'ultimo (seguito dal gate dello stadio), le `probes` leggono **solo i target del lotto** ogni `interval` per `batchBake`, con le stesse regole del gate dello stadio: `failuresToStop` letture rosse consecutive fermano il passo, e l'ultima lettura deve essere verde. Con un pool il gate parte dopo che il lotto è tornato in servizio.
+- `metrics` e `alerts` restano al gate dello stadio: descrivono l'intero passo e sono letti dall'orchestratore. Senza `probes`, `batchBake` è solo un'attesa durevole fra i lotti.
+- Un gate per lotto rosso è un passo fallito: vale `onFailure`, e i lotti successivi non vengono toccati.
+- Con `dbos.region_routing` il gate gira nel workflow figlio del passo, sul worker della region.
+- Le letture sono step `gate@<passo>#<lotto>.<n>`. Non è ammesso con `strategy: traffic` e non è eseguito in dry-run.
 
 ## Fallimenti e rollback
 

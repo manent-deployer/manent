@@ -63,6 +63,9 @@ type Wave struct {
 	ParallelRegions int `json:"parallelRegions,omitempty" yaml:"parallelRegions,omitempty"`
 	// Bake is the observation time after every pass (e.g. "10m").
 	Bake string `json:"bake,omitempty" yaml:"bake,omitempty"`
+	// BatchBake, if set, adds a gate after every batch of a pass but the last (the stage gate
+	// follows it): the probes read the batch targets for this time ("0s": a single read).
+	BatchBake string `json:"batchBake,omitempty" yaml:"batchBake,omitempty"`
 }
 
 // Health are the checks run during and at the end of the observation time.
@@ -234,6 +237,15 @@ func (w Wave) BakeDuration() time.Duration {
 	return d
 }
 
+// BatchGate returns the observation time of the batch gate and whether the gate is enabled.
+func (w Wave) BatchGate() (time.Duration, bool) {
+	if w.BatchBake == "" {
+		return 0, false
+	}
+	d, _ := time.ParseDuration(w.BatchBake)
+	return d, true
+}
+
 // IntervalDuration returns the check frequency.
 func (h *Health) IntervalDuration() time.Duration {
 	if h == nil || h.Interval == "" {
@@ -311,6 +323,14 @@ func (r *Rollout) Validate() error {
 		if w.Bake != "" {
 			if d, err := time.ParseDuration(w.Bake); err != nil || d < 0 || d > maxBake {
 				errs = append(errs, fmt.Errorf("%s.bake %q non valido (durata tra 0 e 24h, es. 10m)", p, w.Bake))
+			}
+		}
+		if w.BatchBake != "" {
+			if d, err := time.ParseDuration(w.BatchBake); err != nil || d < 0 || d > maxBake {
+				errs = append(errs, fmt.Errorf("%s.batchBake %q non valido (durata tra 0 e 24h, es. 1m)", p, w.BatchBake))
+			}
+			if r.IsTraffic() {
+				errs = append(errs, fmt.Errorf("%s.batchBake non ammesso con strategy: traffic (il passo è un unico lotto)", p))
 			}
 		}
 	}
