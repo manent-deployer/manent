@@ -1,0 +1,21 @@
+# UC20: IIS application on the emulated Windows host, over WinRM (HTTPS, basic authentication;
+# in a domain the default is NTLM). The application pool is stopped during the switch.
+plugin: windows
+targets:
+  - {host: win1, user: deploy, labels: {region: eu-1, az: eu-1a}}
+params:
+  mode: iis
+  transport: winrm
+  winrm_auth: basic
+  winrm_insecure_skip_verify: "true"   # lab: self-signed certificate
+  shell: pwsh                          # on Windows Server the default is powershell (5.1)
+  password_secret: win-pass
+  site: Default Web Site
+  app: /uc20-shop
+  app_pool: uc20-shop
+  stop_app_pool: "true"
+  releases_dir: /srv/win/apps/uc20-shop/releases
+  keep_releases: "3"
+secrets:
+  - name: win-pass
+    ref: file:/keys/win-pass

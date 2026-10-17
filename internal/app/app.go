@@ -60,6 +60,7 @@ import (
 	"github.com/joeg-ita/manent/plugins/kubernetes"
 	"github.com/joeg-ita/manent/plugins/lambda"
 	"github.com/joeg-ita/manent/plugins/remotecopy"
+	"github.com/joeg-ita/manent/plugins/windows"
 )
 
 // App holds the components shared by CLI and API.
@@ -143,6 +144,7 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 		lambda.Name:     lambda.Factory,
 		cloudrun.Name:   cloudrun.Factory,
 		jboss.Name:      jboss.Factory,
+		windows.Name:    windows.Factory,
 	} {
 		if err := reg.Register(name, f); err != nil {
 			return nil, err

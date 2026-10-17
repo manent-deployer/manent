@@ -14,6 +14,13 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Plugin `windows` per host Windows: applicazioni IIS (`physicalPath` dell'applicazione,
+  application pool fermato o riciclato) e servizi Windows (`binPath` con `sc.exe config`, attesa
+  di `Running`), via WinRM (NTLM o basic, HTTPS) o OpenSSH, con script PowerShell compatibili con
+  Windows PowerShell 5.1 e PowerShell 7. Una directory per versione sotto `releases_dir`,
+  sha256 verificato sul target, rollback e `CurrentRelease` (riconciliazione), tipo di artefatto
+  `windows` con rollback ammesso nei default. Caso d'uso UC20 su un host Windows emulato con
+  PowerShell vero, WinRM e OpenSSH.
 - Integrazioni con CI e IaC: `manent deploy --ci` (esiti in `$GITHUB_OUTPUT` o nel report dotenv
   di GitLab, riepilogo in `$GITHUB_STEP_SUMMARY`), `--outputs`, `--summary`, `--id`, `--version`,
   `--source`, `--sha256`; verifica di una configurazione di ambiente candidata (`manent env

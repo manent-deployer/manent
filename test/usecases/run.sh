@@ -22,9 +22,9 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -41,6 +41,7 @@ info "interfaccia web compilata"
 (cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-fakes" ./test/usecases/fakes &&
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-windows" ./test/usecases/windows/fake &&
   cd integrations/terraform && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/terraform-provider-manent" .)
 info "binari linux/$goarch compilati"
 
@@ -50,6 +51,7 @@ chmod 644 "$WORK/keys/id"
 # Test secrets read through file: references (UC10, UC12, UC13), before API and workers start.
 head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$WORK/keys/spec-key"
 printf 'admin:uc-dataplane' >"$WORK/keys/dataplane"
+printf 'uc-W1ndows!' >"$WORK/keys/win-pass"
 printf 's3cret-uc12-db' >"$WORK/keys/db-pass"
 printf 'tok-uc12-hook' >"$WORK/keys/hook-token"
 printf 'xoxb-uc-test' >"$WORK/keys/slack-token"
@@ -78,8 +80,8 @@ region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
-dc --profile regions --profile containers --profile lb --profile jboss build -q
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile containers --profile lb --profile jboss --profile windows build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0
 until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do

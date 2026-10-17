@@ -78,6 +78,10 @@ rollback:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
+    windows:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
 
 # Test static tokens (uc-<name>-token): only the sha256 in the configuration.
 auth:
@@ -215,6 +219,9 @@ plugins:
     artifact_types: [kubernetes]     # cluster CA from ca_secret (envconfig)
   jboss:
     artifact_types: [war]
+  windows:
+    artifact_types: [windows]
+    insecure_ignore_host_key: true   # ssh transport
 
 # UC13: Slack, Teams and ServiceNow emulated by the fakes service (test/usecases/fakes).
 integrations:

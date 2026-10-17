@@ -1,0 +1,17 @@
+# UC20: Windows service on the emulated Windows host, over the OpenSSH server.
+plugin: windows
+targets:
+  - {host: win1, user: deploy, labels: {region: eu-1, az: eu-1a}}
+params:
+  mode: service
+  transport: ssh
+  ssh_key_secret: deploy-key
+  shell: pwsh
+  service: UC20Worker
+  binary: bin/worker.exe
+  arguments: --port 9090
+  timeout: 20s
+  releases_dir: /srv/win/apps/uc20-worker/releases
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

@@ -1,0 +1,9 @@
+#!/usr/bin/env pwsh
+# Emulation of "sc.exe config <name> binPath= <path>" for the use cases, on services.json.
+. '/usr/local/share/powershell/Modules/ManentWindowsStub/State.ps1'
+if ($args.Count -lt 4 -or $args[0] -ne 'config' -or $args[2] -ne 'binPath=') { Write-Output "[SC] uso non supportato: $args"; exit 87 }
+$s = Read-ManentState 'services'
+if (-not $s.ContainsKey($args[1])) { Write-Output "[SC] OpenService FAILED 1060: The specified service does not exist as an installed service."; exit 1060 }
+$s[$args[1]].path = [string] $args[3]
+Write-ManentState 'services' $s
+Write-Output "[SC] ChangeServiceConfig SUCCESS"

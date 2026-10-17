@@ -564,6 +564,7 @@ func Default() *Config {
 			"cloudrun":    {Allowed: true},
 			"war":         {Allowed: true},
 			"ear":         {Allowed: true},
+			"windows":     {Allowed: true},
 			"migration":   {Allowed: false},
 		}},
 		Pipeline: Pipeline{Steps: []Step{

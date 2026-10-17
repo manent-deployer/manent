@@ -396,6 +396,7 @@ make web-dev    # server di sviluppo su http://127.0.0.1:5173
 | `lambda` | immagine ECR o pacchetto `.zip`: aggiornamento del codice, versione pubblicata e alias spostato | funzioni AWS Lambda, una region per target |
 | `cloudrun` | immagine di un registry: nuova revisione e traffico sull'ultima revisione pronta | servizi Google Cloud Run, una region per target |
 | `jboss` | archivio `war`/`ear` caricato con l'API HTTP di management, una versione per deployment con cambio atomico; `suspend`, `reload` e `restart` booleani | JBoss EAP e WildFly, standalone o domain |
+| `windows` | archivio `.zip` estratto in una directory per versione via WinRM o OpenSSH, cambio del `physicalPath` IIS o del `binPath` del servizio con PowerShell | IIS e servizi Windows (Windows Server 2016+) |
 
 Tutti supportano dry-run, lettura della release in esercizio e rollback. Per le immagini, il digest del manifest diventa lo sha256 dell'artefatto: promozioni e rollback rilasciano esattamente l'immagine verificata.
 
