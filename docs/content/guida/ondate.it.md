@@ -65,6 +65,7 @@ rollout:
 | `waves[].parallelRegions` | `1` | Region aggiornate insieme nello stesso stadio. Con `by: az`, lo stadio k contiene l'AZ k di ciascuna region (in ordine alfabetico). |
 | `waves[].bake` | `0s` | Tempo di osservazione dopo ogni stadio dell'ondata (al massimo 24h). |
 | `waves[].batchBake` | nessun gate | Se presente, gate dopo ogni lotto di un passo tranne l'ultimo: le sonde leggono i target del lotto per questo tempo (`0s`: una sola lettura). Vedi [gate per lotto](#gate-per-lotto). |
+| `waves[].maxUnavailable` | quello del rollout | Sostituisce `maxUnavailable` per i passi dell'ondata: ad esempio un nodo alla volta nel canary e il 25% nelle ondate ampie. |
 | `maxUnavailable` | `1` | Target aggiornati insieme dentro un passo: un numero o una percentuale dei target del passo. |
 | `onFailure` | `stop` | Cosa fare se un passo o un gate fallisce (vedi sotto). |
 | `approvalsBetween` | | Ondate dopo le quali il rollout attende un'approvazione. |
@@ -80,7 +81,7 @@ manent validate -f release.yml     # rollout.stages: canary, eu-1/eu-1b, resto/e
 
 - Uno **stadio** è un gruppo di passi eseguiti insieme e seguiti dallo stesso bake e health gate. Il suo nome è `<ondata>/<AZ o region>` (`resto/eu-2a+us-1a`).
 - Un **passo** è il lavoro su una region (o un'AZ) dentro lo stadio: `<ondata>/<region>/<az>`.
-- Dentro un passo i target sono aggiornati a **lotti** di `maxUnavailable`, un lotto dopo l'altro.
+- Dentro un passo i target sono aggiornati a **lotti** di `maxUnavailable` (quello dell'ondata, se presente, altrimenti quello del rollout), un lotto dopo l'altro. Una percentuale si calcola sui target del passo, arrotondando per difetto e con almeno un target.
 
 Gli step che lavorano sui target, da `deploy` ad `activation` (con `post-test` in mezzo), sono eseguiti per ogni lotto; quelli prima (`secrets`, `artifacts`, `qa`) una volta sola all'inizio. Nel log e nella timeline ogni esecuzione porta il nome del passo e del lotto: `deploy@eu-1/eu-1/eu-1b#0`.
 

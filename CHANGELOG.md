@@ -14,6 +14,8 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- `maxUnavailable` per ondata (`waves[].maxUnavailable`): sostituisce quello del rollout per i
+  passi dell'ondata.
 - Gate per lotto nei rilasci a ondate: con `waves[].batchBake` le sonde leggono i target di
   ogni lotto (tranne l'ultimo, seguito dal gate dello stadio) prima del lotto successivo, con
   `interval` e `failuresToStop` del gate; anche nei passi eseguiti nella region.

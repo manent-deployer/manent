@@ -131,3 +131,29 @@ func TestPianoGatePerLotto(t *testing.T) {
 		}
 	}
 }
+
+func TestPianoMaxUnavailablePerOndata(t *testing.T) {
+	r := &descriptor.Rollout{
+		Waves: []descriptor.Wave{
+			{Name: "canary", Select: "canary=true"},
+			{Name: "eu-1", Select: "region=eu-1, canary!=true", MaxUnavailable: "2"},
+			{Name: "resto", Select: "region in (eu-2, us-1)", MaxUnavailable: "50%"},
+		},
+		MaxUnavailable: "1",
+	}
+	p, err := Build(topology(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// canary: 1 node, rollout default; eu-1: 5 nodes in lots of 2; resto: 12 nodes, half at a time.
+	want := map[string][]int{"canary": {1}, "eu-1": {2, 2, 1}, "resto": {6, 6}}
+	for _, st := range p.Stages {
+		var got []int
+		for _, b := range st.Passes[0].Batches {
+			got = append(got, len(b))
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want[st.Wave]) {
+			t.Errorf("ondata %s: lotti %v, attesi %v", st.Wave, got, want[st.Wave])
+		}
+	}
+}

@@ -65,6 +65,7 @@ rollout:
 | `waves[].parallelRegions` | `1` | Regions updated together in the same stage. With `by: az`, stage k contains AZ k of each region (in alphabetical order). |
 | `waves[].bake` | `0s` | Bake time after each stage of the wave (at most 24h). |
 | `waves[].batchBake` | no gate | If set, a gate after every batch of a pass but the last: the probes read the batch's targets for this time (`0s`: a single reading). See [batch gate](#batch-gate). |
+| `waves[].maxUnavailable` | the rollout's | Replaces `maxUnavailable` for the passes of the wave: for example one node at a time in the canary and 25% in the wide waves. |
 | `maxUnavailable` | `1` | Targets updated together within a pass: a number or a percentage of the pass's targets. |
 | `onFailure` | `stop` | What to do if a pass or a gate fails (see below). |
 | `approvalsBetween` | | Waves after which the rollout waits for an approval. |
@@ -80,7 +81,7 @@ manent validate -f release.yml     # rollout.stages: canary, eu-1/eu-1b, rest/eu
 
 - A **stage** is a group of passes run together and followed by the same bake and health gate. Its name is `<wave>/<AZ or region>` (`rest/eu-2a+us-1a`).
 - A **pass** is the work on a region (or an AZ) within the stage: `<wave>/<region>/<az>`.
-- Within a pass the targets are updated in **batches** of `maxUnavailable`, one batch after the other.
+- Within a pass the targets are updated in **batches** of `maxUnavailable` (the wave's, if set, otherwise the rollout's), one batch after the other. A percentage is computed on the pass's targets, rounded down and with at least one target.
 
 The steps that work on the targets, from `deploy` to `activation` (with `post-test` in between), run for each batch; the ones before (`secrets`, `artifacts`, `qa`) run only once at the start. In the log and the timeline each run carries the name of the pass and the batch: `deploy@eu-1/eu-1/eu-1b#0`.
 

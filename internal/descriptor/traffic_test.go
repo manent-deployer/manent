@@ -18,15 +18,17 @@ func TestRolloutTraffic(t *testing.T) {
 		t.Errorf("header: %q %q", k, v)
 	}
 	cases := map[string]*Rollout{
-		"l'ultimo gradino deve essere 100": {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{10, 50}}},
-		"crescenti":                        {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{50, 10, 100}}},
-		"obbligatorio con strategy":        {Strategy: StrategyTraffic},
-		"testers.header":                   {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}, Testers: &Testers{Header: "senza valore"}}},
-		"approvalsBetween: ondata \"50\"":  {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
-		"richiede strategy: traffic":       {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
-		"strategy \"blu\"":                 {Strategy: "blu"},
-		"batchBake non ammesso":            {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "1m"}}},
-		"batchBake \"presto\" non valido":  {Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "presto"}}},
+		"l'ultimo gradino deve essere 100":                 {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{10, 50}}},
+		"crescenti":                                        {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{50, 10, 100}}},
+		"obbligatorio con strategy":                        {Strategy: StrategyTraffic},
+		"testers.header":                                   {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}, Testers: &Testers{Header: "senza valore"}}},
+		"approvalsBetween: ondata \"50\"":                  {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, ApprovalsBetween: []string{"50"}},
+		"richiede strategy: traffic":                       {Waves: []Wave{{Name: "a", Select: "x=y"}}, Traffic: &TrafficRollout{Steps: []int{100}}},
+		"strategy \"blu\"":                                 {Strategy: "blu"},
+		"batchBake non ammesso":                            {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "1m"}}},
+		"batchBake \"presto\" non valido":                  {Waves: []Wave{{Name: "a", Select: "x=y", BatchBake: "presto"}}},
+		"rollout.waves[0].maxUnavailable \"0\" non valido": {Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "0"}}},
+		"maxUnavailable non ammesso":                       {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", MaxUnavailable: "2"}}},
 	}
 	for want, r := range cases {
 		if err := r.Validate(); err == nil || !strings.Contains(err.Error(), want) {

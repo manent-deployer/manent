@@ -42,7 +42,7 @@ type Rollout struct {
 	Regions []string `json:"regions,omitempty" yaml:"regions,omitempty"`
 	Waves   []Wave   `json:"waves,omitempty" yaml:"waves,omitempty"`
 	// MaxUnavailable are the targets updated together in a pass: a number or a percentage
-	// ("25%") of the pass targets. Default 1.
+	// ("25%") of the pass targets. Default 1; a wave can set its own.
 	MaxUnavailable string `json:"maxUnavailable,omitempty" yaml:"maxUnavailable,omitempty"`
 	// OnFailure is stop (default), rollback-wave or rollback-all.
 	OnFailure string `json:"onFailure,omitempty" yaml:"onFailure,omitempty"`
@@ -63,6 +63,8 @@ type Wave struct {
 	ParallelRegions int `json:"parallelRegions,omitempty" yaml:"parallelRegions,omitempty"`
 	// Bake is the observation time after every pass (e.g. "10m").
 	Bake string `json:"bake,omitempty" yaml:"bake,omitempty"`
+	// MaxUnavailable, if set, replaces the rollout's for the passes of this wave.
+	MaxUnavailable string `json:"maxUnavailable,omitempty" yaml:"maxUnavailable,omitempty"`
 	// BatchBake, if set, adds a gate after every batch of a pass but the last (the stage gate
 	// follows it): the probes read the batch targets for this time ("0s": a single read).
 	BatchBake string `json:"batchBake,omitempty" yaml:"batchBake,omitempty"`
@@ -255,9 +257,13 @@ func (h *Health) IntervalDuration() time.Duration {
 	return d
 }
 
-// MaxUnavailableFor returns the targets updated together out of n targets (at least 1).
-func (r *Rollout) MaxUnavailableFor(n int) int {
-	v := strings.TrimSpace(r.MaxUnavailable)
+// MaxUnavailableFor returns the targets of wave w updated together out of n targets (at least
+// 1): the wave's maxUnavailable, otherwise the rollout's.
+func (r *Rollout) MaxUnavailableFor(w Wave, n int) int {
+	v := strings.TrimSpace(w.MaxUnavailable)
+	if v == "" {
+		v = strings.TrimSpace(r.MaxUnavailable)
+	}
 	if v == "" {
 		return 1
 	}
@@ -333,13 +339,14 @@ func (r *Rollout) Validate() error {
 				errs = append(errs, fmt.Errorf("%s.batchBake non ammesso con strategy: traffic (il passo è un unico lotto)", p))
 			}
 		}
-	}
-	if v := strings.TrimSpace(r.MaxUnavailable); v != "" {
-		n, err := strconv.Atoi(strings.TrimSuffix(v, "%"))
-		if err != nil || n < 1 || (strings.HasSuffix(v, "%") && n > 100) {
-			errs = append(errs, fmt.Errorf("rollout.maxUnavailable %q non valido (numero >= 1 o percentuale 1-100%%)", v))
+		if w.MaxUnavailable != "" {
+			errs = append(errs, validMaxUnavailable(p+".maxUnavailable", w.MaxUnavailable))
+			if r.IsTraffic() {
+				errs = append(errs, fmt.Errorf("%s.maxUnavailable non ammesso con strategy: traffic (il passo è un unico lotto)", p))
+			}
 		}
 	}
+	errs = append(errs, validMaxUnavailable("rollout.maxUnavailable", r.MaxUnavailable))
 	switch r.OnFailure {
 	case "", OnFailureStop, OnFailureRollbackWave, OnFailureRollbackAll:
 	default:
@@ -362,6 +369,19 @@ func (r *Rollout) Validate() error {
 		errs = append(errs, r.Health.validate())
 	}
 	return errors.Join(errs...)
+}
+
+// validMaxUnavailable checks a maxUnavailable value: a number >= 1 or a percentage 1-100%.
+func validMaxUnavailable(field, v string) error {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(v, "%"))
+	if err != nil || n < 1 || (strings.HasSuffix(v, "%") && n > 100) {
+		return fmt.Errorf("%s %q non valido (numero >= 1 o percentuale 1-100%%)", field, v)
+	}
+	return nil
 }
 
 func (h *Health) validate() error {

@@ -230,7 +230,7 @@ func pass(w descriptor.Wave, region, az string, ts []descriptor.Target, r *descr
 		p.Region = common(ts, labels.Region)
 		p.AZ = common(ts, labels.AZ)
 	}
-	size := r.MaxUnavailableFor(len(ts))
+	size := r.MaxUnavailableFor(w, len(ts))
 	for i := 0; i < len(ts); i += size {
 		p.Batches = append(p.Batches, ts[i:min(i+size, len(ts))])
 	}
