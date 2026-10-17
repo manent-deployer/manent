@@ -201,6 +201,8 @@ nav:
       - ecs: plugins/ecs.md
       - lambda: plugins/lambda.md
       - cloudrun: plugins/cloudrun.md
+      - appservice: plugins/appservice.md
+      - containerapps: plugins/containerapps.md
       - jboss: plugins/jboss.md
       - windows: plugins/windows.md
       - External plugins: plugins/esterni.md

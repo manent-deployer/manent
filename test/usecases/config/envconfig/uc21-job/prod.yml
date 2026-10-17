@@ -1,0 +1,24 @@
+# UC21: scheduled task on the emulated Windows host, over WinRM, with the stored password of
+# the task account.
+plugin: windows
+targets:
+  - {host: win1, user: deploy, labels: {region: eu-1, az: eu-1a}}
+params:
+  mode: task
+  transport: winrm
+  winrm_auth: basic
+  winrm_insecure_skip_verify: "true"
+  shell: pwsh
+  password_secret: win-pass
+  task: Export
+  task_path: \UC21\
+  binary: bin/worker.exe
+  arguments: --all
+  task_user: CONTOSO\svc-job
+  task_password_secret: job-pass
+  run_now: "true"
+  timeout: 5s
+  releases_dir: /srv/win/apps/uc21-job/releases
+secrets:
+  - {name: win-pass, ref: file:/keys/win-pass}
+  - {name: job-pass, ref: file:/keys/job-pass}

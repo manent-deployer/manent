@@ -493,7 +493,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	}
 	var desc []string
 	for v, hosts := range found {
-		desc = append(desc, v+" su "+strings.Join(hosts, ","))
+		desc = append(desc, v+" on "+strings.Join(hosts, ","))
 	}
 	sort.Strings(desc)
 	return nil, fmt.Errorf("different versions on the targets: %s", strings.Join(desc, "; "))

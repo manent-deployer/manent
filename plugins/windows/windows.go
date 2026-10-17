@@ -1,9 +1,12 @@
-// Package windows deploys to Windows hosts: web applications on IIS and Windows services,
-// over WinRM or the OpenSSH server of Windows, with PowerShell scripts.
+// Package windows deploys to Windows hosts: web applications on IIS, Windows services,
+// scheduled tasks and MSI packages, over WinRM or the OpenSSH server of Windows, with
+// PowerShell scripts.
 //
-// Every version is extracted (from a .zip artifact) into <releases_dir>\<version>; the release
-// in service is the physicalPath of the IIS application or the binPath of the service, so the
-// switch is a configuration change and the rollback goes back to a kept directory.
+// Every version is extracted (from a .zip artifact) into <releases_dir>\<version>, or kept
+// there as package.msi; the release in service is the physicalPath of the IIS application, the
+// binPath of the service, the action of the scheduled task or the installed MSI product, so the
+// switch is a configuration change (or an installation) and the rollback goes back to a kept
+// directory. The package also provides the iis-arr and nlb traffic pools (pool.go).
 package windows
 
 import (
@@ -14,6 +17,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -29,7 +33,7 @@ const Name = "windows"
 
 // Parameters of the plugin (deploy.params and environment configuration).
 const (
-	ParamMode        = "mode"         // iis (default) or service
+	ParamMode        = "mode"         // iis (default), service, task or msi
 	ParamReleasesDir = "releases_dir" // required: directory of the releases, e.g. C:\apps\shop\releases
 	ParamSite        = "site"         // iis: site name (required)
 	ParamApp         = "app"          // iis: application path, default "/" (the site)
@@ -37,8 +41,17 @@ const (
 	ParamStopAppPool = "stop_app_pool"
 	ParamService     = "service"   // service: service name (required)
 	ParamBinary      = "binary"    // service: executable relative to the release (required)
-	ParamArguments   = "arguments" // service: arguments of the executable
-	ParamTimeout     = "timeout"   // wait for the application pool or the service (default 60s)
+	ParamArguments   = "arguments" // service and task: arguments of the executable
+	ParamTask        = "task"      // task: scheduled task name (required)
+	ParamTaskPath    = "task_path" // task: folder of the task, default \
+	ParamStopTask    = "stop_task" // task: stops a running instance instead of waiting for it
+	ParamRunNow      = "run_now"   // task: starts the task after the switch
+	ParamTaskUser    = "task_user" // task: account of the task, with task_password_secret
+	ParamTaskSecret  = "task_password_secret"
+	ParamProduct     = "product_name"       // msi: name of the installed product (required)
+	ParamMSIProps    = "msi_properties"     // msi: public properties, "NAME=value NAME2=value"
+	ParamUninstall   = "uninstall_previous" // msi: uninstalls the product before installing
+	ParamTimeout     = "timeout"            // wait for the application pool or the service (default 60s)
 	ParamKeep        = "keep_releases"
 	ParamPostScript  = "post_script" // PowerShell run after the switch
 	ParamTransport   = "transport"   // winrm (default) or ssh
@@ -55,6 +68,8 @@ const (
 const (
 	ModeIIS        = "iis"
 	ModeService    = "service"
+	ModeTask       = "task"
+	ModeMSI        = "msi"
 	TransportSSH   = "ssh"
 	TransportWinRM = "winrm"
 	AuthNTLM       = "ntlm"
@@ -68,6 +83,10 @@ var (
 	// nameRe accepts IIS site, application pool and service names without characters that could
 	// leave the filter or the literal of the scripts.
 	nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,127}$`)
+	// taskPathRe is a task folder: \ or \Folder\Sub\.
+	taskPathRe = regexp.MustCompile(`^\\([A-Za-z0-9][A-Za-z0-9 ._()-]{0,127}\\)*$`)
+	// msiPropRe is a public MSI property with a value without spaces, quotes or shell characters.
+	msiPropRe = regexp.MustCompile(`^[A-Z][A-Z0-9_.]{0,63}=[^\s"'` + "`" + `$;&|<>]{0,256}$`)
 )
 
 // settings are the validated parameters.
@@ -76,6 +95,12 @@ type settings struct {
 	Site, App, AppPool         string
 	StopAppPool                bool
 	Service, Binary, Arguments string
+	Task, TaskPath, TaskUser   string
+	TaskSecret                 string
+	StopTask, RunNow           bool
+	Product                    string
+	MSIProps                   []string
+	Uninstall                  bool
 	Timeout                    time.Duration
 	Keep                       int
 	PostScript                 string
@@ -145,6 +170,9 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	if !versionRe.MatchString(req.Artifact.Version) {
 		errs = append(errs, fmt.Errorf("version %q is not valid as a release name", req.Artifact.Version))
 	}
+	if req.Params[ParamMode] == ModeMSI && req.Artifact.LocalPath != "" && !strings.EqualFold(filepath.Ext(req.Artifact.LocalPath), ".msi") {
+		errs = append(errs, errors.New("mode msi: the artifact must be a .msi package"))
+	}
 	return errors.Join(errs...)
 }
 
@@ -155,10 +183,21 @@ func parse(params map[string]string) (settings, error) {
 		Site: params[ParamSite], App: cmp.Or(params[ParamApp], "/"), AppPool: params[ParamAppPool],
 		Service: params[ParamService], Binary: params[ParamBinary], Arguments: params[ParamArguments],
 		PostScript: params[ParamPostScript], PasswordSecret: params[ParamPassword], SSHSecret: params[ParamSSHKey],
+		Task: params[ParamTask], TaskPath: cmp.Or(params[ParamTaskPath], `\`), TaskUser: params[ParamTaskUser],
+		TaskSecret: params[ParamTaskSecret], Product: params[ParamProduct], MSIProps: strings.Fields(params[ParamMSIProps]),
 		Keep: defaultKeep, Timeout: time.Minute,
 	}
 	var errs []error
 	bad := func(k, why string) { errs = append(errs, fmt.Errorf("parameter %s: %s", k, why)) }
+	flag := func(k string, dst *bool) {
+		if v := params[k]; v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				bad(k, "true or false")
+			}
+			*dst = b
+		}
+	}
 	if s.ReleasesDir == "" || strings.ContainsAny(s.ReleasesDir, "'\"`$\r\n") {
 		bad(ParamReleasesDir, "required, without quotes, $ or newlines")
 	}
@@ -173,25 +212,45 @@ func parse(params map[string]string) (settings, error) {
 		if s.AppPool != "" && !nameRe.MatchString(s.AppPool) {
 			bad(ParamAppPool, "invalid name")
 		}
-		if v := params[ParamStopAppPool]; v != "" {
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				bad(ParamStopAppPool, "true or false")
-			}
-			s.StopAppPool = b
-		}
-	case ModeService:
-		if !nameRe.MatchString(s.Service) {
+		flag(ParamStopAppPool, &s.StopAppPool)
+	case ModeService, ModeTask:
+		if s.Mode == ModeService && !nameRe.MatchString(s.Service) {
 			bad(ParamService, "required with mode service")
 		}
+		if s.Mode == ModeTask {
+			if !nameRe.MatchString(s.Task) {
+				bad(ParamTask, "required with mode task")
+			}
+			if !taskPathRe.MatchString(s.TaskPath) {
+				bad(ParamTaskPath, `task folder, e.g. \ or \Shop\`)
+			}
+			flag(ParamStopTask, &s.StopTask)
+			flag(ParamRunNow, &s.RunNow)
+			if (s.TaskUser == "") != (s.TaskSecret == "") {
+				bad(ParamTaskUser, "task_user and task_password_secret go together")
+			}
+			if strings.ContainsAny(s.TaskUser, "'\"`$\r\n") {
+				bad(ParamTaskUser, "invalid account")
+			}
+		}
 		if s.Binary == "" || strings.ContainsAny(s.Binary, "'\"`$\r\n") || strings.Contains(s.Binary, "..") {
-			bad(ParamBinary, "executable relative to the release, required with mode service")
+			bad(ParamBinary, "executable relative to the release, required with mode "+s.Mode)
 		}
 		if strings.ContainsAny(s.Arguments, "\r\n") {
 			bad(ParamArguments, "without newlines")
 		}
+	case ModeMSI:
+		if !nameRe.MatchString(s.Product) {
+			bad(ParamProduct, "required with mode msi: the name of the installed product (letters, digits, spaces, . _ - ( ))")
+		}
+		for _, p := range s.MSIProps {
+			if !msiPropRe.MatchString(p) {
+				bad(ParamMSIProps, fmt.Sprintf("%q: NAME=value with an uppercase public property, value without spaces or quotes", p))
+			}
+		}
+		flag(ParamUninstall, &s.Uninstall)
 	default:
-		bad(ParamMode, "iis or service")
+		bad(ParamMode, "iis, service, task or msi")
 	}
 	if v := params[ParamTimeout]; v != "" {
 		d, err := time.ParseDuration(v)
@@ -207,6 +266,12 @@ func parse(params map[string]string) (settings, error) {
 		}
 		s.Keep = n
 	}
+	s.Conn = parseConn(params, s.PasswordSecret, s.SSHSecret, bad)
+	return s, errors.Join(errs...)
+}
+
+// parseConn validates the connection parameters, shared by the plugin and the pools.
+func parseConn(params map[string]string, passwordSecret, sshSecret string, bad func(k, why string)) Conn {
 	c := Conn{Transport: cmp.Or(params[ParamTransport], TransportWinRM), Shell: cmp.Or(params[ParamShell], "powershell"), HTTPS: true, Auth: cmp.Or(params[ParamAuth], AuthNTLM)}
 	if c.Transport != TransportWinRM && c.Transport != TransportSSH {
 		bad(ParamTransport, "winrm or ssh")
@@ -242,17 +307,16 @@ func parse(params map[string]string) (settings, error) {
 		}
 		c.Port = n
 	}
-	if c.Transport == TransportWinRM && s.PasswordSecret == "" {
+	if c.Transport == TransportWinRM && passwordSecret == "" {
 		bad(ParamPassword, "required with transport winrm")
 	}
 	if c.Transport == TransportWinRM && c.Auth == AuthBasic && !c.HTTPS {
 		bad(ParamAuth, "basic only with winrm_https: the password would travel in clear text")
 	}
-	if c.Transport == TransportSSH && s.PasswordSecret == "" && s.SSHSecret == "" {
+	if c.Transport == TransportSSH && passwordSecret == "" && sshSecret == "" {
 		bad(ParamSSHKey, "ssh_key_secret or password_secret required with transport ssh")
 	}
-	s.Conn = c
-	return s, errors.Join(errs...)
+	return c
 }
 
 // connect resolves the secrets (only now, never kept) and opens the transport.
@@ -327,8 +391,16 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 	} else {
 		log.InfoContext(ctx, "release già presente sul target, copia saltata")
 	}
-	if _, err := tr.Run(ctx, activateScript(s, version), nil); err != nil {
+	pw, err := p.taskPassword(ctx, req, s)
+	if err != nil {
+		return err
+	}
+	out, err = tr.Run(ctx, activateScript(s, version, false, pw), nil)
+	if err != nil {
 		return fmt.Errorf("activation: %w", err)
+	}
+	if results(out)["reboot"] == "required" {
+		log.WarnContext(ctx, "il pacchetto MSI richiede un riavvio del target, non eseguito da manent")
 	}
 	log.InfoContext(ctx, "release in esercizio", "previous", prev)
 	if _, err := tr.Run(ctx, cleanupScript(s, s.Keep, version, prev), nil); err != nil {
@@ -336,6 +408,14 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 		log.WarnContext(ctx, "pulizia delle release fallita", "error", err)
 	}
 	return nil
+}
+
+// taskPassword resolves the password of the scheduled task account, only when it is needed.
+func (p *Plugin) taskPassword(ctx context.Context, req *plugin.Request, s settings) (string, error) {
+	if s.Mode != ModeTask || s.TaskSecret == "" {
+		return "", nil
+	}
+	return req.Secrets.Secret(ctx, s.TaskSecret)
 }
 
 // current returns the version in service on the target: the release directory the IIS
@@ -348,13 +428,16 @@ func (p *Plugin) current(ctx context.Context, tr Transport, s settings) (string,
 	}
 	r := results(out)
 	if r["found"] != "true" {
-		if s.Mode == ModeIIS {
+		switch s.Mode {
+		case ModeIIS:
 			return "", fmt.Errorf("application %s of site %s not found", s.App, s.Site)
+		case ModeTask:
+			return "", fmt.Errorf("scheduled task %s%s not found", s.TaskPath, s.Task)
 		}
 		return "", fmt.Errorf("service %s not found", s.Service)
 	}
 	p0 := r["path"]
-	if s.Mode == ModeService {
+	if s.Mode == ModeService || s.Mode == ModeTask {
 		p0 = executable(p0)
 	}
 	return releaseOf(s.ReleasesDir, p0), nil
@@ -452,7 +535,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	}
 	var desc []string
 	for _, v := range slices.Sorted(maps.Keys(found)) {
-		desc = append(desc, v+" su "+strings.Join(found[v], ","))
+		desc = append(desc, v+" on "+strings.Join(found[v], ","))
 	}
 	return nil, fmt.Errorf("different releases on the targets: %s", strings.Join(desc, "; "))
 }
@@ -471,9 +554,13 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	var errs []error
 	for _, t := range req.Targets {
 		d := map[string]string{"version": previous.Version}
-		tr, err := p.connect(ctx, req, s, t)
+		pw, err := p.taskPassword(ctx, req, s)
+		var tr Transport
 		if err == nil {
-			_, err = tr.Run(ctx, activateScript(s, previous.Version), nil)
+			tr, err = p.connect(ctx, req, s, t)
+		}
+		if err == nil {
+			_, err = tr.Run(ctx, activateScript(s, previous.Version, true, pw), nil)
 			tr.Close()
 		}
 		if err != nil {

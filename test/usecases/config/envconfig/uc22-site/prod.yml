@@ -1,0 +1,15 @@
+# UC22: App Service web app without slot: the package goes straight to production, the version
+# in the tags of the web app.
+plugin: appservice
+targets:
+  - {host: uc22/uc22-site, labels: {region: westeurope}}
+params:
+  subscription: 33333333-0000-4000-8000-000000000022
+  resource_group: uc22
+  tenant_id: 22222222-0000-4000-8000-000000000022
+  client_id: 22222222-0000-4000-8000-000000000022
+  client_secret_secret: azure-sp
+  health_path: /healthz
+  wait_timeout: 20s
+secrets:
+  - {name: azure-sp, ref: file:/keys/azure-secret}

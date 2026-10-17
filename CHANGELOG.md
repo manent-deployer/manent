@@ -14,6 +14,22 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Azure: plugin `appservice` per le web app di App Service (pacchetti via Kudu OneDeploy o
+  immagini; con uno slot rilascio nello slot, controllo di salute e swap, rollback con lo swap
+  all'indietro e rilasci per percentuale con le `rampUpRules`; senza slot rilascio in
+  produzione con la versione nei tag) e plugin `containerapps` per Azure Container Apps
+  (revisione per deploy con suffisso derivato dal deploy, versione nelle variabili del
+  container, rollback come spostamento del traffico in modalità Multiple o nuova revisione in
+  Single, rilasci per percentuale con le label per i tester). Credenziali da service principal,
+  workload identity o managed identity, senza SDK. Metriche dei gate da Azure Monitor Logs
+  (`provider: azure-monitor`, KQL su Log Analytics, `rollout.azure_monitor`). Caso d'uso UC22
+  su Azure emulato a livello di protocollo (`internal/azurefake`).
+- Windows: `mode: task` per le attività pianificate (azione sull'eseguibile della release,
+  attesa o arresto dell'istanza in esecuzione, password memorizzata dell'account, `run_now`),
+  `mode: msi` per i pacchetti MSI (`msiexec` con le proprietà pubbliche, prodotto letto da
+  `Win32_InstalledWin32Program`, disinstallazione prima di un downgrade o di un rollback) e i
+  pool di traffico `iis-arr` (stato Drain di IIS Application Request Routing, richieste in
+  corso) e `nlb` (`Stop-NlbClusterNode -Drain`). Caso d'uso UC21 su due host Windows emulati.
 - Plugin `windows` per host Windows: applicazioni IIS (`physicalPath` dell'applicazione,
   application pool fermato o riciclato) e servizi Windows (`binPath` con `sc.exe config`, attesa
   di `Running`), via WinRM (NTLM o basic, HTTPS) o OpenSSH, con script PowerShell compatibili con

@@ -52,6 +52,8 @@ In dry-run the pool is not touched.
 | `f5` | iControl REST on the LTM pool member: `session: user-disabled` (existing and persistent connections go on) | `serverside.curConns` at 0 | `session: user-enabled`, `state: user-up`; healthy if the monitor sees it `up` |
 | `nginx-plus` | NGINX Plus API on every instance: `drain: true` on the upstream server | `active` connections at 0 on every instance | `drain: false`, `down: false`; healthy if `up` for the active health checks |
 | `nginx` | Open source NGINX over SSH: `down` parameter on the server in a dedicated file included in the upstream, then `nginx -t && nginx -s reload` on every instance | after `drain_delay` | `down` removed and reload; healthy if present and not `down` |
+| `iis-arr` | IIS Application Request Routing, PowerShell on the ARR server: ARR state *Drain* of the farm server | current requests of the server at 0 | state *Available*; healthy if ARR sees it healthy. See [windows](../plugins/windows.md#svuotamento-con-arr-e-nlb) |
+| `nlb` | Windows Network Load Balancing, PowerShell on a cluster node: `Stop-NlbClusterNode -Drain` (up to `drain_timeout`, then the node stops) | node `Stopped` | `Start-NlbClusterNode`; healthy if `Converged`. See [windows](../plugins/windows.md#svuotamento-con-arr-e-nlb) |
 
 ### haproxy
 
@@ -121,7 +123,7 @@ It works with any load balancer, but it does not know the other members of the p
 
 | `traffic.pool` | Default | Description |
 |---|---|---|
-| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`, `nginx`. |
+| `provider` | | `haproxy`, `aws-elb`, `health-flag`, `f5`, `nginx-plus`, `nginx`, `iis-arr`, `nlb`. |
 | `member` | `{host}` | Member name of a target: `{host}`, `{port}`, `{label.<name>}`. |
 | `drain_timeout` | `5m` | Maximum wait for capacity and remaining connections. |
 | `restore_timeout` | `5m` | Maximum wait for the restore to become healthy. |

@@ -1,4 +1,5 @@
-# Emulation of the Windows service cmdlets for the use cases (Get-CimInstance Win32_Service,
+# Emulation of the Windows service cmdlets for the use cases (Get-CimInstance Win32_Service and
+# Win32_InstalledWin32Program,
 # Get-Service, Stop-Service, Start-Service), on services.json. Starting a service runs its
 # executable with --check: an executable that fails makes the start fail, as a service that
 # stops at startup on Windows.
@@ -11,6 +12,19 @@ function Get-ServiceEntry([hashtable] $s, [string] $Name) {
 
 function Get-CimInstance {
   param([string] $ClassName, [string] $Filter)
+  if ($ClassName -eq 'Win32_InstalledWin32Program') {
+    # Installed MSI products, from products.json (written by the msiexec.exe emulation).
+    if ($Filter -notmatch "^(Name|MsiProductCode)='([^']+)'$") { throw "query non supportata: $ClassName $Filter" }
+    $field, $value = $Matches[1], $Matches[2]
+    $p = Read-ManentState 'products'
+    foreach ($code in $p.Keys) {
+      $e = $p[$code]
+      if (($field -eq 'Name' -and $e.name -eq $value) -or ($field -eq 'MsiProductCode' -and $code -eq $value)) {
+        [pscustomobject]@{ Name = $e.name; Version = $e.version; MsiProductCode = $code }
+      }
+    }
+    return
+  }
   if ($ClassName -ne 'Win32_Service' -or $Filter -notmatch "Name='([^']+)'") { throw "query non supportata: $ClassName $Filter" }
   $name = $Matches[1]
   $s = Read-ManentState 'services'

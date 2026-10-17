@@ -1,0 +1,15 @@
+# UC22: Container Apps app in Multiple mode on the emulated Azure: a revision per deploy, all
+# traffic to the new one; the rollback moves the traffic back to the previous revision.
+plugin: containerapps
+targets:
+  - {host: uc22-api, labels: {region: westeurope}}
+params:
+  subscription: 33333333-0000-4000-8000-000000000022
+  resource_group: uc22
+  tenant_id: 22222222-0000-4000-8000-000000000022
+  client_id: 22222222-0000-4000-8000-000000000022
+  client_secret_secret: azure-sp
+  container: api
+  wait_timeout: 2m
+secrets:
+  - {name: azure-sp, ref: file:/keys/azure-secret}

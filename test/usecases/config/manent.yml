@@ -26,6 +26,14 @@ rollout:
   newrelic: {url: http://fakes:9100/newrelic/graphql, account_id: 1234, api_key_ref: file:/keys/nr-key}
   elastic: {url: http://fakes:9100/elastic, api_key_ref: file:/keys/es-key}
   cloudwatch: {region: eu-west-1, endpoint: http://fakes:9100/cloudwatch, access_key_id_ref: file:/keys/aws-id, secret_access_key_ref: file:/keys/aws-secret}
+  # UC22: Log Analytics of the emulated Azure, with the lab service principal.
+  azure_monitor:
+    workspace_id: 22222222-0000-4000-8000-000000000022
+    endpoint: http://fakes:9400
+    authority: http://fakes:9400
+    tenant_id: 22222222-0000-4000-8000-000000000022
+    client_id: 22222222-0000-4000-8000-000000000022
+    client_secret_ref: file:/keys/azure-secret
 
 # UC17: the workers read the release in service on the targets every 10 seconds.
 reconcile:
@@ -79,6 +87,14 @@ rollback:
       enabled: false
       on: [deploy, post-test, activation]
     windows:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    appservice:
+      allowed: true
+      enabled: false
+      on: [deploy, post-test, activation]
+    containerapps:
       allowed: true
       enabled: false
       on: [deploy, post-test, activation]
@@ -222,6 +238,17 @@ plugins:
   windows:
     artifact_types: [windows]
     insecure_ignore_host_key: true   # ssh transport
+  # UC22: App Service and Container Apps on the emulated Azure (fakes:9400).
+  appservice:
+    artifact_types: [appservice]
+    management_endpoint: http://fakes:9400
+    authority: http://fakes:9400
+    scm_endpoint: http://fakes:9400/scm
+    site_endpoint: http://fakes:9400/site
+  containerapps:
+    artifact_types: [containerapps]
+    management_endpoint: http://fakes:9400
+    authority: http://fakes:9400
 
 # UC13: Slack, Teams and ServiceNow emulated by the fakes service (test/usecases/fakes).
 integrations:

@@ -181,6 +181,7 @@ Health gate of [wave rollouts](../guida/ondate.md#health-gate).
 | `newrelic` | | New Relic NerdGraph: `url` (default `https://api.newrelic.com/graphql`), `account_id`, `api_key_ref` (user key). |
 | `elastic` | | Elasticsearch ES\|QL: `url`, `api_key_ref` or `username` and `password_ref`, `ca_file`. |
 | `cloudwatch` | | Amazon CloudWatch: `region`, `endpoint` (optional), credentials from the SDK chain or `access_key_id_ref` and `secret_access_key_ref`, `role_arn` and `external_id` to assume a role. |
+| `azure_monitor` | | Azure Monitor Logs (`provider: azure-monitor`): `workspace_id`, a service principal with `tenant_id`, `client_id` and `client_secret_ref` or, without them, the identity of the worker (workload or managed identity); `endpoint` and `authority` for sovereign clouds. |
 | `check_timeout` | `30s` | Maximum time of each gate reading. |
 
 ### `integrations`

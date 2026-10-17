@@ -89,7 +89,7 @@ rollout:
 | Campo | Default | Significato |
 |---|---|---|
 | `analysis` | | `mann-whitney` per il confronto statistico; senza, le soglie su una lettura singola descritte sopra. Richiede `compare: stable`. |
-| `provider` | `prometheus` | Sistema di metriche: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch` (configurati in [`rollout`](../operazioni/configurazione.md#rollout)). |
+| `provider` | `prometheus` | Sistema di metriche: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch`, `azure-monitor` (configurati in [`rollout`](../operazioni/configurazione.md#rollout)). |
 | `direction` | `increase` | Cosa è peggiore: `increase`, `decrease` o `either`. |
 | `maxRatio`, `minRatio` | `1` | Rapporto tollerato tra le medie (candidata/stabile) nella direzione peggiore. |
 | `alpha` | `0.05` | Livello di significatività. |
@@ -113,6 +113,7 @@ Ogni query è scritta nel linguaggio del suo sistema, con i soliti segnaposto (`
 | `newrelic` | NRQL via NerdGraph | Senza `SINCE`, `UNTIL` e `TIMESERIES`: li aggiunge manent per la finestra letta. La metrica è il primo campo numerico. |
 | `elastic` | ES\|QL (`/_query`) | Segnaposto `{start}`, `{end}` (RFC 3339) e `{step}` (es. `15 seconds`); l'ultima colonna numerica, una riga per intervallo ordinata per tempo. |
 | `cloudwatch` | metric math o Metrics Insights (`SELECT …`) | Letta con `GetMetricData`; il periodo è arrotondato a un valore accettato da CloudWatch (1, 5, 10, 30 secondi o multipli di 60). |
+| `azure-monitor` | KQL su un workspace Log Analytics (anche di un Application Insights basato su workspace) | La finestra è il `timespan` della query; segnaposto `{step}` (es. `60s`) per `bin(TimeGenerated, {step})`; l'ultima colonna numerica, una riga per punto. |
 
 ## Router
 
@@ -122,6 +123,8 @@ Ogni query è scritta nel linguaggio del suo sistema, con i soliti segnaposto (`
 | [kubernetes](../plugins/kubernetes.md#rilasci-per-percentuale) con Istio | workload con suffisso, Service comune | pesi delle route verso i subset `a` e `b` di un `VirtualService` | voce `http` con un match sull'header |
 | [lambda](../plugins/lambda.md#rilasci-per-percentuale) | versioni pubblicate | alias con un peso aggiuntivo (`AdditionalVersionWeights`) | invocazione diretta della versione candidata |
 | [cloudrun](../plugins/cloudrun.md#rilasci-per-percentuale) | revisioni | traffico del servizio diviso tra due revisioni | URL del tag della revisione (`testers.tag`) |
+| [appservice](../plugins/appservice.md#rilasci-per-percentuale) | produzione e uno slot | `rampUpRules` della produzione verso lo slot, poi lo swap | host name dello slot, o il cookie `x-ms-routing-name` |
+| [containerapps](../plugins/containerapps.md#rilasci-per-percentuale) | revisioni (modalità Multiple) | traffico dell'ingress diviso tra due revisioni | URL della label della revisione (`testers.tag`) |
 
 Su Lambda e Cloud Run le versioni senza traffico non consumano risorse: un blue/green non raddoppia la capacità. Anche un [plugin esterno](../plugins/esterni.md) può fare da router, dichiarando le capacità `slots` e `traffic_router`.
 

@@ -1,0 +1,32 @@
+#!/usr/bin/env pwsh
+# Emulation of msiexec.exe for the use cases, on products.json. The "package" is JSON
+# ({"name", "version", "code", "fail"}): /i installs it, replacing an installed product with the
+# same name and a lower version (MajorUpgrade) and refusing a downgrade (1603); /x removes a
+# product. Public properties (NAME=value) are recorded with the product. Exit codes on Linux
+# have 8 bits: 1603 arrives as 67, so an unknown product on /x exits 0 (1605 would be 69).
+. '/usr/local/share/powershell/Modules/ManentWindowsStub/State.ps1'
+$argv = @($args | ForEach-Object { ([string]$_).Trim('"') })
+$p = Read-ManentState 'products'
+switch ($argv[0]) {
+  '/i' {
+    $pkg = Get-Content -Raw -LiteralPath $argv[1] | ConvertFrom-Json
+    if ($pkg.fail) { exit 1603 }
+    foreach ($code in @($p.Keys)) {
+      if ($p[$code].name -ne $pkg.name -or $code -eq $pkg.code) { continue }
+      if ([version]$p[$code].version -gt [version]$pkg.version) { exit 1603 }
+      $p.Remove($code)
+    }
+    $props = @{}
+    foreach ($a in $argv) { if ($a -match '^([A-Z][A-Z0-9_.]*)=(.*)$') { $props[$Matches[1]] = $Matches[2] } }
+    $p[$pkg.code] = @{ name = $pkg.name; version = $pkg.version; properties = $props }
+    Write-ManentState 'products' $p
+    exit 0
+  }
+  '/x' {
+    if (-not $p.ContainsKey($argv[1])) { exit 0 }
+    $p.Remove($argv[1])
+    Write-ManentState 'products' $p
+    exit 0
+  }
+  default { exit 1639 }
+}

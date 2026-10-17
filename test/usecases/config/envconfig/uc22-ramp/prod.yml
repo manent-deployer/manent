@@ -1,0 +1,28 @@
+# UC22: percentage rollout on App Service: the slot receives 30% of production traffic
+# (rampUpRules) while the gate reads the error rate from Log Analytics, then the swap.
+plugin: appservice
+targets:
+  - {host: uc22-ramp, labels: {region: westeurope, az: westeurope-1}}
+params:
+  subscription: 33333333-0000-4000-8000-000000000022
+  resource_group: uc22
+  tenant_id: 22222222-0000-4000-8000-000000000022
+  client_id: 22222222-0000-4000-8000-000000000022
+  client_secret_secret: azure-sp
+  slot: staging
+  health_path: /healthz
+  wait_timeout: 20s
+secrets:
+  - {name: azure-sp, ref: file:/keys/azure-secret}
+rollout:
+  strategy: traffic
+  traffic:
+    steps: [30, 100]
+    bake: 3s
+  health:
+    interval: 1s
+    metrics:
+      - name: errori
+        provider: azure-monitor
+        query: "AppRequests | where AppRoleName == 'uc22-ramp' | summarize avg(todouble(Success == false)) by bin(TimeGenerated, {step})"
+        max: 0.05

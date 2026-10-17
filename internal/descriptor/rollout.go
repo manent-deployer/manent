@@ -167,10 +167,12 @@ const (
 	ProviderCloudWatch = "cloudwatch"
 	ProviderNewRelic   = "newrelic"
 	ProviderElastic    = "elastic"
+	// ProviderAzureMonitor is Azure Monitor Logs (KQL on a Log Analytics workspace).
+	ProviderAzureMonitor = "azure-monitor"
 )
 
 // MetricProviders are the supported metrics systems.
-var MetricProviders = []string{ProviderPrometheus, ProviderDatadog, ProviderCloudWatch, ProviderNewRelic, ProviderElastic}
+var MetricProviders = []string{ProviderPrometheus, ProviderDatadog, ProviderCloudWatch, ProviderNewRelic, ProviderElastic, ProviderAzureMonitor}
 
 // Metric analyses and directions.
 const (

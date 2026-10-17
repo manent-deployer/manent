@@ -1,0 +1,39 @@
+# UC21: IIS application on two emulated Windows hosts behind an ARR web farm managed on win1:
+# one host at a time leaves the farm (ARR state Drain) before the switch and comes back after.
+plugin: windows
+targets:
+  - {host: win1, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: win2, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  mode: iis
+  transport: winrm
+  winrm_auth: basic
+  winrm_insecure_skip_verify: "true"   # lab: self-signed certificate
+  shell: pwsh
+  password_secret: win-pass
+  site: Default Web Site
+  app: /uc21-web
+  app_pool: uc21-web
+  releases_dir: /srv/win/apps/uc21-web/releases
+secrets:
+  - {name: win-pass, ref: file:/keys/win-pass}
+rollout:
+  waves:
+    - {name: eu, select: "region=eu-1", by: az}
+  maxUnavailable: "1"
+traffic:
+  pool:
+    provider: iis-arr
+    min_healthy: "1"
+    drain_timeout: 20s
+    restore_timeout: 60s
+    poll_interval: 1s
+    settings:
+      host: win1
+      user: deploy
+      farm: uc21-farm
+      transport: winrm
+      winrm_auth: basic
+      winrm_insecure_skip_verify: "true"
+      shell: pwsh
+      password_secret: win-pass

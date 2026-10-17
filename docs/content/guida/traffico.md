@@ -89,7 +89,7 @@ rollout:
 | Field | Default | Meaning |
 |---|---|---|
 | `analysis` | | `mann-whitney` for the statistical comparison; without it, the thresholds on a single reading above. Requires `compare: stable`. |
-| `provider` | `prometheus` | Metrics system: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch` (configured in [`rollout`](../operazioni/configurazione.md#rollout)). |
+| `provider` | `prometheus` | Metrics system: `prometheus`, `datadog`, `newrelic`, `elastic`, `cloudwatch`, `azure-monitor` (configured in [`rollout`](../operazioni/configurazione.md#rollout)). |
 | `direction` | `increase` | What counts as worse: `increase`, `decrease` or `either`. |
 | `maxRatio`, `minRatio` | `1` | Tolerated ratio between the means (candidate/stable) in the worse direction. |
 | `alpha` | `0.05` | Significance level. |
@@ -113,6 +113,7 @@ Every query is written in the language of its system, with the usual placeholder
 | `newrelic` | NRQL via NerdGraph | Without `SINCE`, `UNTIL` and `TIMESERIES`: manent adds them for the window it reads. The metric is the first numeric field. |
 | `elastic` | ES\|QL (`/_query`) | Placeholders `{start}`, `{end}` (RFC 3339) and `{step}` (e.g. `15 seconds`); the last numeric column, one row per bucket sorted by time. |
 | `cloudwatch` | metric math or Metrics Insights (`SELECT …`) | Read with `GetMetricData`; the period is rounded to a value CloudWatch accepts (1, 5, 10, 30 seconds or multiples of 60). |
+| `azure-monitor` | KQL on a Log Analytics workspace (also of a workspace-based Application Insights) | The window is the `timespan` of the query; placeholder `{step}` (e.g. `60s`) for `bin(TimeGenerated, {step})`; the last numeric column, one row per point. |
 
 ## Routers
 
@@ -122,6 +123,8 @@ Every query is written in the language of its system, with the usual placeholder
 | [kubernetes](../plugins/kubernetes.md#rilasci-per-percentuale) with Istio | suffixed workloads, shared Service | weights of the routes to the `a` and `b` subsets of a `VirtualService` | `http` entry with a header match |
 | [lambda](../plugins/lambda.md#rilasci-per-percentuale) | published versions | alias with an additional weight (`AdditionalVersionWeights`) | direct invocation of the candidate version |
 | [cloudrun](../plugins/cloudrun.md#rilasci-per-percentuale) | revisions | service traffic split between two revisions | URL of the revision tag (`testers.tag`) |
+| [appservice](../plugins/appservice.md#rilasci-per-percentuale) | production and a deployment slot | `rampUpRules` of production towards the slot, then the swap | host name of the slot, or the `x-ms-routing-name` cookie |
+| [containerapps](../plugins/containerapps.md#rilasci-per-percentuale) | revisions (Multiple mode) | ingress traffic split between two revisions | URL of the revision label (`testers.tag`) |
 
 On Lambda and Cloud Run versions without traffic use no resources: a blue/green does not double the capacity. An [external plugin](../plugins/esterni.md) can act as a router too, declaring the `slots` and `traffic_router` capabilities.
 

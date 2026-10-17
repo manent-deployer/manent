@@ -84,7 +84,7 @@ services:
     image: manent-uc:dev
     entrypoint: ["/usr/local/bin/manent-uc-fakes"]
     hostname: fakes
-    ports: ["127.0.0.1:19100:9100"]
+    ports: ["127.0.0.1:19100:9100", "127.0.0.1:19400:9400"]
     networks: [core]
 
   api:
@@ -169,6 +169,16 @@ services:
     build: windows
     profiles: [windows]
     hostname: win1
+    volumes:
+      - ./.work/keys:/keys:ro
+      - ./.work/bin/manent-uc-windows:/usr/local/bin/manent-uc-windows:ro
+    networks: [eu1]
+
+  # UC21: the second Windows host, behind the ARR farm and in the NLB cluster managed on win1.
+  win2:
+    build: windows
+    profiles: [windows]
+    hostname: win2
     volumes:
       - ./.work/keys:/keys:ro
       - ./.work/bin/manent-uc-windows:/usr/local/bin/manent-uc-windows:ro

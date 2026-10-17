@@ -83,10 +83,11 @@ type RolloutConfig struct {
 	// CheckTimeout limits every health gate read.
 	CheckTimeout time.Duration `yaml:"check_timeout"`
 	// Other metrics systems for the gates (rollout.health.metrics[].provider).
-	Datadog    *DatadogMetrics    `yaml:"datadog"`
-	NewRelic   *NewRelicMetrics   `yaml:"newrelic"`
-	Elastic    *ElasticMetrics    `yaml:"elastic"`
-	CloudWatch *CloudWatchMetrics `yaml:"cloudwatch"`
+	Datadog      *DatadogMetrics      `yaml:"datadog"`
+	NewRelic     *NewRelicMetrics     `yaml:"newrelic"`
+	Elastic      *ElasticMetrics      `yaml:"elastic"`
+	CloudWatch   *CloudWatchMetrics   `yaml:"cloudwatch"`
+	AzureMonitor *AzureMonitorMetrics `yaml:"azure_monitor"`
 }
 
 // DatadogMetrics configures the Datadog API: keys are secret references, read at every call.
@@ -124,6 +125,18 @@ type CloudWatchMetrics struct {
 	SecretAccessKeyRef string `yaml:"secret_access_key_ref"`
 	RoleARN            string `yaml:"role_arn"`
 	ExternalID         string `yaml:"external_id"`
+}
+
+// AzureMonitorMetrics configures Azure Monitor Logs (KQL on a Log Analytics workspace): a
+// service principal with the secret reference of its client secret or, without it, the
+// identity of the worker (workload or managed identity).
+type AzureMonitorMetrics struct {
+	WorkspaceID     string `yaml:"workspace_id"`
+	Endpoint        string `yaml:"endpoint"`
+	Authority       string `yaml:"authority"`
+	TenantID        string `yaml:"tenant_id"`
+	ClientID        string `yaml:"client_id"`
+	ClientSecretRef string `yaml:"client_secret_ref"`
 }
 
 // Chains configures dependencies between deploys (after) and composite releases.
@@ -556,16 +569,18 @@ func Default() *Config {
 		// Rollback is allowed but disabled for applications; never for migrations, which usually
 		// cannot be reversed.
 		Rollback: Rollback{Locator: "plugin", ArtifactTypes: map[string]RollbackType{
-			"application": {Allowed: true},
-			"container":   {Allowed: true},
-			"kubernetes":  {Allowed: true},
-			"ecs":         {Allowed: true},
-			"lambda":      {Allowed: true},
-			"cloudrun":    {Allowed: true},
-			"war":         {Allowed: true},
-			"ear":         {Allowed: true},
-			"windows":     {Allowed: true},
-			"migration":   {Allowed: false},
+			"application":   {Allowed: true},
+			"container":     {Allowed: true},
+			"kubernetes":    {Allowed: true},
+			"ecs":           {Allowed: true},
+			"lambda":        {Allowed: true},
+			"cloudrun":      {Allowed: true},
+			"war":           {Allowed: true},
+			"ear":           {Allowed: true},
+			"windows":       {Allowed: true},
+			"appservice":    {Allowed: true},
+			"containerapps": {Allowed: true},
+			"migration":     {Allowed: false},
 		}},
 		Pipeline: Pipeline{Steps: []Step{
 			{Name: "secrets", Mode: ModeMandatory},
@@ -754,6 +769,10 @@ func (c *Config) validateMetricSources() []error {
 	if w := r.CloudWatch; w != nil && (w.Region == "" || (w.AccessKeyIDRef == "") != (w.SecretAccessKeyRef == "") || (w.Endpoint != "" && !validURL(w.Endpoint))) {
 		errs = append(errs, errors.New("rollout.cloudwatch: region is required, access_key_id_ref and secret_access_key_ref together, http(s) endpoint if set"))
 	}
+	if a := r.AzureMonitor; a != nil && (!guidRe.MatchString(a.WorkspaceID) || (a.ClientSecretRef != "" && (!guidRe.MatchString(a.TenantID) || !guidRe.MatchString(a.ClientID))) ||
+		(a.Endpoint != "" && !validURL(a.Endpoint)) || (a.Authority != "" && !validURL(a.Authority))) {
+		errs = append(errs, errors.New("rollout.azure_monitor: workspace_id is required (GUID), client_secret_ref with tenant_id and client_id, http(s) endpoint and authority if set"))
+	}
 	return errs
 }
 
@@ -798,6 +817,9 @@ var regionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
 
 // tokenHashRe is a hexadecimal sha256.
 var tokenHashRe = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+
+// guidRe is an Azure ID (workspace, tenant, client).
+var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // validateSecurity checks authentication, secrets and artifact sources.
 func (c *Config) validateSecurity() []error {

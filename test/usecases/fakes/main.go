@@ -2,7 +2,9 @@
 // have no local version: the Slack Web API, Microsoft Teams webhooks, the ServiceNow Table API,
 // a generic HTTP endpoint for custom steps and the metric APIs of Datadog, New Relic
 // (NerdGraph), Elastic (ES|QL) and CloudWatch (GetMetricData, Smithy RPC v2 CBOR). Every request is recorded and can be read on
-// GET /records, so the cases check what manent sent. Never use it outside the lab.
+// GET /records, so the cases check what manent sent. On another port it serves the emulated
+// Azure of internal/azurefake (App Service, Container Apps, Kudu, Log Analytics). Never use it
+// outside the lab.
 package main
 
 import (
@@ -18,6 +20,8 @@ import (
 	"time"
 
 	"github.com/aws/smithy-go/encoding/cbor"
+
+	"github.com/joeg-ita/manent/internal/azurefake"
 )
 
 // record is a request received by the fakes.
@@ -231,10 +235,28 @@ func (f *fakes) hook(w http.ResponseWriter, r *http.Request, body []byte) {
 
 func main() {
 	listen := flag.String("listen", ":9100", "listen address")
+	azureListen := flag.String("azure", ":9400", "listen address of the emulated Azure (UC22)")
 	flag.Parse()
 	f := &fakes{changes: map[string]map[string]any{}, polls: map[string]int{}}
+	go func() {
+		log.Printf("Azure emulato in ascolto su %s", *azureListen)
+		log.Fatal(http.ListenAndServe(*azureListen, newAzure().Handler()))
+	}()
 	log.Printf("fakes in ascolto su %s", *listen)
 	log.Fatal(http.ListenAndServe(*listen, f))
+}
+
+// newAzure creates the emulated Azure of UC22 (internal/azurefake): web apps with and without
+// slot, a container app in Multiple mode, the service principal with the lab secret.
+func newAzure() *azurefake.Fake {
+	az := azurefake.New("uc-azure-secret")
+	az.AddSite("uc22", "uc22-web", "")
+	az.AddSite("uc22", "uc22-web", "staging")
+	az.AddSite("uc22", "uc22-ramp", "")
+	az.AddSite("uc22", "uc22-ramp", "staging")
+	az.AddSite("uc22", "uc22-site", "")
+	az.AddApp("uc22", "uc22-api", "Multiple", "api", "registry:5000/uc/legacy:0")
+	return az
 }
 
 // datadog emulates GET /api/v1/query with the keys uc-dd-api and uc-dd-app.

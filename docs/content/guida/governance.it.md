@@ -86,7 +86,7 @@ L'inventario dice cosa manent ha rilasciato. Con `reconcile.interval` (vedi [con
 
 - A ogni intervallo, per ogni applicazione e ambiente con una release in esercizio, il worker prende la richiesta del deploy in `current`, la fonde con la configurazione di ambiente **attuale** (così vede i target aggiunti o tolti dopo il deploy) e chiede al plugin la release in esercizio **un target alla volta**, con `reconcile.concurrency` letture insieme.
 - Gli ambienti con un deploy in corso o in attesa di approvazione dentro un rollout vengono saltati: i loro target stanno cambiando.
-- La lettura non modifica nulla: è la stessa che il rollback fa prima del deploy (`CurrentRelease`). Serve un plugin che la supporti: `remote-copy` con `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `jboss` e i plugin esterni che dichiarano `current_release`.
+- La lettura non modifica nulla: è la stessa che il rollback fa prima del deploy (`CurrentRelease`). Serve un plugin che la supporti: `remote-copy` con `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `appservice`, `containerapps`, `jboss`, `windows` e i plugin esterni che dichiarano `current_release`.
 - Un solo worker per volta legge (lease `reconcile`). Con `dbos.region_routing` ogni region ha il proprio lease e i suoi worker leggono solo i target della propria region; i target senza region li legge un worker senza region.
 
 L'inventario riporta il risultato in `targets`, e `out_of_sync: true` se almeno un target è `drifted` o `missing`:

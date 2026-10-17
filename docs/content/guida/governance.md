@@ -86,7 +86,7 @@ The inventory says what manent released. With `reconcile.interval` (see [configu
 
 - At every interval, for every application and environment with a release in service, the worker takes the request of the deploy in `current`, merges it with the **current** environment configuration (so it sees targets added or removed after the deploy) and asks the plugin for the release in service **one target at a time**, with `reconcile.concurrency` reads together.
 - Environments with a running deploy, or waiting for an approval within a rollout, are skipped: their targets are changing.
-- The read changes nothing: it is the same one rollback does before the deploy (`CurrentRelease`). It needs a plugin that supports it: `remote-copy` with `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `jboss` and the external plugins that declare `current_release`.
+- The read changes nothing: it is the same one rollback does before the deploy (`CurrentRelease`). It needs a plugin that supports it: `remote-copy` with `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `appservice`, `containerapps`, `jboss`, `windows` and the external plugins that declare `current_release`.
 - One worker at a time reads (lease `reconcile`). With `dbos.region_routing` every region has its own lease and its workers read only the targets of their region; targets without a region are read by a worker without a region.
 
 The inventory reports the result in `targets`, and `out_of_sync: true` if at least one target is `drifted` or `missing`:

@@ -153,7 +153,7 @@ func (c *HTTPChecker) Supports(h *descriptor.Health) error {
 	var errs []error
 	for _, m := range h.Metrics {
 		if p := m.ProviderOrDefault(); c.source(p) == nil {
-			setting := "rollout." + p
+			setting := "rollout." + strings.ReplaceAll(p, "-", "_")
 			if p == descriptor.ProviderPrometheus {
 				setting = "rollout.prometheus_url"
 			}

@@ -51,10 +51,13 @@ import (
 	"github.com/joeg-ita/manent/internal/version"
 	"github.com/joeg-ita/manent/internal/webui"
 	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/joeg-ita/manent/plugins/appservice"
 	"github.com/joeg-ita/manent/plugins/awselb"
 	"github.com/joeg-ita/manent/plugins/awsmetrics"
+	"github.com/joeg-ita/manent/plugins/azuremonitor"
 	"github.com/joeg-ita/manent/plugins/cloudrun"
 	"github.com/joeg-ita/manent/plugins/container"
+	"github.com/joeg-ita/manent/plugins/containerapps"
 	"github.com/joeg-ita/manent/plugins/ecs"
 	"github.com/joeg-ita/manent/plugins/jboss"
 	"github.com/joeg-ita/manent/plugins/kubernetes"
@@ -137,14 +140,16 @@ func recorder(m *telemetry.Metrics) telemetry.Recorder {
 func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) {
 	reg := plugin.NewRegistry()
 	for name, f := range map[string]plugin.Factory{
-		remotecopy.Name: remotecopy.Factory,
-		container.Name:  container.Factory,
-		kubernetes.Name: kubernetes.Factory,
-		ecs.Name:        ecs.Factory,
-		lambda.Name:     lambda.Factory,
-		cloudrun.Name:   cloudrun.Factory,
-		jboss.Name:      jboss.Factory,
-		windows.Name:    windows.Factory,
+		remotecopy.Name:    remotecopy.Factory,
+		container.Name:     container.Factory,
+		kubernetes.Name:    kubernetes.Factory,
+		ecs.Name:           ecs.Factory,
+		lambda.Name:        lambda.Factory,
+		cloudrun.Name:      cloudrun.Factory,
+		jboss.Name:         jboss.Factory,
+		windows.Name:       windows.Factory,
+		appservice.Name:    appservice.Factory,
+		containerapps.Name: containerapps.Factory,
 	} {
 		if err := reg.Register(name, f); err != nil {
 			return nil, err
@@ -211,11 +216,14 @@ func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provid
 }
 
 // NewTrafficProviders returns the load balancer and router providers: the HTTP and SSH ones
-// of internal/traffic and those based on cloud SDKs.
+// of internal/traffic, those based on cloud SDKs and the Windows ones (ARR, NLB) of the
+// windows plugin.
 func NewTrafficProviders() *traffic.Providers {
 	p := traffic.Default()
 	p.Pools["aws-elb"] = traffic.Provider[traffic.PoolFactory]{New: awselb.NewPool(awselb.SDKConnector{}), Validate: awselb.ValidatePool}
 	p.Routers["aws-alb"] = traffic.Provider[traffic.RouterFactory]{New: awselb.NewRouter(awselb.SDKConnector{}), Validate: awselb.ValidateRouter}
+	p.Pools[windows.PoolARR] = traffic.Provider[traffic.PoolFactory]{New: windows.NewPoolFactory(windows.PoolARR, windows.DefaultPoolConnector), Validate: windows.ValidateARR}
+	p.Pools[windows.PoolNLB] = traffic.Provider[traffic.PoolFactory]{New: windows.NewPoolFactory(windows.PoolNLB, windows.DefaultPoolConnector), Validate: windows.ValidateNLB}
 	return p
 }
 
@@ -397,6 +405,10 @@ func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker,
 	if w := r.CloudWatch; w != nil {
 		sources[descriptor.ProviderCloudWatch] = &awsmetrics.Source{Region: w.Region, Endpoint: w.Endpoint, AccessKeyIDRef: w.AccessKeyIDRef,
 			SecretAccessKeyRef: w.SecretAccessKeyRef, RoleARN: w.RoleARN, ExternalID: w.ExternalID, Secret: secret}
+	}
+	if a := r.AzureMonitor; a != nil {
+		sources[descriptor.ProviderAzureMonitor] = &azuremonitor.Source{WorkspaceID: a.WorkspaceID, Endpoint: a.Endpoint, Authority: a.Authority,
+			TenantID: a.TenantID, ClientID: a.ClientID, ClientSecretRef: a.ClientSecretRef, Secret: secret, Client: client}
 	}
 	return &rollout.HTTPChecker{Client: client, Sources: sources, AlertmanagerURL: r.AlertmanagerURL}, nil
 }

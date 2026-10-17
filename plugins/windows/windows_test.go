@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/joeg-ita/manent/internal/traffic"
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
@@ -66,9 +67,14 @@ func (f fakeTransport) Run(_ context.Context, script string, data io.Reader) (st
 	case strings.Contains(script, "MANENT:active"):
 		v := between(script, "$version = '", "'")
 		root := between(script, "$root = '", "'")
-		if strings.Contains(script, "sc.exe") {
+		switch {
+		case strings.Contains(script, "Set-ScheduledTask"):
+			h.path = root + `\` + v + `\bin\job.exe`
+		case strings.Contains(script, "Invoke-Msiexec"):
+			h.path = root + `\` + v
+		case strings.Contains(script, "sc.exe"):
 			h.path = `"` + root + `\` + v + `\bin\svc.exe" --port 8080`
-		} else {
+		default:
 			h.path = root + `\` + v
 		}
 		return "MANENT:active=" + v + "\n", nil
@@ -221,6 +227,10 @@ func TestParametriNonValidi(t *testing.T) {
 		"mode":               {ParamReleasesDir: `C:\r`, ParamMode: "msi", ParamPassword: "p"},
 		"ssh_key_secret":     {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamTransport: TransportSSH},
 		"powershell or pwsh": {ParamReleasesDir: `C:\r`, ParamSite: "s", ParamPassword: "p", ParamShell: "bash"},
+		"task_path":          {ParamMode: ModeTask, ParamReleasesDir: `C:\r`, ParamTask: "job", ParamBinary: "j.exe", ParamTaskPath: `Shop`, ParamPassword: "p"},
+		"task_user":          {ParamMode: ModeTask, ParamReleasesDir: `C:\r`, ParamTask: "job", ParamBinary: "j.exe", ParamTaskUser: `CONTOSO\svc`, ParamPassword: "p"},
+		"product_name":       {ParamMode: ModeMSI, ParamReleasesDir: `C:\r`, ParamPassword: "p"},
+		"msi_properties":     {ParamMode: ModeMSI, ParamReleasesDir: `C:\r`, ParamProduct: "Shop", ParamMSIProps: `INSTALLDIR=C:\x lower=1`, ParamPassword: "p"},
 	} {
 		if _, err := parse(params); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("atteso errore su %q, ricevuto %v", want, err)
@@ -276,5 +286,149 @@ func TestBootstrapEStdin(t *testing.T) {
 	}
 	if r := results("rumore\r\nMANENT:a=1\nMANENT:b=x=y\n"); r["a"] != "1" || r["b"] != "x=y" {
 		t.Errorf("risultati: %v", r)
+	}
+}
+
+func TestDeployTaskEMSI(t *testing.T) {
+	host := &fakeHost{path: `C:\old\job.exe`, releases: map[string]bool{}}
+	c := &fakeConnector{hosts: map[string]*fakeHost{"win-1": host}}
+	p := New(c, []string{"windows"}, discard)
+	params := map[string]string{ParamMode: ModeTask, ParamReleasesDir: `C:\apps\job\releases`, ParamTask: "Shop Export", ParamTaskPath: `\Shop\`,
+		ParamBinary: `bin\job.exe`, ParamArguments: "--all", ParamTaskUser: `CONTOSO\svc-job`, ParamTaskSecret: "job-pass", ParamStopTask: "true", ParamPassword: "win-pass"}
+	req := request(t, params, "3.0.0")
+	req.Secrets = secrets{"win-pass": "s3cret", "job-pass": "j0b"}
+	if err := p.Validate(req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Deploy(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	act := host.scripts[len(host.scripts)-2]
+	for _, want := range []string{"$name = 'Shop Export'", `$tpath = '\Shop\'`, "Stop-ScheduledTask", "-User $user -Password $password", "$password = 'j0b'", "$arguments = '--all'"} {
+		if !strings.Contains(act, want) {
+			t.Errorf("attivazione dell'attività senza %q", want)
+		}
+	}
+	if rel, err := p.CurrentRelease(context.Background(), req); err != nil || rel == nil || rel.Version != "3.0.0" {
+		t.Fatalf("release dall'azione dell'attività: %+v %v", rel, err)
+	}
+
+	// MSI: the package is kept, not extracted; uninstall only on rollback (or uninstall_previous).
+	host = &fakeHost{releases: map[string]bool{}}
+	c.hosts["win-1"] = host
+	params = map[string]string{ParamMode: ModeMSI, ParamReleasesDir: `C:\pkg\shop`, ParamProduct: "Shop Agent", ParamMSIProps: "PORT=8080 ENV=prod", ParamPassword: "win-pass"}
+	req = request(t, params, "4.1.0")
+	req.Artifact.LocalPath = strings.TrimSuffix(req.Artifact.LocalPath, ".zip") + ".msi"
+	if err := os.WriteFile(req.Artifact.LocalPath, []byte("msi"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Deploy(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	var upload string
+	for _, sc := range host.scripts {
+		if strings.Contains(sc, "FromBase64String($l)") {
+			upload = sc
+		}
+	}
+	if !strings.Contains(upload, "$msi = 'true'") {
+		t.Error("pacchetto MSI estratto come uno zip")
+	}
+	act = host.scripts[len(host.scripts)-2]
+	for _, want := range []string{"$product = 'Shop Agent'", "$props = @('PORT=8080', 'ENV=prod')", "$uninstall = 'false'", "Win32_InstalledWin32Program"} {
+		if !strings.Contains(act, want) {
+			t.Errorf("installazione MSI senza %q", want)
+		}
+	}
+	if rel, err := p.CurrentRelease(context.Background(), req); err != nil || rel == nil || rel.Version != "4.1.0" {
+		t.Fatalf("release MSI: %+v %v", rel, err)
+	}
+	if _, err := p.Rollback(context.Background(), req, plugin.Release{Version: "4.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if last := host.scripts[len(host.scripts)-1]; !strings.Contains(last, "$uninstall = 'true'") || host.path != `C:\pkg\shop\4.0.0` {
+		t.Errorf("rollback MSI senza disinstallazione: %s", host.path)
+	}
+	bad := request(t, params, "4.1.0")
+	if err := p.Validate(bad); err == nil || !strings.Contains(err.Error(), ".msi") {
+		t.Errorf("zip accettato in mode msi: %v", err)
+	}
+}
+
+// poolTransport answers the pool scripts with the given members and records the scripts.
+type poolTransport struct {
+	members string
+	scripts *[]string
+}
+
+func (f poolTransport) Run(_ context.Context, script string, _ io.Reader) (string, error) {
+	*f.scripts = append(*f.scripts, script)
+	return "MANENT:members=" + f.members + "\r\n", nil
+}
+
+func (poolTransport) Close() error { return nil }
+
+func TestPool(t *testing.T) {
+	var scripts []string
+	var conns []Conn
+	members := `[{"name":"web1","state":"0","healthy":true,"enabled":true,"requests":3},{"name":"web2","state":"1","healthy":true,"enabled":true,"requests":0}]`
+	connect := func(_ context.Context, _ map[string]string, tg plugin.Target, c Conn) (Transport, error) {
+		if tg.Host != "arr1" || tg.User != `CONTOSO\lb` {
+			t.Errorf("host di gestione: %+v", tg)
+		}
+		conns = append(conns, c)
+		return poolTransport{members: members, scripts: &scripts}, nil
+	}
+	settings := map[string]string{SettingHost: "arr1", SettingUser: `CONTOSO\lb`, SettingFarm: "shop-farm", ParamPassword: "lb-pass"}
+	if err := ValidateARR(map[string]string{SettingHost: "arr1"}); err == nil || !strings.Contains(err.Error(), "farm") {
+		t.Errorf("farm mancante: %v", err)
+	}
+	pl, err := NewPoolFactory(PoolARR, connect)(context.Background(), traffic.Env{Settings: settings, Secrets: secrets{"lb-pass": "pw"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := pl.Members(context.Background())
+	if err != nil || len(ms) != 2 || !ms[0].InService() || ms[1].State != traffic.StateDraining {
+		t.Fatalf("membri: %+v %v", ms, err)
+	}
+	if conns[0].Password != "pw" || !strings.Contains(scripts[0], "$farmName = 'shop-farm'") {
+		t.Errorf("connessione o farm: %+v", conns[0])
+	}
+	if err := pl.Drain(context.Background(), []string{"web1"}); err != nil {
+		t.Fatal(err)
+	}
+	if last := scripts[len(scripts)-1]; !strings.Contains(last, "$members = @('web1')") || !strings.Contains(last, "Set-State $members 1") {
+		t.Errorf("svuotamento ARR: %s", last)
+	}
+	if n, err := pl.Connections(context.Background(), []string{"web1"}); err != nil || n["web1"] != 3 {
+		t.Errorf("richieste in corso: %v %v", n, err)
+	}
+	if _, err := pl.Connections(context.Background(), []string{"web9"}); err == nil {
+		t.Error("membro assente accettato")
+	}
+	if err := pl.Drain(context.Background(), []string{"web1'; Remove-Item C:\\"}); err == nil {
+		t.Error("nome di membro non valido accettato")
+	}
+
+	members = `[{"name":"NODE1","state":"Converged","healthy":true,"enabled":true},{"name":"node2","state":"Draining","healthy":false,"enabled":true}]`
+	nlb, err := NewPoolFactory(PoolNLB, connect)(context.Background(), traffic.Env{Settings: map[string]string{SettingHost: "arr1", SettingUser: `CONTOSO\lb`,
+		SettingDrainTimeout: "90s", ParamPassword: "lb-pass"}, Secrets: secrets{"lb-pass": "pw"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nlb.Drain(context.Background(), []string{"node2"}); err != nil {
+		t.Fatal(err)
+	}
+	if last := scripts[len(scripts)-1]; !strings.Contains(last, "Stop-NlbClusterNode -HostName $m -Drain -Timeout 2") {
+		t.Errorf("svuotamento NLB: %s", last)
+	}
+	if n, _ := nlb.Connections(context.Background(), []string{"node2", "node1"}); n["node2"] != 1 || n["node1"] != 0 {
+		t.Errorf("connessioni NLB: %v", n)
+	}
+	if h, _ := nlb.Healthy(context.Background(), []string{"node1", "node2"}); !h["node1"] || h["node2"] {
+		t.Errorf("salute NLB: %v", h)
 	}
 }

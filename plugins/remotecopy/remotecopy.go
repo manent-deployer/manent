@@ -374,7 +374,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	}
 	var desc []string
 	for _, v := range slices.Sorted(maps.Keys(found)) {
-		desc = append(desc, v+" su "+strings.Join(found[v], ","))
+		desc = append(desc, v+" on "+strings.Join(found[v], ","))
 	}
 	return nil, fmt.Errorf("different releases on the targets: %s", strings.Join(desc, "; "))
 }

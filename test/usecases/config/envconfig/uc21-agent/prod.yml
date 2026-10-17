@@ -1,0 +1,37 @@
+# UC21: MSI package on two emulated Windows hosts, nodes of an NLB cluster managed on win1: one
+# node at a time is drained (Stop-NlbClusterNode -Drain) before the installation.
+plugin: windows
+targets:
+  - {host: win1, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: win2, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  mode: msi
+  transport: ssh
+  ssh_key_secret: deploy-key
+  shell: pwsh
+  product_name: UC21 Agent
+  msi_properties: PORT=7070 ENV=prod
+  releases_dir: /srv/win/apps/uc21-agent/releases
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+  - {name: win-pass, ref: file:/keys/win-pass}
+rollout:
+  waves:
+    - {name: eu, select: "region=eu-1", by: az}
+  maxUnavailable: "1"
+traffic:
+  pool:
+    provider: nlb
+    min_healthy: "1"
+    drain_timeout: 20s
+    restore_timeout: 60s
+    poll_interval: 1s
+    settings:
+      host: win1
+      user: deploy
+      transport: winrm
+      winrm_auth: basic
+      winrm_insecure_skip_verify: "true"
+      shell: pwsh
+      password_secret: win-pass
+      drain_timeout: 1m
