@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Rocket, Undo2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, HelpCircle, Rocket, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -12,6 +12,50 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { can, canInApp } from "@/lib/permissions";
 
 type Open = { kind: "promote" | "rollback"; application: string; environment: string } | null;
+
+// Targets is the state read from the targets by the reconciliation: the hosts changed outside
+// manent are listed, the others only counted.
+function Targets({ e }: { e: InventoryEntry }) {
+  const { t, locale } = useI18n();
+  const st = e.targets;
+  if (!st) return null;
+  const checked = formatRelative(st.checked_at, locale);
+  if (st.error && !st.targets?.length) {
+    return (
+      <span className="flex items-start gap-1 text-xs text-muted" title={st.error}>
+        <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t("inventory.targetsUnreadable", { time: checked })}
+      </span>
+    );
+  }
+  const all = st.targets ?? [];
+  const changed = all.filter((x) => x.state === "drifted" || x.state === "missing");
+  const unknown = all.filter((x) => x.state === "unknown").length;
+  if (changed.length === 0) {
+    return (
+      <span className="flex items-start gap-1 text-xs text-muted" title={formatDateTime(st.checked_at, locale)}>
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t("inventory.targetsInSync", { count: String(all.length - unknown), time: checked })}
+        {unknown > 0 && ` · ${t("inventory.targetsUnknown", { count: String(unknown) })}`}
+      </span>
+    );
+  }
+  return (
+    <details className="text-xs text-warn">
+      <summary className="flex cursor-pointer list-none items-start gap-1">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t("inventory.targetsChanged", { count: String(changed.length), total: String(all.length), time: checked })}
+      </summary>
+      <ul className="mt-1 space-y-0.5 pl-5 font-mono text-fg">
+        {changed.map((x) => (
+          <li key={x.host}>
+            {x.host}: {x.state === "missing" ? t("inventory.targetMissing") : x.version}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void }) {
   const { t, locale } = useI18n();
@@ -39,6 +83,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           <time dateTime={cur.updated_at}>{formatRelative(cur.updated_at, locale)}</time>
         </span>
       )}
+      <Targets e={e} />
       {e.drift && (
         <span className="flex items-start gap-1 text-xs text-warn">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

@@ -3,6 +3,7 @@ package telemetry
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/joeg-ita/manent/internal/cluster"
+	"github.com/joeg-ita/manent/internal/service"
 )
 
 // BuildInfo identifies the running binary.
@@ -160,6 +162,8 @@ var (
 		"Ultimo heartbeat di ogni executor registrato (globale).", []string{"executor", "version"}, nil)
 	descUp = prometheus.NewDesc("manent_executor_up",
 		"1 se l'executor invia heartbeat, 0 se è perso o arrestato (globale).", []string{"executor", "version"}, nil)
+	descTargets = prometheus.NewDesc("manent_targets",
+		"Target per stato letto dalla riconciliazione (in-sync, drifted, missing, standby, unknown; globale).", []string{"application", "environment", "state"}, nil)
 	descScrapeError = prometheus.NewDesc("manent_state_scrape_error",
 		"1 se l'ultima lettura dello stato dal database è fallita.", nil, nil)
 )
@@ -169,7 +173,14 @@ func (c *StateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descWorkflows
 	ch <- descHeartbeat
 	ch <- descUp
+	ch <- descTargets
 	ch <- descScrapeError
+}
+
+// TargetStateSource is implemented by a StateSource that also provides the target states
+// recorded by the reconciliation.
+type TargetStateSource interface {
+	TargetStates(ctx context.Context) ([]cluster.TargetsRecord, error)
 }
 
 // Collect implements prometheus.Collector.
@@ -214,5 +225,31 @@ func (c *StateCollector) read() []prometheus.Metric {
 			prometheus.MustNewConstMetric(descHeartbeat, prometheus.GaugeValue, float64(e.HeartbeatAt.Unix()), e.ID, e.Version),
 			prometheus.MustNewConstMetric(descUp, prometheus.GaugeValue, up, e.ID, e.Version))
 	}
+	if ts, ok := c.Source.(TargetStateSource); ok {
+		// Without a target store (or with the reconciliation never run) there are no series.
+		if recs, err := ts.TargetStates(ctx); err == nil {
+			out = append(out, targetMetrics(recs)...)
+		}
+	}
 	return append(out, prometheus.MustNewConstMetric(descScrapeError, prometheus.GaugeValue, failed))
+}
+
+// targetMetrics counts the targets per application, environment and state, summing the scopes.
+func targetMetrics(recs []cluster.TargetsRecord) []prometheus.Metric {
+	type key struct{ app, env, state string }
+	counts := map[key]int{}
+	for _, r := range recs {
+		var st service.TargetsState
+		if json.Unmarshal([]byte(r.Data), &st) != nil {
+			continue
+		}
+		for _, t := range st.Targets {
+			counts[key{r.Application, r.Environment, t.State}]++
+		}
+	}
+	var out []prometheus.Metric
+	for k, n := range counts {
+		out = append(out, prometheus.MustNewConstMetric(descTargets, prometheus.GaugeValue, float64(n), k.app, k.env, k.state))
+	}
+	return out
 }

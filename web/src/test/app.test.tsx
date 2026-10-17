@@ -120,6 +120,45 @@ describe("inventario", () => {
     expect(within(table).queryByRole("button", { name: "Roll back" })).toBeNull();
   });
 
+  it("mostra i target cambiati fuori da manent", async () => {
+    const checked = new Date().toISOString();
+    const withTargets = [
+      {
+        application: "shop",
+        environment: "test",
+        current: dep({ id: "t1", environment: "test", version: "1.5.0" }),
+        targets: { checked_at: checked, deployment: "t1", version: "1.5.0", targets: [{ host: "a", state: "in-sync", version: "1.5.0" }, { host: "b", state: "in-sync", version: "1.5.0" }] },
+      },
+      {
+        application: "shop",
+        environment: "prod",
+        current: dep({ id: "p1" }),
+        out_of_sync: true,
+        targets: {
+          checked_at: checked,
+          deployment: "p1",
+          version: "2.0.0",
+          targets: [
+            { host: "web-1", state: "in-sync", version: "2.0.0" },
+            { host: "web-2", state: "drifted", version: "1.9.9" },
+            { host: "web-3", state: "missing" },
+          ],
+        },
+      },
+    ];
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/inventory") return { json: { inventory: withTargets } };
+    });
+    renderApp(api, "/inventory");
+    const table = await screen.findByRole("table", { name: /Live release per application/ });
+    expect(within(table).getByText(/2 targets in sync/)).toBeInTheDocument();
+    expect(within(table).getByText(/2 of 3 targets changed outside manent/)).toBeInTheDocument();
+    expect(within(table).getByText("web-2: 1.9.9")).toBeInTheDocument();
+    expect(within(table).getByText("web-3: no release")).toBeInTheDocument();
+  });
+
   it("promuove solo dopo un dry-run riuscito", async () => {
     const user = userEvent.setup();
     const ops = identity({ grants: [{ role: "operator", actions: ["deployment.read", "deployment.submit", "deployment.dry-run", "deployment.rollback"], applications: ["*"], environments: ["*"] }] });

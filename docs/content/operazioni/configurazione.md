@@ -241,6 +241,16 @@ Like all durations in the configuration, values are written with the unit (`0s`,
 | `keep_releases` | `10` | Successful deploys always kept per application and environment. |
 | `interval` | `1h` | How often a worker runs the cleanup. |
 
+### `reconcile` { #reconcile }
+
+Periodic reading of the release in service on the targets, to report in the inventory those changed outside manent (see [real state of the targets](../guida/governance.md#stato-reale)).
+
+| Key | Default | Description |
+|---|---|---|
+| `interval` | `0s` | How often the workers read the targets of every environment (`0s` = disabled; otherwise at least `10s`). |
+| `timeout` | `30s` | Maximum time to read one target. |
+| `concurrency` | `8` | Targets of an environment read together. |
+
 ## Environment variables
 
 | Variable | Effect |

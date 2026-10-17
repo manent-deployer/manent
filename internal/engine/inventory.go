@@ -11,6 +11,7 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
+	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/governance"
 )
@@ -18,7 +19,36 @@ import (
 // Inventory rebuilds from the deploy history the release in service in every
 // application/environment. It ignores dry-runs. The state is kept in a process cache
 // (inventoryCache): every call reads only new workflows and those not yet ended.
-func (e *Engine) Inventory(_ context.Context, f InventoryFilter) ([]InventoryEntry, error) {
+func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryEntry, error) {
+	out, err := e.inventory(f)
+	if err != nil || e.targets == nil {
+		return out, err
+	}
+	recs, err := e.targets.TargetStates(ctx)
+	if err != nil {
+		e.logger.Debug("stato dei target non disponibile", "error", err)
+		return out, nil
+	}
+	byEnv := map[string][]cluster.TargetsRecord{}
+	for _, r := range recs {
+		k := r.Application + "/" + r.Environment
+		byEnv[k] = append(byEnv[k], r)
+	}
+	for i, ie := range out {
+		if ie.Current == nil {
+			continue
+		}
+		// Only readings of the deploy in service count: an earlier one says nothing about it.
+		if st := mergeTargets(byEnv[ie.Application+"/"+ie.Environment], ie.Current.ID); st != nil {
+			out[i].Targets = st
+			out[i].OutOfSync = slices.ContainsFunc(st.Targets, TargetState.Changed)
+		}
+	}
+	return out, nil
+}
+
+// inventory reads the inventory from the cache.
+func (e *Engine) inventory(f InventoryFilter) ([]InventoryEntry, error) {
 	e.inv.mu.Lock()
 	defer e.inv.mu.Unlock()
 	if err := e.refreshInventory(); err != nil {

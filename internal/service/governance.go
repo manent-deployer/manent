@@ -68,7 +68,54 @@ type InventoryEntry struct {
 	// Drift is a rollout stopped after updating part of the regions or AZs: the environment has
 	// different versions (details in LastFailure.RolloutProgress).
 	Drift bool `json:"drift,omitempty"`
+	// Targets is the state read from the targets by the last reconciliation (reconcile.interval),
+	// if it refers to Current.
+	Targets *TargetsState `json:"targets,omitempty"`
+	// OutOfSync means that at least one target is not on Current's version (state drifted or
+	// missing): something changed it outside manent.
+	OutOfSync bool `json:"out_of_sync,omitempty"`
 }
+
+// TargetsState is the state of an environment's targets read by the reconciliation.
+type TargetsState struct {
+	CheckedAt time.Time `json:"checked_at"`
+	// Deployment and Version are the deploy in service and its version, the targets were
+	// compared with.
+	Deployment string        `json:"deployment"`
+	Version    string        `json:"version"`
+	Targets    []TargetState `json:"targets,omitempty"`
+	// Error is a failure reading the whole environment (configuration, plugin).
+	Error string `json:"error,omitempty"`
+}
+
+// TargetState is the release read from a target.
+type TargetState struct {
+	Host   string `json:"host"`
+	Region string `json:"region,omitempty"`
+	AZ     string `json:"az,omitempty"`
+	Slot   string `json:"slot,omitempty"`
+	// Version is the version in service on the target; empty if none or unreadable.
+	Version string `json:"version,omitempty"`
+	State   string `json:"state"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+// Target states.
+const (
+	// TargetInSync: the target runs the version in service.
+	TargetInSync = "in-sync"
+	// TargetDrifted: the target runs another version.
+	TargetDrifted = "drifted"
+	// TargetMissing: the target has no release.
+	TargetMissing = "missing"
+	// TargetStandby: in a slot rollout, the slot without traffic (the replaced version).
+	TargetStandby = "standby"
+	// TargetUnknown: the target could not be read.
+	TargetUnknown = "unknown"
+)
+
+// Changed reports a target state that means a change outside manent.
+func (t TargetState) Changed() bool { return t.State == TargetDrifted || t.State == TargetMissing }
 
 // Redeploy are the options shared by promotions and manual rollbacks.
 type Redeploy struct {

@@ -1,0 +1,15 @@
+# UC17: two targets of region eu-1, read periodically by the reconciliation (reconcile in
+# manent.yml) to report the targets changed outside manent.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  dest_dir: /home/deploy/apps/uc17-shop
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

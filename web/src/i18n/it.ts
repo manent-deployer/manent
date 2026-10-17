@@ -293,6 +293,11 @@ export const it: Record<MessageKey, string> = {
   "inventory.drift": "Drift: un rollout fallito ha lasciato i target su versioni diverse",
   "inventory.lastFailure": "Ultimo fallimento: {version} {time}",
   "inventory.notDeployed": "Non rilasciata",
+  "inventory.targetsInSync": "{count} target allineati · verificati {time}",
+  "inventory.targetsUnknown": "{count} non leggibili",
+  "inventory.targetsChanged": "{count} target su {total} cambiati fuori da manent · verificati {time}",
+  "inventory.targetMissing": "nessuna release",
+  "inventory.targetsUnreadable": "Stato dei target non leggibile · {time}",
   "inventory.actionsFor": "Azioni per {application} in {environment}",
 
   "calendar.title": "Calendario",

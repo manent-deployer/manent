@@ -35,12 +35,13 @@ observability:
 | `manent_workflows` | gauge | `workflow`, `status`, `queue` | Workflow per stato: deploy in coda, in esecuzione, in attesa di approvazione e conclusi. |
 | `manent_executor_up` | gauge | `executor`, `version` | 1 se il worker invia heartbeat, 0 se è perso o arrestato. |
 | `manent_executor_heartbeat_timestamp_seconds` | gauge | `executor`, `version` | Ultimo heartbeat. |
+| `manent_targets` | gauge | `application`, `environment`, `state` | Target per stato letto dalla [riconciliazione](../guida/governance.md#stato-reale): `in-sync`, `drifted`, `missing`, `standby`, `unknown`. |
 | `manent_build_info` | gauge | `version`, `commit`, `workflow_version` | Versione del binario e dei workflow. |
 
 Più le metriche standard del runtime Go (`go_*`) e del processo (`process_*`).
 
 !!! note "Metriche globali e di processo"
-    `manent_deployments_total` e gli istogrammi sono del singolo processo e vanno sommati tra le istanze (`sum`). `manent_workflows` e `manent_executor_*` sono letti dal database, quindi ogni istanza riporta gli stessi valori: vanno aggregati con `max`. La lettura dal database avviene al più ogni 15 secondi per i workflow non conclusi (in coda, in esecuzione, pianificati) e al più ogni 5 minuti per i conclusi, il cui conteggio scorre tutto lo storico.
+    `manent_deployments_total` e gli istogrammi sono del singolo processo e vanno sommati tra le istanze (`sum`). `manent_workflows`, `manent_executor_*` e `manent_targets` sono letti dal database, quindi ogni istanza riporta gli stessi valori: vanno aggregati con `max`. La lettura dal database avviene al più ogni 15 secondi per i workflow non conclusi (in coda, in esecuzione, pianificati) e al più ogni 5 minuti per i conclusi, il cui conteggio scorre tutto lo storico.
 
 Esempi di query e allarmi:
 
@@ -53,6 +54,9 @@ max(manent_workflows{workflow="manent.deploy",status="ENQUEUED"}) > 20
 
 # Worker perso
 max by (executor) (manent_executor_up) == 0
+
+# Target cambiati fuori da manent
+max by (application, environment) (manent_targets{state=~"drifted|missing"}) > 0
 
 # Durata p95 dei deploy in produzione
 histogram_quantile(0.95, sum by (le) (rate(manent_deployment_duration_seconds_bucket{environment="prod"}[1d])))

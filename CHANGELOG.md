@@ -14,6 +14,12 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Stato reale dei target (`reconcile` in `manent.yml`): i worker leggono a intervalli, un target
+  alla volta, la release in esercizio con `CurrentRelease` del plugin e la confrontano con
+  l'inventario. `targets` e `out_of_sync` nell'inventario (API, `manent inventory
+  --out-of-sync`, interfaccia web), stati `in-sync`, `drifted`, `missing`, `standby`,
+  `unknown`, metrica `manent_targets`, log e SIEM quando un target cambia fuori da manent. Caso
+  d'uso UC17 su target SSH veri.
 - `maxUnavailable` per ondata (`waves[].maxUnavailable`): sostituisce quello del rollout per i
   passi dell'ondata.
 - Gate per lotto nei rilasci a ondate: con `waves[].batchBake` le sonde leggono i target di

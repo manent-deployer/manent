@@ -863,6 +863,28 @@ export interface components {
             current?: components["schemas"]["Status"];
             last_failure?: components["schemas"]["Status"];
             drift?: boolean;
+            targets?: components["schemas"]["TargetsState"];
+            /** @description Almeno un target non è sulla versione di current (drifted o missing). */
+            out_of_sync?: boolean;
+        };
+        /** @description Stato letto dai target dall'ultima riconciliazione (reconcile.interval). */
+        TargetsState: {
+            /** Format: date-time */
+            checked_at: string;
+            deployment: string;
+            version: string;
+            targets?: components["schemas"]["TargetState"][];
+            error?: string;
+        };
+        TargetState: {
+            host: string;
+            region?: string;
+            az?: string;
+            slot?: string;
+            version?: string;
+            /** @enum {string} */
+            state: "in-sync" | "drifted" | "missing" | "standby" | "unknown";
+            detail?: string;
         };
         WindowStatus: {
             name: string;

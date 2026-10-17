@@ -241,6 +241,16 @@ Come tutte le durate della configurazione, i valori si scrivono con l'unità (`0
 | `keep_releases` | `10` | Deploy riusciti conservati comunque per applicazione e ambiente. |
 | `interval` | `1h` | Ogni quanto un worker esegue la pulizia. |
 
+### `reconcile` { #reconcile }
+
+Lettura periodica della release in esercizio sui target, per segnalare nell'inventario quelli cambiati fuori da manent (vedi [stato reale dei target](../guida/governance.md#stato-reale)).
+
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `interval` | `0s` | Ogni quanto i worker leggono i target di ogni ambiente (`0s` = disattivata; altrimenti almeno `10s`). |
+| `timeout` | `30s` | Tempo massimo della lettura di un target. |
+| `concurrency` | `8` | Target di un ambiente letti insieme. |
+
 ## Variabili d'ambiente
 
 | Variabile | Effetto |

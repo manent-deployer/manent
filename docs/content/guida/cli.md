@@ -101,7 +101,7 @@ A queued, scheduled or awaiting-approval deploy is removed. A running deploy sto
 See [Release governance](governance.md).
 
 ```sh
-manent inventory [-a <application>] [-e <environment>]
+manent inventory [-a <application>] [-e <environment>] [--out-of-sync]
 manent promote -a <application> --from <environment> --to <environment> [--version <v>] [--deploy-file <yaml>]
 manent rollback -a <application> -e <environment> [--to <version>]
 manent approve <id> [-m <comment>]

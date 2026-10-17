@@ -68,6 +68,7 @@ manent inventory [-a myapp] [-e prod]
 | `current` | Ultimo deploy riuscito: versione, `sha256` dell'artefatto effettivamente rilasciato, chi l'ha richiesto. |
 | `kind` | `deploy`, `promotion` o `rollback`. Per promozioni e rollback `source` è il deploy da cui derivano. |
 | `last_failure` | Presente se dopo `current` c'è un deploy fallito o annullato. Con `rollback: completed` l'ambiente è tornato a `current`; altrimenti il suo stato va verificato. |
+| `targets`, `out_of_sync` | Stato letto dai target, se la riconciliazione è attiva: vedi [stato reale dei target](#stato-reale). |
 | `drift` | `true` se `last_failure` è un [rilascio a ondate](ondate.md) fermato dopo aver aggiornato una parte delle region o AZ (`rollout_progress`, es. `2/4`): l'ambiente ha versioni diverse. |
 
 Lo storico completo di un ambiente si legge con l'elenco dei deploy:
@@ -78,6 +79,48 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 
 !!! note
     L'inventario si ricostruisce dagli ultimi 10.000 deploy all'avvio del server e ogni 10 minuti, e nel frattempo segue i deploy nuovi e quelli in corso. Un'applicazione che non viene rilasciata da molto più tempo può non comparire: in quel caso fa fede il sistema di destinazione.
+
+## Stato reale dei target { #stato-reale }
+
+L'inventario dice cosa manent ha rilasciato. Con `reconcile.interval` (vedi [configurazione](../operazioni/configurazione.md#reconcile)) i worker leggono anche cosa c'è davvero sui target, e segnalano quelli cambiati fuori da manent: un deploy manuale, un rollback a mano, un nodo ricostruito con un'immagine vecchia.
+
+- A ogni intervallo, per ogni applicazione e ambiente con una release in esercizio, il worker prende la richiesta del deploy in `current`, la fonde con la configurazione di ambiente **attuale** (così vede i target aggiunti o tolti dopo il deploy) e chiede al plugin la release in esercizio **un target alla volta**, con `reconcile.concurrency` letture insieme.
+- Gli ambienti con un deploy in corso o in attesa di approvazione dentro un rollout vengono saltati: i loro target stanno cambiando.
+- La lettura non modifica nulla: è la stessa che il rollback fa prima del deploy (`CurrentRelease`). Serve un plugin che la supporti: `remote-copy` con `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `jboss` e i plugin esterni che dichiarano `current_release`.
+- Un solo worker per volta legge (lease `reconcile`). Con `dbos.region_routing` ogni region ha il proprio lease e i suoi worker leggono solo i target della propria region; i target senza region li legge un worker senza region.
+
+L'inventario riporta il risultato in `targets`, e `out_of_sync: true` se almeno un target è `drifted` o `missing`:
+
+```json
+{
+  "application": "myapp", "environment": "prod",
+  "current": {"id": "7c0e…", "version": "1.4.0"},
+  "out_of_sync": true,
+  "targets": {
+    "checked_at": "2026-10-17T09:20:00Z", "deployment": "7c0e…", "version": "1.4.0",
+    "targets": [
+      {"host": "web-1", "region": "eu-1", "az": "eu-1a", "version": "1.4.0", "state": "in-sync"},
+      {"host": "web-2", "region": "eu-1", "az": "eu-1b", "version": "1.3.2", "state": "drifted"}
+    ]
+  }
+}
+```
+
+| `state` | Significato |
+|---|---|
+| `in-sync` | Il target ha la versione di `current`. |
+| `drifted` | Il target ha un'altra versione. |
+| `missing` | Il target non ha alcuna release (ad esempio un nodo nuovo, mai rilasciato). |
+| `standby` | Nei [rilasci per percentuale](traffico.md) con il router dell'ambiente: lo slot senza traffico, con la versione sostituita. Non è un'anomalia. |
+| `unknown` | Il target non è leggibile (`detail` riporta l'errore, ad esempio SSH irraggiungibile). |
+
+Una lettura conta solo per il deploy con cui è stata fatta: dopo un nuovo deploy l'inventario non mostra `targets` finché la riconciliazione successiva non ha confrontato i target con la nuova versione. Se l'intero ambiente non è leggibile (plugin senza `CurrentRelease`, configurazione di ambiente non valida) `targets.error` spiega perché.
+
+```sh
+manent inventory --out-of-sync      # solo gli ambienti con target cambiati fuori da manent
+```
+
+Ogni target che passa a `drifted` o `missing` produce un log di livello warning (`target cambiato fuori da manent`, con host, versione attesa e trovata), inviato anche al SIEM; il ritorno in linea un log informativo. La metrica `manent_targets` conta i target per stato (vedi [Osservabilità](../operazioni/osservabilita.md)). Nell'interfaccia web la cella dell'inventario elenca i target cambiati.
 
 ## Promozione { #promozione }
 

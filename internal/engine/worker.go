@@ -99,6 +99,10 @@ type WorkerOptions struct {
 	Traffic TrafficOps
 	// HealthTimeout limits every health gate read (default 30s).
 	HealthTimeout time.Duration
+	// Inspector reads the release in service from the targets; with Reconcile.Interval > 0 the
+	// worker compares it periodically with the inventory.
+	Inspector TargetInspector
+	Reconcile ReconcileOptions
 	// Region is the worker's region: with RegionRouting it runs that region's rollout passes
 	// (queue <queue>.<region>) besides deploys.
 	Region string
@@ -156,6 +160,8 @@ type Worker struct {
 	registry        cluster.Registry
 	admin           *Admin
 	maintenance     MaintenanceOptions
+	inspector       TargetInspector
+	reconcile       ReconcileOptions
 	build, hostname string
 	version         string
 	startedAt       time.Time
@@ -212,6 +218,8 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		metrics:         opts.Metrics,
 		registry:        opts.Registry,
 		maintenance:     opts.Maintenance.withDefaults(),
+		inspector:       opts.Inspector,
+		reconcile:       opts.Reconcile.withDefaults(),
 		build:           opts.Build,
 		hostname:        opts.Hostname,
 		version:         dbos.GetApplicationVersion(ctx),
@@ -330,6 +338,10 @@ func (w *Worker) Launch() error {
 	if w.registry != nil {
 		w.wg.Add(1)
 		go w.maintain()
+		if w.reconcile.Interval > 0 && w.inspector != nil {
+			w.wg.Add(1)
+			go w.reconcileLoop()
+		}
 	}
 	w.logger.Info("worker avviato", "queue", w.queue.GetName(), "version", w.version)
 	return nil

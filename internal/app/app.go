@@ -485,6 +485,9 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		Resolver: c.resolver, Governance: c.governance, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	}
+	if r, ok := executors.(engine.TargetStateReader); ok {
+		opts.TargetStates = r
+	}
 	if c.chat != nil {
 		opts.Notifications = c.chat
 	}
@@ -638,6 +641,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Health:               c.health,
 		Traffic:              c.traffic,
 		HealthTimeout:        cfg.Rollout.CheckTimeout,
+		Inspector:            c.traffic.Deploy,
+		Reconcile:            engine.ReconcileOptions{Interval: cfg.Reconcile.Interval, Timeout: cfg.Reconcile.Timeout, Concurrency: cfg.Reconcile.Concurrency},
 		Region:               cfg.DBOS.Region,
 		RegionRouting:        cfg.DBOS.RegionRouting,
 		ChainPollInterval:    cfg.Chains.PollInterval,
@@ -720,6 +725,10 @@ type lazyAdmin struct{ a *App }
 
 func (l lazyAdmin) Executors(ctx context.Context, staleAfter time.Duration) ([]engine.ExecutorStatus, error) {
 	return l.a.Admin().Executors(ctx, staleAfter)
+}
+
+func (l lazyAdmin) TargetStates(ctx context.Context) ([]cluster.TargetsRecord, error) {
+	return l.a.Admin().TargetStates(ctx)
 }
 
 // dbosClient returns the DBOS client of the application (worker context or client).

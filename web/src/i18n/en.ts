@@ -292,6 +292,11 @@ export const en = {
   "inventory.drift": "Drift: a failed rollout left targets on different versions",
   "inventory.lastFailure": "Last failure: {version} {time}",
   "inventory.notDeployed": "Not deployed",
+  "inventory.targetsInSync": "{count} targets in sync · checked {time}",
+  "inventory.targetsUnknown": "{count} unreadable",
+  "inventory.targetsChanged": "{count} of {total} targets changed outside manent · checked {time}",
+  "inventory.targetMissing": "no release",
+  "inventory.targetsUnreadable": "Target state unreadable · {time}",
   "inventory.actionsFor": "Actions for {application} in {environment}",
 
   "calendar.title": "Calendar",

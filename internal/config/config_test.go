@@ -248,3 +248,18 @@ pipeline:
 		t.Errorf("avvisi: %s", w)
 	}
 }
+
+func TestRiconciliazione(t *testing.T) {
+	cfg, err := load(t, "reconcile: {interval: 10m}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := cfg.Reconcile; r.Interval != 10*time.Minute || r.Timeout != 30*time.Second || r.Concurrency != 8 {
+		t.Errorf("reconcile: %+v", r)
+	}
+	for _, yaml := range []string{"reconcile: {interval: 1s}\n", "reconcile: {interval: 1m, concurrency: 0}\n", "reconcile: {timeout: 0s}\n"} {
+		if _, err := load(t, yaml); err == nil || !strings.Contains(err.Error(), "reconcile") {
+			t.Errorf("%q: atteso errore su reconcile, ricevuto %v", yaml, err)
+		}
+	}
+}

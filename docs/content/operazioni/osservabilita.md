@@ -34,13 +34,14 @@ observability:
 | `manent_http_request_duration_seconds` | histogram | `method`, `route`, `code` | API requests. |
 | `manent_workflows` | gauge | `workflow`, `status`, `queue` | Workflows per state: deploys queued, running, awaiting approval and finished. |
 | `manent_executor_up` | gauge | `executor`, `version` | 1 if the worker sends heartbeats, 0 if it is lost or stopped. |
+| `manent_targets` | gauge | `application`, `environment`, `state` | Targets per state read by the [reconciliation](../guida/governance.md#stato-reale): `in-sync`, `drifted`, `missing`, `standby`, `unknown`. |
 | `manent_executor_heartbeat_timestamp_seconds` | gauge | `executor`, `version` | Last heartbeat. |
 | `manent_build_info` | gauge | `version`, `commit`, `workflow_version` | Binary and workflow version. |
 
 Plus the standard Go runtime (`go_*`) and process (`process_*`) metrics.
 
 !!! note "Global and per-process metrics"
-    `manent_deployments_total` and the histograms belong to the single process and must be summed across instances (`sum`). `manent_workflows` and `manent_executor_*` are read from the database, so every instance reports the same values: aggregate them with `max`. The database is read at most every 15 seconds for unfinished workflows (queued, running, scheduled) and at most every 5 minutes for finished ones, whose count scans the whole history.
+    `manent_deployments_total` and the histograms belong to the single process and must be summed across instances (`sum`). `manent_workflows`, `manent_executor_*` and `manent_targets` are read from the database, so every instance reports the same values: aggregate them with `max`. The database is read at most every 15 seconds for unfinished workflows (queued, running, scheduled) and at most every 5 minutes for finished ones, whose count scans the whole history.
 
 Example queries and alerts:
 
@@ -53,6 +54,9 @@ max(manent_workflows{workflow="manent.deploy",status="ENQUEUED"}) > 20
 
 # Lost worker
 max by (executor) (manent_executor_up) == 0
+
+# Targets changed outside manent
+max by (application, environment) (manent_targets{state=~"drifted|missing"}) > 0
 
 # p95 duration of production deploys
 histogram_quantile(0.95, sum by (le) (rate(manent_deployment_duration_seconds_bucket{environment="prod"}[1d])))

@@ -47,6 +47,13 @@ retention:
   keep_releases: 10
   interval: 1h
 
+# Periodic reading of the release in service on the targets, to report in the inventory those
+# changed outside manent (docs: Governance, Real state of the targets). 0s = disabled.
+reconcile:
+  interval: 0s        # e.g. 10m
+  timeout: 30s
+  concurrency: 8
+
 # Metrics, probes and tracing (docs: Observability).
 observability:
   # listen: ":9090"   # /metrics, /healthz, /readyz on a dedicated port (needed by workers)

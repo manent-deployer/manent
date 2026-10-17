@@ -27,6 +27,11 @@ rollout:
   elastic: {url: http://fakes:9100/elastic, api_key_ref: file:/keys/es-key}
   cloudwatch: {region: eu-west-1, endpoint: http://fakes:9100/cloudwatch, access_key_id_ref: file:/keys/aws-id, secret_access_key_ref: file:/keys/aws-secret}
 
+# UC17: the workers read the release in service on the targets every 10 seconds.
+reconcile:
+  interval: 10s
+  timeout: 10s
+
 # UC9: frequent reads of the state of awaited deploys.
 chains:
   poll_interval: 1s

@@ -68,6 +68,7 @@ manent inventory [-a myapp] [-e prod]
 | `current` | Last successful deploy: version, `sha256` of the artifact actually released, who requested it. |
 | `kind` | `deploy`, `promotion` or `rollback`. For promotions and rollbacks `source` is the deploy they derive from. |
 | `last_failure` | Present if a failed or cancelled deploy came after `current`. With `rollback: completed` the environment went back to `current`; otherwise its state must be checked. |
+| `targets`, `out_of_sync` | State read from the targets, if reconciliation is enabled: see [real state of the targets](#stato-reale). |
 | `drift` | `true` if `last_failure` is a [wave rollout](ondate.md) stopped after updating only some regions or AZs (`rollout_progress`, e.g. `2/4`): the environment runs different versions. |
 
 The complete history of an environment is read with the deploy list:
@@ -78,6 +79,48 @@ manent list -a myapp -e prod --state SUCCESS -n 50
 
 !!! note
     The inventory is rebuilt from the last 10,000 deploys when the server starts and every 10 minutes, and in the meantime it follows new and running deploys. An application that has not been released for much longer may not appear: in that case the target system is the source of truth.
+
+## Real state of the targets { #stato-reale }
+
+The inventory says what manent released. With `reconcile.interval` (see [configuration](../operazioni/configurazione.md#reconcile)) the workers also read what is really on the targets, and report those changed outside manent: a manual deploy, a rollback by hand, a node rebuilt from an old image.
+
+- At every interval, for every application and environment with a release in service, the worker takes the request of the deploy in `current`, merges it with the **current** environment configuration (so it sees targets added or removed after the deploy) and asks the plugin for the release in service **one target at a time**, with `reconcile.concurrency` reads together.
+- Environments with a running deploy, or waiting for an approval within a rollout, are skipped: their targets are changing.
+- The read changes nothing: it is the same one rollback does before the deploy (`CurrentRelease`). It needs a plugin that supports it: `remote-copy` with `layout: releases`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `jboss` and the external plugins that declare `current_release`.
+- One worker at a time reads (lease `reconcile`). With `dbos.region_routing` every region has its own lease and its workers read only the targets of their region; targets without a region are read by a worker without a region.
+
+The inventory reports the result in `targets`, and `out_of_sync: true` if at least one target is `drifted` or `missing`:
+
+```json
+{
+  "application": "myapp", "environment": "prod",
+  "current": {"id": "7c0e…", "version": "1.4.0"},
+  "out_of_sync": true,
+  "targets": {
+    "checked_at": "2026-10-17T09:20:00Z", "deployment": "7c0e…", "version": "1.4.0",
+    "targets": [
+      {"host": "web-1", "region": "eu-1", "az": "eu-1a", "version": "1.4.0", "state": "in-sync"},
+      {"host": "web-2", "region": "eu-1", "az": "eu-1b", "version": "1.3.2", "state": "drifted"}
+    ]
+  }
+}
+```
+
+| `state` | Meaning |
+|---|---|
+| `in-sync` | The target runs the version of `current`. |
+| `drifted` | The target runs another version. |
+| `missing` | The target has no release (for example a new node, never released to). |
+| `standby` | In [percentage rollouts](traffico.md) with the environment's router: the slot without traffic, with the replaced version. Not an anomaly. |
+| `unknown` | The target cannot be read (`detail` reports the error, for example SSH unreachable). |
+
+A reading counts only for the deploy it was made with: after a new deploy the inventory shows no `targets` until the next reconciliation has compared the targets with the new version. If the whole environment cannot be read (plugin without `CurrentRelease`, invalid environment configuration) `targets.error` explains why.
+
+```sh
+manent inventory --out-of-sync      # only environments with targets changed outside manent
+```
+
+Every target that becomes `drifted` or `missing` produces a warning log (`target cambiato fuori da manent`, with host, expected and found version), also sent to the SIEM; coming back in sync an informational log. The `manent_targets` metric counts the targets per state (see [Observability](../operazioni/osservabilita.md)). In the web interface the inventory cell lists the changed targets.
 
 ## Promotion { #promozione }
 

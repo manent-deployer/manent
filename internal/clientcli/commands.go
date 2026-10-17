@@ -293,6 +293,7 @@ type InventoryCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
+	OutOfSync   bool   `long:"out-of-sync" description:"solo gli ambienti con target cambiati fuori da manent (riconciliazione)"`
 }
 
 // Execute implements flags.Commander.
@@ -301,6 +302,9 @@ func (c *InventoryCmd) Execute([]string) error {
 		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment})
 		if err != nil {
 			return err
+		}
+		if c.OutOfSync {
+			inv = slices.DeleteFunc(inv, func(e service.InventoryEntry) bool { return !e.OutOfSync })
 		}
 		return cliutil.PrintJSON(inv)
 	})

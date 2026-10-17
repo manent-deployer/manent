@@ -426,3 +426,12 @@ func (a *Admin) ExecutorList(ctx context.Context) ([]cluster.Executor, error) {
 	}
 	return a.registry.List(ctx)
 }
+
+// TargetStates returns the states read from the targets by the reconciliation.
+func (a *Admin) TargetStates(ctx context.Context) ([]cluster.TargetsRecord, error) {
+	ts, ok := a.registry.(cluster.TargetStore)
+	if !ok {
+		return nil, errNoTargetStore
+	}
+	return ts.ListTargets(ctx)
+}

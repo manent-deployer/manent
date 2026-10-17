@@ -101,7 +101,7 @@ Un deploy in coda, pianificato o in attesa di approvazione viene rimosso. Un dep
 Vedi [Governance dei rilasci](governance.md).
 
 ```sh
-manent inventory [-a <applicazione>] [-e <ambiente>]
+manent inventory [-a <applicazione>] [-e <ambiente>] [--out-of-sync]
 manent promote -a <applicazione> --from <ambiente> --to <ambiente> [--version <v>] [--deploy-file <yaml>]
 manent rollback -a <applicazione> -e <ambiente> [--to <versione>]
 manent approve <id> [-m <commento>]

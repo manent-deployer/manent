@@ -214,3 +214,26 @@ func TestExecutorIDInUso(t *testing.T) {
 		t.Fatalf("avvio dopo un arresto ordinato: %v %v", ok, err)
 	}
 }
+
+func TestStatoDeiTarget(t *testing.T) {
+	r := openTest(t)
+	ctx := context.Background()
+	at := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
+	for _, rec := range []TargetsRecord{
+		{Application: "shop", Environment: "prod", Scope: "eu-1", CheckedAt: at, Data: `{"v":1}`},
+		{Application: "shop", Environment: "prod", Scope: "", CheckedAt: at, Data: `{"v":2}`},
+		// Same scope again: the record is replaced.
+		{Application: "shop", Environment: "prod", Scope: "eu-1", CheckedAt: at.Add(time.Minute), Data: `{"v":3}`},
+	} {
+		if err := r.SaveTargets(ctx, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := r.ListTargets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Scope != "" || got[1].Data != `{"v":3}` || !got[1].CheckedAt.Equal(at.Add(time.Minute)) {
+		t.Errorf("record: %+v", got)
+	}
+}

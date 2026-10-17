@@ -79,6 +79,8 @@ type (
 	ChangeTicket         = service.ChangeTicket
 	InventoryFilter      = service.InventoryFilter
 	InventoryEntry       = service.InventoryEntry
+	TargetsState         = service.TargetsState
+	TargetState          = service.TargetState
 	Redeploy             = service.Redeploy
 	PromoteRequest       = service.PromoteRequest
 	RollbackRequest      = service.RollbackRequest

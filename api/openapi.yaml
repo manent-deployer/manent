@@ -845,6 +845,31 @@ components:
         current: {$ref: '#/components/schemas/Status'}
         last_failure: {$ref: '#/components/schemas/Status'}
         drift: {type: boolean}
+        targets: {$ref: '#/components/schemas/TargetsState'}
+        out_of_sync:
+          type: boolean
+          description: Almeno un target non è sulla versione di current (drifted o missing).
+    TargetsState:
+      type: object
+      description: Stato letto dai target dall'ultima riconciliazione (reconcile.interval).
+      required: [checked_at, deployment, version]
+      properties:
+        checked_at: {type: string, format: date-time}
+        deployment: {type: string}
+        version: {type: string}
+        targets: {type: array, items: {$ref: '#/components/schemas/TargetState'}}
+        error: {type: string}
+    TargetState:
+      type: object
+      required: [host, state]
+      properties:
+        host: {type: string}
+        region: {type: string}
+        az: {type: string}
+        slot: {type: string}
+        version: {type: string}
+        state: {type: string, enum: [in-sync, drifted, missing, standby, unknown]}
+        detail: {type: string}
     WindowStatus:
       type: object
       required: [name, applications, environments, active]

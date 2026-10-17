@@ -1,6 +1,7 @@
 // Package cluster keeps the registry of manent executors (workers): heartbeats, shutdown,
 // claiming the workflows of a lost node and leases for the tasks only one worker at a time
-// must perform (automatic recovery, retention).
+// must perform (automatic recovery, retention, reconciliation). It also stores the state read
+// from the targets by the reconciliation.
 //
 // The registry lives in the DBOS database, in its own tables: without DBOS Conductor it is the
 // only way to know which executors are still alive.
@@ -77,6 +78,25 @@ type Registry interface {
 	Close() error
 }
 
+// TargetsRecord is the state read from the targets of an application/environment by one
+// reconciliation scope: "" for the workers without a region, the region otherwise.
+type TargetsRecord struct {
+	Application string
+	Environment string
+	Scope       string
+	CheckedAt   time.Time
+	// Data is the state, in JSON (service.TargetsState).
+	Data string
+}
+
+// TargetStore stores the last state read from the targets, one record per
+// application/environment and scope.
+type TargetStore interface {
+	SaveTargets(ctx context.Context, r TargetsRecord) error
+	// ListTargets returns all records, ordered by application, environment and scope.
+	ListTargets(ctx context.Context) ([]TargetsRecord, error)
+}
+
 // InUseError means an executor_id already registered by another live process.
 type InUseError struct {
 	ID, Hostname           string
@@ -98,13 +118,16 @@ const ClaimTimeout = 2 * time.Minute
 // SQL is the Registry on Postgres or SQLite.
 type SQL struct {
 	db *sql.DB
-	// executors and leases are the qualified table names; exBare and leaseBare the ones used to
-	// refer to the existing row in ON CONFLICT.
-	executors, leases, exBare, leaseBare string
-	now                                  func() time.Time
+	// executors, leases and targets are the qualified table names; exBare and leaseBare the ones
+	// used to refer to the existing row in ON CONFLICT.
+	executors, leases, targets, exBare, leaseBare string
+	now                                           func() time.Time
 }
 
-var _ Registry = (*SQL)(nil)
+var (
+	_ Registry    = (*SQL)(nil)
+	_ TargetStore = (*SQL)(nil)
+)
 
 // Open opens the registry on the DBOS database (database_url) and creates the tables if
 // missing: on Postgres in the "manent" schema, on SQLite with the "manent_" prefix.
@@ -120,11 +143,11 @@ func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 	r := &SQL{db: db, now: time.Now}
 	if postgres {
 		db.SetMaxOpenConns(4)
-		r.executors, r.leases, r.exBare, r.leaseBare = "manent.executors", "manent.leases", "executors", "leases"
+		r.executors, r.leases, r.targets, r.exBare, r.leaseBare = "manent.executors", "manent.leases", "manent.target_states", "executors", "leases"
 	} else {
 		// SQLite: one connection, so writes do not compete within the process.
 		db.SetMaxOpenConns(1)
-		r.executors, r.leases = "manent_executors", "manent_leases"
+		r.executors, r.leases, r.targets = "manent_executors", "manent_leases", "manent_target_states"
 		r.exBare, r.leaseBare = r.executors, r.leases
 	}
 	if err := r.migrate(ctx, postgres); err != nil {
@@ -176,6 +199,13 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 			name       TEXT PRIMARY KEY,
 			holder     TEXT NOT NULL,
 			expires_at BIGINT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS ` + r.targets + ` (
+			application TEXT NOT NULL,
+			environment TEXT NOT NULL,
+			scope       TEXT NOT NULL,
+			checked_at  BIGINT NOT NULL,
+			data        TEXT NOT NULL,
+			PRIMARY KEY (application, environment, scope))`,
 	}
 	if postgres {
 		stmts = append([]string{`CREATE SCHEMA IF NOT EXISTS manent`}, stmts...)
@@ -372,6 +402,34 @@ func (r *SQL) Lease(ctx context.Context, name, holder string, ttl time.Duration)
 	}
 	n, err := res.RowsAffected()
 	return n == 1, err
+}
+
+// SaveTargets implements TargetStore: it replaces the record of the same scope.
+func (r *SQL) SaveTargets(ctx context.Context, t TargetsRecord) error {
+	_, err := r.db.ExecContext(ctx, `INSERT INTO `+r.targets+` (application, environment, scope, checked_at, data) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (application, environment, scope) DO UPDATE SET checked_at = excluded.checked_at, data = excluded.data`,
+		t.Application, t.Environment, t.Scope, ms(t.CheckedAt), t.Data)
+	return err
+}
+
+// ListTargets implements TargetStore.
+func (r *SQL) ListTargets(ctx context.Context) ([]TargetsRecord, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT application, environment, scope, checked_at, data FROM `+r.targets+` ORDER BY application, environment, scope`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TargetsRecord
+	for rows.Next() {
+		var t TargetsRecord
+		var at int64
+		if err := rows.Scan(&t.Application, &t.Environment, &t.Scope, &at, &t.Data); err != nil {
+			return nil, err
+		}
+		t.CheckedAt = time.UnixMilli(at).UTC()
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // Close closes the connection.

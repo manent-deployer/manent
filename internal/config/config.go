@@ -49,6 +49,7 @@ type Config struct {
 	Chains           Chains                    `yaml:"chains"`
 	Recovery         Recovery                  `yaml:"recovery"`
 	Retention        Retention                 `yaml:"retention"`
+	Reconcile        Reconcile                 `yaml:"reconcile"`
 	Integrations     Integrations              `yaml:"integrations"`
 }
 
@@ -152,6 +153,17 @@ type Retention struct {
 	KeepReleases int `yaml:"keep_releases"`
 	// Interval is how often a worker runs the cleanup.
 	Interval time.Duration `yaml:"interval"`
+}
+
+// Reconcile configures the periodic reading of the release in service on the targets, to
+// report in the inventory the targets changed outside manent.
+type Reconcile struct {
+	// Interval between two readings of every environment (0 = disabled).
+	Interval time.Duration `yaml:"interval"`
+	// Timeout of the reading of one target.
+	Timeout time.Duration `yaml:"timeout"`
+	// Concurrency is the number of targets of an environment read together.
+	Concurrency int `yaml:"concurrency"`
 }
 
 // App identifies the application.
@@ -568,6 +580,7 @@ func Default() *Config {
 		Observability: Observability{Metrics: true, Tracing: Tracing{SampleRatio: 1}},
 		Recovery:      Recovery{HeartbeatInterval: 15 * time.Second, StaleAfter: time.Minute},
 		Retention:     Retention{KeepReleases: 10, Interval: time.Hour},
+		Reconcile:     Reconcile{Timeout: 30 * time.Second, Concurrency: 8},
 		Rollout:       RolloutConfig{CheckTimeout: 30 * time.Second},
 		Chains:        Chains{PollInterval: 5 * time.Second},
 	}
@@ -760,6 +773,9 @@ func (c *Config) validateOperations() []error {
 	}
 	if t := c.Retention; t.MaxAge > 0 && t.MaxAge < 24*time.Hour {
 		errs = append(errs, errors.New("retention.max_age deve essere almeno 24h"))
+	}
+	if t := c.Reconcile; t.Interval < 0 || (t.Interval > 0 && t.Interval < 10*time.Second) || t.Timeout <= 0 || t.Concurrency < 1 {
+		errs = append(errs, errors.New("reconcile: interval deve essere 0 (disattivata) o almeno 10s, timeout > 0 e concurrency >= 1"))
 	}
 	if c.DBOS.Region != "" && !regionRe.MatchString(c.DBOS.Region) {
 		errs = append(errs, fmt.Errorf("dbos.region %q non valida", c.DBOS.Region))

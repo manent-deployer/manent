@@ -90,7 +90,10 @@ type ServiceOptions struct {
 	// delay beyond which a worker is considered lost.
 	Executors  ExecutorLister
 	StaleAfter time.Duration
-	Logger     *slog.Logger
+	// TargetStates, if set, adds to the inventory the state read from the targets by the
+	// reconciliation.
+	TargetStates TargetStateReader
+	Logger       *slog.Logger
 	// Now returns the current time; replaceable in tests.
 	Now func() time.Time
 }
@@ -129,6 +132,7 @@ type Engine struct {
 	health     rollout.Checker
 	traffic    TrafficOps
 	executors  ExecutorLister
+	targets    TargetStateReader
 	staleAfter time.Duration
 	logger     *slog.Logger
 	now        func() time.Time
@@ -154,6 +158,7 @@ func NewService(opts ServiceOptions) *Engine {
 		health:     opts.Health,
 		traffic:    opts.Traffic,
 		executors:  opts.Executors,
+		targets:    opts.TargetStates,
 		staleAfter: cmp.Or(opts.StaleAfter, time.Minute),
 		logger:     opts.Logger.With("component", "engine"),
 		now:        opts.Now,
