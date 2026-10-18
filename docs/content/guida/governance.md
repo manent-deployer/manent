@@ -9,7 +9,7 @@ manent keeps track of what is live in each environment and enforces the rules by
 - **manual rollback:** go back to a previous version with one command;
 - **change management:** a ticket in ServiceNow or Jira for every deploy, optionally waiting for its approval (`change` in the rule, see [Chat and change management](integrazioni.md#change-management)).
 
-The rules live in the `governance` section of the [configuration](../operazioni/configurazione.md) and apply to CLI and API alike.
+The rules live in the `governance` section of the [configuration](../operazioni/configurazione.md) and apply to CLI and API alike. With `governance.engine: opa` they can also be written in Rego and changed at runtime, with revisions tested, measured and approved by another person: see [Policies in Rego](policy.md). Freeze windows can be created and closed at runtime with both engines ([freezes at runtime](policy.md#freeze-a-runtime)).
 
 ```yaml title="manent.yml"
 governance:
@@ -158,6 +158,7 @@ With `approvals.required` the deploy does not run immediately: it stays `AWAITIN
 | `allow_self` | `false` | Allows approval by whoever requested the deploy. |
 | `timeout` | `72h` | When it expires the request becomes `EXPIRED` and the deploy does not run. |
 | `when` | `before` | `before`: approvals before the deploy. `rollout`: no approval before the deploy, the rule's approvals are asked at the approval points of the rollout (see below). |
+| `approvers` | | `groups` and `subjects` (patterns with `*`): only these identities can approve, besides the `deployment.approve` permission. |
 
 With a [wave rollout](ondate.md#approvazioni-e-freeze) or a [percentage rollout](traffico.md) that has `approvalsBetween`, a rule with `approvals` asks for approvals twice by default: before the deploy and at every point of the rollout. With `when: rollout` the first wave (or the candidate at weight 0) starts without approval, and the approvals of the rule (number, `allow_self`, `timeout`) are asked only at the points listed in `approvalsBetween`. A deploy covered by such a rule must have a rollout that actually pauses: an `approvalsBetween` entry after a wave that is not the last one, or a step of the [percentage rollout](traffico.md). Otherwise it is rejected at submission (`422`), or fails in the `config` step, before touching any target, if the environment configuration changed in the meantime. The first percentage release has no stable version and skips the intermediate steps: the approval is then asked before any traffic reaches the candidate. Change approval in the ITSM (`change.approval`) is still asked before the deploy.
 
@@ -196,8 +197,9 @@ Rules:
 - **Permission.** Approving and rejecting require `deployment.approve` on the application and environment, granted by the predefined `approver` role. The `deployer` and `operator` roles do not include it.
 - **Self-approval.** Whoever requested the deploy cannot approve it (`403`), unless `allow_self: true`. They can, however, reject it to withdraw it.
 - **One decision per person.** A second decision by the same identity is refused.
-- **Recurring schedules.** If the environment requires approvals when the schedule is created, every run waits for approval.
-- **Rule at request time.** The required approvals are those valid when the deploy is enqueued.
+- **Approvers.** With `approvers` an identity outside the groups or subjects of the rule cannot decide (`403`), and the request does not appear among its `manent approvals`.
+- **Recurring schedules.** Every run evaluates the governance in force at that moment: a rule with approvals added after the creation of the schedule applies to the next runs. Schedules created by previous versions keep the approvals of their creation.
+- **Rule at request time.** The required approvals are those valid when the deploy is enqueued: a stricter rule arrived later does not invalidate them (unless `governance.start: strict`, see [Policies in Rego](policy.md#determinismo-e-registrazione)).
 - **Separate queue.** The wait happens on a dedicated queue (`<dbos.queue>-approvals`): it takes no worker slots and does not block other deploys of the same environment.
 
 Every decision is recorded in the audit log (`deployment.approve`, `deployment.reject`), as is the final outcome (`approval.finish`).
@@ -213,15 +215,21 @@ During a freeze window real deploys on the application and environment are block
 | `regions` | Optional: limits the window to the passes of [wave rollouts](ondate.md#approvazioni-e-freeze) in these regions (patterns with `*`). A window with `regions` does not block enqueuing: the rollout pauses before the region and resumes once the window closes. |
 | `from`, `to` | Single window (RFC 3339). |
 | `cron`, `duration`, `timezone` | Recurring window: each occurrence starts at `cron` (5 fields) and lasts `duration`. |
+| `hard` | The window cannot be exempted by a Rego policy nor bypassed with `freezeOverride`. |
 
-The freeze is checked twice:
+The freeze is checked three times:
 
 - **at enqueue time:** an immediate deploy, or one scheduled with `schedule.at` inside a window, is rejected with `422`;
-- **at start on the worker,** in the `config` step: a deploy enqueued earlier (for example by a schedule or approved late) that starts during a window fails immediately, without retries.
+- **at start on the worker,** in the `config` step: a deploy enqueued earlier (for example by a schedule or approved late) that starts during a window fails immediately, without retries;
+- **before every stage of a rollout,** in its own step: the rollout pauses until the end of the window.
 
 ```sh
 manent freezes [-a myapp] [-e prod]     # active windows and next occurrences
+manent freeze add --name incident-881 -e prod --for 4h [--hard]   # emergency freeze, without restarting
+manent freeze delete incident-881
 ```
+
+The windows created at runtime (`freeze.write` permission) are described in [Freezes at runtime](policy.md#freeze-a-runtime).
 
 ### Emergency override
 
@@ -234,6 +242,7 @@ freezeOverride: "INC-4711: VAT calculation fix"
 or `--freeze-override "INC-4711 …"` with `promote` and `rollback`. The override:
 
 - requires the `deployment.freeze-override` permission, granted only by `admin` or a dedicated role;
+- does not bypass the `hard` windows;
 - is recorded in the audit log (`comment` field) and in the output of the `config` step;
 - does not exempt from approvals;
 - is not allowed with `schedule.cron`, because it applies to a single deploy.
@@ -264,5 +273,7 @@ It requires the `deployment.rollback` permission (`deployer` and `operator` role
 | `POST` | `/api/v1/deployments/{id}/approve` | Approve. |
 | `POST` | `/api/v1/deployments/{id}/reject` | Reject. |
 | `GET` | `/api/v1/freezes?application=&environment=` | Freeze windows. |
+| `POST` | `/api/v1/freezes` | Create a freeze window at runtime. |
+| `DELETE` | `/api/v1/freezes/{name}` | Delete a freeze window created at runtime. |
 
 See [HTTP API](api.md#governance).

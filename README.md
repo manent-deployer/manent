@@ -315,10 +315,23 @@ manent freezes -e prod                                       # finestre di freez
 - **Inventario:** ricostruito dallo storico dei deploy riusciti; segnala i deploy falliti successivi.
 - **Promozione:** con `requires` un deploy di un artefatto mai rilasciato negli ambienti indicati è rifiutato (`422`). `promote` riusa il descrittore di origine e ne fissa lo `sha256`, ma non i target.
 - **Approvazioni:** il deploy resta `AWAITING_APPROVAL` su una coda separata, che non occupa i worker, e parte con lo stesso ID dopo le approvazioni. Può essere respinto, scadere o essere annullato.
-- **Freeze:** blocca i deploy all'accodamento e all'avvio sul worker; `freezeOverride: "<motivo>"` nel descrittore deroga, con il permesso `deployment.freeze-override`.
+- **Freeze:** blocca i deploy all'accodamento, all'avvio sul worker e prima di ogni stadio del rollout; `freezeOverride: "<motivo>"` nel descrittore deroga, con il permesso `deployment.freeze-override`, salvo le finestre `hard`. `manent freeze add --name incidente -e prod --for 4h` crea un freeze d'emergenza a runtime, senza riavvii.
 - **Dry-run:** non soggetti alle regole.
 
 Dettagli nella [documentazione](docs/content/guida/governance.md).
+
+### Policy in Rego
+
+Con `governance.engine: opa` le regole si scrivono in Rego e le valuta OPA incorporato nel processo. Le revisioni si cambiano a runtime: vengono caricate in bozza, testate, misurate sui deploy reali e approvate da un'altra persona. Senza revisioni, la policy predefinita applica le regole di `manent.yml`.
+
+```sh
+manent policy push -d policies/ -m "approvazione dei DBA per le migrazioni"   # compilata e testata dal server
+manent policy impact 13 --since 30d                                         # decisioni dei deploy reali ricalcolate
+manent policy approve 13                                                    # da un'identità diversa dall'autore
+manent-server policy test -d policies/                                      # in locale, senza server
+```
+
+La policy restituisce divieti e obblighi (`requires`, `approvals` con gli `approvers`, `change`, esenzioni dai freeze); manent li fa rispettare. Le decisioni sono registrate negli step DBOS con la revisione, così una recovery non rivaluta mai. Le sorgenti possibili sono lo store di manent, una directory, un bundle OPA firmato o Consul. Dettagli in [Policy in Rego](docs/content/guida/policy.md).
 
 ## Chat e change management
 

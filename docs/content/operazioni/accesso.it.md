@@ -133,6 +133,8 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 | `schedule.read` | Leggere le schedule ricorrenti. |
 | `schedule.write` | Creare, aggiornare, sospendere, riattivare ed eliminare le schedule. Creare una schedule richiede anche `deployment.submit`. |
 | `platform.read` | Vedere i [worker](../guida/cli.md#attivita-e-worker): host, versioni, region, heartbeat e workflow in esecuzione. Non dipende dall'applicazione: basta un binding qualsiasi che la conceda. |
+| `freeze.write` | Creare ed eliminare [finestre di freeze a runtime](../guida/policy.md#freeze-a-runtime), su ogni applicazione e ambiente della finestra. |
+| `policy.read`, `policy.write`, `policy.approve` | Leggere, caricare (e valutare, misurare) e attivare le revisioni della [policy di governance](../guida/policy.md). Come `platform.read` non dipendono dall'applicazione. |
 
 | Ruolo predefinito | Azioni |
 |---|---|
@@ -141,7 +143,8 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 | `approver` | `viewer` + `deployment.approve` |
 | `deployer` | `tester` + `deployment.submit`, `deployment.cancel`, `deployment.rollback` |
 | `operator` | `deployer` + `schedule.write`, `platform.read` |
-| `admin` | tutte, compresa `deployment.freeze-override` |
+| `release-manager` | `viewer` + `freeze.write` |
+| `admin` | tutte, comprese `deployment.freeze-override` e le azioni `policy.*` |
 
 `deployer` e `operator` non possono approvare: chi rilascia non deve potersi approvare con un secondo ruolo. Le approvazioni si assegnano a un gruppo dedicato (es. il change advisory board) con il ruolo `approver`.
 
@@ -187,6 +190,8 @@ Ogni azione rilevante produce una voce di audit:
 | `after.finish`, `release.finish` | Esito dell'attesa delle dipendenze e di una release composta, registrato dal worker. |
 | `deployment.cancel` | Annullamento. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Operazioni sulle schedule. |
+| `freeze.create`, `freeze.delete` | Finestre di freeze create o eliminate a runtime (anche da `manent-server admin freeze-delete`). |
+| `policy.push`, `policy.activate` | Revisioni della policy di governance caricate e attivate (anche da `manent-server admin policy-activate`). |
 | `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Solo se negate. |
 | `deployment.finish` | Esito finale del deploy, registrato dal worker. |
 

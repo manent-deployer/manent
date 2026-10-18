@@ -72,6 +72,14 @@ function Facts({ d }: { d: Status }) {
           )}
         </Fact>
       )}
+      {d.policy && (
+        <Fact label={t("detail.policy")}>
+          <span className="font-mono text-sm">
+            {d.policy.revision}
+            {d.policy.rule && <span className="text-muted"> · {d.policy.rule}</span>}
+          </span>
+        </Fact>
+      )}
       <Fact label={t("detail.requestedBy")}>{d.requested_by || "—"}</Fact>
       <Fact label={t("detail.created")}>
         <time dateTime={d.created_at}>{formatDateTime(d.created_at, locale)}</time>
@@ -135,6 +143,11 @@ function ApprovalPanel({ d }: { d: Status }) {
           <span className="text-muted"> · {t("detail.approval.expires", { time: formatRelative(a.expires_at, locale) })}</span>
         )}
       </p>
+      {a.approvers && (
+        <p className="mt-2 text-sm text-muted">
+          {t("detail.approval.approvers", { who: [...(a.approvers.groups ?? []).map((g) => t("detail.approval.group", { group: g })), ...(a.approvers.subjects ?? [])].join(", ") })}
+        </p>
+      )}
       {a.change && (
         <p className="mt-2 text-sm">
           {t(`detail.approval.change.${a.change.approval ?? "pending"}` as MessageKey, { number: a.change.number })}

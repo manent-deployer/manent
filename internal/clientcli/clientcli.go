@@ -84,6 +84,14 @@ func Run(args []string) error {
 		}); err != nil {
 		return err
 	}
+	if err := cliutil.AddGroup(p, "policy", "Gestisce le revisioni della policy di governance (Rego)",
+		"Gestisce le revisioni della policy di governance valutata da OPA: caricamento in bozza, test, impatto, approvazione e ritorno", policyCommands(g)); err != nil {
+		return err
+	}
+	if err := cliutil.AddGroup(p, "freeze", "Crea ed elimina finestre di freeze a runtime",
+		"Crea ed elimina finestre di freeze senza modificare manent.yml né riavviare (es. un freeze d'emergenza)", freezeCommands(g)); err != nil {
+		return err
+	}
 	if err := cliutil.AddGroup(p, "env", "Verifica le configurazioni di ambiente",
 		"Verifica sul server una configurazione di ambiente candidata, prima di applicarla", []cliutil.Command{
 			{Name: "validate", Short: "Verifica una configurazione di ambiente come la userebbe un deploy", Cmd: &EnvValidateCmd{global: g}},

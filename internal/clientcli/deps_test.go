@@ -20,6 +20,7 @@ func TestClientLeggero(t *testing.T) {
 		"github.com/joeg-ita/manent/internal/steps", "github.com/joeg-ita/manent/plugins/",
 		"github.com/joeg-ita/manent/internal/secrets", "github.com/joeg-ita/manent/internal/extplugin",
 		"github.com/joeg-ita/manent/internal/webui", "github.com/aws/", "golang.org/x/oauth2/google",
+		"github.com/open-policy-agent/", "github.com/joeg-ita/manent/internal/policy", "github.com/joeg-ita/manent/internal/cluster",
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		for _, f := range forbidden {

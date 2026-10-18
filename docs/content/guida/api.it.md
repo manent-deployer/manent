@@ -47,6 +47,15 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
 | `GET` | `/api/v1/freezes` | Finestre di freeze attive e future. |
+| `POST` | `/api/v1/freezes` | Crea una finestra di freeze a runtime (`freeze.write`). |
+| `DELETE` | `/api/v1/freezes/{name}` | Elimina una finestra di freeze creata a runtime. |
+| `GET` | `/api/v1/policies` | Revisioni della policy di governance e quella in vigore (`policy.read`). |
+| `POST` | `/api/v1/policies` | Carica una revisione in bozza (`policy.write`). |
+| `GET` | `/api/v1/policies/{revision}` | Una revisione con i suoi file. |
+| `POST` | `/api/v1/policies/{revision}/evaluate` | Decisione di una revisione su un descrittore (`policy.write`). |
+| `GET` | `/api/v1/policies/{revision}/impact` | Decisioni dei deploy reali ricalcolate con una revisione (`policy.write`). |
+| `POST` | `/api/v1/policies/{revision}/approve` | Approva e attiva una bozza (`policy.approve`). |
+| `POST` | `/api/v1/policies/{revision}/activate` | Torna a una revisione precedente (`policy.approve`). |
 | `GET` | `/api/v1/metrics/dora` | Metriche DORA. |
 | `GET` | `/api/v1/schedules` | Elenca le schedule ricorrenti. |
 | `GET` | `/api/v1/schedules/{nome}` | Dettaglio di una schedule. |
@@ -272,6 +281,25 @@ Restituiscono `{"inventory": [...]}` e `{"freezes": [...]}`. Le finestre di free
  "start": "2026-10-16T18:00:00+02:00", "end": "2026-10-19T08:00:00+02:00", "recurring": true}
 ```
 
+### Freeze a runtime e policy
+
+```http
+POST /api/v1/freezes
+
+{"name": "incidente-881", "reason": "incidente 881", "applications": ["*"], "environments": ["prod"],
+ "to": "2026-10-18T18:00:00Z", "hard": true}
+```
+
+`from` vale adesso per default. Risponde `201` con la finestra. Risponde `403` senza `freeze.write` su ogni applicazione e ambiente della finestra, e `422` per un nome non valido, un duplicato o una finestra nel passato. `DELETE /api/v1/freezes/{name}` risponde `204`, oppure `404` per una finestra non creata a runtime.
+
+```http
+POST /api/v1/policies
+
+{"files": {"governance.rego": "package manent.governance\n…", "data.yaml": "…"}, "comment": "approvazione dei DBA"}
+```
+
+Risponde `201` con la revisione in bozza e l'esito dei test, oppure `422` con l'errore di compilazione o i test falliti. `{revision}` è un numero o `current` (la revisione in vigore). Vedi [Policy in Rego](policy.md#revisioni).
+
 ## Release composte { #release-composte }
 
 `POST /api/v1/releases` invia una [release composta](catene.md#release-composte). Il corpo è la release in JSON con i descrittori inclusi (`descriptor`; `file` è solo per la CLI):
@@ -342,6 +370,15 @@ Gli errori hanno sempre la forma:
 ```json
 {"error": "messaggio"}
 ```
+
+| Status | Significato |
+|---|---|
+| `400` | Richiesta o descrittore malformati. |
+| `401` | Token mancante o non valido. |
+| `403` | Permesso negato. |
+| `404` | Deploy, schedule, revisione o finestra inesistenti. |
+| `422` | Richiesta non accettabile (policy, governance, orario passato, ...). |
+| `503` | Temporaneamente non disponibile: ad esempio nessuna policy di governance caricata. Riprovare. |
 
 ## Log degli accessi
 

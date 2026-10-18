@@ -121,7 +121,13 @@ type SQL struct {
 	// executors, leases and targets are the qualified table names; exBare and leaseBare the ones
 	// used to refer to the existing row in ON CONFLICT.
 	executors, leases, targets, exBare, leaseBare string
-	now                                           func() time.Time
+	// policies, policyActive and freezes are the policy tables; policyActiveBare the name used
+	// in ON CONFLICT.
+	policies, policyActive, freezes, policyActiveBare string
+	// postgres and dsn serve the policy notifications (LISTEN/NOTIFY).
+	postgres bool
+	dsn      string
+	now      func() time.Time
 }
 
 var (
@@ -140,15 +146,18 @@ func Open(ctx context.Context, databaseURL string) (*SQL, error) {
 	if err != nil {
 		return nil, fmt.Errorf("executor registry: %w", err)
 	}
-	r := &SQL{db: db, now: time.Now}
+	r := &SQL{db: db, now: time.Now, postgres: postgres, dsn: dsn}
 	if postgres {
 		db.SetMaxOpenConns(4)
 		r.executors, r.leases, r.targets, r.exBare, r.leaseBare = "manent.executors", "manent.leases", "manent.target_states", "executors", "leases"
+		r.policies, r.policyActive, r.freezes, r.policyActiveBare = "manent.policy_revisions", "manent.policy_active", "manent.freeze_windows", "policy_active"
 	} else {
 		// SQLite: one connection, so writes do not compete within the process.
 		db.SetMaxOpenConns(1)
 		r.executors, r.leases, r.targets = "manent_executors", "manent_leases", "manent_target_states"
 		r.exBare, r.leaseBare = r.executors, r.leases
+		r.policies, r.policyActive, r.freezes = "manent_policy_revisions", "manent_policy_active", "manent_freeze_windows"
+		r.policyActiveBare = r.policyActive
 	}
 	if err := r.migrate(ctx, postgres); err != nil {
 		_ = db.Close()
@@ -207,6 +216,7 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 			data        TEXT NOT NULL,
 			PRIMARY KEY (application, environment, scope))`,
 	}
+	stmts = append(stmts, r.policyTables(postgres)...)
 	if postgres {
 		stmts = append([]string{`CREATE SCHEMA IF NOT EXISTS manent`}, stmts...)
 	}

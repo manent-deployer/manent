@@ -26,7 +26,6 @@ import (
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/telemetry"
@@ -77,9 +76,12 @@ type WorkerOptions struct {
 	Rollback RollbackPolicy
 	// Audit, if set, records the final outcome of every deploy.
 	Audit audit.Recorder
-	// Governance, if set, blocks at startup the deploys during a freeze window.
+	// Governance, if set, evaluates the policy at the deploy start, at every rollout stage and
+	// at every schedule run.
 	Governance Governance
-	Logger     *slog.Logger
+	// PolicyStart is governance.opa.start: deny (default) or strict.
+	PolicyStart string
+	Logger      *slog.Logger
 	// SchedulePollInterval is how often DBOS reloads schedules from the database (default 30s).
 	SchedulePollInterval time.Duration
 	// Metrics, if set, records duration and outcome of deploys and steps.
@@ -150,6 +152,7 @@ type Worker struct {
 	rollback        RollbackPolicy
 	audit           audit.Recorder
 	governance      Governance
+	policyStart     string
 	health          rollout.Checker
 	traffic         TrafficOps
 	healthTimeout   time.Duration
@@ -209,6 +212,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		rollback:        opts.Rollback,
 		audit:           opts.Audit,
 		governance:      opts.Governance,
+		policyStart:     opts.PolicyStart,
 		health:          opts.Health,
 		traffic:         opts.Traffic,
 		healthTimeout:   cmp.Or(opts.HealthTimeout, 30*time.Second),
@@ -623,7 +627,7 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 	if w.resolver != nil || w.rollback != nil || w.governance != nil {
 		rc, err := dbos.RunAsStep(ctx, func(c context.Context) (resolvedConfig, error) {
 			return instrument(w, c, ev, "config", func(c context.Context) (resolvedConfig, error) {
-				return w.resolveConfig(c, req.Descriptor, req.Approval)
+				return w.resolveConfig(c, req)
 			})
 		}, dbos.WithStepName("config"), dbos.WithStepMaxRetries(w.resolverRetries), dbos.WithStepRetryPredicate(pipeline.Retryable))
 		ev.send(&req.Descriptor, stepEvent("config", rc.Meta, err))
@@ -753,21 +757,19 @@ func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn
 }
 
 // resolveConfig produces the effective descriptor: environment configuration and rollback
-// policy. A real deploy that starts during a freeze window fails, unless overridden; so does
-// one with approvals moved into the rollout, if the effective rollout has none.
-func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, approvals *governance.Approvals) (resolvedConfig, error) {
+// policy. A real deploy fails if the governance policy now denies it or a freeze window is
+// active, unless overridden; so does one with approvals moved into the rollout, if the
+// effective rollout has none.
+func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig, error) {
+	d, approvals := req.Descriptor, req.Approval
 	meta := map[string]string{}
-	if w.governance != nil && !d.DryRun {
-		if d.FreezeOverride != "" {
-			meta["freeze_override"] = d.FreezeOverride
-		} else if win := w.governance.Frozen(d.Application, d.Environment, time.Now()); win != nil {
-			return resolvedConfig{}, pipeline.Permanent(errors.New(freezeMessage(win)))
-		}
-	}
 	if w.resolver != nil {
 		var err error
 		if d, meta, err = w.resolver.Resolve(ctx, d); err != nil {
 			return resolvedConfig{}, err
+		}
+		if meta == nil {
+			meta = map[string]string{}
 		}
 	}
 	if w.rollback != nil {
@@ -799,6 +801,9 @@ func (w *Worker) resolveConfig(ctx context.Context, d descriptor.Descriptor, app
 	}
 	if err := checkRolloutApprovals(&d, approvals); err != nil {
 		return resolvedConfig{}, pipeline.Permanent(err)
+	}
+	if err := w.startPolicy(ctx, req, &d, meta); err != nil {
+		return resolvedConfig{}, err
 	}
 	if m := trafficMeta(d); m != "" {
 		meta["traffic"] = m

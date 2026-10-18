@@ -44,17 +44,32 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 	if err != nil {
 		return "", fmt.Errorf("invalid schedule context: %w", err)
 	}
-	d := &sc.Request.Descriptor
+	req := sc.Request
+	d := &req.Descriptor
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
-	// The schedule's deploys count as requested by whoever created it. If the environment
-	// required approvals when the schedule was created, every run must be approved.
-	if needsApproval(sc.Request) {
-		if err := enqueueApproval(ctx, sc.QueueName, sc.Request, id); err != nil {
+	// The schedule's deploys count as requested by whoever created it. Schedules created with
+	// a governance decision evaluate the policy in force at every run, in a DBOS step; the older
+	// ones keep the obligations of the schedule's creation.
+	if req.Policy != nil && w.governance != nil {
+		tp, err := dbos.RunAsStep(ctx, func(c context.Context) (tickPolicy, error) {
+			return w.evaluateTick(c, req, in.ScheduledTime)
+		}, dbos.WithStepName("policy"), dbos.WithStepMaxRetries(policyStepRetries))
+		if err != nil {
+			return "", err
+		}
+		if tp.Deny != "" {
+			w.logger.Warn("esecuzione della schedule rifiutata dalla policy di governance", "schedule", d.ScheduleName(), "deployment", id, "reason", tp.Deny)
+			return "", fmt.Errorf("run %s not enqueued: %s", id, tp.Deny)
+		}
+		req.Approval, req.Change, req.Policy = tp.Approval, tp.Change, tp.Policy
+	}
+	if needsApproval(req) {
+		if err := enqueueApproval(ctx, sc.QueueName, req, id); err != nil {
 			return "", err
 		}
 		return id, nil
 	}
-	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, sc.Request, deployOptions(sc.Request, id)...)
+	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, req, deployOptions(req, id)...)
 	if err != nil {
 		return "", err
 	}

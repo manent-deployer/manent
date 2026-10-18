@@ -52,12 +52,16 @@ func Run(args []string) error {
 	add("validate", "Verifica configurazione e descrittore in locale, senza database", &ValidateCmd{global: g})
 	add("version", "Mostra la versione di manent-server", &cliutil.VersionCmd{})
 	if err := cliutil.AddGroup(p, "admin", "Operazioni di piattaforma sul database di sistema",
-		"Operazioni di piattaforma: worker, recovery dei nodi persi e degli aggiornamenti, retention dello storico", []cliutil.Command{
+		"Operazioni di piattaforma: worker, recovery dei nodi persi e degli aggiornamenti, retention dello storico", append([]cliutil.Command{
 			{Name: "executors", Short: "Elenca i worker registrati e i loro workflow in sospeso", Cmd: &ExecutorsCmd{global: g}},
 			{Name: "recover", Short: "Riprende i workflow di un worker perso o di una versione precedente", Cmd: &RecoverCmd{global: g}},
 			{Name: "prune", Short: "Elimina lo storico dei workflow più vecchio della retention", Cmd: &PruneCmd{global: g}},
 			{Name: "specs", Short: "Elenca deploy in attesa e schedule che contengono specifiche revocate degli step personalizzati", Cmd: &SpecsCmd{global: g}},
-		}); err != nil {
+		}, adminPolicyCommands(g)...)); err != nil {
+		return err
+	}
+	if err := cliutil.AddGroup(p, "policy", "Verifica in locale le policy di governance (Rego)",
+		"Compila, testa e valuta una directory di policy Rego senza server e senza database", policyCommands(g)); err != nil {
 		return err
 	}
 	if err := cliutil.AddGroup(p, "audit", "Strumenti per il file di audit", "Strumenti per il file di audit", []cliutil.Command{
@@ -120,14 +124,9 @@ func (c *ValidateCmd) Execute([]string) error {
 		return err
 	}
 	out := map[string]any{"valid": true, "plan": plan.Public(), "rollback": eff.Rollback}
-	gov, err := app.NewGovernance(cfg)
+	g, err := localGovernance(cfg, log, sp, d, nil)
 	if err != nil {
 		return err
-	}
-	rule := gov.Rule(d.Application, d.Environment)
-	g := map[string]any{"rule": rule.Name, "requires": rule.Requires, "approvals": rule.Approvals.Required}
-	if w := gov.Frozen(d.Application, d.Environment, time.Now()); w != nil {
-		g["freeze"] = w
 	}
 	out["governance"] = g
 	if !c.Offline {
@@ -146,6 +145,10 @@ func (c *ValidateCmd) Execute([]string) error {
 		for i, s := range eff.Secrets {
 			names[i] = s.Name
 		}
+		if g, err = localGovernance(cfg, log, sp, d, &eff); err != nil {
+			return err
+		}
+		out["governance"] = g
 		out["config"] = meta
 		out["deploy"] = eff.Deploy
 		out["secrets"] = names

@@ -166,7 +166,7 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 	var done [][]passRun
 	for i, stage := range plan.Stages {
 		if !d.DryRun {
-			if err := w.waitFreeze(ctx, d, stage, rs); err != nil {
+			if err := w.waitFreeze(ctx, req, d, stage, rs); err != nil {
 				return err
 			}
 		}
@@ -646,45 +646,6 @@ func now(ctx dbos.Context) (time.Time, error) {
 	return dbos.RunAsStep(ctx, func(context.Context) (time.Time, error) { return time.Now().UTC(), nil }, dbos.WithStepName("now"))
 }
 
-// waitFreeze waits for the end of the freezes active on the stage's regions (or on the whole
-// environment). An override (freezeOverride) ignores them.
-func (w *Worker) waitFreeze(ctx dbos.Context, d *descriptor.Descriptor, stage rollout.Stage, rs *RolloutState) error {
-	if w.governance == nil || d.FreezeOverride != "" {
-		return nil
-	}
-	for {
-		t, err := now(ctx)
-		if err != nil {
-			return err
-		}
-		var win *governance.WindowStatus
-		region := ""
-		for _, reg := range stage.Regions() {
-			if f := w.governance.FrozenIn(d.Application, d.Environment, reg, t); f != nil {
-				win, region = f, reg
-				break
-			}
-		}
-		if win == nil {
-			if rs.Status == service.RolloutPausedFreeze {
-				rs.Status, rs.Paused = service.RolloutRunning, ""
-				w.publishRollout(ctx, rs)
-			}
-			return nil
-		}
-		rs.Status = service.RolloutPausedFreeze
-		rs.Paused = fmt.Sprintf("freeze %q fino a %s", win.Name, win.End.Format(time.RFC3339))
-		if region != "" {
-			rs.Paused += " in " + region
-		}
-		w.publishRollout(ctx, rs)
-		w.logger.Info("rollout in pausa per un freeze", "stage", stage.Name, "freeze", win.Name, "until", win.End)
-		if _, err := dbos.Sleep(ctx, max(win.End.Sub(t), time.Second)); err != nil {
-			return err
-		}
-	}
-}
-
 // waitRolloutApproval waits for the approvals required after a wave. The deploy's governance
 // rule applies (number of approvals, self-approval, expiry) or, without one, a single
 // approval by another identity.
@@ -701,6 +662,9 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 		return err
 	}
 	st := ApprovalState{Status: ApprovalPending, Required: rule.Required, AllowSelf: rule.AllowSelf, ExpiresAt: t.Add(rule.Timeout)}
+	if a := req.Approval; a != nil {
+		st.Approvers = a.Approvers
+	}
 	rs.Status, rs.Paused, rs.Approval = status, "approvazione dopo "+after, &st
 	if status == service.RolloutPausedDrift {
 		rs.Paused = after

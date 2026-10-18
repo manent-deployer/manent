@@ -11,7 +11,11 @@ export type Action =
   | "deployment.freeze-override"
   | "schedule.read"
   | "schedule.write"
-  | "platform.read";
+  | "platform.read"
+  | "policy.read"
+  | "policy.write"
+  | "policy.approve"
+  | "freeze.write";
 
 /** glob matches a value against a pattern where "*" stands for any sequence (as internal/glob). */
 export function glob(pattern: string, value: string): boolean {

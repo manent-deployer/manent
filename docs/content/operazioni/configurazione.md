@@ -108,10 +108,22 @@ See [Authentication, permissions and audit](accesso.md).
 
 | Key | Default | Description |
 |---|---|---|
-| `governance.rules` | `[]` | Rules per application and environment (the first match applies): `name`, `applications`, `environments`, `requires` (environments to promote from), `approvals` (`required`, `allow_self`, `timeout`, default `72h`), `change` (`approval`, `timeout`, default `72h`: change ticket, see [Chat and change management](../guida/integrazioni.md#change-management)). |
-| `governance.freezes` | `[]` | Freeze windows: `name`, `reason`, `applications`, `environments` and `from`/`to` or `cron` (5 fields), `duration`, `timezone`. |
+| `governance.engine` | `builtin` | `builtin`: the rules and windows of this file. `opa`: Rego policies evaluated by OPA, changeable at runtime. |
+| `governance.rules` | `[]` | Rules per application and environment (the first match applies): `name`, `applications`, `environments`, `requires` (environments to promote from), `approvals` (`required`, `allow_self`, `timeout`, default `72h`, `when`, `approvers` with `groups` and `subjects`), `change` (`approval`, `timeout`, default `72h`: change ticket, see [Chat and change management](../guida/integrazioni.md#change-management)). With `opa` they are the data of the default policy. |
+| `governance.freezes` | `[]` | Freeze windows: `name`, `reason`, `applications`, `environments` and `from`/`to` or `cron` (5 fields), `duration`, `timezone`, `hard`. Windows can also be created at runtime (`manent freeze add`). |
+| `governance.refresh` | `10s` | How often every process reads policy and runtime freezes again. |
+| `governance.max_staleness` | `10m` | Beyond this without a successful read, real deploys are refused (`503`). |
+| `governance.start` | `deny` | What the deploy start checks again: `deny` (denials and freezes) or `strict` (also approvals and change grown after the submission). |
+| `governance.opa.source` | `store` | Revisions: `store` (managed with `manent policy`), `file`, `bundle`, `consul`. |
+| `governance.opa.store.review` | `false` | A draft is approved by an identity other than its author. |
+| `governance.opa.store.tests` | `run` | `run`: the revision's tests run if present; `required`: revisions without tests are refused. |
+| `governance.opa.file.dir` | | Directory of the policy with `source: file`. |
+| `governance.opa.bundle.*` | | `url`, `ca_file`, `credentials_ref`, `signing` (`public_key_ref`, `algorithm`, `key_id`, `scope`), `insecure_skip_verify`. |
+| `governance.opa.consul.prefix` | `manent/policies` | KV prefix with `source: consul` (address and token of `envconfig.consul`). |
+| `governance.opa.query` | `data.manent.governance.decision` | Query of the decision. |
+| `governance.opa.eval_timeout` | `200ms` | Limit of one evaluation. |
 
-See [Release governance](../guida/governance.md).
+See [Release governance](../guida/governance.md) and [Policies in Rego](../guida/policy.md).
 
 ### `descriptor_policy`
 

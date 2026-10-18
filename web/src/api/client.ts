@@ -20,6 +20,10 @@ export type Activity = components["schemas"]["Activity"];
 export type Worker = components["schemas"]["Worker"];
 export type AfterState = components["schemas"]["AfterState"];
 export type ReleaseStatus = components["schemas"]["ReleaseStatus"];
+export type FreezeRequest = components["schemas"]["FreezeRequest"];
+export type PolicyList = components["schemas"]["PolicyList"];
+export type PolicyRevision = components["schemas"]["PolicyRevision"];
+export type PolicyImpact = components["schemas"]["PolicyImpact"];
 
 /** API error with the HTTP status and the server message. */
 export class ApiError extends Error {

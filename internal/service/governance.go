@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/governance"
 )
 
 // Outcomes of an approval.
@@ -31,11 +32,13 @@ type DecisionRequest struct {
 
 // ApprovalState is the state of an approval.
 type ApprovalState struct {
-	Status    string     `json:"status"`
-	Required  int        `json:"required"`
-	AllowSelf bool       `json:"allow_self,omitempty"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	Decisions []Decision `json:"decisions,omitempty"`
+	Status    string `json:"status"`
+	Required  int    `json:"required"`
+	AllowSelf bool   `json:"allow_self,omitempty"`
+	// Approvers, if set, limits who can approve (groups or subjects).
+	Approvers *governance.Approvers `json:"approvers,omitempty"`
+	ExpiresAt time.Time             `json:"expires_at"`
+	Decisions []Decision            `json:"decisions,omitempty"`
 	// Change is the change ticket to approve in the ITSM, if required.
 	Change *ChangeTicket `json:"change,omitempty"`
 }

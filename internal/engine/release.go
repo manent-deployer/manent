@@ -78,11 +78,12 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		if _, err := e.planner.Plan(&d); err != nil {
 			return nil, fmt.Errorf("%w: deploy %s: %w", ErrInvalidRequest, rd.Name, err)
 		}
-		if _, err := e.check(ctx, &d); err != nil {
+		eff, err := e.check(ctx, &d)
+		if err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
 		// Freezes and governance rules reject the release at once, not after enqueuing.
-		if _, _, err := e.govern(ctx, &d); err != nil {
+		if err := e.govern(ctx, &Request{Descriptor: d, Kind: KindDeploy, Release: r.ID, RequestedBy: auth.FromContext(ctx).String()}, eff); err != nil {
 			return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 		}
 		// Internal dependencies do not exist yet: only external ones are checked.

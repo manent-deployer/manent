@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity as ActivityIcon, BarChart3, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, ShieldAlert, Sun } from "lucide-react";
+import { Activity as ActivityIcon, BarChart3, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, Scale, ShieldAlert, Sun } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
@@ -155,6 +155,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: "/releases", label: t("nav.releases"), icon: GitBranch },
     { to: "/calendar", label: t("nav.calendar"), icon: CalendarClock },
     { to: "/metrics", label: t("nav.metrics"), icon: BarChart3 },
+    ...(canSomewhere(me.data, "policy.read") ? [{ to: "/policies", label: t("nav.policies"), icon: Scale }] : []),
   ];
 
   return (

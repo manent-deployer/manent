@@ -9,7 +9,7 @@ manent tiene traccia di cosa è in esercizio in ogni ambiente e applica le regol
 - **rollback manuale:** si torna a una versione precedente con un comando;
 - **change management:** un ticket in ServiceNow o Jira per ogni deploy, con l'eventuale attesa della sua approvazione (`change` nella regola, vedi [Chat e change management](integrazioni.md#change-management)).
 
-Le regole sono nella sezione `governance` della [configurazione](../operazioni/configurazione.md) e valgono per CLI e API.
+Le regole sono nella sezione `governance` della [configurazione](../operazioni/configurazione.md) e valgono per CLI e API. Con `governance.engine: opa` si possono anche scrivere in Rego e cambiare a runtime, con revisioni testate, misurate e approvate da un'altra persona: vedi [Policy in Rego](policy.md). Con entrambi i motori le finestre di freeze si possono creare e chiudere a runtime ([freeze a runtime](policy.md#freeze-a-runtime)).
 
 ```yaml title="manent.yml"
 governance:
@@ -156,6 +156,7 @@ Con `approvals.required` il deploy non viene eseguito subito: resta `AWAITING_AP
 |---|---|---|
 | `required` | `0` | Approvazioni necessarie. |
 | `allow_self` | `false` | Ammette l'approvazione di chi ha richiesto il deploy. |
+| `approvers` | | `groups` e `subjects` (pattern con `*`): solo queste identità possono approvare, oltre al permesso `deployment.approve`. |
 | `timeout` | `72h` | Scaduto il tempo la richiesta passa a `EXPIRED` e il deploy non viene eseguito. |
 | `when` | `before` | `before`: approvazioni prima del deploy. `rollout`: nessuna approvazione prima del deploy, quelle della regola si chiedono nei punti di approvazione del rollout (vedi sotto). |
 
@@ -196,8 +197,9 @@ Regole:
 - **Permesso.** Approvare e respingere richiede `deployment.approve` sull'applicazione e sull'ambiente, concesso dal ruolo predefinito `approver`. I ruoli `deployer` e `operator` non lo includono.
 - **Auto-approvazione.** Chi ha richiesto il deploy non può approvarlo (`403`), salvo `allow_self: true`. Può però respingerlo, per ritirarlo.
 - **Una decisione per persona.** Una seconda decisione della stessa identità è rifiutata.
-- **Schedule ricorrenti.** Se l'ambiente richiede approvazioni quando la schedule viene creata, ogni esecuzione resta in attesa di approvazione.
-- **Regola al momento della richiesta.** Le approvazioni richieste sono quelle valide quando il deploy viene accodato.
+- **Approvatori.** Con `approvers` un'identità fuori dai gruppi o dai soggetti della regola non può decidere (`403`), e la richiesta non compare nei suoi `manent approvals`.
+- **Schedule ricorrenti.** Ogni esecuzione valuta la governance in vigore in quel momento: una regola con approvazioni aggiunta dopo la creazione della schedule vale per le esecuzioni successive. Le schedule create dalle versioni precedenti mantengono le approvazioni della loro creazione.
+- **Regola al momento della richiesta.** Le approvazioni richieste sono quelle valide quando il deploy viene accodato: una regola più severa arrivata dopo non le invalida (salvo `governance.start: strict`, vedi [Policy in Rego](policy.md#determinismo-e-registrazione)).
 - **Coda separata.** L'attesa avviene su una coda dedicata (`<dbos.queue>-approvals`): non occupa slot dei worker e non blocca altri deploy dello stesso ambiente.
 
 Ogni decisione è registrata nell'audit (`deployment.approve`, `deployment.reject`), così come l'esito finale (`approval.finish`).
@@ -213,15 +215,21 @@ Durante una finestra di freeze i deploy reali sull'applicazione e sull'ambiente 
 | `regions` | Facoltativo: limita la finestra ai passi dei [rilasci a ondate](ondate.md#approvazioni-e-freeze) su queste region (pattern con `*`). Una finestra con `regions` non blocca l'accodamento: il rollout si mette in pausa prima della region e riparte a finestra chiusa. |
 | `from`, `to` | Finestra singola (RFC 3339). |
 | `cron`, `duration`, `timezone` | Finestra ricorrente: ogni occorrenza inizia a `cron` (5 campi) e dura `duration`. |
+| `hard` | La finestra non può essere esentata da una policy Rego né superata con `freezeOverride`. |
 
-Il freeze è verificato due volte:
+Il freeze è verificato tre volte:
 
 - **all'accodamento:** un deploy immediato, o pianificato con `schedule.at` dentro una finestra, viene rifiutato con `422`;
-- **all'avvio sul worker,** nello step `config`: un deploy accodato prima (ad esempio da una schedule o approvato tardi) che parte durante una finestra fallisce subito, senza retry.
+- **all'avvio sul worker,** nello step `config`: un deploy accodato prima (ad esempio da una schedule o approvato tardi) che parte durante una finestra fallisce subito, senza retry;
+- **prima di ogni stadio di un rollout,** in uno step dedicato: il rollout si mette in pausa fino alla fine della finestra.
 
 ```sh
 manent freezes [-a myapp] [-e prod]     # finestre attive e prossime occorrenze
+manent freeze add --name incidente-881 -e prod --for 4h [--hard]   # freeze d'emergenza, senza riavvii
+manent freeze delete incidente-881
 ```
+
+Le finestre create a runtime (permesso `freeze.write`) sono descritte in [Freeze a runtime](policy.md#freeze-a-runtime).
 
 ### Deroga per le emergenze
 
@@ -234,6 +242,7 @@ freezeOverride: "INC-4711: correzione del calcolo IVA"
 oppure `--freeze-override "INC-4711 …"` con `promote` e `rollback`. La deroga:
 
 - richiede il permesso `deployment.freeze-override`, concesso solo da `admin` o da un ruolo dedicato;
+- non supera le finestre `hard`;
 - viene registrata nell'audit (campo `comment`) e nell'output dello step `config`;
 - non esonera dalle approvazioni;
 - non è ammessa con `schedule.cron`, perché vale per un singolo deploy.
@@ -264,5 +273,7 @@ Richiede il permesso `deployment.rollback` (ruoli `deployer` e `operator`) ed è
 | `POST` | `/api/v1/deployments/{id}/approve` | Approva. |
 | `POST` | `/api/v1/deployments/{id}/reject` | Respinge. |
 | `GET` | `/api/v1/freezes?application=&environment=` | Finestre di freeze. |
+| `POST` | `/api/v1/freezes` | Crea una finestra di freeze a runtime. |
+| `DELETE` | `/api/v1/freezes/{name}` | Elimina una finestra di freeze creata a runtime. |
 
 Vedi [API HTTP](api.md#governance).

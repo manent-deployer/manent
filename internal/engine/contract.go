@@ -41,6 +41,7 @@ var (
 	ErrNotFound       = service.ErrNotFound
 	ErrInvalidRequest = service.ErrInvalidRequest
 	ErrForbidden      = service.ErrForbidden
+	ErrUnavailable    = service.ErrUnavailable
 )
 
 // Terminal reports the final states of a deploy.

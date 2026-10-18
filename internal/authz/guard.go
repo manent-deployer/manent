@@ -332,9 +332,33 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 		g.record(ctx, act, t, audit.OutcomeDenied, err)
 		return err
 	}
+	if a := pendingApproval(st); !g.Policy.Disabled && a != nil && !a.Approvers.Allows(p.String(), principalGroups(p)) {
+		err := fmt.Errorf("%w: %s is not among the approvers of deploy %s set by the governance policy", engine.ErrForbidden, actor(p), id)
+		g.record(ctx, act, t, audit.OutcomeDenied, err)
+		return err
+	}
 	err = g.Next.Decide(ctx, id, r)
 	g.done(ctx, act, t, err)
 	return err
+}
+
+// pendingApproval returns the approval the deploy waits for: before the deploy or between
+// two rollout waves.
+func pendingApproval(st *engine.Status) *engine.ApprovalState {
+	if st.Approval != nil && st.Approval.Status == engine.ApprovalPending {
+		return st.Approval
+	}
+	if st.Rollout != nil && st.Rollout.Approval != nil {
+		return st.Rollout.Approval
+	}
+	return st.Approval
+}
+
+func principalGroups(p *auth.Principal) []string {
+	if p == nil {
+		return nil
+	}
+	return p.Groups
 }
 
 // Freezes requires only authentication: freeze windows are not restricted.
@@ -452,6 +476,9 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 			continue
 		}
 		if !g.Policy.Disabled && st.RequestedBy == p.String() && (st.Approval == nil || !st.Approval.AllowSelf) {
+			continue
+		}
+		if a := pendingApproval(&st); !g.Policy.Disabled && a != nil && !a.Approvers.Allows(p.String(), principalGroups(p)) {
 			continue
 		}
 		out = append(out, st)

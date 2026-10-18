@@ -61,6 +61,8 @@ var (
 	ErrInvalidRequest = errors.New("invalid request")
 	// ErrForbidden means an action not allowed by the user's permissions.
 	ErrForbidden = errors.New("permission denied")
+	// ErrUnavailable means a temporary condition (e.g. no governance policy loaded): retry later.
+	ErrUnavailable = errors.New("service unavailable")
 )
 
 // Service is the entry point used by CLI and API.
@@ -72,6 +74,7 @@ type Service interface {
 	AccessService
 	PlatformService
 	ReleaseService
+	PolicyService
 }
 
 // DeploymentService manages deploys, immediate or scheduled.
@@ -165,10 +168,19 @@ type EnvironmentCheck struct {
 
 // GovernanceValidation are the governance rules that would apply to the deploy.
 type GovernanceValidation struct {
+	// Revision is the governance policy that produced the decision.
+	Revision  string                   `json:"revision,omitempty"`
 	Rule      string                   `json:"rule,omitempty"`
 	Requires  []string                 `json:"requires,omitempty"`
 	Approvals int                      `json:"approvals"`
+	Approvers *governance.Approvers    `json:"approvers,omitempty"`
+	Change    *governance.Change       `json:"change,omitempty"`
 	Freeze    *governance.WindowStatus `json:"freeze,omitempty"`
+	// Deny are the reasons the policy would refuse the deploy.
+	Deny  []governance.Denial `json:"deny,omitempty"`
+	Notes []string            `json:"notes,omitempty"`
+	// Error is a policy evaluation failure: the deploy would be refused.
+	Error string `json:"error,omitempty"`
 }
 
 // StepResult is the outcome of a run step.
@@ -233,6 +245,8 @@ type Status struct {
 	After *AfterState `json:"after,omitempty"`
 	// Release is the composite release the deploy belongs to.
 	Release string `json:"release,omitempty"`
+	// Policy is the governance decision recorded at submission (revision and rule).
+	Policy *governance.Snapshot `json:"policy,omitempty"`
 	// Rollout is the state of the wave release, if the deploy has one.
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// RolloutProgress summarizes the rollout in listings: "stages passed/total stages".

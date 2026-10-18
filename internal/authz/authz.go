@@ -31,6 +31,15 @@ const (
 	// PlatformRead allows seeing the workers (hosts, versions, regions) and their load.
 	// It does not depend on application and environment: any binding granting it is enough.
 	PlatformRead Action = "platform.read"
+	// PolicyRead allows reading the governance policy revisions; PolicyWrite pushing, evaluating
+	// and measuring the impact of new ones; PolicyApprove activating them. Like platform.read
+	// they do not depend on application and environment.
+	PolicyRead    Action = "policy.read"
+	PolicyWrite   Action = "policy.write"
+	PolicyApprove Action = "policy.approve"
+	// FreezeWrite allows creating and deleting freeze windows at runtime, on the applications
+	// and environments of the window (a "*" pattern requires the permission on "*").
+	FreezeWrite Action = "freeze.write"
 	// All stands for every action.
 	All Action = "*"
 )
@@ -38,7 +47,8 @@ const (
 // Actions lists the valid actions in a role definition.
 var Actions = []Action{
 	DeploymentRead, DeploymentSubmit, DeploymentDryRun, DeploymentCancel, DeploymentRollback,
-	DeploymentApprove, FreezeOverride, ScheduleRead, ScheduleWrite, PlatformRead, All,
+	DeploymentApprove, FreezeOverride, ScheduleRead, ScheduleWrite, PlatformRead,
+	PolicyRead, PolicyWrite, PolicyApprove, FreezeWrite, All,
 }
 
 // BuiltinRoles are the predefined roles; the configuration can add others.
@@ -50,7 +60,9 @@ var BuiltinRoles = map[string][]Action{
 	"approver": {DeploymentRead, ScheduleRead, DeploymentApprove},
 	"deployer": {DeploymentRead, ScheduleRead, DeploymentDryRun, DeploymentSubmit, DeploymentCancel, DeploymentRollback},
 	"operator": {DeploymentRead, ScheduleRead, DeploymentDryRun, DeploymentSubmit, DeploymentCancel, DeploymentRollback, ScheduleWrite, PlatformRead},
-	"admin":    {All},
+	// release-manager opens and closes freeze windows; policy changes stay with admin.
+	"release-manager": {DeploymentRead, ScheduleRead, FreezeWrite},
+	"admin":           {All},
 }
 
 // Binding assigns a role to users or groups on a set of applications and environments.

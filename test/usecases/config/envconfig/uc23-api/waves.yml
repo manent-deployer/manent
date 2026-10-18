@@ -1,0 +1,23 @@
+# UC23: wave rollout paused by a freeze created at runtime between two stages.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc23-api
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id
+rollout:
+  waves:
+    - {name: primo, select: "az=eu-1b", bake: 12s}
+    - {name: secondo, select: "az=eu-1c"}
+  health:
+    interval: 2s
+    probes:
+      - {url: "http://{host}:8080/uc23-api/current/healthz"}

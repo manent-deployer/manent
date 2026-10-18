@@ -47,6 +47,15 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/rollbacks` | Goes back to a previous version. |
 | `GET` | `/api/v1/inventory` | Live releases per application and environment. |
 | `GET` | `/api/v1/freezes` | Active and upcoming freeze windows. |
+| `POST` | `/api/v1/freezes` | Creates a freeze window at runtime (`freeze.write`). |
+| `DELETE` | `/api/v1/freezes/{name}` | Deletes a freeze window created at runtime. |
+| `GET` | `/api/v1/policies` | Governance policy revisions and the one in force (`policy.read`). |
+| `POST` | `/api/v1/policies` | Pushes a draft revision (`policy.write`). |
+| `GET` | `/api/v1/policies/{revision}` | A revision with its files. |
+| `POST` | `/api/v1/policies/{revision}/evaluate` | Decision of a revision on a descriptor (`policy.write`). |
+| `GET` | `/api/v1/policies/{revision}/impact` | Decisions of the real deploys recomputed with a revision (`policy.write`). |
+| `POST` | `/api/v1/policies/{revision}/approve` | Approves and activates a draft (`policy.approve`). |
+| `POST` | `/api/v1/policies/{revision}/activate` | Goes back to a previous revision (`policy.approve`). |
 | `GET` | `/api/v1/metrics/dora` | DORA metrics. |
 | `GET` | `/api/v1/schedules` | Lists recurring schedules. |
 | `GET` | `/api/v1/schedules/{name}` | Details of a schedule. |
@@ -272,6 +281,25 @@ They return `{"inventory": [...]}` and `{"freezes": [...]}`. Freeze windows are 
  "start": "2026-10-16T18:00:00+02:00", "end": "2026-10-19T08:00:00+02:00", "recurring": true}
 ```
 
+### Freezes at runtime and policies
+
+```http
+POST /api/v1/freezes
+
+{"name": "incident-881", "reason": "incident 881", "applications": ["*"], "environments": ["prod"],
+ "to": "2026-10-18T18:00:00Z", "hard": true}
+```
+
+`from` defaults to now. Responds `201` with the window; `403` without `freeze.write` on every application/environment of the window; `422` for an invalid name, a duplicate or a window in the past. `DELETE /api/v1/freezes/{name}` responds `204`, `404` for a window not created at runtime.
+
+```http
+POST /api/v1/policies
+
+{"files": {"governance.rego": "package manent.governance\n…", "data.yaml": "…"}, "comment": "DBA approval"}
+```
+
+Responds `201` with the draft revision and its test results; `422` with the compilation error or the failed tests. `{revision}` is a number or `current` (the revision in force). See [Policies in Rego](policy.md#revisioni).
+
 ## Composite releases { #release-composte }
 
 `POST /api/v1/releases` submits a [composite release](catene.md#release-composte). The body is the release in JSON with the descriptors included (`descriptor`; `file` is only for the CLI):
@@ -342,6 +370,15 @@ Errors always have the shape:
 ```json
 {"error": "message"}
 ```
+
+| Status | Meaning |
+|---|---|
+| `400` | Malformed request or descriptor. |
+| `401` | Missing or invalid token. |
+| `403` | Permission denied. |
+| `404` | Deploy, schedule, revision or window not found. |
+| `422` | Request not acceptable (policy, governance, past time, ...). |
+| `503` | Temporarily unavailable: for example no governance policy loaded. Retry. |
 
 ## Access log
 

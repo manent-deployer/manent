@@ -38,6 +38,8 @@ type Request struct {
 	Plan       pipeline.Plan         `json:"plan"`
 	// RequestedBy is the identity that requested the deploy (or created the schedule), e.g. "oidc:alice".
 	RequestedBy string `json:"requested_by,omitempty"`
+	// RequestedGroups are the groups of RequestedBy at request time, for the governance policy.
+	RequestedGroups []string `json:"requested_groups,omitempty"`
 	// Kind is deploy, promotion or rollback (empty = deploy).
 	Kind string `json:"kind,omitempty"`
 	// Source is the deploy a promotion or a manual rollback derives from.
@@ -50,6 +52,10 @@ type Request struct {
 	// Change, if set, opens a change management ticket for the deploy and possibly waits for its
 	// approval. Like Approval, it is the rule valid at request time.
 	Change *governance.Change `json:"change,omitempty"`
+	// Policy is the governance decision taken at request time (revision, rule, input hash). If
+	// set, the rollout stages and the schedule runs evaluate the policy in their own DBOS steps;
+	// requests enqueued before it existed keep the previous code paths.
+	Policy *governance.Snapshot `json:"policy,omitempty"`
 	// Notify are the chat notification destinations (integrations.notifications), chosen at
 	// request time: the workflow step sequence does not depend on the configuration read during
 	// a recovery.
@@ -80,6 +86,8 @@ type ServiceOptions struct {
 	Resolver ConfigResolver
 	// Governance, if set, applies mandatory promotion, approvals and freezes.
 	Governance Governance
+	// Policies, if set, manages policy revisions and runtime freezes.
+	Policies PolicyAdmin
 	// Notifications, if set, chooses the chat notification destinations.
 	Notifications NotificationRouter
 	// Health, if set, checks that rollout health checks can run.
@@ -108,15 +116,6 @@ type SourceChecker interface {
 	Check(source string) error
 }
 
-// Governance provides the release rules and the freeze windows.
-type Governance interface {
-	Rule(application, environment string) governance.Rule
-	Frozen(application, environment string, t time.Time) *governance.WindowStatus
-	// FrozenIn also considers windows limited to a region (rollout passes).
-	FrozenIn(application, environment, region string, t time.Time) *governance.WindowStatus
-	Windows(application, environment string, t time.Time) []governance.WindowStatus
-}
-
 // Engine implements Service using only the DBOS client APIs: it enqueues and queries
 // workflows but does not run them (Workers do).
 type Engine struct {
@@ -128,6 +127,7 @@ type Engine struct {
 	sources    SourceChecker
 	resolver   ConfigResolver
 	governance Governance
+	policies   PolicyAdmin
 	notify     NotificationRouter
 	health     rollout.Checker
 	traffic    TrafficOps
@@ -154,6 +154,7 @@ func NewService(opts ServiceOptions) *Engine {
 		sources:    opts.Sources,
 		resolver:   opts.Resolver,
 		governance: opts.Governance,
+		policies:   opts.Policies,
 		notify:     opts.Notifications,
 		health:     opts.Health,
 		traffic:    opts.Traffic,
@@ -207,11 +208,15 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 			return nil, err
 		}
 	}
+	p := auth.FromContext(ctx)
 	req := Request{
-		Descriptor: *d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: meta.kind, Source: meta.source,
+		Descriptor: *d, Plan: plan, RequestedBy: p.String(), Kind: meta.kind, Source: meta.source,
 		Release: meta.release, TraceParent: telemetry.TraceParent(ctx),
 	}
-	if req.Approval, req.Change, err = e.govern(ctx, d); err != nil {
+	if p != nil {
+		req.RequestedGroups = p.Groups
+	}
+	if err := e.govern(ctx, &req, eff); err != nil {
 		return nil, err
 	}
 	if eff != nil {
@@ -323,27 +328,13 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	v, _, err := e.inspect(ctx, d)
+	v, eff, err := e.inspect(ctx, d)
 	if err != nil {
 		return nil, err
 	}
 	v.Plan = plan.Public()
-	e.describeGovernance(v, d)
+	e.describeGovernance(ctx, v, d, eff)
 	return v, nil
-}
-
-// describeGovernance adds to the validation the governance rules that apply to the deploy.
-func (e *Engine) describeGovernance(v *Validation, d *descriptor.Descriptor) {
-	if e.governance == nil {
-		return
-	}
-	rule := e.governance.Rule(d.Application, d.Environment)
-	v.Governance = &GovernanceValidation{Rule: rule.Name, Requires: rule.Requires, Approvals: rule.Approvals.Required}
-	at := e.now()
-	if d.Schedule != nil && d.Schedule.At != nil {
-		at = *d.Schedule.At
-	}
-	v.Governance.Freeze = e.governance.Frozen(d.Application, d.Environment, at)
 }
 
 // CandidateResolver merges a descriptor with a given environment configuration instead of the
@@ -368,14 +359,14 @@ func (e *Engine) ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	v, _, err := e.inspectWith(ctx, d, func(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
+	v, eff, err := e.inspectWith(ctx, d, func(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
 		return cr.ResolveWith(ctx, d, []byte(c.Config))
 	})
 	if err != nil {
 		return nil, err
 	}
 	v.Plan = plan.Public()
-	e.describeGovernance(v, d)
+	e.describeGovernance(ctx, v, d, eff)
 	return v, nil
 }
 
@@ -484,45 +475,6 @@ func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 	return v, nil, nil
 }
 
-// govern applies the governance rules to a real deploy: freeze, mandatory promotion and
-// approvals. It returns the required approvals, or nil. Dry-runs are not subject to the rules
-// because they do not change the environments.
-func (e *Engine) govern(ctx context.Context, d *descriptor.Descriptor) (*governance.Approvals, *governance.Change, error) {
-	if e.governance == nil || d.DryRun {
-		return nil, nil, nil
-	}
-	if d.FreezeOverride == "" && (d.Schedule == nil || d.Schedule.Cron == "") {
-		at := e.now()
-		if d.Schedule != nil && d.Schedule.At != nil {
-			at = *d.Schedule.At
-		}
-		if w := e.governance.Frozen(d.Application, d.Environment, at); w != nil {
-			return nil, nil, fmt.Errorf("%w: %s", ErrInvalidRequest, freezeMessage(w))
-		}
-	}
-	rule := e.governance.Rule(d.Application, d.Environment)
-	for _, env := range rule.Requires {
-		rel, err := e.findRelease(ctx, d.Application, env, func(s Status) bool { return sameArtifact(s, d) })
-		if err != nil {
-			return nil, nil, err
-		}
-		if rel == nil {
-			return nil, nil, fmt.Errorf("%w: %s %s was not released successfully in %s: it must be promoted from there (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
-		}
-	}
-	var approvals *governance.Approvals
-	if rule.Approvals.Required > 0 {
-		a := rule.Approvals
-		approvals = &a
-	}
-	var change *governance.Change
-	if rule.Change != nil {
-		c := *rule.Change
-		change = &c
-	}
-	return approvals, change, nil
-}
-
 // changeTicket reads the change ticket from the workflow attributes.
 func changeTicket(st dbos.WorkflowStatus) *ChangeTicket {
 	n := attr(st, attrChange)
@@ -570,15 +522,6 @@ func rolloutAsksApproval(r *descriptor.Rollout) bool {
 	return false
 }
 
-// freezeMessage describes the freeze blocking a deploy.
-func freezeMessage(w *governance.WindowStatus) string {
-	msg := fmt.Sprintf("deploy blocked by freeze %q until %s", w.Name, w.End.Format(time.RFC3339))
-	if w.Reason != "" {
-		msg += " (" + w.Reason + ")"
-	}
-	return msg + "; in an emergency set freezeOverride with the reason"
-}
-
 // sameArtifact reports whether the recorded deploy released the same artifact as the
 // descriptor: same name and version and, if both known, same sha256.
 func sameArtifact(s Status, d *descriptor.Descriptor) bool {
@@ -623,6 +566,9 @@ const (
 	attrChangeURL = "change_url"
 	// attrRolloutProgress summarizes a wave rollout: "stages passed/total stages".
 	attrRolloutProgress = "rollout_progress"
+	// attrPolicy and attrPolicyRule are revision and rule of the governance decision.
+	attrPolicy     = "policy"
+	attrPolicyRule = "policy_rule"
 )
 
 // attributes returns the initial attributes of a workflow.
@@ -649,6 +595,9 @@ func attributes(req Request) map[string]any {
 	}
 	if req.Release != "" {
 		a[attrRelease] = req.Release
+	}
+	if req.Policy != nil {
+		a[attrPolicy], a[attrPolicyRule] = req.Policy.Revision, req.Policy.Rule
 	}
 	return a
 }
@@ -966,6 +915,9 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		s.Application, s.Environment, _ = strings.Cut(st.QueuePartitionKey, "/")
 	}
 	s.Release = attr(st, attrRelease)
+	if rev := attr(st, attrPolicy); rev != "" {
+		s.Policy = &governance.Snapshot{Revision: rev, Rule: attr(st, attrPolicyRule)}
+	}
 	switch st.Name {
 	case approvalWorkflowName:
 		s.ID = strings.TrimSuffix(st.ID, approvalSuffix)

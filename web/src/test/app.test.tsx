@@ -304,3 +304,93 @@ describe("catene", () => {
     expect(screen.queryByRole("button", { name: "Cancel release" })).not.toBeInTheDocument();
   });
 });
+
+describe("governance", () => {
+  const releaseManager = identity({
+    grants: [{ role: "release-manager", actions: ["deployment.read", "schedule.read", "freeze.write"], applications: ["*"], environments: ["prod"] }],
+  });
+
+  it("crea un freeze d'emergenza dal calendario", async () => {
+    const user = userEvent.setup();
+    const { api, calls } = fakeApi(({ method, path }) => {
+      if (path === "/api/v1/me") return { json: releaseManager };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/schedules") return { json: { schedules: [] } };
+      if (method === "GET" && path === "/api/v1/freezes")
+        return {
+          json: {
+            freezes: [
+              { name: "year-end", applications: ["*"], environments: ["prod"], active: false, start: now, end: now },
+              { name: "incident-7", applications: ["*"], environments: ["prod"], active: true, hard: true, dynamic: true, created_by: "oidc:carol", start: now, end: now },
+            ],
+          },
+        };
+      if (method === "POST" && path === "/api/v1/freezes") return { status: 201, json: { name: "incident-8", applications: ["*"], environments: ["prod"], active: true } };
+    });
+    renderApp(api, "/calendar");
+    const table = await screen.findByRole("table", { name: "Active and upcoming freeze windows" });
+    // Only the windows created at runtime can be closed.
+    expect(within(table).getAllByRole("button", { name: /Close/ })).toHaveLength(1);
+    expect(within(table).getByText("Hard")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "New freeze" }));
+    const dialog = await screen.findByRole("dialog", { name: "New freeze" });
+    await user.type(within(dialog).getByLabelText("Name"), "incident-8");
+    await user.type(within(dialog).getByLabelText("Reason"), "database outage");
+    await user.click(within(dialog).getByLabelText(/Hard freeze/));
+    await user.click(within(dialog).getByRole("button", { name: "Create freeze" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/freezes")).toBe(true));
+    const body = calls.find((c) => c.method === "POST" && c.path === "/api/v1/freezes")?.body as Record<string, unknown>;
+    expect(body).toMatchObject({ name: "incident-8", reason: "database outage", applications: ["*"], environments: ["prod"], hard: true });
+    expect(await screen.findByText("Freeze incident-8 created.")).toBeInTheDocument();
+  });
+
+  it("senza freeze.write non mostra il nuovo freeze", async () => {
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/schedules") return { json: { schedules: [] } };
+      if (path === "/api/v1/freezes") return { json: { freezes: [] } };
+    });
+    renderApp(api, "/calendar");
+    expect(await screen.findByText("No active or upcoming freeze windows.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New freeze" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Policy" })).toBeNull();
+  });
+
+  it("approva una revisione della policy", async () => {
+    const user = userEvent.setup();
+    const admin = identity({ grants: [{ role: "admin", actions: ["*"], applications: ["*"], environments: ["*"] }] });
+    const { api, calls } = fakeApi(({ method, path }) => {
+      if (path === "/api/v1/me") return { json: admin };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/policies")
+        return {
+          json: {
+            engine: "opa",
+            source: "store",
+            current: "1:abc",
+            revisions: [
+              { revision: 2, sha256: "def0123456789", status: "draft", author: "oidc:alice", comment: "DBA approval", created_at: now, tests: [{ name: "t1", pass: true }] },
+              { revision: 1, sha256: "abc0123456789", status: "active", author: "oidc:alice", reviewed_by: "oidc:bob", created_at: now },
+            ],
+          },
+        };
+      if (path === "/api/v1/policies/2")
+        return { json: { revision: 2, sha256: "def0123456789", status: "draft", author: "oidc:alice", comment: "DBA approval", created_at: now, files: { "governance.rego": "package manent.governance" } } };
+      if (path === "/api/v1/policies/2/impact")
+        return { json: { revision: "2:def", since: now, evaluated: 4, changes: [{ deployment: "d9", application: "db", environment: "prod", version: "3.0", created_at: now, before: "approvals=1", after: "approvals=2" }] } };
+      if (method === "POST" && path === "/api/v1/policies/2/approve") return { status: 204 };
+    });
+    renderApp(api, "/policies");
+    const table = await screen.findByRole("table", { name: "Revisions" });
+    expect(within(table).getByText("1 of 1 passed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Policy" })).toBeInTheDocument();
+    await user.click(within(table).getByRole("button", { name: "2" }));
+    const dialog = await screen.findByRole("dialog", { name: "Revision 2" });
+    expect(await within(dialog).findByText("package manent.governance")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Compute the impact" }));
+    expect(await within(dialog).findByText("4 deploys evaluated, 1 with a different decision.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Approve and activate" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/policies/2/approve")).toBe(true));
+  });
+});

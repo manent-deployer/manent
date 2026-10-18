@@ -283,7 +283,128 @@ export interface paths {
         /** Finestre di freeze attive e future */
         get: operations["listFreezes"];
         put?: never;
+        /** Crea una finestra di freeze a runtime (freeze.write) */
+        post: operations["createFreeze"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/freezes/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         post?: never;
+        /** Elimina una finestra di freeze creata a runtime (freeze.write) */
+        delete: operations["deleteFreeze"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisioni della policy di governance (policy.read) */
+        get: operations["listPolicies"];
+        put?: never;
+        /** Carica una revisione in bozza, dopo compilazione e test (policy.write) */
+        post: operations["pushPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Una revisione con i suoi file (policy.read) */
+        get: operations["getPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{revision}/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decisione di una revisione su un descrittore (policy.write) */
+        post: operations["evaluatePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{revision}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decisioni dei deploy reali del periodo ricalcolate con la revisione (policy.write) */
+        get: operations["policyImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{revision}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approva e attiva una revisione in bozza (policy.approve, un'identità diversa dall'autore) */
+        post: operations["approvePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{revision}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Torna a una revisione già attiva in passato (policy.approve) */
+        post: operations["activatePolicy"];
         delete?: never;
         options?: never;
         head?: never;
@@ -612,6 +733,7 @@ export interface components {
             status: "pending" | "approved" | "rejected" | "expired";
             required: number;
             allow_self?: boolean;
+            approvers?: components["schemas"]["Approvers"];
             /** Format: date-time */
             expires_at: string;
             decisions?: components["schemas"]["Decision"][];
@@ -729,6 +851,7 @@ export interface components {
             after?: components["schemas"]["AfterState"];
             /** @description Release composta a cui appartiene il deploy */
             release?: string;
+            policy?: components["schemas"]["PolicySnapshot"];
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
@@ -847,10 +970,16 @@ export interface components {
                 [key: string]: string;
             };
             governance?: {
+                revision?: string;
                 rule?: string;
                 requires?: string[];
                 approvals?: number;
+                approvers?: components["schemas"]["Approvers"];
+                change?: components["schemas"]["ChangeRule"];
                 freeze?: components["schemas"]["WindowStatus"];
+                deny?: components["schemas"]["Denial"][];
+                notes?: string[];
+                error?: string;
             };
             rollout?: components["schemas"]["RolloutState"];
             warnings?: string[];
@@ -929,6 +1058,129 @@ export interface components {
             /** Format: date-time */
             end?: string;
             recurring?: boolean;
+            /** @description Non esentabile dalla policy né superabile con freezeOverride */
+            hard?: boolean;
+            /** @description Creata a runtime */
+            dynamic?: boolean;
+            created_by?: string;
+        };
+        FreezeRequest: {
+            name: string;
+            reason?: string;
+            applications: string[];
+            environments: string[];
+            regions?: string[];
+            /**
+             * Format: date-time
+             * @description Default adesso
+             */
+            from?: string;
+            /** Format: date-time */
+            to: string;
+            hard?: boolean;
+        };
+        Approvers: {
+            groups?: string[];
+            subjects?: string[];
+        };
+        ChangeRule: {
+            approval?: boolean;
+            /** @description Nanosecondi */
+            timeout?: number;
+        };
+        Denial: {
+            code: string;
+            message: string;
+        };
+        PolicySnapshot: {
+            revision: string;
+            rule?: string;
+            input_sha256?: string;
+            notes?: string[];
+        };
+        PolicyTest: {
+            name: string;
+            pass: boolean;
+            error?: string;
+        };
+        PolicyRevision: {
+            revision: number;
+            sha256: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "superseded";
+            author: string;
+            comment?: string;
+            reviewed_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            activated_at?: string;
+            tests?: components["schemas"]["PolicyTest"][];
+            files?: {
+                [key: string]: string;
+            };
+        };
+        PolicyList: {
+            /** @enum {string} */
+            engine: "builtin" | "opa";
+            source?: string;
+            /** @description Revisione in vigore nel processo che ha risposto */
+            current: string;
+            /** Format: date-time */
+            loaded_at?: string;
+            revisions: components["schemas"]["PolicyRevision"][];
+        };
+        PolicyPush: {
+            /** @description Moduli *.rego e file data.json/data.yaml per percorso */
+            files: {
+                [key: string]: string;
+            };
+            comment?: string;
+        };
+        PolicyEvaluationRequest: {
+            descriptor: components["schemas"]["Descriptor"];
+            /** @enum {string} */
+            phase?: "submit" | "validate" | "start" | "stage" | "tick";
+            /** @enum {string} */
+            kind?: "deploy" | "promotion" | "rollback";
+        };
+        GovernanceDecision: {
+            revision?: string;
+            rule?: string;
+            deny?: components["schemas"]["Denial"][];
+            requires?: string[];
+            approvals?: {
+                [key: string]: unknown;
+            };
+            change?: components["schemas"]["ChangeRule"];
+            freeze_exempt?: string[];
+            notes?: string[];
+            freeze?: components["schemas"]["WindowStatus"];
+            input_sha256?: string;
+        };
+        PolicyEvaluation: {
+            /** @description Documento input della policy (schema 1) */
+            input: {
+                [key: string]: unknown;
+            };
+            decision: components["schemas"]["GovernanceDecision"];
+        };
+        PolicyChange: {
+            deployment: string;
+            application: string;
+            environment: string;
+            version: string;
+            /** Format: date-time */
+            created_at: string;
+            before: string;
+            after: string;
+        };
+        PolicyImpact: {
+            revision: string;
+            /** Format: date-time */
+            since: string;
+            evaluated: number;
+            changes?: components["schemas"]["PolicyChange"][];
         };
         ScheduleInfo: {
             name: string;
@@ -1015,6 +1267,8 @@ export interface components {
     parameters: {
         id: string;
         name: string;
+        /** @description Numero della revisione, oppure current per quella in vigore */
+        revision: string;
     };
     requestBodies: {
         Decision: {
@@ -1472,6 +1726,233 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    createFreeze: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FreezeRequest"];
+            };
+        };
+        responses: {
+            /** @description Finestra creata */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WindowStatus"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteFreeze: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["name"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eliminata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisioni e policy in vigore */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyList"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    pushPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyPush"];
+            };
+        };
+        responses: {
+            /** @description Revisione in bozza */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRevision"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisione */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRevision"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    evaluatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description Input e decisione */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyEvaluation"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    policyImpact: {
+        parameters: {
+            query?: {
+                /** @description Data RFC 3339, durata (720h) o giorni (30d); default 7 giorni */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deploy con una decisione diversa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyImpact"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    approvePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attivata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    activatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attivata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getDORA: {

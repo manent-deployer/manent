@@ -133,6 +133,8 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 | `schedule.read` | Read recurring schedules. |
 | `schedule.write` | Create, update, pause, resume and delete schedules. Creating a schedule also requires `deployment.submit`. |
 | `platform.read` | See the [workers](../guida/cli.md#attivita-e-worker): hosts, versions, regions, heartbeat and running workflows. It is not tied to an application: any binding that grants it is enough. |
+| `freeze.write` | Create and delete [freeze windows at runtime](../guida/policy.md#freeze-a-runtime), on every application and environment of the window. |
+| `policy.read`, `policy.write`, `policy.approve` | Read, push (and evaluate, measure) and activate the revisions of the [governance policy](../guida/policy.md). Like `platform.read` they are not tied to an application. |
 
 | Predefined role | Actions |
 |---|---|
@@ -141,7 +143,8 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 | `approver` | `viewer` + `deployment.approve` |
 | `deployer` | `tester` + `deployment.submit`, `deployment.cancel`, `deployment.rollback` |
 | `operator` | `deployer` + `schedule.write`, `platform.read` |
-| `admin` | all, including `deployment.freeze-override` |
+| `release-manager` | `viewer` + `freeze.write` |
+| `admin` | all, including `deployment.freeze-override` and the `policy.*` actions |
 
 `deployer` and `operator` cannot approve: whoever releases must not be able to approve themselves through a second role. Approvals are assigned to a dedicated group (e.g. the change advisory board) with the `approver` role.
 
@@ -187,6 +190,8 @@ Every relevant action produces an audit entry:
 | `after.finish`, `release.finish` | Outcome of a dependency wait and of a composite release, recorded by the worker. |
 | `deployment.cancel` | Cancellation. |
 | `schedule.pause`, `schedule.resume`, `schedule.delete` | Schedule operations. |
+| `freeze.create`, `freeze.delete` | Freeze windows created or deleted at runtime (also from `manent-server admin freeze-delete`). |
+| `policy.push`, `policy.activate` | Governance policy revisions pushed and activated (also from `manent-server admin policy-activate`). |
 | `deployment.read`, `schedule.read`, `schedule.write`, `platform.read` | Only if denied. |
 | `deployment.finish` | Final outcome of the deploy, recorded by the worker. |
 

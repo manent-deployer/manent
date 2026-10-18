@@ -116,15 +116,29 @@ auth:
     - {name: cab, sha256: 747b88c3090b64b426e37f0d042f64d8f6d0eee1e997afa7d135045fae31489a, groups: [cab]}
     - {name: admin, sha256: ee6d41bedd050de5a3e01118d65033dd5b2a1d72c5c874c3b9b5d4257bb45301, groups: [admins]}
     - {name: viewer, sha256: b55ac51de6e0593e2f297b5c930d2ab09889ab8ddbe773841a36e281d7664c6e, groups: [viewers]}
+    # UC23: whoever writes the governance policy (an admin approves it).
+    - {name: pol, sha256: 572161b46d0d0dd2ebc3e39fbc5fcb9c0dc8745153e5103480a720977a68f825, groups: [policy-authors]}
 
 rbac:
+  roles:
+    # UC23: pushes and measures policy revisions, without activating them.
+    policy-author: [deployment.read, policy.read, policy.write]
   bindings:
+    - {groups: [policy-authors], role: policy-author, applications: ["*"], environments: ["*"]}
     - {groups: [ci], role: operator, applications: ["*"], environments: ["*"]}
     - {groups: [cab], role: approver, applications: ["*"], environments: ["*"]}
     - {groups: [admins], role: admin, applications: ["*"], environments: ["*"]}
     - {groups: [viewers], role: viewer, applications: ["*"], environments: ["*"]}
 
 governance:
+  # UC23: Rego policies evaluated by OPA, revisions managed with manent policy. Until a revision
+  # is approved the default policy applies the rules below: every use case runs on it.
+  engine: opa
+  refresh: 2s
+  max_staleness: 1m
+  opa:
+    source: store
+    store: {review: true}
   rules:
     # UC2: in production only artifacts already released to test, with one approval.
     - name: uc2-produzione

@@ -413,9 +413,85 @@ type Audit struct {
 
 // Governance configures the release rules: promotion, approvals and freezes.
 type Governance struct {
-	// Rules apply per application and environment: the first match wins.
+	// Engine is builtin (default: rules and freezes of this file) or opa (Rego policies).
+	Engine string `yaml:"engine"`
+	// Rules apply per application and environment: the first match wins. With the opa engine
+	// they are the data of the default policy (data.manent.rules).
 	Rules   []GovernanceRule `yaml:"rules"`
 	Freezes []FreezeWindow   `yaml:"freezes"`
+	// Refresh is how often a process reads the policy and the runtime freezes again;
+	// MaxStaleness, how long without a successful read before real deploys are refused.
+	Refresh      time.Duration `yaml:"refresh"`
+	MaxStaleness time.Duration `yaml:"max_staleness"`
+	// Start is what the deploy start checks again: deny (denials and freezes) or strict (also
+	// obligations grown after the submission).
+	Start string    `yaml:"start"`
+	OPA   OPAConfig `yaml:"opa"`
+}
+
+// Governance engines, sources and start checks.
+const (
+	GovernanceBuiltin  = "builtin"
+	GovernanceOPA      = "opa"
+	PolicySourceStore  = "store"
+	PolicySourceFile   = "file"
+	PolicySourceBundle = "bundle"
+	PolicySourceConsul = "consul"
+	PolicyStartDeny    = "deny"
+	PolicyStartStrict  = "strict"
+)
+
+// OPAConfig configures the Rego policies evaluated by OPA embedded in manent.
+type OPAConfig struct {
+	// Query is the decision (default data.manent.governance.decision).
+	Query string `yaml:"query"`
+	// Source of the revisions: store (default: managed with manent policy), file, bundle, consul.
+	Source      string             `yaml:"source"`
+	EvalTimeout time.Duration      `yaml:"eval_timeout"`
+	Store       PolicyStoreConfig  `yaml:"store"`
+	File        PolicyFileConfig   `yaml:"file"`
+	Bundle      PolicyBundleConfig `yaml:"bundle"`
+	Consul      PolicyConsulConfig `yaml:"consul"`
+}
+
+// PolicyStoreConfig configures the revisions managed by manent.
+type PolicyStoreConfig struct {
+	// Review requires approving a revision with an identity other than its author.
+	Review bool `yaml:"review"`
+	// Tests: run (default: the revision's tests run if present) or required.
+	Tests string `yaml:"tests"`
+}
+
+// PolicyFileConfig reads the policy from a directory (*.rego and data.json/data.yaml).
+type PolicyFileConfig struct {
+	Dir string `yaml:"dir"`
+}
+
+// PolicyBundleConfig downloads a signed OPA bundle.
+type PolicyBundleConfig struct {
+	URL    string `yaml:"url"`
+	CAFile string `yaml:"ca_file"`
+	// CredentialsRef is the secret with the bearer token of the download.
+	CredentialsRef string        `yaml:"credentials_ref"`
+	Signing        BundleSigning `yaml:"signing"`
+	// InsecureSkipVerify accepts unsigned bundles: development only.
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
+}
+
+// BundleSigning is the verification of the bundle signature.
+type BundleSigning struct {
+	// PublicKeyRef is the secret (or file:) with the public key in PEM (or the HMAC secret).
+	PublicKeyRef string `yaml:"public_key_ref"`
+	// Algorithm default RS256; KeyID and Scope as in the OPA bundle signature.
+	Algorithm string `yaml:"algorithm"`
+	KeyID     string `yaml:"key_id"`
+	Scope     string `yaml:"scope"`
+}
+
+// PolicyConsulConfig reads the policy from the Consul KV store, with the address and the
+// token of envconfig.consul.
+type PolicyConsulConfig struct {
+	Prefix string `yaml:"prefix"`
 }
 
 // GovernanceRule are the release rules of applications and environments ("*" patterns).
@@ -437,6 +513,14 @@ type ApprovalSettings struct {
 	Timeout   time.Duration `yaml:"timeout"`
 	// When: before (default) or rollout, to ask for them at the rollout's approval points.
 	When string `yaml:"when"`
+	// Approvers limits who can approve: OIDC or token groups, identities "<method>:<name>".
+	Approvers *ApproversSettings `yaml:"approvers"`
+}
+
+// ApproversSettings are the identities allowed to approve ("*" patterns).
+type ApproversSettings struct {
+	Groups   []string `yaml:"groups"`
+	Subjects []string `yaml:"subjects"`
 }
 
 // FreezeWindow is a window in which deploys are blocked: absolute (from/to) or recurring
@@ -452,6 +536,8 @@ type FreezeWindow struct {
 	Cron         string        `yaml:"cron"`
 	Duration     time.Duration `yaml:"duration"`
 	Timezone     string        `yaml:"timezone"`
+	// Hard windows cannot be exempted by the policy nor overridden with freezeOverride.
+	Hard bool `yaml:"hard"`
 }
 
 // DescriptorPolicy limits what a descriptor can add to the environment configuration.
@@ -639,6 +725,12 @@ func (c *Config) SecurityWarnings() []string {
 	if slices.Contains(dp.SecretRefs, "*") {
 		w = append(w, "descriptor_policy.secret_refs: il descrittore può dichiarare qualsiasi segreto (anche variabili d'ambiente del worker)")
 	}
+	if g := c.Governance; g.Engine == GovernanceOPA && g.OPA.Source == PolicySourceBundle && g.OPA.Bundle.InsecureSkipVerify {
+		w = append(w, "governance.opa.bundle.insecure_skip_verify: bundle della policy non firmati accettati")
+	}
+	if g := c.Governance; g.Engine == GovernanceOPA && g.OPA.Source == PolicySourceStore && !g.OPA.Store.Review {
+		w = append(w, "governance.opa.store.review: false, chi carica una revisione della policy può attivarla da solo")
+	}
 	if c.Artifacts.AllowUnlisted != nil && *c.Artifacts.AllowUnlisted {
 		w = append(w, "artifacts.allow_unlisted: il worker scarica artefatti da qualsiasi sorgente, anche file locali")
 	}
@@ -696,6 +788,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateSIEM()...)
 	errs = append(errs, c.validateIntegrations()...)
 	errs = append(errs, c.validateMetricSources()...)
+	errs = append(errs, c.validateGovernance()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency cannot exceed global_concurrency"))
@@ -869,6 +962,63 @@ func (c *Config) validateSecurity() []error {
 	}
 	if c.Audit.HMACKeyRef != "" && c.Audit.File == "" {
 		errs = append(errs, errors.New("audit.hmac_key_ref requires audit.file"))
+	}
+	return errs
+}
+
+// validateGovernance checks engine, source and start checks of the governance policy.
+func (c *Config) validateGovernance() []error {
+	g := c.Governance
+	var errs []error
+	switch g.Engine {
+	case "", GovernanceBuiltin, GovernanceOPA:
+	default:
+		errs = append(errs, fmt.Errorf("governance.engine %q not supported (builtin|opa)", g.Engine))
+	}
+	switch g.Start {
+	case "", PolicyStartDeny, PolicyStartStrict:
+	default:
+		errs = append(errs, fmt.Errorf("governance.start %q not supported (deny|strict)", g.Start))
+	}
+	if g.Refresh < 0 || g.MaxStaleness < 0 {
+		errs = append(errs, errors.New("governance: refresh and max_staleness must be >= 0"))
+	}
+	if g.MaxStaleness > 0 && g.Refresh > 0 && g.MaxStaleness <= g.Refresh {
+		errs = append(errs, errors.New("governance.max_staleness must be greater than refresh"))
+	}
+	for i, r := range g.Rules {
+		if a := r.Approvals; a != nil && a.Approvers != nil && len(a.Approvers.Groups) == 0 && len(a.Approvers.Subjects) == 0 {
+			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.approvers: provide groups or subjects", i))
+		}
+	}
+	if g.Engine != GovernanceOPA {
+		return errs
+	}
+	o := g.OPA
+	switch o.Source {
+	case "", PolicySourceStore:
+		switch o.Store.Tests {
+		case "", "run", "required":
+		default:
+			errs = append(errs, fmt.Errorf("governance.opa.store.tests %q not supported (run|required)", o.Store.Tests))
+		}
+	case PolicySourceFile:
+		if o.File.Dir == "" {
+			errs = append(errs, errors.New("governance.opa.file.dir is required with source file"))
+		}
+	case PolicySourceBundle:
+		if o.Bundle.URL == "" {
+			errs = append(errs, errors.New("governance.opa.bundle.url is required with source bundle"))
+		}
+		if o.Bundle.Signing.PublicKeyRef == "" && !o.Bundle.InsecureSkipVerify {
+			errs = append(errs, errors.New("governance.opa.bundle.signing.public_key_ref is required (or insecure_skip_verify: true, development only)"))
+		}
+	case PolicySourceConsul:
+	default:
+		errs = append(errs, fmt.Errorf("governance.opa.source %q not supported (store|file|bundle|consul)", o.Source))
+	}
+	if o.EvalTimeout < 0 {
+		errs = append(errs, errors.New("governance.opa.eval_timeout must be >= 0"))
 	}
 	return errs
 }

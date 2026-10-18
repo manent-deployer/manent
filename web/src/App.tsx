@@ -18,6 +18,7 @@ import { CalendarPage } from "@/pages/Calendar";
 import { DeploymentDetailPage } from "@/pages/DeploymentDetail";
 import { DeploymentsPage } from "@/pages/Deployments";
 import { InventoryPage } from "@/pages/Inventory";
+import { PoliciesPage } from "@/pages/Policies";
 import { ReleaseDetailPage, ReleasesPage } from "@/pages/Releases";
 
 // Metrics use Recharts (about 100 KB compressed): loaded only when the page opens.
@@ -66,6 +67,7 @@ export function AppRoutes() {
         <Route path="/releases" element={<ReleasesPage />} />
         <Route path="/releases/:id" element={<ReleaseDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/policies" element={<PoliciesPage />} />
         <Route
           path="/metrics"
           element={

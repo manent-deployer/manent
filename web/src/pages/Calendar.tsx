@@ -1,33 +1,163 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Pause, Play, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
-import { unwrap, type ScheduleInfo } from "@/api/client";
+import { unwrap, type ScheduleInfo, type WindowStatus } from "@/api/client";
 import { useApi, useMe } from "@/api/context";
 import { useToast } from "@/components/Toaster";
-import { Badge, Button, Dialog, EmptyState, ErrorState, Loading, PageHeader, Section } from "@/components/ui";
+import { Badge, Button, Dialog, EmptyState, ErrorState, Field, inputClass, Loading, PageHeader, Section } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import { can } from "@/lib/permissions";
+import { can, canSomewhere } from "@/lib/permissions";
+
+/** list splits a comma-separated list of patterns. */
+function list(v: string): string[] {
+  return v
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/** NewFreeze creates a freeze window at runtime: an emergency freeze without touching manent.yml. */
+function NewFreeze() {
+  const { t } = useI18n();
+  const api = useApi();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [reason, setReason] = useState("");
+  const [apps, setApps] = useState("*");
+  const [envs, setEnvs] = useState("prod");
+  const [hours, setHours] = useState("4");
+  const [hard, setHard] = useState(false);
+  const create = useMutation({
+    mutationFn: async () => {
+      const h = Number(hours);
+      const to = new Date(Date.now() + h * 3_600_000).toISOString();
+      return unwrap(await api.POST("/api/v1/freezes", { body: { name, reason, applications: list(apps), environments: list(envs), to, hard } }));
+    },
+    onSuccess: (w) => {
+      toast("ok", t("calendar.freeze.created", { name: w.name }));
+      setOpen(false);
+      void qc.invalidateQueries({ queryKey: ["freezes"] });
+    },
+    onError: (e) => toast("error", t("actions.failed", { message: e instanceof Error ? e.message : String(e) })),
+  });
+  const invalidHours = !(Number(hours) > 0);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!invalidHours && name) create.mutate();
+  };
+  return (
+    <>
+      <Button size="sm" icon={Plus} onClick={() => setOpen(true)}>
+        {t("calendar.freeze.new")}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen} title={t("calendar.freeze.new")} description={t("calendar.freeze.lead")}>
+        <form className="flex flex-col gap-3" onSubmit={submit}>
+          <Field label={t("calendar.freeze.name")} hint={t("calendar.freeze.nameHint")}>
+            {(p) => <input {...p} className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}" />}
+          </Field>
+          <Field label={t("calendar.freeze.reason")}>{(p) => <input {...p} className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("calendar.freeze.applications")} hint={t("calendar.freeze.patternsHint")}>
+              {(p) => <input {...p} className={inputClass} value={apps} onChange={(e) => setApps(e.target.value)} required />}
+            </Field>
+            <Field label={t("calendar.freeze.environments")} hint={t("calendar.freeze.patternsHint")}>
+              {(p) => <input {...p} className={inputClass} value={envs} onChange={(e) => setEnvs(e.target.value)} required />}
+            </Field>
+          </div>
+          <Field label={t("calendar.freeze.hours")} error={invalidHours ? t("calendar.freeze.hoursInvalid") : undefined}>
+            {(p) => <input {...p} type="number" min="0.25" step="0.25" className={inputClass} value={hours} onChange={(e) => setHours(e.target.value)} />}
+          </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={hard} onChange={(e) => setHard(e.target.checked)} />
+            <span>
+              {t("calendar.freeze.hard")}
+              <span className="block text-xs text-muted">{t("calendar.freeze.hardHint")}</span>
+            </span>
+          </label>
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="primary" type="submit" busy={create.isPending} disabled={!name || invalidHours}>
+              {t("calendar.freeze.create")}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
+  );
+}
+
+/** DeleteFreeze closes early a window created at runtime. */
+function DeleteFreeze({ w }: { w: WindowStatus }) {
+  const { t } = useI18n();
+  const api = useApi();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [confirm, setConfirm] = useState(false);
+  const del = useMutation({
+    mutationFn: async () => unwrap(await api.DELETE("/api/v1/freezes/{name}", { params: { path: { name: w.name } } })),
+    onSuccess: () => {
+      toast("ok", t("calendar.freeze.deleted", { name: w.name }));
+      setConfirm(false);
+      void qc.invalidateQueries({ queryKey: ["freezes"] });
+    },
+    onError: (e) => toast("error", t("actions.failed", { message: e instanceof Error ? e.message : String(e) })),
+  });
+  return (
+    <>
+      <Button size="sm" variant="danger" icon={Trash2} onClick={() => setConfirm(true)} aria-label={`${t("calendar.freeze.delete")} ${w.name}`}>
+        {t("calendar.freeze.delete")}
+      </Button>
+      <Dialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title={t("calendar.freeze.deleteTitle", { name: w.name })}
+        description={t("calendar.freeze.deleteBody")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirm(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="danger" busy={del.isPending} onClick={() => del.mutate()}>
+              {t("calendar.freeze.delete")}
+            </Button>
+          </>
+        }
+      />
+    </>
+  );
+}
+
+/** canWriteFreeze says whether the identity has freeze.write on every pattern of the window. */
+function canWriteFreeze(me: Parameters<typeof can>[0], w: WindowStatus): boolean {
+  return w.applications.every((a) => w.environments.every((e) => can(me, "freeze.write", a, e)));
+}
 
 function Freezes() {
   const { t, locale } = useI18n();
   const api = useApi();
+  const me = useMe();
   const q = useQuery({ queryKey: ["freezes"], queryFn: async () => unwrap(await api.GET("/api/v1/freezes")).freezes, refetchInterval: 60_000 });
   if (q.isPending) return <Loading />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (q.data.length === 0) return <EmptyState>{t("calendar.freezes.empty")}</EmptyState>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[40rem] text-left text-sm">
+      <table className="w-full min-w-[48rem] text-left text-sm">
         <caption className="sr-only">{t("calendar.freezes.caption")}</caption>
         <thead className="border-b border-border/70 text-xs uppercase tracking-wider text-muted">
           <tr>
             <th scope="col" className="py-2 pr-4 font-medium">{t("calendar.col.name")}</th>
             <th scope="col" className="py-2 pr-4 font-medium">{t("calendar.col.scope")}</th>
             <th scope="col" className="py-2 pr-4 font-medium">{t("calendar.col.when")}</th>
-            <th scope="col" className="py-2 font-medium">{t("calendar.col.state")}</th>
+            <th scope="col" className="py-2 pr-4 font-medium">{t("calendar.col.state")}</th>
+            <th scope="col" className="py-2 font-medium">{t("calendar.col.actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -45,9 +175,18 @@ function Freezes() {
                 <time dateTime={w.start}>{formatDateTime(w.start, locale)}</time> – <time dateTime={w.end}>{formatDateTime(w.end, locale)}</time>
                 {w.recurring && <span> ({t("calendar.recurring")})</span>}
               </td>
-              <td className="py-2">
-                {w.active ? <Badge tone="warn">{t("calendar.active")}</Badge> : <Badge tone="muted">{t("calendar.upcoming")}</Badge>}
+              <td className="py-2 pr-4">
+                <div className="flex flex-wrap gap-1">
+                  {w.active ? <Badge tone="warn">{t("calendar.active")}</Badge> : <Badge tone="muted">{t("calendar.upcoming")}</Badge>}
+                  {w.hard && (
+                    <Badge tone="bad" icon={ShieldAlert}>
+                      {t("calendar.hard")}
+                    </Badge>
+                  )}
+                  {w.dynamic && <Badge tone="info">{t("calendar.dynamic", { who: w.created_by ?? "" })}</Badge>}
+                </div>
               </td>
+              <td className="py-2">{w.dynamic && canWriteFreeze(me.data, w) ? <DeleteFreeze w={w} /> : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -172,11 +311,12 @@ function Schedules() {
 
 export function CalendarPage() {
   const { t } = useI18n();
+  const me = useMe();
   return (
     <>
       <PageHeader title={t("calendar.title")} lead={t("calendar.lead")} />
       <div className="flex flex-col gap-4">
-        <Section title={t("calendar.freezes")}>
+        <Section title={t("calendar.freezes")} actions={canSomewhere(me.data, "freeze.write") ? <NewFreeze /> : undefined}>
           <Freezes />
         </Section>
         <Section title={t("calendar.schedules")}>

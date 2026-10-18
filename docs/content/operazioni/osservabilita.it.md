@@ -37,6 +37,11 @@ observability:
 | `manent_executor_heartbeat_timestamp_seconds` | gauge | `executor`, `version` | Ultimo heartbeat. |
 | `manent_targets` | gauge | `application`, `environment`, `state` | Target per stato letto dalla [riconciliazione](../guida/governance.md#stato-reale): `in-sync`, `drifted`, `missing`, `standby`, `unknown`. |
 | `manent_build_info` | gauge | `version`, `commit`, `workflow_version` | Versione del binario e dei workflow. |
+| `manent_policy_revision_info` | gauge | `engine`, `source`, `revision` | [Policy di governance](../guida/policy.md) in vigore nel processo. |
+| `manent_policy_age_seconds` | gauge | | Secondi dall'ultima lettura riuscita della policy e dei freeze a runtime. |
+| `manent_policy_evaluations_total` | counter | `phase`, `outcome` | Valutazioni della policy (`allowed`, `denied`, `frozen`, `error`, `unavailable`). |
+| `manent_policy_eval_duration_seconds` | histogram | `phase` | Durata delle valutazioni. |
+| `manent_policy_load_errors_total` | counter | | Letture fallite: revisione rifiutata o sorgente irraggiungibile. |
 
 Più le metriche standard del runtime Go (`go_*`) e del processo (`process_*`).
 

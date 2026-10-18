@@ -237,3 +237,83 @@ func TestStatoDeiTarget(t *testing.T) {
 		t.Errorf("record: %+v", got)
 	}
 }
+
+func TestRevisioniDellaPolicy(t *testing.T) {
+	r := openTest(t)
+	ctx := context.Background()
+	if rev, err := r.ActivePolicy(ctx); err != nil || rev != 0 {
+		t.Fatalf("nessuna revisione attiva attesa: %d %v", rev, err)
+	}
+	now := time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)
+	r1, err := r.CreatePolicy(ctx, PolicyRecord{SHA256: "a", Author: "oidc:alice", CreatedAt: now, Tests: "[]", Files: `{"p.rego":"x"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, err := r.CreatePolicy(ctx, PolicyRecord{SHA256: "b", Author: "oidc:alice", CreatedAt: now, Tests: "[]", Files: `{}`})
+	if err != nil || r2 <= r1 {
+		t.Fatalf("revisioni %d %d: %v", r1, r2, err)
+	}
+	if err := r.ActivatePolicy(ctx, r1, 0, "oidc:bob"); err != nil {
+		t.Fatal(err)
+	}
+	// The expected active revision is 0, but r1 is active now: conflict.
+	if err := r.ActivatePolicy(ctx, r2, 0, "oidc:bob"); !errors.Is(err, ErrPolicyConflict) {
+		t.Fatalf("conflitto atteso: %v", err)
+	}
+	if err := r.ActivatePolicy(ctx, r2, r1, ""); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := r.Policies(ctx)
+	if err != nil || len(ps) != 2 || ps[0].Revision != r2 || ps[0].Status != policyActive || ps[1].Status != policySuperseded || ps[1].ReviewedBy != "oidc:bob" {
+		t.Fatalf("revisioni inattese: %+v %v", ps, err)
+	}
+	p, err := r.Policy(ctx, r1)
+	if err != nil || p == nil || p.Files != `{"p.rego":"x"}` {
+		t.Fatalf("revisione %d: %+v %v", r1, p, err)
+	}
+	if p, err := r.Policy(ctx, 99); err != nil || p != nil {
+		t.Fatalf("revisione inesistente: %+v %v", p, err)
+	}
+
+	if err := r.CreateFreeze(ctx, FreezeRecord{Name: "incidente", Data: "{}", CreatedBy: "oidc:carol", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CreateFreeze(ctx, FreezeRecord{Name: "incidente", Data: "{}", CreatedBy: "oidc:carol", CreatedAt: now}); err == nil {
+		t.Fatal("nome duplicato accettato")
+	}
+	fs, err := r.ListFreezes(ctx)
+	if err != nil || len(fs) != 1 || fs[0].CreatedBy != "oidc:carol" {
+		t.Fatalf("freeze inattesi: %+v %v", fs, err)
+	}
+	if ok, err := r.DeleteFreeze(ctx, "incidente"); err != nil || !ok {
+		t.Fatalf("eliminazione: %v %v", ok, err)
+	}
+	if ok, _ := r.DeleteFreeze(ctx, "incidente"); ok {
+		t.Fatal("seconda eliminazione riuscita")
+	}
+}
+
+func TestNotificaDellaPolicy(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("LISTEN/NOTIFY solo su Postgres")
+	}
+	r := openTest(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	got := make(chan struct{}, 4)
+	go func() { _ = r.ListenPolicy(ctx, func() { got <- struct{}{} }) }()
+	// The first call arrives when listening starts.
+	select {
+	case <-got:
+	case <-time.After(10 * time.Second):
+		t.Fatal("ascolto non avviato")
+	}
+	if err := r.NotifyPolicy(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-got:
+	case <-time.After(10 * time.Second):
+		t.Fatal("notifica non ricevuta")
+	}
+}

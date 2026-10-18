@@ -1,6 +1,7 @@
 package governance
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -104,5 +105,90 @@ func TestApprovalsWhen(t *testing.T) {
 	}
 	if (&Approvals{When: ApprovalsRollout}).InRollout() != true || (*Approvals)(nil).InRollout() {
 		t.Error("InRollout")
+	}
+}
+
+func TestDecideFreezeEsenzioniEDeroghe(t *testing.T) {
+	now := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)
+	soft := Window{Name: "weekend", Applications: []string{"*"}, Environments: []string{"prod"}, From: now.Add(-time.Hour), To: now.Add(time.Hour)}
+	hard := Window{Name: "chiusura", Applications: []string{"*"}, Environments: []string{"prod"}, From: now.Add(-time.Hour), To: now.Add(time.Hour), Hard: true}
+	us := Window{Name: "us", Applications: []string{"*"}, Environments: []string{"prod"}, Regions: []string{"us-*"}, From: now.Add(-time.Hour), To: now.Add(time.Hour)}
+	ws := []Window{soft, hard, us}
+	if errs := PrepareWindows(ws, "t"); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	decide := func(in Input, exempt ...string) Decision {
+		t.Helper()
+		d, err := Decide(context.Background(), in, ws, func(_ context.Context, in Input) (Decision, error) {
+			if in.Schema != InputSchema || in.Freezes.Active == nil {
+				t.Errorf("input non preparato: %+v", in)
+			}
+			return Decision{FreezeExempt: exempt}, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	in := Input{Phase: PhaseSubmit, Now: now, Application: "a", Environment: "prod"}
+	if d := decide(in); d.Freeze == nil || d.Freeze.Name != "weekend" || d.InputSHA256 == "" {
+		t.Errorf("la prima finestra attiva blocca: %+v", d.Freeze)
+	}
+	if d := decide(in, "weekend"); d.Freeze == nil || d.Freeze.Name != "chiusura" {
+		t.Errorf("l'esenzione non vale per la finestra hard: %+v", d.Freeze)
+	}
+	in.Deployment.FreezeOverride = "INC-1"
+	if d := decide(in); d.Freeze == nil || !d.Freeze.Hard {
+		t.Errorf("la deroga non supera la finestra hard: %+v", d.Freeze)
+	}
+	in.Region, in.Deployment.FreezeOverride = "us-1", ""
+	if d := decide(in, "weekend", "chiusura"); d.Freeze == nil || d.Freeze.Name != "chiusura" {
+		t.Errorf("hard prima della finestra di region: %+v", d.Freeze)
+	}
+	in.Environment = "test"
+	if d := decide(in); d.Freeze != nil {
+		t.Errorf("nessuna finestra in test: %+v", d.Freeze)
+	}
+}
+
+func TestCheckDellaDecisione(t *testing.T) {
+	d := Decision{Approvals: &Approvals{Required: 1}}
+	if err := d.Check(); err != nil || d.Approvals.Timeout != DefaultApprovalTimeout {
+		t.Errorf("timeout predefinito: %+v %v", d.Approvals, err)
+	}
+	d = Decision{Approvals: &Approvals{Required: 0}}
+	if err := d.Check(); err != nil || d.Approvals != nil {
+		t.Errorf("zero approvazioni = nessuna: %+v %v", d.Approvals, err)
+	}
+	for name, bad := range map[string]Decision{
+		"negative": {Approvals: &Approvals{Required: -1}},
+		"when":     {Approvals: &Approvals{Required: 1, When: "dopo"}},
+		"deny":     {Deny: []Denial{{Code: "x"}}},
+		"requires": {Requires: []string{""}},
+		"timeout":  {Change: &Change{Timeout: -time.Second}},
+	} {
+		if err := bad.Check(); err == nil {
+			t.Errorf("%s: decisione non valida accettata", name)
+		}
+	}
+	if err := (Decision{Revision: "1:a", Deny: []Denial{{Code: "c", Message: "m"}}}).Denied(); err == nil || err.Error() != "denied by the governance policy 1:a: c: m" {
+		t.Errorf("messaggio del divieto: %v", err)
+	}
+}
+
+func TestApprovatori(t *testing.T) {
+	var none *Approvers
+	if !none.Allows("oidc:x", nil) || !(&Approvers{}).Allows("oidc:x", nil) {
+		t.Error("senza approvatori tutti possono approvare")
+	}
+	a := &Approvers{Groups: []string{"dba"}, Subjects: []string{"oidc:boss", "token:*"}}
+	cases := map[string]bool{"oidc:boss": true, "token:ci": true, "oidc:anna": false}
+	for subject, want := range cases {
+		if got := a.Allows(subject, []string{"dev"}); got != want {
+			t.Errorf("%s: %v, atteso %v", subject, got, want)
+		}
+	}
+	if !a.Allows("oidc:anna", []string{"dev", "dba"}) {
+		t.Error("il gruppo dba approva")
 	}
 }

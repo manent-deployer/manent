@@ -104,6 +104,15 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.POST("/rollbacks", s.rollback)
 	v1.GET("/inventory", s.inventory)
 	v1.GET("/freezes", s.freezes)
+	v1.POST("/freezes", s.createFreeze)
+	v1.DELETE("/freezes/:name", s.deleteFreeze)
+	v1.GET("/policies", s.policies)
+	v1.POST("/policies", s.pushPolicy)
+	v1.GET("/policies/:revision", s.policy)
+	v1.POST("/policies/:revision/evaluate", s.evaluatePolicy)
+	v1.GET("/policies/:revision/impact", s.policyImpact)
+	v1.POST("/policies/:revision/approve", s.activatePolicy(true))
+	v1.POST("/policies/:revision/activate", s.activatePolicy(false))
 	v1.GET("/workers", s.workers)
 	v1.POST("/releases", s.submitRelease)
 	v1.GET("/releases", s.listReleases)
@@ -502,6 +511,8 @@ func writeError(c *gin.Context, err error) {
 		code = http.StatusUnprocessableEntity
 	case errors.Is(err, engine.ErrForbidden):
 		code = http.StatusForbidden
+	case errors.Is(err, engine.ErrUnavailable):
+		code = http.StatusServiceUnavailable
 	}
 	c.JSON(code, gin.H{"error": err.Error()})
 }

@@ -288,7 +288,7 @@ func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descrip
 	base := 0
 	for si, stage := range plan.Stages {
 		if !d.DryRun {
-			if err := w.waitFreeze(ctx, d, stage, rs); err != nil {
+			if err := w.waitFreeze(ctx, req, d, stage, rs); err != nil {
 				return err
 			}
 		}

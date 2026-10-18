@@ -25,6 +25,7 @@ tags:
   - name: access
   - name: platform
   - name: releases
+  - name: policies
   - name: ui
   - name: probes
 
@@ -300,6 +301,114 @@ paths:
                 required: [freezes]
                 properties:
                   freezes: {type: array, items: {$ref: '#/components/schemas/WindowStatus'}}
+    post:
+      tags: [governance]
+      summary: Crea una finestra di freeze a runtime (freeze.write)
+      operationId: createFreeze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FreezeRequest'}
+      responses:
+        '201': {description: Finestra creata, content: {application/json: {schema: {$ref: '#/components/schemas/WindowStatus'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/freezes/{name}:
+    delete:
+      tags: [governance]
+      summary: Elimina una finestra di freeze creata a runtime (freeze.write)
+      operationId: deleteFreeze
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '204': {description: Eliminata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/policies:
+    get:
+      tags: [policies]
+      summary: Revisioni della policy di governance (policy.read)
+      operationId: listPolicies
+      responses:
+        '200': {description: Revisioni e policy in vigore, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyList'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    post:
+      tags: [policies]
+      summary: Carica una revisione in bozza, dopo compilazione e test (policy.write)
+      operationId: pushPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PolicyPush'}
+      responses:
+        '201': {description: Revisione in bozza, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}:
+    get:
+      tags: [policies]
+      summary: Una revisione con i suoi file (policy.read)
+      operationId: getPolicy
+      parameters: [{$ref: '#/components/parameters/revision'}]
+      responses:
+        '200': {description: Revisione, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}/evaluate:
+    post:
+      tags: [policies]
+      summary: Decisione di una revisione su un descrittore (policy.write)
+      operationId: evaluatePolicy
+      parameters: [{$ref: '#/components/parameters/revision'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PolicyEvaluationRequest'}
+      responses:
+        '200': {description: Input e decisione, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEvaluation'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}/impact:
+    get:
+      tags: [policies]
+      summary: Decisioni dei deploy reali del periodo ricalcolate con la revisione (policy.write)
+      operationId: policyImpact
+      parameters:
+        - {$ref: '#/components/parameters/revision'}
+        - name: since
+          in: query
+          description: Data RFC 3339, durata (720h) o giorni (30d); default 7 giorni
+          schema: {type: string}
+      responses:
+        '200': {description: Deploy con una decisione diversa, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyImpact'}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}/approve:
+    post:
+      tags: [policies]
+      summary: Approva e attiva una revisione in bozza (policy.approve, un'identità diversa dall'autore)
+      operationId: approvePolicy
+      parameters: [{$ref: '#/components/parameters/revision'}]
+      responses:
+        '204': {description: Attivata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}/activate:
+    post:
+      tags: [policies]
+      summary: Torna a una revisione già attiva in passato (policy.approve)
+      operationId: activatePolicy
+      parameters: [{$ref: '#/components/parameters/revision'}]
+      responses:
+        '204': {description: Attivata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /api/v1/metrics/dora:
     get:
       tags: [insight]
@@ -520,6 +629,12 @@ components:
       in: path
       required: true
       schema: {type: string}
+    revision:
+      name: revision
+      in: path
+      required: true
+      description: Numero della revisione, oppure current per quella in vigore
+      schema: {type: string}
   requestBodies:
     Decision:
       content:
@@ -603,6 +718,7 @@ components:
         status: {type: string, enum: [pending, approved, rejected, expired]}
         required: {type: integer}
         allow_self: {type: boolean}
+        approvers: {$ref: '#/components/schemas/Approvers'}
         expires_at: {type: string, format: date-time}
         decisions: {type: array, items: {$ref: '#/components/schemas/Decision'}}
         change: {$ref: '#/components/schemas/ChangeTicket'}
@@ -705,6 +821,7 @@ components:
         change: {$ref: '#/components/schemas/ChangeTicket'}
         after: {$ref: '#/components/schemas/AfterState'}
         release: {type: string, description: Release composta a cui appartiene il deploy}
+        policy: {$ref: '#/components/schemas/PolicySnapshot'}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
         result: {$ref: '#/components/schemas/Result'}
@@ -823,10 +940,16 @@ components:
         governance:
           type: object
           properties:
+            revision: {type: string}
             rule: {type: string}
             requires: {type: array, items: {type: string}}
             approvals: {type: integer}
+            approvers: {$ref: '#/components/schemas/Approvers'}
+            change: {$ref: '#/components/schemas/ChangeRule'}
             freeze: {$ref: '#/components/schemas/WindowStatus'}
+            deny: {type: array, items: {$ref: '#/components/schemas/Denial'}}
+            notes: {type: array, items: {type: string}}
+            error: {type: string}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         warnings: {type: array, items: {type: string}}
     StepRecord:
@@ -911,6 +1034,129 @@ components:
         start: {type: string, format: date-time}
         end: {type: string, format: date-time}
         recurring: {type: boolean}
+        hard: {type: boolean, description: Non esentabile dalla policy né superabile con freezeOverride}
+        dynamic: {type: boolean, description: Creata a runtime}
+        created_by: {type: string}
+    FreezeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, applications, environments, to]
+      properties:
+        name: {type: string}
+        reason: {type: string}
+        applications: {type: array, items: {type: string}}
+        environments: {type: array, items: {type: string}}
+        regions: {type: array, items: {type: string}}
+        from: {type: string, format: date-time, description: Default adesso}
+        to: {type: string, format: date-time}
+        hard: {type: boolean}
+    Approvers:
+      type: object
+      properties:
+        groups: {type: array, items: {type: string}}
+        subjects: {type: array, items: {type: string}}
+    ChangeRule:
+      type: object
+      properties:
+        approval: {type: boolean}
+        timeout: {type: integer, description: Nanosecondi}
+    Denial:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+    PolicySnapshot:
+      type: object
+      required: [revision]
+      properties:
+        revision: {type: string}
+        rule: {type: string}
+        input_sha256: {type: string}
+        notes: {type: array, items: {type: string}}
+    PolicyTest:
+      type: object
+      required: [name, pass]
+      properties:
+        name: {type: string}
+        pass: {type: boolean}
+        error: {type: string}
+    PolicyRevision:
+      type: object
+      required: [revision, sha256, status, author, created_at]
+      properties:
+        revision: {type: integer}
+        sha256: {type: string}
+        status: {type: string, enum: [draft, active, superseded]}
+        author: {type: string}
+        comment: {type: string}
+        reviewed_by: {type: string}
+        created_at: {type: string, format: date-time}
+        activated_at: {type: string, format: date-time}
+        tests: {type: array, items: {$ref: '#/components/schemas/PolicyTest'}}
+        files: {type: object, additionalProperties: {type: string}}
+    PolicyList:
+      type: object
+      required: [engine, current, revisions]
+      properties:
+        engine: {type: string, enum: [builtin, opa]}
+        source: {type: string}
+        current: {type: string, description: Revisione in vigore nel processo che ha risposto}
+        loaded_at: {type: string, format: date-time}
+        revisions: {type: array, items: {$ref: '#/components/schemas/PolicyRevision'}}
+    PolicyPush:
+      type: object
+      additionalProperties: false
+      required: [files]
+      properties:
+        files: {type: object, additionalProperties: {type: string}, description: Moduli *.rego e file data.json/data.yaml per percorso}
+        comment: {type: string}
+    PolicyEvaluationRequest:
+      type: object
+      additionalProperties: false
+      required: [descriptor]
+      properties:
+        descriptor: {$ref: '#/components/schemas/Descriptor'}
+        phase: {type: string, enum: [submit, validate, start, stage, tick]}
+        kind: {type: string, enum: [deploy, promotion, rollback]}
+    GovernanceDecision:
+      type: object
+      properties:
+        revision: {type: string}
+        rule: {type: string}
+        deny: {type: array, items: {$ref: '#/components/schemas/Denial'}}
+        requires: {type: array, items: {type: string}}
+        approvals: {type: object, additionalProperties: true}
+        change: {$ref: '#/components/schemas/ChangeRule'}
+        freeze_exempt: {type: array, items: {type: string}}
+        notes: {type: array, items: {type: string}}
+        freeze: {$ref: '#/components/schemas/WindowStatus'}
+        input_sha256: {type: string}
+    PolicyEvaluation:
+      type: object
+      required: [input, decision]
+      properties:
+        input: {type: object, additionalProperties: true, description: Documento input della policy (schema 1)}
+        decision: {$ref: '#/components/schemas/GovernanceDecision'}
+    PolicyChange:
+      type: object
+      required: [deployment, application, environment, version, created_at, before, after]
+      properties:
+        deployment: {type: string}
+        application: {type: string}
+        environment: {type: string}
+        version: {type: string}
+        created_at: {type: string, format: date-time}
+        before: {type: string}
+        after: {type: string}
+    PolicyImpact:
+      type: object
+      required: [revision, since, evaluated]
+      properties:
+        revision: {type: string}
+        since: {type: string, format: date-time}
+        evaluated: {type: integer}
+        changes: {type: array, items: {$ref: '#/components/schemas/PolicyChange'}}
     ScheduleInfo:
       type: object
       required: [name, cron, status, application, environment]

@@ -37,6 +37,11 @@ observability:
 | `manent_targets` | gauge | `application`, `environment`, `state` | Targets per state read by the [reconciliation](../guida/governance.md#stato-reale): `in-sync`, `drifted`, `missing`, `standby`, `unknown`. |
 | `manent_executor_heartbeat_timestamp_seconds` | gauge | `executor`, `version` | Last heartbeat. |
 | `manent_build_info` | gauge | `version`, `commit`, `workflow_version` | Binary and workflow version. |
+| `manent_policy_revision_info` | gauge | `engine`, `source`, `revision` | [Governance policy](../guida/policy.md) in force in the process. |
+| `manent_policy_age_seconds` | gauge | | Seconds since the last successful read of policy and runtime freezes. |
+| `manent_policy_evaluations_total` | counter | `phase`, `outcome` | Policy evaluations (`allowed`, `denied`, `frozen`, `error`, `unavailable`). |
+| `manent_policy_eval_duration_seconds` | histogram | `phase` | Duration of the evaluations. |
+| `manent_policy_load_errors_total` | counter | | Failed reads: revision refused or source unreachable. |
 
 Plus the standard Go runtime (`go_*`) and process (`process_*`) metrics.
 

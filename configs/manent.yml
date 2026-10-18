@@ -226,12 +226,26 @@ audit:
 
 # Release rules: mandatory promotion, approvals and freeze windows.
 governance:
+  # engine: builtin                     # builtin (rules below) | opa (Rego policies, docs: guida/policy)
+  # refresh: 10s                        # reread of policy and runtime freezes (manent freeze add)
+  # max_staleness: 10m                  # beyond this without a successful read, real deploys are refused
+  # start: deny                         # deny | strict (refuse deploys whose obligations grew after submission)
+  # opa:
+  #   source: store                     # store (manent policy push/approve) | file | bundle | consul
+  #   store: {review: true, tests: run} # four eyes; tests: required refuses revisions without tests
+  #   file: {dir: /etc/manent/policies}
+  #   bundle:
+  #     url: https://policies.example.com/manent/bundle.tar.gz
+  #     credentials_ref: vault:secret/data/manent/bundle#token
+  #     signing: {public_key_ref: file:/etc/manent/bundle.pub}
+  #   consul: {prefix: manent/policies}
   rules: []                             # the first matching rule wins
   # - name: production
   #   applications: ["*"]
   #   environments: [prod]
   #   requires: [preprod]               # the same artifact must already have been released to preprod
   #   approvals: {required: 1, timeout: 72h}   # allow_self: false, when: before (default; rollout = at the approvalsBetween points)
+  #   # approvals: {required: 2, approvers: {groups: [dba]}}   # only these identities can approve
   freezes: []
   # - name: year-end
   #   reason: accounting close

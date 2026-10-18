@@ -14,6 +14,24 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Governance in Rego: con `governance.engine: opa` le regole sono policy Rego valutate da OPA
+  incorporato (built-in non deterministici esclusi, Rego v1 strict, timeout per valutazione,
+  libreria `manent.lib` e `manent.lib.rules` con la semantica delle regole YAML, usata dalla
+  policy predefinita). La decisione restituisce divieti, `requires`, `approvals` con
+  `approvers`, `change`, esenzioni dai freeze e note, valutata all'accodamento, all'avvio,
+  prima di ogni stadio del rollout (step `policy@<stadio>#<n>`) e a ogni esecuzione delle
+  schedule (step `policy`), con revisione e hash dell'input registrati. Revisioni modificabili
+  a runtime: store nel database con bozza, test `*_test.rego`, `impact` sui deploy reali,
+  approvazione a quattro occhi e ritorno (`manent policy`, `/api/v1/policies`, pagina Policy
+  dell'interfaccia web), oppure directory, bundle OPA firmato o Consul; propagazione con
+  polling e `LISTEN/NOTIFY` su Postgres; fail-closed con `max_staleness` e `/readyz`.
+  `governance.start: strict`. Comandi locali `manent-server policy test|eval` e break-glass
+  `manent-server admin policy-activate|freeze-delete`. Metriche `manent_policy_*`.
+- Freeze a runtime con entrambi i motori (`manent freeze add|delete`, `POST/DELETE
+  /api/v1/freezes`, pagina Calendario), finestre `hard` che la policy non esenta e la deroga
+  non supera. Azioni RBAC `freeze.write`, `policy.read`, `policy.write`, `policy.approve` e
+  ruolo `release-manager`; `approvals.approvers` anche nelle regole YAML. Caso d'uso UC23.
+
 - Azure: plugin `appservice` per le web app di App Service (pacchetti via Kudu OneDeploy o
   immagini; con uno slot rilascio nello slot, controllo di salute e swap, rollback con lo swap
   all'indietro e rilasci per percentuale con le `rampUpRules`; senza slot rilascio in

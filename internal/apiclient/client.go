@@ -149,6 +149,8 @@ func statusError(code int, msg string) error {
 		base = service.ErrNotFound
 	case http.StatusUnprocessableEntity:
 		base = service.ErrInvalidRequest
+	case http.StatusServiceUnavailable:
+		base = service.ErrUnavailable
 	default:
 		return fmt.Errorf("server: %s", msg)
 	}

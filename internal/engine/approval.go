@@ -89,7 +89,7 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 	}
 	st := ApprovalState{Status: ApprovalPending, ExpiresAt: expires}
 	if rule != nil {
-		st.Required, st.AllowSelf = rule.Required, rule.AllowSelf
+		st.Required, st.AllowSelf, st.Approvers = rule.Required, rule.AllowSelf, rule.Approvers
 	}
 	log := w.logger.With("deployment", in.DeploymentID)
 	if chg != nil {

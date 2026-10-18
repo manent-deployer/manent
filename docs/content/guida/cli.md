@@ -123,6 +123,26 @@ manent whoami                   # your identity on the server and your roles
 
 `promote` and `rollback` also accept `--id`, `--dry-run`, `--freeze-override <reason>`, `--no-wait` and `--timeout`, with the same meaning as for `deploy`.
 
+### Freezes and policies
+
+See [Policies in Rego](policy.md).
+
+```sh
+manent freeze add --name <name> -e <environment> [-a <application>] [--region <r>] (--for <duration> | --until <RFC 3339>) [--from <RFC 3339>] [--reason <text>] [--hard]
+manent freeze delete <name>
+manent freeze list
+
+manent policy list
+manent policy show <revision|current>
+manent policy pull <revision|current> -d <dir>
+manent policy push -d <dir> [-m <comment>]
+manent policy diff <revision> <revision>
+manent policy eval <revision|current> -f <yaml> [--phase submit|validate|start|stage|tick] [--kind deploy|promotion|rollback]
+manent policy impact <revision> [--since 7d]
+manent policy approve <revision>         # activates a draft
+manent policy activate <revision>        # back to a revision already active in the past
+```
+
 ## Logs, timeline and metrics
 
 ```sh

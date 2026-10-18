@@ -26,6 +26,32 @@ type Approvals struct {
 	// When is the moment of the approvals: before (default) before the deploy; rollout moves them
 	// to the rollout's approval points (approvalsBetween), if any.
 	When string `json:"when,omitempty"`
+	// Approvers, if set, limits who can approve besides the deployment.approve permission.
+	Approvers *Approvers `json:"approvers,omitempty"`
+}
+
+// Approvers are the identities allowed to approve a deploy: an approver must match one of the
+// subjects ("*" patterns on "<method>:<name>") or belong to one of the groups.
+type Approvers struct {
+	Groups   []string `json:"groups,omitempty"`
+	Subjects []string `json:"subjects,omitempty"`
+}
+
+// Allows reports whether the identity (subject and groups) can approve. A nil or empty set
+// allows everyone.
+func (a *Approvers) Allows(subject string, groups []string) bool {
+	if a == nil || (len(a.Groups) == 0 && len(a.Subjects) == 0) {
+		return true
+	}
+	if glob.Any(a.Subjects, subject) {
+		return true
+	}
+	for _, g := range groups {
+		if glob.Any(a.Groups, g) {
+			return true
+		}
+	}
+	return false
 }
 
 // Moments of the approvals (Approvals.When).
@@ -80,6 +106,11 @@ type Window struct {
 	Cron     string
 	Duration time.Duration
 	Timezone string
+	// Hard windows cannot be exempted by the policy nor overridden with freezeOverride.
+	Hard bool
+	// CreatedBy and CreatedAt describe a window created at runtime (API or CLI).
+	CreatedBy string
+	CreatedAt time.Time
 
 	schedule cron.Schedule
 }
@@ -95,6 +126,10 @@ type WindowStatus struct {
 	Start        time.Time `json:"start,omitzero"`
 	End          time.Time `json:"end,omitzero"`
 	Recurring    bool      `json:"recurring,omitempty"`
+	Hard         bool      `json:"hard,omitempty"`
+	// Dynamic marks a window created at runtime, with its author.
+	Dynamic   bool   `json:"dynamic,omitempty"`
+	CreatedBy string `json:"created_by,omitempty"`
 }
 
 // Policy holds rules and freeze windows.
@@ -105,6 +140,16 @@ type Policy struct {
 
 // New checks rules and windows and prepares the cron expressions.
 func New(rules []Rule, windows []Window) (*Policy, error) {
+	errs := checkRules(rules)
+	errs = append(errs, PrepareWindows(windows, "governance.freezes")...)
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return &Policy{Rules: rules, Freezes: windows}, nil
+}
+
+// checkRules checks the rules and sets the default approval timeout.
+func checkRules(rules []Rule) []error {
 	var errs []error
 	for i, r := range rules {
 		if len(r.Applications) == 0 || len(r.Environments) == 0 {
@@ -120,17 +165,24 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 			rules[i].Approvals.Timeout = DefaultApprovalTimeout
 		}
 	}
+	return errs
+}
+
+// PrepareWindows checks the windows and prepares their cron expressions; field is the
+// configuration path used in the errors.
+func PrepareWindows(windows []Window, field string) []error {
+	var errs []error
 	for i := range windows {
 		w := &windows[i]
 		if w.Name == "" || len(w.Applications) == 0 || len(w.Environments) == 0 {
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: name, applications and environments are required", i))
+			errs = append(errs, fmt.Errorf("%s[%d]: name, applications and environments are required", field, i))
 		}
 		switch {
 		case w.Cron != "" && (!w.From.IsZero() || !w.To.IsZero()):
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: from/to and cron are alternatives", i))
+			errs = append(errs, fmt.Errorf("%s[%d]: from/to and cron are alternatives", field, i))
 		case w.Cron != "":
 			if w.Duration <= 0 {
-				errs = append(errs, fmt.Errorf("governance.freezes[%d]: duration is required with cron", i))
+				errs = append(errs, fmt.Errorf("%s[%d]: duration is required with cron", field, i))
 			}
 			expr := w.Cron
 			if w.Timezone != "" {
@@ -138,17 +190,14 @@ func New(rules []Rule, windows []Window) (*Policy, error) {
 			}
 			s, err := cron.ParseStandard(expr)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("invalid governance.freezes[%d].cron: %w", i, err))
+				errs = append(errs, fmt.Errorf("invalid %s[%d].cron: %w", field, i, err))
 			}
 			w.schedule = s
 		case w.From.IsZero() || w.To.IsZero() || !w.To.After(w.From):
-			errs = append(errs, fmt.Errorf("governance.freezes[%d]: provide from and to (to after from) or cron and duration", i))
+			errs = append(errs, fmt.Errorf("%s[%d]: provide from and to (to after from) or cron and duration", field, i))
 		}
 	}
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-	return &Policy{Rules: rules, Freezes: windows}, nil
+	return errs
 }
 
 // Rule returns the first rule matching the application and environment, or an empty rule
@@ -177,16 +226,8 @@ func (p *Policy) FrozenIn(application, environment, region string, t time.Time) 
 	if p == nil {
 		return nil
 	}
-	for _, w := range p.Freezes {
-		if !w.applies(application, environment) {
-			continue
-		}
-		if len(w.Regions) > 0 && (region == "" || !glob.Any(w.Regions, region)) {
-			continue
-		}
-		if st := w.status(t); st.Active {
-			return &st
-		}
+	if active := ActiveWindows(p.Freezes, application, environment, region, t); len(active) > 0 {
+		return &active[0]
 	}
 	return nil
 }
@@ -197,8 +238,32 @@ func (p *Policy) Windows(application, environment string, t time.Time) []WindowS
 	if p == nil {
 		return nil
 	}
+	return ListWindows(p.Freezes, application, environment, t)
+}
+
+// ActiveWindows returns the windows of ws active at t for the application and environment in
+// a region, in order (see FrozenIn for the region semantics).
+func ActiveWindows(ws []Window, application, environment, region string, t time.Time) []WindowStatus {
+	var out []WindowStatus
+	for _, w := range ws {
+		if !w.applies(application, environment) {
+			continue
+		}
+		if len(w.Regions) > 0 && (region == "" || !glob.Any(w.Regions, region)) {
+			continue
+		}
+		if st := w.status(t); st.Active {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
+// ListWindows returns the active and future windows of ws concerning the application and
+// environment (all if empty), with the next occurrence.
+func ListWindows(ws []Window, application, environment string, t time.Time) []WindowStatus {
 	out := []WindowStatus{}
-	for _, w := range p.Freezes {
+	for _, w := range ws {
 		if (application != "" || environment != "") && !w.applies(application, environment) {
 			continue
 		}
@@ -219,7 +284,8 @@ func (w Window) applies(application, environment string) bool {
 
 // status computes the occurrence active at instant t or, if none, the next one.
 func (w Window) status(t time.Time) WindowStatus {
-	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions}
+	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions,
+		Hard: w.Hard, Dynamic: w.CreatedBy != "", CreatedBy: w.CreatedBy}
 	if w.schedule == nil {
 		st.Start, st.End = w.From, w.To
 		st.Active = !t.Before(w.From) && t.Before(w.To)

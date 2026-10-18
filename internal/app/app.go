@@ -39,9 +39,9 @@ import (
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/extplugin"
-	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/logging"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/policy"
 	"github.com/joeg-ita/manent/internal/rollback"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/secrets"
@@ -87,6 +87,9 @@ type App struct {
 	adminOnce sync.Once
 	admin     *engine.Admin
 	draining  atomic.Bool
+	// governance is the policy in force; stopGovernance ends its refresh.
+	governance     *policy.Runtime
+	stopGovernance context.CancelFunc
 }
 
 // NewLogger creates the application logger, with forwarding to the SIEM if configured.
@@ -342,29 +345,6 @@ func AuditKey(cfg *config.Config, sp secrets.Provider) ([]byte, error) {
 	return []byte(v), nil
 }
 
-// NewGovernance creates the release rules and the freeze windows from the configuration.
-func NewGovernance(cfg *config.Config) (*governance.Policy, error) {
-	g := cfg.Governance
-	rules := make([]governance.Rule, len(g.Rules))
-	for i, r := range g.Rules {
-		rules[i] = governance.Rule{Name: r.Name, Applications: r.Applications, Environments: r.Environments, Requires: r.Requires}
-		if a := r.Approvals; a != nil {
-			rules[i].Approvals = governance.Approvals{Required: a.Required, AllowSelf: a.AllowSelf, Timeout: a.Timeout, When: a.When}
-		}
-		if ch := r.Change; ch != nil {
-			rules[i].Change = &governance.Change{Approval: ch.Approval, Timeout: cmp.Or(ch.Timeout, 72*time.Hour)}
-		}
-	}
-	windows := make([]governance.Window, len(g.Freezes))
-	for i, f := range g.Freezes {
-		windows[i] = governance.Window{
-			Name: f.Name, Reason: f.Reason, Applications: f.Applications, Environments: f.Environments, Regions: f.Regions,
-			From: f.From, To: f.To, Cron: f.Cron, Duration: f.Duration, Timezone: f.Timezone,
-		}
-	}
-	return governance.New(rules, windows)
-}
-
 // NewHealthChecker creates the health gate of rollouts: HTTP probes, metrics from Prometheus,
 // Datadog, New Relic, Elastic and CloudWatch (rollout.<system> in manent.yml) and
 // Alertmanager. Another metrics system is added here, implementing rollout.Checker.
@@ -425,20 +405,9 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 	r := envconfig.Resolver{Required: ec.Required, Policy: NewDescriptorPolicy(cfg)}
 	switch ec.Provider {
 	case config.EnvProviderConsul:
-		addr := ec.Consul.Address
-		if addr == "" {
-			addr = cmp.Or(os.Getenv("CONSUL_HTTP_ADDR"), "http://127.0.0.1:8500")
-		}
-		if !strings.Contains(addr, "://") {
-			addr = "http://" + addr
-		}
-		token := os.Getenv("CONSUL_HTTP_TOKEN")
-		if ec.Consul.TokenFile != "" {
-			b, err := os.ReadFile(ec.Consul.TokenFile)
-			if err != nil {
-				return r, fmt.Errorf("reading the Consul token: %w", err)
-			}
-			token = strings.TrimSpace(string(b))
+		addr, token, err := consulAccess(cfg)
+		if err != nil {
+			return r, err
 		}
 		r.Provider = &envconfig.ConsulProvider{
 			Address:     addr,
@@ -473,7 +442,7 @@ type components struct {
 	sources    *artifact.Sources
 	authz      authz.Policy
 	audit      audit.Recorder
-	governance *governance.Policy
+	governance *policy.Runtime
 	custom     *customstep.Builder
 	secrets    secrets.Provider
 	chat       *chat.Notifier
@@ -496,7 +465,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
-		Resolver: c.resolver, Governance: c.governance, Health: c.health, Traffic: c.traffic, Logger: c.log,
+		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	}
 	if r, ok := executors.(engine.TargetStateReader); ok {
@@ -506,6 +475,14 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		opts.Notifications = c.chat
 	}
 	return engine.NewService(opts)
+}
+
+// startGovernance loads the governance policy and keeps it up to date; the returned function
+// stops the refresh.
+func (c *components) startGovernance() context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
+	c.governance.Start(ctx)
+	return cancel
 }
 
 // chatNotifier returns the notifier as an interface, nil without destinations.
@@ -556,7 +533,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 	if err != nil {
 		return nil, err
 	}
-	gov, err := NewGovernance(cfg)
+	gov, err := NewGovernance(cfg, sp, log)
 	if err != nil {
 		return nil, err
 	}
@@ -578,6 +555,11 @@ func newComponents(cfg *config.Config) (*components, error) {
 	health, err := NewHealthChecker(cfg, sp)
 	if err != nil {
 		return nil, err
+	}
+	if metrics != nil {
+		if err := metrics.Register(gov.Collector()); err != nil {
+			return nil, err
+		}
 	}
 	return &components{
 		metrics:    metrics,
@@ -617,9 +599,10 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	}
 	var reg cluster.Registry
 	if r, err := cluster.Open(context.Background(), cfg.DBOS.DatabaseURL); err != nil {
-		c.log.Warn("registro dei worker non disponibile: niente heartbeat, recovery automatica e retention", "error", err)
+		c.log.Warn("registro dei worker non disponibile: niente heartbeat, recovery automatica, retention e freeze a runtime", "error", err)
 	} else {
 		reg = r
+		c.governance.SetStore(r)
 	}
 	host, _ := os.Hostname()
 	rc := cfg.Recovery
@@ -648,6 +631,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Rollback:             c.rollback,
 		Audit:                c.audit,
 		Governance:           c.governance,
+		PolicyStart:          cfg.Governance.Start,
 		Logger:               c.log,
 		SchedulePollInterval: cfg.DBOS.SchedulePollInterval,
 		Metrics:              recorder(c.metrics),
@@ -683,7 +667,9 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("starting DBOS: %w", err)
 	}
 	svc := c.guard(eng)
+	stop := c.startGovernance()
 	return &App{
+		governance: c.governance, stopGovernance: stop,
 		Config:   cfg,
 		Logger:   c.log,
 		Service:  svc,
@@ -719,7 +705,16 @@ func NewClient(cfg *config.Config) (*App, error) {
 			return nil, fmt.Errorf("connecting to the DBOS database: %w", err)
 		}
 	}
+	// The policy store lives in the same database: the API needs it for runtime freezes and
+	// policy revisions.
+	if store, err := cluster.Open(context.Background(), cfg.DBOS.DatabaseURL); err != nil {
+		c.log.Warn("archivio della policy non disponibile: niente freeze a runtime né revisioni della policy", "error", err)
+	} else {
+		c.governance.SetStore(store)
+		c.closers = append(c.closers, store)
+	}
 	a := &App{
+		governance: c.governance, stopGovernance: c.startGovernance(),
 		Config:  cfg,
 		Logger:  c.log,
 		client:  client,
@@ -774,6 +769,13 @@ func (a *App) Admin() *engine.Admin {
 	return a.admin
 }
 
+// Governance returns the governance policy in force (operations outside the permissions, as
+// manent-server admin).
+func (a *App) Governance() *policy.Runtime { return a.governance }
+
+// Audit returns the audit recorder.
+func (a *App) Audit() audit.Recorder { return a.audit }
+
 // Metrics returns the Prometheus metrics, or nil if disabled.
 func (a *App) Metrics() *telemetry.Metrics { return a.metrics }
 
@@ -786,10 +788,16 @@ func (a *App) EnableStateMetrics() error {
 	return a.metrics.Register(&telemetry.StateCollector{Source: a.Admin(), StaleAfter: a.Config.Recovery.StaleAfter})
 }
 
-// Ready checks that the process can serve: it is not stopping and it reaches the database.
-func (a *App) Ready(context.Context) error {
+// Ready checks that the process can serve: it is not stopping, the governance policy is
+// loaded and it reaches the database.
+func (a *App) Ready(ctx context.Context) error {
 	if a.draining.Load() {
 		return errors.New("shutting down")
+	}
+	if a.governance != nil {
+		if err := a.governance.Ready(ctx); err != nil {
+			return err
+		}
 	}
 	_, err := dbos.ListWorkflows(a.dbosClient(), dbos.WithFilterLimit(1), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	return err
@@ -864,6 +872,9 @@ func (a *App) WarnInsecure() {
 func (a *App) Close() {
 	var err error
 	a.draining.Store(true)
+	if a.stopGovernance != nil {
+		a.stopGovernance()
+	}
 	if a.worker != nil {
 		a.worker.Drain(a.Config.DBOS.DrainTimeout)
 		err = a.worker.Shutdown(30 * time.Second)

@@ -10,7 +10,7 @@ import (
 	"github.com/joeg-ita/manent/internal/config"
 	"github.com/joeg-ita/manent/internal/customspec"
 	"github.com/joeg-ita/manent/internal/customstep"
-	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/joeg-ita/manent/internal/policy"
 	"github.com/joeg-ita/manent/internal/secrets"
 )
 
@@ -32,7 +32,7 @@ func NewSpecKeys(cfg *config.Config, sp secrets.Provider) (customspec.Keys, erro
 }
 
 // NewCustomSteps creates the worker's custom step builder.
-func NewCustomSteps(cfg *config.Config, sp secrets.Provider, keys customspec.Keys, rec audit.Recorder, gov *governance.Policy, log *slog.Logger) *customstep.Builder {
+func NewCustomSteps(cfg *config.Config, sp secrets.Provider, keys customspec.Keys, rec audit.Recorder, gov *policy.Runtime, log *slog.Logger) *customstep.Builder {
 	c := cfg.Pipeline.Custom
 	return &customstep.Builder{
 		Secrets:    sp,
