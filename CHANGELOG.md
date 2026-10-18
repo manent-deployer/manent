@@ -16,11 +16,14 @@ ne usa il contenuto come note.
 
 - Tenant: terza dimensione facoltativa accanto ad applicazione e ambiente. Registro dei tenant
   nel provider della configurazione di ambiente (`envconfig/tenants/<tenant>.yml` o
-  `manent/tenants/<tenant>` su Consul) con tag, ambienti collegati, parametri e segreti;
-  `tenancy` e `tenant_params` nella configurazione di ambiente, target dedicati e condivisi
+  `manent/tenants/<tenant>` su Consul) con tag, ambienti collegati, parametri, segreti e
+  `step_params` per applicazione, riletto nello step `config` (che registra `tenant_source` e
+  `tenant_revision`) e in cache per selettori e permessi (`envconfig.tenants_cache`, default
+  30s); `tenancy` e `tenant_params` nella configurazione di ambiente, target dedicati e condivisi
   con l'etichetta `tenant`, segnaposto `{tenant}`, fusione a tre strati. Deploy per tenant
   (`tenant`, `--tenant`) con partizione `<app>/<env>/<tenant>`, inventario, DORA, callback e
-  chat per tenant, `requires`, promozione e rollback per tenant. Rilascio multi-tenant
+  chat per tenant, riconciliazione dei target per tenant (anche sui target condivisi),
+  `requires`, promozione e rollback per tenant. Rilascio multi-tenant
   (`tenants`: nomi o selettore, gruppi con bake e approvazioni tra gruppi, `maxParallel`,
   `onFailure`, `onDenied`) con il workflow `manent.tenants`, anche dalle schedule ricorrenti,
   promozione di gruppo e rollback di un rilascio. Tenant nelle policy Rego (input schema 2,
@@ -167,6 +170,12 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- Tenant: senza `tenancy` nella configurazione di ambiente e senza `tenant` nel descrittore
+  nulla cambia (partizione, ID, attributi, inventario, regole, binding, metriche). I nomi dei
+  workflow esistenti restano invariati e si aggiunge `manent.tenants`. L'input delle policy
+  passa a `schema: 2` aggiungendo solo `tenant` e `tenants_run`: le policy Rego esistenti
+  restano valide. Lo stato dei target riconciliati è salvato con la chiave `scope|tenant`, senza
+  migrazione dei record esistenti.
 - I messaggi di errore sono in inglese: errori restituiti da API (`{"error": ...}`), client e
   server, step, plugin (compresi gli script PowerShell del plugin `windows`), plugin esterni
   (gRPC), provider Terraform e motivi dei gate di salute. Log, output dei comandi, notifiche in
