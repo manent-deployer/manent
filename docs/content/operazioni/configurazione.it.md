@@ -62,6 +62,9 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `consul.key` | `manent/{application}/{environment}` | Modello della chiave KV. |
 | `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{environment}.yml` | Modello del percorso per il provider `file`. |
+| `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Modello del percorso dei documenti dei [tenant](../guida/tenant.md). |
+| `consul.tenants_key` | `manent/tenants/{tenant}` | Modello della chiave KV dei documenti dei tenant. |
+| `tenants_cache` | `30s` | Per quanto resta in cache l'elenco dei tenant (selettori, permessi). |
 
 Vedi [Configurazione di ambiente](../guida/configurazione-ambiente.md).
 
@@ -97,7 +100,7 @@ Vedi [Rollback](../guida/rollback.md).
 | `auth.tokens` | `[]` | Token statici: `name`, `sha256` (mai il token), `groups`, `expires_at`. |
 | `auth.tokens_file` | | File YAML con altri token (stesso formato, chiave `tokens`), riletto quando cambia: revoca senza riavvio. |
 | `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. |
-| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`). |
+| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`), `tenants` (selettore: il binding vale solo per i deploy di quei [tenant](../guida/tenant.md#permessi)). |
 | `audit.file` | | File JSON Lines delle voci di audit, con catena di hash, oltre al log e al SIEM. |
 | `audit.max_size_mb` | `0` | Dimensione oltre cui il file viene ruotato (`0` = nessuna rotazione). |
 | `audit.hmac_key_ref` | | Riferimento alla chiave (almeno 16 byte) con cui la catena diventa un HMAC. |

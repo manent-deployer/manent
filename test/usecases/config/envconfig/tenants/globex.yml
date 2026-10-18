@@ -1,0 +1,4 @@
+description: Globex Corporation
+tags: {tier: silver, contract: "2026"}
+applications: {uc24-shop: [prod]}
+params: {uc24-shop: {banner: Globex, replicas: "2"}}

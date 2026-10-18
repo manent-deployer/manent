@@ -47,6 +47,8 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
 | `GET` | `/api/v1/freezes` | Finestre di freeze attive e future. |
+| `GET` | `/api/v1/tenants?application=&environment=&selector=` | [Tenant](tenant.md) del registro, filtrati dai permessi. |
+| `GET` | `/api/v1/tenants/{name}` | Un tenant (parametri e nomi dei segreti). |
 | `POST` | `/api/v1/freezes` | Crea una finestra di freeze a runtime (`freeze.write`). |
 | `DELETE` | `/api/v1/freezes/{name}` | Elimina una finestra di freeze creata a runtime. |
 | `GET` | `/api/v1/policies` | Revisioni della policy di governance e quella in vigore (`policy.read`). |

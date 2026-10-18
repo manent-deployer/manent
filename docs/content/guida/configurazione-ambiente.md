@@ -109,6 +109,7 @@ The environment configuration is **authoritative**: the descriptor can only add 
 | `step_params` | Parameters of the [custom steps](step-personalizzati.md), per step: the descriptor (`stepParams`) can add keys allowed by `descriptor_policy.step_params`; a key present in both must have the same value. |
 | `rollout` | The environment's [wave rollout](ondate.md) strategy is authoritative: the descriptor can omit it or repeat it identically. |
 | `traffic` | Load balancer and router of the environment ([draining](svuotamento.md), [percentage rollouts](traffico.md)): only in the environment configuration, a descriptor that defines it is rejected. |
+| `tenancy`, `tenant_params` | Whether the environment wants a [tenant](tenant.md) and which parameters every tenant provides: between environment and descriptor comes the tenant layer, with its parameters, secrets and targets (label `tenant`). |
 | `rollback` | `enabled`, `on` and `locator` follow the same rule: if defined in both they must match. This way an environment can enforce [rollback](rollback.md) without the descriptor being able to disable it. The artifact type's `allowed` limit still applies. |
 
 A conflicting value makes the deploy fail: it is never silently overwritten. After the merge there must be at least one target.

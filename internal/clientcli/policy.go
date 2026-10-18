@@ -400,6 +400,7 @@ type FreezeAddCmd struct {
 	Applications []string `short:"a" long:"application" description:"applicazioni (pattern con *, ripetibile; default *)"`
 	Environments []string `short:"e" long:"environment" required:"true" description:"ambienti (pattern con *, ripetibile)"`
 	Regions      []string `long:"region" description:"solo queste region (ripetibile)"`
+	Tenants      string   `long:"tenants" description:"solo i deploy dei tenant scelti dal selettore (es. name=acme, tier=gold)"`
 	From         string   `long:"from" description:"inizio, RFC 3339 (default adesso)"`
 	Until        string   `long:"until" description:"fine, RFC 3339"`
 	For          string   `long:"for" description:"durata dall'inizio, in alternativa a --until (es. 4h)"`
@@ -408,7 +409,7 @@ type FreezeAddCmd struct {
 
 // Execute implements flags.Commander.
 func (c *FreezeAddCmd) Execute([]string) error {
-	r := service.FreezeRequest{Name: c.Name, Reason: c.Reason, Applications: c.Applications, Environments: c.Environments, Regions: c.Regions, Hard: c.Hard}
+	r := service.FreezeRequest{Name: c.Name, Reason: c.Reason, Applications: c.Applications, Environments: c.Environments, Regions: c.Regions, Tenants: c.Tenants, Hard: c.Hard}
 	if len(r.Applications) == 0 {
 		r.Applications = []string{"*"}
 	}

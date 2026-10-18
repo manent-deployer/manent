@@ -26,6 +26,7 @@ tags:
   - name: platform
   - name: releases
   - name: policies
+  - name: tenants
   - name: ui
   - name: probes
 
@@ -58,6 +59,7 @@ paths:
         - {name: schedule, in: query, schema: {type: string}}
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
+        - {name: tenant, in: query, schema: {type: string}}
         - {name: state, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, default: 50}}
         - name: cursor
@@ -273,6 +275,7 @@ paths:
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
+        - {name: tenant, in: query, schema: {type: string}}
       responses:
         '200':
           description: Inventario
@@ -322,6 +325,35 @@ paths:
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
         '204': {description: Eliminata}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v1/tenants:
+    get:
+      tags: [tenants]
+      summary: Tenant del registro (filtrati dai permessi)
+      operationId: listTenants
+      parameters:
+        - {name: application, in: query, schema: {type: string}}
+        - {name: environment, in: query, schema: {type: string}}
+        - {name: selector, in: query, description: Selettore sui tag e sul nome, schema: {type: string}}
+      responses:
+        '200':
+          description: Tenant
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tenants]
+                properties:
+                  tenants: {type: array, items: {$ref: '#/components/schemas/TenantInfo'}}
+  /api/v1/tenants/{name}:
+    get:
+      tags: [tenants]
+      summary: Un tenant
+      operationId: getTenant
+      parameters: [{$ref: '#/components/parameters/name'}]
+      responses:
+        '200': {description: Tenant, content: {application/json: {schema: {$ref: '#/components/schemas/TenantInfo'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/policies:
@@ -417,6 +449,8 @@ paths:
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
+        - {name: tenant, in: query, schema: {type: string}}
+        - {name: by, in: query, description: "tenant: metriche anche per tenant", schema: {type: string, enum: [tenant]}}
         - name: since
           in: query
           description: Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni
@@ -510,6 +544,7 @@ paths:
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
+        - {name: tenant, in: query, schema: {type: string}}
       responses:
         '200': {description: Attività, content: {application/json: {schema: {$ref: '#/components/schemas/Activity'}}}}
         '401': {$ref: '#/components/responses/Error'}
@@ -666,6 +701,11 @@ components:
         id: {type: string}
         application: {type: string}
         environment: {type: string}
+        tenant: {type: string, description: Tenant del deploy}
+        tenants:
+          type: object
+          description: Rilascio a più tenant (names o selector, groups, maxParallel, onFailure, onDenied, approvalsBetween)
+          additionalProperties: true
         dryRun: {type: boolean}
         after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
         afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
@@ -703,6 +743,8 @@ components:
         scheduled_at: {type: string, format: date-time}
         schedule: {type: string}
         dry_run: {type: boolean}
+        tenants: {type: array, items: {type: string}, description: Tenant di un rilascio multi-tenant}
+        skipped: {type: array, items: {$ref: '#/components/schemas/TenantSkip'}}
     Decision:
       type: object
       required: [approver, approve, time]
@@ -802,10 +844,11 @@ components:
           description: ENQUEUED, DELAYED, PENDING, SUCCESS, ERROR, CANCELLED, AWAITING_APPROVAL, REJECTED, EXPIRED, WAITING_DEPENDENCY, DEPENDENCY_FAILED, MAX_RECOVERY_ATTEMPTS_EXCEEDED
         application: {type: string}
         environment: {type: string}
+        tenant: {type: string}
         artifact: {type: string}
         version: {type: string}
         sha256: {type: string}
-        kind: {type: string, enum: [deploy, promotion, rollback]}
+        kind: {type: string, enum: [deploy, promotion, rollback, tenants]}
         source: {type: string, description: Deploy di origine di una promozione o di un rollback}
         dry_run: {type: boolean}
         rollback: {type: string, description: Esito del rollback automatico}
@@ -822,6 +865,8 @@ components:
         after: {$ref: '#/components/schemas/AfterState'}
         release: {type: string, description: Release composta a cui appartiene il deploy}
         policy: {$ref: '#/components/schemas/PolicySnapshot'}
+        tenants_run: {$ref: '#/components/schemas/TenantsRunState'}
+        run: {type: string, description: Rilascio multi-tenant a cui appartiene il deploy}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
         result: {$ref: '#/components/schemas/Result'}
@@ -993,6 +1038,7 @@ components:
       properties:
         application: {type: string}
         environment: {type: string}
+        tenant: {type: string}
         current: {$ref: '#/components/schemas/Status'}
         last_failure: {$ref: '#/components/schemas/Status'}
         drift: {type: boolean}
@@ -1034,9 +1080,65 @@ components:
         start: {type: string, format: date-time}
         end: {type: string, format: date-time}
         recurring: {type: boolean}
+        tenants: {type: string}
         hard: {type: boolean, description: Non esentabile dalla policy né superabile con freezeOverride}
         dynamic: {type: boolean, description: Creata a runtime}
         created_by: {type: string}
+    TenantSkip:
+      type: object
+      required: [tenant, reason]
+      properties:
+        tenant: {type: string}
+        reason: {type: string}
+    TenantInfo:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        description: {type: string}
+        tags: {type: object, additionalProperties: {type: string}}
+        applications: {type: object, additionalProperties: {type: array, items: {type: string}}}
+        params: {type: object, additionalProperties: {type: object, additionalProperties: {type: string}}}
+        secrets: {type: object, additionalProperties: {type: array, items: {type: string}}, description: Nomi dei segreti, mai i riferimenti}
+        disabled: {type: boolean}
+        source: {type: string}
+    TenantRunEntry:
+      type: object
+      required: [tenant, group, state]
+      properties:
+        tenant: {type: string}
+        group: {type: string}
+        deployment_id: {type: string}
+        state: {type: string, description: Stato del deploy, oppure PENDING_START, SKIPPED, DENIED}
+        error: {type: string}
+        reason: {type: string}
+    TenantGroupState:
+      type: object
+      required: [name, state]
+      properties:
+        name: {type: string}
+        bake: {type: string}
+        state: {type: string, enum: [pending, running, baking, done, skipped]}
+    TenantsRunState:
+      type: object
+      required: [id, application, environment, status, max_parallel, on_failure, groups, tenants]
+      properties:
+        id: {type: string}
+        application: {type: string}
+        environment: {type: string}
+        artifact: {type: string}
+        version: {type: string}
+        kind: {type: string}
+        status: {type: string, enum: [running, baking, paused-approval, succeeded, failed, stopped]}
+        group: {type: string}
+        paused: {type: string}
+        max_parallel: {type: integer}
+        on_failure: {type: string}
+        groups: {type: array, items: {$ref: '#/components/schemas/TenantGroupState'}}
+        tenants: {type: array, items: {$ref: '#/components/schemas/TenantRunEntry'}}
+        approval: {$ref: '#/components/schemas/ApprovalState'}
+        error: {type: string}
+        updated_at: {type: string, format: date-time}
     FreezeRequest:
       type: object
       additionalProperties: false
@@ -1047,6 +1149,7 @@ components:
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
         regions: {type: array, items: {type: string}}
+        tenants: {type: string, description: Selettore dei tenant}
         from: {type: string, format: date-time, description: Default adesso}
         to: {type: string, format: date-time}
         hard: {type: boolean}
@@ -1175,6 +1278,7 @@ components:
       properties:
         application: {type: string}
         environment: {type: string}
+        tenant: {type: string}
         deployments: {type: integer}
         failures: {type: integer}
         deployments_per_day: {type: number}
@@ -1205,6 +1309,8 @@ components:
             from: {type: string}
             to: {type: string}
             version: {type: string}
+            tenant: {type: string, description: Promuove la release di questo tenant}
+            tenants: {type: string, description: Selettore dei tenant da promuovere, ognuno dalla propria release}
             deploy: {$ref: '#/components/schemas/DeployTargets'}
     RollbackRequest:
       allOf:
@@ -1215,6 +1321,8 @@ components:
             application: {type: string}
             environment: {type: string}
             version: {type: string}
+            tenant: {type: string, description: Torna indietro sulla release di questo tenant}
+            run: {type: string, description: Rilascio multi-tenant di cui riportare indietro i tenant riusciti}
     Grant:
       type: object
       required: [role, actions, applications, environments]
@@ -1223,6 +1331,7 @@ components:
         actions: {type: array, items: {type: string}}
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
+        tenants: {type: string, description: Selettore dei tenant a cui il permesso è limitato}
     Identity:
       type: object
       required: [subject, name, method, auth_enabled, grants]

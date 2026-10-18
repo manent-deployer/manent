@@ -2,10 +2,13 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
+
+	"github.com/joeg-ita/manent/internal/auth"
 )
 
 // applySchedule creates or updates (upsert by name) the DBOS schedule.
@@ -47,6 +50,16 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 	req := sc.Request
 	d := &req.Descriptor
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
+	if d.Tenants != nil {
+		// A multi-tenant schedule selects the tenants again at every run.
+		run, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
+			return w.submitScheduledRun(c, req, id)
+		}, dbos.WithStepName("tenants:submit"))
+		if err != nil {
+			return "", err
+		}
+		return run, nil
+	}
 	// The schedule's deploys count as requested by whoever created it. Schedules created with
 	// a governance decision evaluate the policy in force at every run, in a DBOS step; the older
 	// ones keep the obligations of the schedule's creation.
@@ -149,4 +162,26 @@ func toScheduleInfo(s dbos.WorkflowSchedule) ScheduleInfo {
 		info.RequestedBy = sc.Request.RequestedBy
 	}
 	return info
+}
+
+// submitScheduledRun submits the multi-tenant release of a schedule run, with the identity of
+// whoever created the schedule. The run ID is the tick's: a repeated tick finds it enqueued.
+func (w *Worker) submitScheduledRun(ctx context.Context, req Request, id string) (string, error) {
+	eng, ok := w.service.(*Engine)
+	if !ok {
+		return "", errors.New("service not configured on the worker")
+	}
+	d := req.Descriptor
+	d.ID, d.Schedule = id, nil
+	method, subject, _ := strings.Cut(req.RequestedBy, ":")
+	pc := auth.WithPrincipal(ctx, &auth.Principal{Method: method, Subject: subject, Groups: req.RequestedGroups})
+	sub, err := eng.submit(pc, &d, submitMeta{kind: KindDeploy})
+	if err != nil {
+		if st, serr := eng.Status(ctx, id); serr == nil && st.TenantsRun != nil {
+			return id, nil
+		}
+		w.logger.Warn("esecuzione multi-tenant della schedule rifiutata", "schedule", req.Descriptor.ScheduleName(), "run", id, "error", err)
+		return "", err
+	}
+	return sub.ID, nil
 }

@@ -308,6 +308,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tenant del registro (filtrati dai permessi) */
+        get: operations["listTenants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Un tenant */
+        get: operations["getTenant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policies": {
         parameters: {
             query?: never;
@@ -684,6 +718,12 @@ export interface components {
             id?: string;
             application: string;
             environment: string;
+            /** @description Tenant del deploy */
+            tenant?: string;
+            /** @description Rilascio a più tenant (names o selector, groups, maxParallel, onFailure, onDenied, approvalsBetween) */
+            tenants?: {
+                [key: string]: unknown;
+            };
             dryRun?: boolean;
             /** @description ID dei deploy che devono riuscire prima di questo */
             after?: string[];
@@ -720,6 +760,9 @@ export interface components {
             scheduled_at?: string;
             schedule?: string;
             dry_run?: boolean;
+            /** @description Tenant di un rilascio multi-tenant */
+            tenants?: string[];
+            skipped?: components["schemas"]["TenantSkip"][];
         };
         Decision: {
             approver: string;
@@ -819,11 +862,12 @@ export interface components {
             state: string;
             application?: string;
             environment?: string;
+            tenant?: string;
             artifact?: string;
             version?: string;
             sha256?: string;
             /** @enum {string} */
-            kind?: "deploy" | "promotion" | "rollback";
+            kind?: "deploy" | "promotion" | "rollback" | "tenants";
             /** @description Deploy di origine di una promozione o di un rollback */
             source?: string;
             dry_run?: boolean;
@@ -852,6 +896,9 @@ export interface components {
             /** @description Release composta a cui appartiene il deploy */
             release?: string;
             policy?: components["schemas"]["PolicySnapshot"];
+            tenants_run?: components["schemas"]["TenantsRunState"];
+            /** @description Rilascio multi-tenant a cui appartiene il deploy */
+            run?: string;
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
@@ -1020,6 +1067,7 @@ export interface components {
         InventoryEntry: {
             application: string;
             environment: string;
+            tenant?: string;
             current?: components["schemas"]["Status"];
             last_failure?: components["schemas"]["Status"];
             drift?: boolean;
@@ -1058,11 +1106,72 @@ export interface components {
             /** Format: date-time */
             end?: string;
             recurring?: boolean;
+            tenants?: string;
             /** @description Non esentabile dalla policy né superabile con freezeOverride */
             hard?: boolean;
             /** @description Creata a runtime */
             dynamic?: boolean;
             created_by?: string;
+        };
+        TenantSkip: {
+            tenant: string;
+            reason: string;
+        };
+        TenantInfo: {
+            name: string;
+            description?: string;
+            tags?: {
+                [key: string]: string;
+            };
+            applications?: {
+                [key: string]: string[];
+            };
+            params?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+            /** @description Nomi dei segreti */
+            secrets?: {
+                [key: string]: string[];
+            };
+            disabled?: boolean;
+            source?: string;
+        };
+        TenantRunEntry: {
+            tenant: string;
+            group: string;
+            deployment_id?: string;
+            /** @description Stato del deploy */
+            state: string;
+            error?: string;
+            reason?: string;
+        };
+        TenantGroupState: {
+            name: string;
+            bake?: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "baking" | "done" | "skipped";
+        };
+        TenantsRunState: {
+            id: string;
+            application: string;
+            environment: string;
+            artifact?: string;
+            version?: string;
+            kind?: string;
+            /** @enum {string} */
+            status: "running" | "baking" | "paused-approval" | "succeeded" | "failed" | "stopped";
+            group?: string;
+            paused?: string;
+            max_parallel: number;
+            on_failure: string;
+            groups: components["schemas"]["TenantGroupState"][];
+            tenants: components["schemas"]["TenantRunEntry"][];
+            approval?: components["schemas"]["ApprovalState"];
+            error?: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         FreezeRequest: {
             name: string;
@@ -1070,6 +1179,8 @@ export interface components {
             applications: string[];
             environments: string[];
             regions?: string[];
+            /** @description Selettore dei tenant */
+            tenants?: string;
             /**
              * Format: date-time
              * @description Default adesso
@@ -1196,6 +1307,7 @@ export interface components {
         DORAMetrics: {
             application?: string;
             environment?: string;
+            tenant?: string;
             deployments: number;
             failures: number;
             deployments_per_day: number;
@@ -1222,18 +1334,28 @@ export interface components {
             from: string;
             to: string;
             version?: string;
+            /** @description Promuove la release di questo tenant */
+            tenant?: string;
+            /** @description Selettore dei tenant da promuovere */
+            tenants?: string;
             deploy?: components["schemas"]["DeployTargets"];
         };
         RollbackRequest: components["schemas"]["Redeploy"] & {
             application: string;
             environment: string;
             version?: string;
+            /** @description Torna indietro sulla release di questo tenant */
+            tenant?: string;
+            /** @description Rilascio multi-tenant di cui riportare indietro i tenant riusciti */
+            run?: string;
         };
         Grant: {
             role: string;
             actions: string[];
             applications: string[];
             environments: string[];
+            /** @description Selettore dei tenant a cui il permesso è limitato */
+            tenants?: string;
         };
         Identity: {
             subject: string;
@@ -1290,6 +1412,7 @@ export interface operations {
                 schedule?: string;
                 application?: string;
                 environment?: string;
+                tenant?: string;
                 state?: string;
                 limit?: number;
                 /** @description next_cursor della pagina precedente */
@@ -1683,6 +1806,7 @@ export interface operations {
             query?: {
                 application?: string;
                 environment?: string;
+                tenant?: string;
             };
             header?: never;
             path?: never;
@@ -1771,6 +1895,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listTenants: {
+        parameters: {
+            query?: {
+                application?: string;
+                environment?: string;
+                /** @description Selettore sui tag e sul nome */
+                selector?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tenants: components["schemas"]["TenantInfo"][];
+                    };
+                };
+            };
+        };
+    };
+    getTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["name"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantInfo"];
+                };
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -1960,6 +2135,9 @@ export interface operations {
             query?: {
                 application?: string;
                 environment?: string;
+                tenant?: string;
+                /** @description tenant: metriche anche per tenant */
+                by?: "tenant";
                 /** @description Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni */
                 since?: string;
             };
@@ -2142,6 +2320,7 @@ export interface operations {
             query?: {
                 application?: string;
                 environment?: string;
+                tenant?: string;
             };
             header?: never;
             path?: never;

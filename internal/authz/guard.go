@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"github.com/joeg-ita/manent/internal/audit"
 	"github.com/joeg-ita/manent/internal/auth"
@@ -14,6 +15,7 @@ import (
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // Guard wraps an engine.Service: it checks the permissions of the identity in the context and
@@ -24,6 +26,8 @@ type Guard struct {
 	Policy Policy
 	Audit  audit.Recorder
 	Logger *slog.Logger
+	// Tenants, if set, gives the tags of the tenants for the bindings with tenants.
+	Registry tenant.Directory
 }
 
 var _ engine.Service = (*Guard)(nil)
@@ -31,7 +35,9 @@ var _ engine.Service = (*Guard)(nil)
 // target identifies the object of an action, for permissions and audit.
 type target struct {
 	application, environment, deployment, schedule string
-	dryRun                                         bool
+	// tenant is the tenant of the deploy, if any.
+	tenant string
+	dryRun bool
 	// comment is the comment of an approval or the reason of a freeze override.
 	comment string
 }
@@ -39,12 +45,35 @@ type target struct {
 // check verifies the permission; if denied it records the audit entry and returns the error.
 func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	p := auth.FromContext(ctx)
-	if g.Policy.Allowed(p, a, t.application, t.environment) {
+	if g.allowed(ctx, p, a, t.application, t.environment, t.tenant) {
 		return nil
 	}
-	err := fmt.Errorf("%w: %s cannot perform %s on %s/%s", engine.ErrForbidden, actor(p), a, t.application, t.environment)
+	where := t.application + "/" + t.environment
+	if t.tenant != "" {
+		where += " (tenant " + t.tenant + ")"
+	}
+	err := fmt.Errorf("%w: %s cannot perform %s on %s", engine.ErrForbidden, actor(p), a, where)
 	g.record(ctx, a, t, audit.OutcomeDenied, err)
 	return err
+}
+
+// allowed checks a permission on a deploy of the tenant (name "" without tenant), with the
+// tags read from the tenant registry.
+func (g *Guard) allowed(ctx context.Context, p *auth.Principal, a Action, application, environment, tenantName string) bool {
+	return g.Policy.AllowedFor(p, a, application, environment, g.tenantRef(ctx, tenantName))
+}
+
+// tenantRef returns the tenant with its tags (the name alone if the registry cannot be read).
+func (g *Guard) tenantRef(ctx context.Context, name string) *tenant.Ref {
+	if name == "" {
+		return nil
+	}
+	if g.Registry != nil {
+		if t, err := g.Registry.Tenant(ctx, name); err == nil {
+			return t.Ref()
+		}
+	}
+	return &tenant.Ref{Name: name}
 }
 
 // record records an audit entry; a recording error is only logged.
@@ -83,7 +112,7 @@ func actor(p *auth.Principal) string {
 
 // Plan requires deployment.read: it reveals the pipeline configured for the application/environment.
 func (g *Guard) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment, tenant: d.Tenant}); err != nil {
 		return nil, err
 	}
 	return g.Next.Plan(ctx, d)
@@ -110,12 +139,22 @@ func (g *Guard) checkOverride(ctx context.Context, override string, t target) er
 // application or environment also requires schedule.write on that one, since it would be
 // overwritten. A freeze override requires deployment.freeze-override.
 func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.Submission, error) {
-	t := target{application: d.Application, environment: d.Environment, dryRun: d.DryRun, comment: d.FreezeOverride}
+	t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, dryRun: d.DryRun, comment: d.FreezeOverride}
 	act := submitAction(DeploymentSubmit, d.DryRun)
-	if err := g.check(ctx, act, t); err != nil {
+	if d.Tenants != nil {
+		// A multi-tenant release requires the permission on every selected tenant.
+		if err := g.checkTenants(ctx, act, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector); err != nil {
+			return nil, err
+		}
+		if d.FreezeOverride != "" {
+			if err := g.checkTenants(ctx, FreezeOverride, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector); err != nil {
+				return nil, err
+			}
+		}
+		t.comment = "tenants " + d.Tenants.Selector + strings.Join(d.Tenants.Names, ",")
+	} else if err := g.check(ctx, act, t); err != nil {
 		return nil, err
-	}
-	if err := g.checkOverride(ctx, d.FreezeOverride, t); err != nil {
+	} else if err := g.checkOverride(ctx, d.FreezeOverride, t); err != nil {
 		return nil, err
 	}
 	if err := g.checkDependencies(ctx, d.After); err != nil {
@@ -146,7 +185,7 @@ func (g *Guard) Status(ctx context.Context, id string) (*engine.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := g.check(ctx, DeploymentRead, target{application: st.Application, environment: st.Environment, deployment: id}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id}); err != nil {
 		return nil, err
 	}
 	remember(ctx, id, st.Application, st.Environment)
@@ -159,7 +198,7 @@ func (g *Guard) List(ctx context.Context, f engine.ListFilter) ([]engine.Status,
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.Policy.Allowed(p, DeploymentRead, st.Application, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Environment, st.Tenant) && (match == nil || match(st))
 	}
 	all, err := g.Next.List(ctx, f)
 	if err != nil {
@@ -189,7 +228,10 @@ func (g *Guard) Cancel(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	t := target{application: st.Application, environment: st.Environment, deployment: id}
+	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id}
+	if err := g.checkRun(ctx, DeploymentCancel, st); err != nil {
+		return err
+	}
 	if err := g.check(ctx, DeploymentCancel, t); err != nil {
 		return err
 	}
@@ -266,7 +308,7 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, ie := range all {
-		if g.Policy.Allowed(p, DeploymentRead, ie.Application, ie.Environment) {
+		if g.allowed(ctx, p, DeploymentRead, ie.Application, ie.Environment, ie.Tenant) {
 			out = append(out, ie)
 		}
 	}
@@ -276,10 +318,13 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 // Promote requires deployment.read on the source environment and deployment.submit (or
 // deployment.dry-run) on the destination one.
 func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.Submission, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: r.Application, environment: r.From}); err != nil {
+	if r.Tenants != "" {
+		return g.promoteTenants(ctx, r)
+	}
+	if err := g.check(ctx, DeploymentRead, target{application: r.Application, environment: r.From, tenant: r.Tenant}); err != nil {
 		return nil, err
 	}
-	t := target{application: r.Application, environment: r.To, dryRun: r.DryRun, comment: r.FreezeOverride}
+	t := target{application: r.Application, environment: r.To, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride}
 	if err := g.check(ctx, submitAction(DeploymentSubmit, r.DryRun), t); err != nil {
 		return nil, err
 	}
@@ -296,8 +341,17 @@ func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.S
 
 // Rollback requires deployment.rollback (or deployment.dry-run).
 func (g *Guard) Rollback(ctx context.Context, r engine.RollbackRequest) (*engine.Submission, error) {
-	t := target{application: r.Application, environment: r.Environment, dryRun: r.DryRun, comment: r.FreezeOverride}
-	if err := g.check(ctx, submitAction(DeploymentRollback, r.DryRun), t); err != nil {
+	t := target{application: r.Application, environment: r.Environment, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride}
+	if r.Run != "" {
+		st, err := g.Next.Status(ctx, r.Run)
+		if err != nil {
+			return nil, err
+		}
+		if err := g.checkRun(ctx, submitAction(DeploymentRollback, r.DryRun), st); err != nil {
+			return nil, err
+		}
+		t.comment = "rollback of " + r.Run
+	} else if err := g.check(ctx, submitAction(DeploymentRollback, r.DryRun), t); err != nil {
 		return nil, err
 	}
 	if err := g.checkOverride(ctx, r.FreezeOverride, t); err != nil {
@@ -322,7 +376,10 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	if !r.Approve {
 		act = ActionReject
 	}
-	t := target{application: st.Application, environment: st.Environment, deployment: id, comment: r.Comment}
+	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id, comment: r.Comment}
+	if err := g.checkRun(ctx, DeploymentApprove, st); err != nil {
+		return err
+	}
 	if err := g.check(ctx, DeploymentApprove, t); err != nil {
 		return err
 	}
@@ -398,7 +455,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.Policy.Allowed(p, DeploymentRead, st.Application, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Environment, st.Tenant) && (match == nil || match(st))
 	}
 	rep, err := g.Next.DORA(ctx, f)
 	if err != nil {
@@ -407,7 +464,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	// A remote service ignores Match: unreadable environments are removed.
 	envs := rep.Environments[:0]
 	for _, m := range rep.Environments {
-		if g.Policy.Allowed(p, DeploymentRead, m.Application, m.Environment) {
+		if g.allowed(ctx, p, DeploymentRead, m.Application, m.Environment, m.Tenant) {
 			envs = append(envs, m)
 		}
 	}
@@ -418,7 +475,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 // Validate requires read on the application and environment: it shows the effective
 // configuration, which may include the environment's targets and parameters.
 func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment, tenant: d.Tenant}); err != nil {
 		return nil, err
 	}
 	return g.Next.Validate(ctx, d)
@@ -457,7 +514,7 @@ func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {
 		for i, a := range g.Policy.Roles[b.Role] {
 			acts[i] = string(a)
 		}
-		id.Grants = append(id.Grants, engine.Grant{Role: b.Role, Actions: acts, Applications: b.Applications, Environments: b.Environments})
+		id.Grants = append(id.Grants, engine.Grant{Role: b.Role, Actions: acts, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants})
 	}
 	return id, nil
 }
@@ -472,7 +529,7 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, st := range all {
-		if !g.Policy.Allowed(p, DeploymentApprove, st.Application, st.Environment) {
+		if !g.allowed(ctx, p, DeploymentApprove, st.Application, st.Environment, st.Tenant) {
 			continue
 		}
 		if !g.Policy.Disabled && st.RequestedBy == p.String() && (st.Approval == nil || !st.Approval.AllowSelf) {
@@ -518,7 +575,7 @@ func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.Policy.Allowed(p, DeploymentRead, st.Application, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Environment, st.Tenant) && (match == nil || match(st))
 	}
 	a, err := g.Next.Activity(ctx, f)
 	if err != nil {
@@ -558,7 +615,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 		if d == nil {
 			continue // rejected by the engine validation
 		}
-		t := target{application: d.Application, environment: d.Environment, comment: d.FreezeOverride}
+		t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, comment: d.FreezeOverride}
 		if err := g.check(ctx, DeploymentSubmit, t); err != nil {
 			return nil, err
 		}
@@ -580,7 +637,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 		return nil, err
 	}
 	for _, d := range rs.Deploys {
-		g.done(ctx, DeploymentSubmit, target{application: d.Application, environment: d.Environment, deployment: d.DeploymentID, comment: "release " + rs.ID}, nil)
+		g.done(ctx, DeploymentSubmit, target{application: d.Application, environment: d.Environment, tenant: d.Tenant, deployment: d.DeploymentID, comment: "release " + rs.ID}, nil)
 	}
 	return rs, nil
 }
@@ -588,7 +645,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 // readableRelease reports whether the identity can read all the deploys of the release.
 func (g *Guard) readableRelease(ctx context.Context, rs *engine.ReleaseStatus, a Action) error {
 	for _, d := range rs.Deploys {
-		if err := g.check(ctx, a, target{application: d.Application, environment: d.Environment, deployment: d.DeploymentID}); err != nil {
+		if err := g.check(ctx, a, target{application: d.Application, environment: d.Environment, tenant: d.Tenant, deployment: d.DeploymentID}); err != nil {
 			return err
 		}
 	}

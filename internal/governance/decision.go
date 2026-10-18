@@ -26,8 +26,9 @@ const (
 	PhaseTick = "tick"
 )
 
-// InputSchema is the version of the Input document. Fields are only added, never renamed.
-const InputSchema = 1
+// InputSchema is the version of the Input document. Fields are only added, never renamed:
+// schema 2 added tenant and tenants_run.
+const InputSchema = 2
 
 // ErrUnavailable means no valid policy is loaded (or it is older than max_staleness): real
 // deploys are refused until it comes back.
@@ -52,6 +53,35 @@ type Input struct {
 	Targets     []InputTarget   `json:"targets,omitempty"`
 	Current     *InputRelease   `json:"current,omitempty"`
 	Freezes     InputFreezes    `json:"freezes"`
+	// Tenant is the tenant of the deploy (absent for untenanted deploys).
+	Tenant *InputTenant `json:"tenant,omitempty"`
+	// TenantsRun is the multi-tenant release the deploy belongs to.
+	TenantsRun *InputTenantsRun `json:"tenants_run,omitempty"`
+}
+
+// InputTenant is the tenant of the deploy with its tags.
+type InputTenant struct {
+	Name string            `json:"name"`
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// Labels are the tags plus the name, for the tenant selectors.
+func (t *InputTenant) Labels() map[string]string {
+	if t == nil {
+		return nil
+	}
+	l := map[string]string{"name": t.Name}
+	for k, v := range t.Tags {
+		l[k] = v
+	}
+	return l
+}
+
+// InputTenantsRun is the multi-tenant release of the deploy.
+type InputTenantsRun struct {
+	ID    string `json:"id"`
+	Count int    `json:"count,omitempty"`
+	Group string `json:"group,omitempty"`
 }
 
 // InputDeployment describes the deploy request.
@@ -216,7 +246,7 @@ type EvalFunc func(context.Context, Input) (Decision, error)
 // freezeOverride, and hard windows always block.
 func Decide(ctx context.Context, in Input, windows []Window, eval EvalFunc) (Decision, error) {
 	in.Schema = InputSchema
-	in.Freezes.Active = ActiveWindows(windows, in.Application, in.Environment, in.Region, in.Now)
+	in.Freezes.Active = ActiveWindowsFor(windows, in.Application, in.Environment, in.Region, in.Tenant.Labels(), in.Now)
 	if in.Freezes.Active == nil {
 		in.Freezes.Active = []WindowStatus{}
 	}
@@ -258,13 +288,18 @@ func (p *Policy) Evaluate(ctx context.Context, in Input) (Decision, error) {
 		windows = p.Freezes
 	}
 	return Decide(ctx, in, windows, func(_ context.Context, in Input) (Decision, error) {
-		return p.RuleDecision(in.Application, in.Environment), nil
+		return p.RuleDecisionFor(in), nil
 	})
 }
 
 // RuleDecision is the decision of the first rule matching application and environment.
 func (p *Policy) RuleDecision(application, environment string) Decision {
-	r := p.Rule(application, environment)
+	return p.RuleDecisionFor(Input{Application: application, Environment: environment})
+}
+
+// RuleDecisionFor is the decision of the first rule matching the input (tenant included).
+func (p *Policy) RuleDecisionFor(in Input) Decision {
+	r := p.RuleFor(in.Application, in.Environment, in.Tenant.Labels())
 	dec := Decision{Revision: p.Revision(), Rule: r.Name, Requires: r.Requires}
 	if r.Approvals.Required > 0 {
 		a := r.Approvals

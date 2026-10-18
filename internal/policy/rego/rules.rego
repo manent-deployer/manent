@@ -13,7 +13,15 @@ matching contains i if {
 	some i, r in data.manent.rules
 	lib.match_any(r.applications, input.application)
 	lib.match_any(r.environments, input.environment)
+	tenant_ok(r)
 }
+
+# A rule without tenants applies to every deploy, one with tenants only to matching tenants.
+tenant_ok(r) if not r.tenants
+
+tenant_ok(r) if r.tenants == ""
+
+tenant_ok(r) if lib.tenant_matches(r.tenants, object.get(input, "tenant", {}))
 
 rule := data.manent.rules[min(matching)] if count(matching) > 0
 

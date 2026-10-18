@@ -245,6 +245,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	dbos.RegisterWorkflow(ctx, w.afterWorkflow, dbos.WithWorkflowName(afterWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.releaseWorkflow, dbos.WithWorkflowName(releaseWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.retireWorkflow, dbos.WithWorkflowName(retireWorkflowName))
+	dbos.RegisterWorkflow(ctx, w.tenantsWorkflow, dbos.WithWorkflowName(tenantsWorkflowName))
 
 	q := opts.Queue
 	qopts := []dbos.QueueOption{
@@ -444,6 +445,9 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if req.Adopted != nil {
+		return w.adoptWorkflow(ctx, id, req)
+	}
 	d0 := req.Descriptor
 	_, span := telemetry.Tracer().Start(telemetry.WithTraceParent(context.Background(), req.TraceParent), "deployment",
 		trace.WithAttributes(
@@ -484,6 +488,7 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	w.recordAttributes(ctx, id, req, res, final)
 	if !req.Descriptor.DryRun {
 		w.notifyWaiters(ctx, id)
+		w.notifyRun(ctx, req.Run, id)
 	}
 	w.recordMetrics(id, req, final)
 	span.SetAttributes(attribute.String("manent.outcome", final.Status))
@@ -585,7 +590,7 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 	e.seq++
 	ev.Sequence = e.seq
 	ev.ID = fmt.Sprintf("%s:%d", e.id, e.seq)
-	ev.DeploymentID, ev.Application, ev.Environment, ev.DryRun = e.id, d.Application, d.Environment, d.DryRun
+	ev.DeploymentID, ev.Application, ev.Environment, ev.Tenant, ev.DryRun = e.id, d.Application, d.Environment, d.Tenant, d.DryRun
 	ev.RequestedBy = e.requestedBy
 	for i, cb := range d.Callbacks {
 		if !cb.Wants(ev.Type) {

@@ -31,7 +31,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 	}
 	byEnv := map[string][]cluster.TargetsRecord{}
 	for _, r := range recs {
-		k := r.Application + "/" + r.Environment
+		k := r.Application + "/" + r.Environment + "/" + r.Tenant
 		byEnv[k] = append(byEnv[k], r)
 	}
 	for i, ie := range out {
@@ -39,7 +39,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 			continue
 		}
 		// Only readings of the deploy in service count: an earlier one says nothing about it.
-		if st := mergeTargets(byEnv[ie.Application+"/"+ie.Environment], ie.Current.ID); st != nil {
+		if st := mergeTargets(byEnv[ie.Application+"/"+ie.Environment+"/"+ie.Tenant], ie.Current.ID); st != nil {
 			out[i].Targets = st
 			out[i].OutOfSync = slices.ContainsFunc(st.Targets, TargetState.Changed)
 		}
@@ -57,7 +57,8 @@ func (e *Engine) inventory(f InventoryFilter) ([]InventoryEntry, error) {
 	out := []InventoryEntry{}
 	for _, k := range slices.Sorted(maps.Keys(e.inv.entries)) {
 		ie := *e.inv.entries[k]
-		if (f.Application != "" && ie.Application != f.Application) || (f.Environment != "" && ie.Environment != f.Environment) {
+		if (f.Application != "" && ie.Application != f.Application) || (f.Environment != "" && ie.Environment != f.Environment) ||
+			(f.Tenant != "" && ie.Tenant != f.Tenant) {
 			continue
 		}
 		ie.Drift = ie.LastFailure != nil && progressStarted(ie.LastFailure.RolloutProgress)
@@ -187,10 +188,10 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 		c.pending[w.ID] = true
 		return
 	}
-	k := s.Application + "/" + s.Environment
+	k := s.Application + "/" + s.Environment + "/" + s.Tenant
 	ie := c.entries[k]
 	if ie == nil {
-		ie = &InventoryEntry{Application: s.Application, Environment: s.Environment}
+		ie = &InventoryEntry{Application: s.Application, Environment: s.Environment, Tenant: s.Tenant}
 		c.entries[k] = ie
 	}
 	switch s.State {
@@ -258,17 +259,31 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 	if r.Application == "" || r.From == "" || r.To == "" || r.From == r.To {
 		return nil, fmt.Errorf("%w: application, from and to are required, from different from to", ErrInvalidRequest)
 	}
-	src, err := e.findRelease(ctx, r.Application, r.From, func(s Status) bool { return r.Version == "" || s.Version == r.Version })
+	if r.Tenants != "" {
+		return e.promoteTenants(ctx, r)
+	}
+	d, src, err := e.promoteDescriptor(ctx, r)
 	if err != nil {
 		return nil, err
+	}
+	return e.submit(ctx, d, submitMeta{kind: KindPromotion, source: src.ID})
+}
+
+// promoteDescriptor builds the descriptor of a promotion from the release in r.From.
+func (e *Engine) promoteDescriptor(ctx context.Context, r PromoteRequest) (*descriptor.Descriptor, *Status, error) {
+	src, err := e.findRelease(ctx, r.Application, r.From, func(s Status) bool {
+		return (r.Version == "" || s.Version == r.Version) && s.Tenant == r.Tenant
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	if src == nil {
 		v := cmp.Or(r.Version, "alcuna versione")
-		return nil, fmt.Errorf("%w: %s: %s was not released successfully in %s", ErrInvalidRequest, r.Application, v, r.From)
+		return nil, nil, fmt.Errorf("%w: %s: %s was not released successfully in %s%s", ErrInvalidRequest, r.Application, v, r.From, tenantSuffix(r.Tenant))
 	}
 	req, err := e.loadRequest(src.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	d := req.Descriptor
 	d.Environment = r.To
@@ -278,9 +293,9 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 	}
 	applyRedeploy(r.Redeploy, &d, src)
 	if err := d.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	return e.submit(ctx, &d, submitMeta{kind: KindPromotion, source: src.ID})
+	return &d, src, nil
 }
 
 // Rollback releases again, with its descriptor, a version already successfully released to
@@ -295,9 +310,21 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	if r.Application == "" || r.Environment == "" {
 		return nil, fmt.Errorf("%w: application and environment are required", ErrInvalidRequest)
 	}
+	if r.Run != "" {
+		return e.rollbackRun(ctx, r)
+	}
+	d, target, err := e.rollbackDescriptor(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	return e.submit(ctx, d, submitMeta{kind: KindRollback, source: target.ID})
+}
+
+// rollbackDescriptor finds the release to go back to and builds the descriptor of the rollback.
+func (e *Engine) rollbackDescriptor(ctx context.Context, r RollbackRequest) (*descriptor.Descriptor, *Status, error) {
 	var current, target, failed *Status
 	err := e.scan(nil, func(s Status) bool {
-		if s.Application != r.Application || s.Environment != r.Environment || s.DryRun {
+		if s.Application != r.Application || s.Environment != r.Environment || s.Tenant != r.Tenant || s.DryRun {
 			return true
 		}
 		if s.State != string(dbos.WorkflowStatusSuccess) {
@@ -322,30 +349,30 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	})
 	switch {
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	case current == nil:
-		return nil, fmt.Errorf("%w: no successful deploy of %s in %s", ErrInvalidRequest, r.Application, r.Environment)
+		return nil, nil, fmt.Errorf("%w: no successful deploy of %s in %s%s", ErrInvalidRequest, r.Application, r.Environment, tenantSuffix(r.Tenant))
 	case target == nil && r.Version == current.Version:
-		return nil, fmt.Errorf("%w: version %s is already in service in %s", ErrInvalidRequest, r.Version, r.Environment)
+		return nil, nil, fmt.Errorf("%w: version %s is already in service in %s%s", ErrInvalidRequest, r.Version, r.Environment, tenantSuffix(r.Tenant))
 	case target == nil:
 		v := cmp.Or(r.Version, "una versione precedente a "+current.Version)
-		return nil, fmt.Errorf("%w: %s was not released successfully in %s", ErrInvalidRequest, v, r.Environment)
+		return nil, nil, fmt.Errorf("%w: %s was not released successfully in %s%s", ErrInvalidRequest, v, r.Environment, tenantSuffix(r.Tenant))
 	}
 	req, err := e.loadRequest(target.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	d := req.Descriptor
 	if e.rollback != nil {
 		if err := e.rollback.Allowed(d.Artifact.Type); err != nil {
-			return nil, fmt.Errorf("%w: manual rollback not allowed: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: manual rollback not allowed: %w", ErrInvalidRequest, err)
 		}
 	}
 	applyRedeploy(r.Redeploy, &d, target)
 	if err := d.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	return e.submit(ctx, &d, submitMeta{kind: KindRollback, source: target.ID})
+	return &d, target, nil
 }
 
 // leftChanged says whether a deploy ended without success may have left the targets on a

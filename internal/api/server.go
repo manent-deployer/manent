@@ -106,6 +106,8 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.GET("/freezes", s.freezes)
 	v1.POST("/freezes", s.createFreeze)
 	v1.DELETE("/freezes/:name", s.deleteFreeze)
+	v1.GET("/tenants", s.tenants)
+	v1.GET("/tenants/:name", s.tenant)
 	v1.GET("/policies", s.policies)
 	v1.POST("/policies", s.pushPolicy)
 	v1.GET("/policies/:revision", s.policy)
@@ -175,7 +177,8 @@ func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 
 // list lists the most recent deploys (query: schedule, application, environment, state, limit).
 func (s *Server) list(c *gin.Context) {
-	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"), State: c.Query("state"), Cursor: c.Query("cursor")}
+	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"),
+		Tenant: c.Query("tenant"), State: c.Query("state"), Cursor: c.Query("cursor")}
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
@@ -308,7 +311,7 @@ func (s *Server) rollback(c *gin.Context) {
 
 // inventory returns the release in service per application and environment.
 func (s *Server) inventory(c *gin.Context) {
-	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment")})
+	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant")})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -396,7 +399,7 @@ func (s *Server) workers(c *gin.Context) {
 }
 
 func (s *Server) activity(c *gin.Context) {
-	a, err := s.svc.Activity(c.Request.Context(), engine.ActivityFilter{Application: c.Query("application"), Environment: c.Query("environment")})
+	a, err := s.svc.Activity(c.Request.Context(), engine.ActivityFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant")})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -484,7 +487,7 @@ func (s *Server) logs(c *gin.Context) {
 
 // dora computes the DORA metrics; ?since= takes an RFC 3339 date or a duration (e.g. 720h).
 func (s *Server) dora(c *gin.Context) {
-	f := engine.DORAFilter{Application: c.Query("application"), Environment: c.Query("environment")}
+	f := engine.DORAFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), ByTenant: c.Query("by") == "tenant"}
 	if v := c.Query("since"); v != "" {
 		t, err := service.ParseSince(v, time.Now())
 		if err != nil {

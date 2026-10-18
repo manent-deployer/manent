@@ -47,6 +47,7 @@ import (
 	"github.com/joeg-ita/manent/internal/secrets"
 	"github.com/joeg-ita/manent/internal/steps"
 	"github.com/joeg-ita/manent/internal/telemetry"
+	"github.com/joeg-ita/manent/internal/tenant"
 	"github.com/joeg-ita/manent/internal/traffic"
 	"github.com/joeg-ita/manent/internal/version"
 	"github.com/joeg-ita/manent/internal/webui"
@@ -87,6 +88,8 @@ type App struct {
 	adminOnce sync.Once
 	admin     *engine.Admin
 	draining  atomic.Bool
+	// engine is the service without permissions (platform operations of manent-server admin).
+	engine *engine.Engine
 	// governance is the policy in force; stopGovernance ends its refresh.
 	governance     *policy.Runtime
 	stopGovernance context.CancelFunc
@@ -307,7 +310,7 @@ func NewAuthzPolicy(cfg *config.Config) (authz.Policy, error) {
 	}
 	bindings := make([]authz.Binding, len(cfg.RBAC.Bindings))
 	for i, b := range cfg.RBAC.Bindings {
-		bindings[i] = authz.Binding{Subjects: b.Subjects, Groups: b.Groups, Role: b.Role, Applications: b.Applications, Environments: b.Environments}
+		bindings[i] = authz.Binding{Subjects: b.Subjects, Groups: b.Groups, Role: b.Role, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants}
 	}
 	return authz.NewPolicy(roles, bindings)
 }
@@ -410,16 +413,27 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 			return r, err
 		}
 		r.Provider = &envconfig.ConsulProvider{
-			Address:     addr,
-			Token:       token,
-			Datacenter:  ec.Consul.Datacenter,
-			KeyTemplate: ec.Consul.Key,
-			Client:      &http.Client{Timeout: 10 * time.Second},
+			Address:           addr,
+			Token:             token,
+			Datacenter:        ec.Consul.Datacenter,
+			KeyTemplate:       ec.Consul.Key,
+			TenantKeyTemplate: ec.Consul.TenantsKey,
+			Client:            &http.Client{Timeout: 10 * time.Second},
 		}
 	case config.EnvProviderFile:
-		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path}
+		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path, TenantTemplate: ec.File.Tenants}
 	}
+	r.Tenants = envconfig.TenantDirectory(r.Provider)
 	return r, nil
+}
+
+// NewTenantCache returns the tenant registry of the environment configuration provider, with
+// a cache for selectors and permissions; nil if the provider has no registry.
+func NewTenantCache(cfg *config.Config, r envconfig.Resolver) tenant.Directory {
+	if r.Tenants == nil {
+		return nil
+	}
+	return &tenant.Cache{Next: r.Tenants, TTL: cfg.EnvConfig.TenantsCache}
 }
 
 // NewCallbackPolicy returns the limits on callback URLs set in the configuration.
@@ -443,14 +457,16 @@ type components struct {
 	authz      authz.Policy
 	audit      audit.Recorder
 	governance *policy.Runtime
-	custom     *customstep.Builder
-	secrets    secrets.Provider
-	chat       *chat.Notifier
-	change     change.Provider
-	health     rollout.Checker
-	traffic    *steps.Traffic
-	metrics    *telemetry.Metrics
-	closers    []io.Closer
+	// tenants is the tenant registry with the cache (nil without registry).
+	tenants tenant.Directory
+	custom  *customstep.Builder
+	secrets secrets.Provider
+	chat    *chat.Notifier
+	change  change.Provider
+	health  rollout.Checker
+	traffic *steps.Traffic
+	metrics *telemetry.Metrics
+	closers []io.Closer
 }
 
 // service builds the service exposed to CLI and API: the Engine wrapped by permissions.
@@ -465,7 +481,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
-		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Health: c.health, Traffic: c.traffic, Logger: c.log,
+		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 	}
 	if r, ok := executors.(engine.TargetStateReader); ok {
@@ -495,7 +511,7 @@ func (c *components) chatNotifier() engine.ChatNotifier {
 
 // guard wraps the Engine with permissions.
 func (c *components) guard(eng *engine.Engine) engine.Service {
-	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Logger: c.log.With("component", "authz")}
+	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz")}
 }
 
 func newComponents(cfg *config.Config) (*components, error) {
@@ -580,6 +596,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 		authz:      authzPolicy,
 		audit:      auditRec,
 		governance: gov,
+		tenants:    NewTenantCache(cfg, resolver),
 		secrets:    sp,
 		chat:       NewChatNotifier(cfg, sp, log),
 		change:     NewChangeProvider(cfg, sp),
@@ -669,7 +686,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	svc := c.guard(eng)
 	stop := c.startGovernance()
 	return &App{
-		governance: c.governance, stopGovernance: stop,
+		governance: c.governance, stopGovernance: stop, engine: eng,
 		Config:   cfg,
 		Logger:   c.log,
 		Service:  svc,
@@ -724,7 +741,8 @@ func NewClient(cfg *config.Config) (*App, error) {
 		audit:   c.audit,
 		metrics: c.metrics,
 	}
-	a.Service = c.service(cfg, client, lazyAdmin{a})
+	a.engine = c.engine(cfg, client, lazyAdmin{a})
+	a.Service = c.guard(a.engine)
 	a.slack = NewSlackInteractions(cfg, c.secrets, a.Service, c.log)
 	return a, nil
 }
@@ -772,6 +790,9 @@ func (a *App) Admin() *engine.Admin {
 // Governance returns the governance policy in force (operations outside the permissions, as
 // manent-server admin).
 func (a *App) Governance() *policy.Runtime { return a.governance }
+
+// Engine returns the service without permissions, for the platform operations.
+func (a *App) Engine() *engine.Engine { return a.engine }
 
 // Audit returns the audit recorder.
 func (a *App) Audit() audit.Recorder { return a.audit }

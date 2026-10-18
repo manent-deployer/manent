@@ -1,0 +1,4 @@
+description: Initech (2025 contract, stays on the previous version)
+tags: {tier: silver, contract: "2025"}
+applications: {uc24-shop: [prod]}
+params: {uc24-shop: {banner: Initech}}

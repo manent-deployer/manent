@@ -192,3 +192,29 @@ func TestApprovatori(t *testing.T) {
 		t.Error("il gruppo dba approva")
 	}
 }
+
+func TestRegoleEFreezePerTenant(t *testing.T) {
+	now := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)
+	p, err := New([]Rule{
+		{Name: "gold", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "tier=gold", Approvals: Approvals{Required: 2}},
+		{Name: "prod", Applications: []string{"*"}, Environments: []string{"prod"}, Approvals: Approvals{Required: 1}},
+	}, []Window{{Name: "acme-close", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "name=acme", From: now.Add(-time.Hour), To: now.Add(time.Hour)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := Input{Phase: PhaseSubmit, Now: now, Application: "shop", Environment: "prod"}
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "prod" || d.Freeze != nil {
+		t.Errorf("senza tenant: %+v", d)
+	}
+	in.Tenant = &InputTenant{Name: "acme", Tags: map[string]string{"tier": "gold"}}
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "gold" || d.Approvals.Required != 2 || d.Freeze == nil {
+		t.Errorf("tenant gold acme: %+v", d)
+	}
+	in.Tenant = &InputTenant{Name: "globex", Tags: map[string]string{"tier": "silver"}}
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "prod" || d.Freeze != nil {
+		t.Errorf("tenant silver: %+v", d)
+	}
+	if _, err := New([]Rule{{Applications: []string{"*"}, Environments: []string{"*"}, Tenants: "tier=="}}, nil); err == nil {
+		t.Error("selettore non valido accettato")
+	}
+}

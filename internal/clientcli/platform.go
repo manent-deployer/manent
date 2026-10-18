@@ -41,6 +41,7 @@ type ActivityCmd struct {
 	global      *GlobalOptions
 	Application string        `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string        `short:"e" long:"environment" description:"solo questo ambiente"`
+	Tenant      string        `short:"t" long:"tenant" description:"solo questo tenant"`
 	JSON        bool          `long:"json" description:"output JSON"`
 	Watch       time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
 }
@@ -49,7 +50,7 @@ type ActivityCmd struct {
 func (c *ActivityCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		return repeat(ctx, c.Watch, func() error {
-			a, err := svc.Activity(ctx, service.ActivityFilter{Application: c.Application, Environment: c.Environment})
+			a, err := svc.Activity(ctx, service.ActivityFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant})
 			if err != nil {
 				return err
 			}

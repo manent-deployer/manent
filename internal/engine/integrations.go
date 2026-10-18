@@ -59,7 +59,7 @@ func (w *Worker) notifyChat(ctx dbos.Context, id string, routes []string, msg ch
 func (w *Worker) chatMessage(id string, req Request, event string) chat.Message {
 	d := req.Descriptor
 	return chat.Message{
-		Event: event, DeploymentID: id, Application: d.Application, Environment: d.Environment,
+		Event: event, DeploymentID: id, Application: d.Application, Environment: d.Environment, Tenant: d.Tenant,
 		Artifact: d.Artifact.Name, Version: d.Artifact.Version, Kind: cmp.Or(req.Kind, KindDeploy),
 		RequestedBy: req.RequestedBy, DryRun: d.DryRun,
 	}

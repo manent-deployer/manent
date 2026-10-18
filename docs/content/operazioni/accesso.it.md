@@ -148,6 +148,8 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 
 `deployer` e `operator` non possono approvare: chi rilascia non deve potersi approvare con un secondo ruolo. Le approvazioni si assegnano a un gruppo dedicato (es. il change advisory board) con il ruolo `approver`.
 
+Un binding con `tenants` (un selettore sui tag e su `name`) vale solo per i deploy dei [tenant](../guida/tenant.md#permessi) corrispondenti; senza, per ogni deploy.
+
 Altri ruoli si definiscono in `rbac.roles`:
 
 ```yaml

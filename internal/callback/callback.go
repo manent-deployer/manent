@@ -50,7 +50,9 @@ type Event struct {
 	DeploymentID string `json:"deployment_id"`
 	Application  string `json:"application"`
 	Environment  string `json:"environment"`
-	DryRun       bool   `json:"dry_run,omitempty"`
+	// Tenant is the tenant of the deploy, if any.
+	Tenant string `json:"tenant,omitempty"`
+	DryRun bool   `json:"dry_run,omitempty"`
 	// RequestedBy is the identity that requested the deploy (e.g. "oidc:alice").
 	RequestedBy string `json:"requested_by,omitempty"`
 	// Step is set only for step events.

@@ -77,6 +77,8 @@ Il descrittore dichiara **cosa** rilasciare e **dove**. La CLI lo legge in YAML,
 | `id` | no | ID del deploy e chiave di idempotenza: lo stesso `id` non viene eseguito due volte. Non ammesso con `schedule.cron`. |
 | `application` | sì | Nome dell'applicazione. |
 | `environment` | sì | Ambiente di destinazione (es. `test`, `prod`). |
+| `tenant` | | [Tenant](tenant.md) del deploy (cliente o istanza): parametri, segreti e target dal registro dei tenant. |
+| `tenants` | | Rilascio a più [tenant](tenant.md#rilasciare-a-piu-tenant): `names` o `selector`, `groups`, `maxParallel`, `onFailure`, `onDenied`, `approvalsBetween`. Alternativo a `tenant`. |
 
 `id`, `application`, `environment` e il nome della schedule diventano nomi di directory e chiavi: sono ammessi lettere, cifre, `.`, `_`, `:` e `-`, con iniziale alfanumerica e al massimo 128 caratteri.
 

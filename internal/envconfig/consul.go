@@ -22,7 +22,10 @@ type ConsulProvider struct {
 	Datacenter string
 	// KeyTemplate is the key template, with {application} and {environment} placeholders.
 	KeyTemplate string
-	Client      *http.Client
+	// TenantKeyTemplate is the key template of the tenant documents, with {tenant} (empty: no
+	// tenant registry).
+	TenantKeyTemplate string
+	Client            *http.Client
 }
 
 // consulKV is an element of the GET /v1/kv/<key> response.

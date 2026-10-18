@@ -281,6 +281,8 @@ type EnvConfig struct {
 	MaxRetries int          `yaml:"max_retries"`
 	Consul     ConsulConfig `yaml:"consul"`
 	File       FileConfig   `yaml:"file"`
+	// TenantsCache is how long the tenant listing is kept (selectors, permissions).
+	TenantsCache time.Duration `yaml:"tenants_cache"`
 }
 
 // ConsulConfig configures reading from the Consul KV store.
@@ -292,12 +294,16 @@ type ConsulConfig struct {
 	// Key is the key template, with {application} and {environment}.
 	Key       string `yaml:"key"`
 	TokenFile string `yaml:"token_file"`
+	// TenantsKey is the key template of the tenant documents, with {tenant}.
+	TenantsKey string `yaml:"tenants_key"`
 }
 
 // FileConfig configures reading from local files.
 type FileConfig struct {
 	// Path is the path template, with {application} and {environment}.
 	Path string `yaml:"path"`
+	// Tenants is the path template of the tenant documents, with {tenant}.
+	Tenants string `yaml:"tenants"`
 }
 
 // Callbacks configures sending events to the callbacks named in descriptors.
@@ -397,6 +403,8 @@ type RBACBinding struct {
 	Role         string   `yaml:"role"`
 	Applications []string `yaml:"applications"`
 	Environments []string `yaml:"environments"`
+	// Tenants limits the binding to the deploys of the matching tenants (selector on tags and "name").
+	Tenants string `yaml:"tenants"`
 }
 
 // Audit configures the recording of actions.
@@ -504,6 +512,8 @@ type GovernanceRule struct {
 	Approvals *ApprovalSettings `yaml:"approvals"`
 	// Change opens a change management ticket for every deploy (integrations.change).
 	Change *ChangeRule `yaml:"change"`
+	// Tenants limits the rule to the deploys of the matching tenants (selector).
+	Tenants string `yaml:"tenants"`
 }
 
 // ApprovalSettings configures the approvals required before the deploy.
@@ -538,6 +548,8 @@ type FreezeWindow struct {
 	Timezone     string        `yaml:"timezone"`
 	// Hard windows cannot be exempted by the policy nor overridden with freezeOverride.
 	Hard bool `yaml:"hard"`
+	// Tenants limits the window to the deploys of the matching tenants (selector).
+	Tenants string `yaml:"tenants"`
 }
 
 // DescriptorPolicy limits what a descriptor can add to the environment configuration.
@@ -646,10 +658,11 @@ func Default() *Config {
 		SIEM:    SIEM{Network: "udp"},
 		WorkDir: "./work",
 		EnvConfig: EnvConfig{
-			Provider:   EnvProviderNone,
-			MaxRetries: 3,
-			Consul:     ConsulConfig{Key: "manent/{application}/{environment}"},
-			File:       FileConfig{Path: "./envconfig/{application}/{environment}.yml"},
+			Provider:     EnvProviderNone,
+			MaxRetries:   3,
+			Consul:       ConsulConfig{Key: "manent/{application}/{environment}", TenantsKey: "manent/tenants/{tenant}"},
+			File:         FileConfig{Path: "./envconfig/{application}/{environment}.yml", Tenants: "./envconfig/tenants/{tenant}.yml"},
+			TenantsCache: 30 * time.Second,
 		},
 		Callbacks: Callbacks{Timeout: 10 * time.Second, MaxRetries: 3},
 		// Rollback is allowed but disabled for applications; never for migrations, which usually

@@ -40,7 +40,7 @@ governance:
       timezone: Europe/Rome
 ```
 
-Per ogni deploy vale **la prima regola** (in ordine) la cui `applications` e `environments` corrispondono. Senza regole non ci sono vincoli. I [dry-run](dry-run.md) non sono soggetti alle regole, perché non modificano gli ambienti.
+Per ogni deploy vale **la prima regola** (in ordine) la cui `applications` e `environments` corrispondono (e `tenants`, un selettore, per i deploy dei [tenant](tenant.md#governance)). Senza regole non ci sono vincoli. I [dry-run](dry-run.md) non sono soggetti alle regole, perché non modificano gli ambienti.
 
 ## Inventario
 
@@ -216,6 +216,7 @@ Durante una finestra di freeze i deploy reali sull'applicazione e sull'ambiente 
 | `from`, `to` | Finestra singola (RFC 3339). |
 | `cron`, `duration`, `timezone` | Finestra ricorrente: ogni occorrenza inizia a `cron` (5 campi) e dura `duration`. |
 | `hard` | La finestra non può essere esentata da una policy Rego né superata con `freezeOverride`. |
+| `tenants` | Selettore facoltativo: la finestra vale solo per i deploy dei [tenant](tenant.md#governance) corrispondenti. |
 
 Il freeze è verificato tre volte:
 

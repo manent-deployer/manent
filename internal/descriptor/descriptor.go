@@ -27,12 +27,17 @@ const APIVersion = "manent/v1"
 type Descriptor struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	// ID is optional: if set it is the idempotency key of the workflow.
-	ID          string      `json:"id,omitempty" yaml:"id,omitempty"`
-	Application string      `json:"application" yaml:"application"`
-	Environment string      `json:"environment" yaml:"environment"`
-	Artifact    Artifact    `json:"artifact" yaml:"artifact"`
-	Secrets     []SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
-	Deploy      Deploy      `json:"deploy" yaml:"deploy"`
+	ID          string `json:"id,omitempty" yaml:"id,omitempty"`
+	Application string `json:"application" yaml:"application"`
+	Environment string `json:"environment" yaml:"environment"`
+	// Tenant, if set, is the tenant (customer, instance) the deploy is for: its parameters,
+	// secrets and targets come from the tenant registry.
+	Tenant string `json:"tenant,omitempty" yaml:"tenant,omitempty"`
+	// Tenants releases to several tenants: one deploy per tenant (alternative to Tenant).
+	Tenants  *Tenants    `json:"tenants,omitempty" yaml:"tenants,omitempty"`
+	Artifact Artifact    `json:"artifact" yaml:"artifact"`
+	Secrets  []SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Deploy   Deploy      `json:"deploy" yaml:"deploy"`
 	// Steps enables or disables optional steps by name.
 	Steps map[string]bool `json:"steps,omitempty" yaml:"steps,omitempty"`
 	// StepParams are the parameters of custom steps, per step. They normally come from the
@@ -340,6 +345,23 @@ func (d *Descriptor) Validate() error {
 	}
 	if d.ID != "" && !validName(d.ID) {
 		errs = append(errs, fmt.Errorf("invalid id %q: %s", d.ID, nameRule))
+	}
+	if d.Tenant != "" {
+		if err := ValidTenantName(d.Tenant); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.Tenants != nil {
+		if d.Tenant != "" {
+			errs = append(errs, errors.New("tenant and tenants are alternatives"))
+		}
+		if d.DryRun {
+			errs = append(errs, errors.New("tenants not allowed with dryRun: run a dry-run per tenant with tenant"))
+		}
+		if len(d.After) > 0 {
+			errs = append(errs, errors.New("tenants not allowed with after"))
+		}
+		errs = append(errs, d.Tenants.validate())
 	}
 	errs = append(errs, d.validateAfter())
 	if d.Schedule != nil {

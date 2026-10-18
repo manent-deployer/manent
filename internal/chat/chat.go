@@ -52,8 +52,10 @@ type Message struct {
 	DeploymentID string
 	Application  string
 	Environment  string
-	Artifact     string
-	Version      string
+	// Tenant is the tenant of the deploy, if any.
+	Tenant   string
+	Artifact string
+	Version  string
 	// Kind is deploy, promotion or rollback.
 	Kind        string
 	RequestedBy string

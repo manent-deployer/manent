@@ -107,6 +107,7 @@ plugins:
             Callbacks: Callback
             Release governance: Governance dei rilasci
             Policies in Rego: Policy in Rego
+            Tenants: Tenant
             Wave rollouts: Rilasci a ondate
             Load balancer draining: Svuotamento dal load balancer
             Percentage rollouts: Rilasci per percentuale
@@ -175,6 +176,7 @@ nav:
       - Rollback: guida/rollback.md
       - Release governance: guida/governance.md
       - Policies in Rego: guida/policy.md
+      - Tenants: guida/tenant.md
       - Wave rollouts: guida/ondate.md
       - Load balancer draining: guida/svuotamento.md
       - Percentage rollouts: guida/traffico.md

@@ -85,6 +85,7 @@ type WorkerTask struct {
 type ActivityFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
+	Tenant      string `json:"tenant,omitempty"`
 	// Match, if set, is an extra filter (e.g. permissions), applied before reading the details
 	// of running deploys.
 	Match func(Status) bool `json:"-"`

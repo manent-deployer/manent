@@ -29,7 +29,7 @@ La policy riceve un **input** che descrive il deploy e restituisce una **decisio
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "phase": "submit",
   "now": "2026-10-18T09:30:00Z",
   "application": "shop",
@@ -55,6 +55,7 @@ La policy riceve un **input** che descrive il deploy e restituisce una **decisio
 | `targets`, `plugin`, `rollout` | Dal deploy effettivo (configurazione di ambiente fusa), quando è noto. |
 | `current` | Release in esercizio nell'ambiente; assente al primo rilascio. |
 | `freezes.active` | Finestre attive a `now`, calcolate da manent. |
+| `tenant`, `tenants_run` | Il [tenant](tenant.md) del deploy (`name`, `tags`) e il rilascio multi-tenant a cui appartiene (`id`); assenti senza tenant. Aggiunti con lo schema 2. |
 
 L'input non contiene segreti né parametri dei plugin. Lo schema è versionato (`schema`): i campi si aggiungono e non vengono mai rinominati.
 
@@ -137,6 +138,7 @@ decision := {
 | `semver_less(a, b)` | Versioni confrontate per numero; prefisso `v` ammesso, una pre-release precede la sua release. |
 | `local_time(t, tz)` | `year`, `month`, `day`, `weekday` (0 = domenica), `hour`, `minute` di un istante in un fuso orario. |
 | `business_hours(t, tz)` | Dalle 9:00 alle 18:00, dal lunedì al venerdì. |
+| `tenant_matches(selettore, tenant)` | Un selettore di tenant su `input.tenant` (`{}` senza tenant: mai). |
 | `duration_ns(d)` | Una durata (`"72h"`) in nanosecondi. |
 
 `data.manent.lib.rules` implementa la semantica delle regole YAML su `data.manent.rules`: una policy può delegargli i casi che non gestisce (`decision := rules.decision if not mine`).

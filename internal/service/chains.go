@@ -70,6 +70,7 @@ type ReleaseDeployState struct {
 	DeploymentID string   `json:"deployment_id"`
 	Application  string   `json:"application"`
 	Environment  string   `json:"environment"`
+	Tenant       string   `json:"tenant,omitempty"`
 	Version      string   `json:"version,omitempty"`
 	After        []string `json:"after,omitempty"`
 	State        string   `json:"state"`

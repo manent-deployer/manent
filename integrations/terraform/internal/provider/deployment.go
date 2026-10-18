@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ type deploymentModel struct {
 	ID                types.String `tfsdk:"id"`
 	Application       types.String `tfsdk:"application"`
 	Environment       types.String `tfsdk:"environment"`
+	Tenant            types.String `tfsdk:"tenant"`
 	Descriptor        types.String `tfsdk:"descriptor"`
 	Version           types.String `tfsdk:"version"`
 	Source            types.String `tfsdk:"source"`
@@ -66,6 +68,8 @@ func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 			"application": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Applicazione."},
 			"environment": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Ambiente."},
+			"tenant": schema.StringAttribute{Optional: true, PlanModifiers: replace,
+				Description: "Tenant del deploy (cliente o istanza), al posto di quello del descrittore; con for_each su manent_tenants una risorsa per tenant."},
 			"descriptor": schema.StringAttribute{
 				Required:    true,
 				Description: "Descrittore di deploy YAML (es. file(\"deploy/prod.yml\")); version, source e sha256 lo sovrascrivono.",
@@ -133,17 +137,19 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	inv, err := r.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
+	tn := m.Tenant.ValueString()
+	inv, err := r.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString(), Tenant: tn})
 	if err != nil {
 		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
 	}
-	if len(inv) == 0 || inv[0].Current == nil {
+	i := slices.IndexFunc(inv, func(e service.InventoryEntry) bool { return e.Tenant == tn && e.Current != nil })
+	if i < 0 {
 		// Nothing in service (e.g. history deleted): the next apply deploys again.
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	readInventory(&m, inv[0])
+	readInventory(&m, inv[i])
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
@@ -163,12 +169,17 @@ func (r *deploymentResource) Delete(_ context.Context, req resource.DeleteReques
 		"manent non rimuove le release dai target: la risorsa esce dallo stato di Terraform, i target restano invariati.")
 }
 
-// ImportState implements resource.ResourceWithImportState: the ID is <application>/<environment>.
+// ImportState implements resource.ResourceWithImportState: the ID is
+// <application>/<environment>[/<tenant>].
 func (r *deploymentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	app, env, ok := cutPair(req.ID)
 	if !ok {
-		resp.Diagnostics.AddError("invalid import ID", "use <application>/<environment>")
+		resp.Diagnostics.AddError("invalid import ID", "use <application>/<environment>[/<tenant>]")
 		return
+	}
+	if e, tn, found := strings.Cut(env, "/"); found {
+		env = e
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), tn)...)
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("application"), app)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment"), env)...)
@@ -222,6 +233,12 @@ func buildDescriptor(m *deploymentModel) (*descriptor.Descriptor, error) {
 		return nil, fmt.Errorf("the descriptor is for %s/%s, the resource for %s/%s", d.Application, d.Environment, app, env)
 	}
 	d.ID = ""
+	if v := m.Tenant.ValueString(); v != "" {
+		d.Tenant = v
+	}
+	if d.Tenants != nil {
+		return nil, fmt.Errorf("tenants is not allowed: use a resource per tenant (for_each over manent_tenants)")
+	}
 	d.Artifact.Version = m.Version.ValueString()
 	if v := m.Source.ValueString(); v != "" {
 		d.Artifact.Source = v

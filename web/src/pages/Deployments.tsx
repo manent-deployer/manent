@@ -118,6 +118,7 @@ export function DeploymentsPage() {
                     <Link to={`/deployments/${encodeURIComponent(d.id)}`} className="font-medium text-fg underline-offset-4 hover:text-accent hover:underline">
                       {d.application ?? "—"} <span aria-hidden>→</span>
                       <span className="sr-only"> / </span> {d.environment ?? "—"}
+                      {d.tenant && <span className="text-muted"> · {d.tenant}</span>}
                     </Link>
                     <div className="font-mono text-xs text-muted">{shortId(d.id)}</div>
                   </th>

@@ -196,7 +196,7 @@ func (c *Client) Status(ctx context.Context, id string) (*service.Status, error)
 // List implements service.Service. f.Match cannot be applied remotely and is ignored.
 func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Status, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "state": f.State, "cursor": f.Cursor} {
+	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "tenant": f.Tenant, "state": f.State, "cursor": f.Cursor} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -286,6 +286,9 @@ func (c *Client) Inventory(ctx context.Context, f service.InventoryFilter) ([]se
 	}
 	if f.Environment != "" {
 		q.Set("environment", f.Environment)
+	}
+	if f.Tenant != "" {
+		q.Set("tenant", f.Tenant)
 	}
 	var out struct {
 		Inventory []service.InventoryEntry `json:"inventory"`
@@ -400,6 +403,9 @@ func (c *Client) Activity(ctx context.Context, f service.ActivityFilter) (*servi
 	if f.Environment != "" {
 		q.Set("environment", f.Environment)
 	}
+	if f.Tenant != "" {
+		q.Set("tenant", f.Tenant)
+	}
 	var a service.Activity
 	if err := c.do(ctx, http.MethodGet, "/activity", q, nil, &a); err != nil {
 		return nil, err
@@ -446,6 +452,12 @@ func (c *Client) DORA(ctx context.Context, f service.DORAFilter) (*service.DORAR
 	}
 	if !f.Since.IsZero() {
 		q.Set("since", f.Since.Format(time.RFC3339))
+	}
+	if f.Tenant != "" {
+		q.Set("tenant", f.Tenant)
+	}
+	if f.ByTenant {
+		q.Set("by", "tenant")
 	}
 	var rep service.DORAReport
 	if err := c.do(ctx, http.MethodGet, "/metrics/dora", q, nil, &rep); err != nil {

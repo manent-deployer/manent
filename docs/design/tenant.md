@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Stato | Proposta |
+| Stato | Implementato (vedi §16 per le differenze rispetto alla proposta) |
 | Data | 2026-10-18 |
 | Ambito | `internal/envconfig`, `internal/descriptor`, `internal/engine` (submit, coda, inventario, governance, release), `internal/authz`, `internal/policy`, `internal/cluster`, API/CLI/UI, provider Terraform |
 
@@ -405,3 +405,41 @@ manent rollback -a shop -e prod --tenant acme
 3. **Target condivisi con installazione per tenant** (un namespace o una directory per cliente sullo stesso host): basta il segnaposto `{tenant}` nei parametri, oppure i plugin devono sapere esplicitamente del tenant (nomi degli oggetti, storico in ConfigMap per tenant)?
 4. **Cardinalità:** oltre quale numero di tenant serve paginare la matrice e l'inventario lato server, invece di filtrare in memoria come oggi?
 5. **Variabili condivise tra applicazioni** (le *library variable set* di Octopus): servono dal primo giorno, o bastano i parametri per applicazione nel documento del tenant?
+
+## 16. Implementazione
+
+Implementate le fasi 1–4 (§13). La fase 5, lo store dei tenant nel database, resta facoltativa e non è stata fatta. Per le questioni aperte (§15) sono state scelte le proposte del documento:
+
+- `onDenied: skip` di default;
+- approvazioni per tenant, senza `scope: run`;
+- per i target condivisi basta il segnaposto `{tenant}`;
+- filtri in memoria;
+- parametri per applicazione, senza variabili condivise.
+
+Differenze rispetto al testo:
+
+| Punto | Proposta | Implementazione |
+|---|---|---|
+| Coda dei tenant (`dbos.tenant_concurrency`, coda `-tenants`) | limite per worker dei deploy di tenant | non implementata: `maxParallel` per rilascio e `environment_concurrency` per tenant bastano. Può essere aggiunta senza cambiare i workflow. |
+| Approvazione e change con `scope: run` | un'approvazione e un ticket per il rilascio | non implementati (questione aperta §15.2): un'approvazione per deploy di tenant più quelle tra i gruppi (`approvalsBetween`). |
+| Notifiche in chat del rilascio | una per il rilascio | una per deploy di tenant, con il tenant nel messaggio. |
+| `manent tenants run status|cancel` | comandi dedicati | `manent status|cancel|approve <id del rilascio>`: lo stato è quello del rilascio, con il dettaglio per tenant. |
+| `admin tenants adopt` | sottocomando | `manent-server admin tenants-adopt`. |
+| Etichetta `tenant` sulle metriche | con `observability.tenant_labels` | non implementata (cardinalità). |
+| Riconciliazione sui target condivisi | con i parametri del tenant | sì: il resolver usa il tenant del deploy in esercizio; i record sono salvati con la chiave `scope|tenant`, senza migrazione. |
+| Rollback di un rilascio | in ordine inverso | sì, come rilascio `<run>.rollback` con `onFailure: continue`; i tenant senza release precedente sono saltati. |
+| Release composte con `tenants` | escluse nella prima versione | escluse (`tenant` singolo per deploy ammesso). |
+
+Codice:
+
+- `internal/tenant`: modello, selezione, cache;
+- `internal/envconfig/tenant.go`: registro, fusione;
+- `internal/engine/tenants.go` e `tenantrun.go`: deploy, rilascio multi-tenant, adozione;
+- `internal/authz/tenants.go`;
+- `internal/api/tenants.go`;
+- CLI `manent tenants`, `--tenant`/`--tenants`;
+- web UI: inventario e dettaglio;
+- provider Terraform: `tenant`, `manent_tenants`;
+- caso d'uso UC24;
+- documentazione `guida/tenant`.
+

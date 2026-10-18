@@ -111,7 +111,8 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 			firstSuccess[s.Application+"\x00"+s.Artifact+"\x00"+s.Version] = s.UpdatedAt
 		}
 		if s.UpdatedAt.Before(f.Since) || (f.Application != "" && s.Application != f.Application) ||
-			(f.Environment != "" && s.Environment != f.Environment) || (f.Match != nil && !f.Match(s)) {
+			(f.Environment != "" && s.Environment != f.Environment) || (f.Tenant != "" && s.Tenant != f.Tenant) ||
+			(f.Match != nil && !f.Match(s)) {
 			return true
 		}
 		switch s.State {
@@ -120,9 +121,14 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 			return true
 		}
 		k := s.Application + "/" + s.Environment
+		m := DORAMetrics{Application: s.Application, Environment: s.Environment}
+		if f.ByTenant || f.Tenant != "" {
+			k += "/" + s.Tenant
+			m.Tenant = s.Tenant
+		}
 		a := byEnv[k]
 		if a == nil {
-			a = &doraAcc{m: DORAMetrics{Application: s.Application, Environment: s.Environment}}
+			a = &doraAcc{m: m}
 			byEnv[k] = a
 		}
 		a.events = append(a.events, s)

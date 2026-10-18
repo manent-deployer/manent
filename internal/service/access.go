@@ -30,4 +30,6 @@ type Grant struct {
 	Actions      []string `json:"actions"`
 	Applications []string `json:"applications"`
 	Environments []string `json:"environments"`
+	// Tenants is the selector of the tenants the grant is limited to ("" for all).
+	Tenants string `json:"tenants,omitempty"`
 }

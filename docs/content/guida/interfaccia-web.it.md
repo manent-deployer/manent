@@ -13,14 +13,14 @@ Mostra solo ciò che l'utente può vedere e offre solo le azioni che può esegui
 | **Attività** | Cosa sta succedendo ora: deploy in esecuzione con worker, ultimo step e avanzamento delle ondate; deploy in attesa di approvazione, in attesa delle dipendenze, in coda e pianificati. Con `platform.read`, i worker con stato, region, heartbeat e workflow in esecuzione. Aggiornata ogni 5 secondi. | Aprire un deploy. |
 | **Approvazioni** | I deploy in attesa di una decisione che puoi prendere, prima dell'avvio o tra due ondate. | Approvare con un commento, respingere (commento obbligatorio). |
 | **Release** | [Release composte](catene.md#release-composte) con l'avanzamento di ogni deploy, le dipendenze e i rollback di `onFailure: rollback`. | Aprire una release o un deploy, annullare una release. |
-| **Inventario** | Release in esercizio per applicazione e ambiente, ultimo fallimento e drift. | Promuovere in un altro ambiente, fare rollback, sempre dopo un dry-run. |
+| **Inventario** | Release in esercizio per applicazione e ambiente (una riga per [tenant](tenant.md): la matrice tenant × ambiente), ultimo fallimento e drift. | Promuovere in un altro ambiente, fare rollback, sempre dopo un dry-run. |
 | **Calendario** | Finestre di freeze attive e future (anche per region, hard, create a runtime con il loro autore), schedule ricorrenti. | Con `freeze.write`, creare un freeze d'emergenza e chiudere quelli creati a runtime. Sospendere, riprendere ed eliminare le schedule. |
 | **Metriche** | Metriche DORA su 7, 30 o 90 giorni, per applicazione e ambiente, con i dati anche in tabella. | |
 | **Policy** | Con `policy.read`: motore, sorgente e revisione della [policy di governance](policy.md) in vigore, le revisioni con stato, autore, approvatore e test, i file di ogni revisione. | Con `policy.write` calcolare l'impatto sugli ultimi 7 giorni; con `policy.approve` approvare una bozza o tornare a una revisione precedente. |
 
 Ogni vista ha un URL proprio con i filtri nella query string, così un link incollato in chat apre esattamente la stessa pagina.
 
-**Promozioni e rollback** passano sempre da un [dry-run](dry-run.md): il dialogo lo esegue su un worker e abilita la conferma solo se riesce. Il motivo di una deroga al freeze è proposto solo a chi ha `deployment.freeze-override`. Le **approvazioni** seguono le regole della [governance](governance.md#approvazioni): chi ha richiesto un deploy non può approvarlo, e il pulsante spiega perché. Il dettaglio di un deploy mostra la revisione della policy di governance che lo ha deciso e, se la policy li limita, gli approvatori ammessi.
+**Promozioni e rollback** passano sempre da un [dry-run](dry-run.md): il dialogo lo esegue su un worker e abilita la conferma solo se riesce. Il motivo di una deroga al freeze è proposto solo a chi ha `deployment.freeze-override`. Le **approvazioni** seguono le regole della [governance](governance.md#approvazioni): chi ha richiesto un deploy non può approvarlo, e il pulsante spiega perché. Il dettaglio di un deploy mostra la revisione della policy di governance che lo ha deciso e, se la policy li limita, gli approvatori ammessi. Il dettaglio di un rilascio multi-tenant mostra lo stato di ogni tenant, il suo gruppo e il motivo per cui un tenant è stato saltato o negato.
 
 ## Accesso
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/glob"
@@ -49,7 +50,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 	}
 	patterns := make([]string, len(p.SecretRefs))
 	for i, s := range p.SecretRefs {
-		patterns[i] = expandKey(s, d.Application, d.Environment)
+		patterns[i] = strings.ReplaceAll(expandKey(s, d.Application, d.Environment), tenantPlaceholder, d.Tenant)
 	}
 	for _, s := range d.Secrets {
 		if slices.ContainsFunc(c.Secrets, func(e descriptor.SecretRef) bool { return e.Name == s.Name }) {

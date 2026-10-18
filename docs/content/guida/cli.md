@@ -123,6 +123,20 @@ manent whoami                   # your identity on the server and your roles
 
 `promote` and `rollback` also accept `--id`, `--dry-run`, `--freeze-override <reason>`, `--no-wait` and `--timeout`, with the same meaning as for `deploy`.
 
+### Tenants
+
+See [Tenants](tenant.md).
+
+```sh
+manent tenants list [-a <application>] [-e <environment>] [--selector <selector>]
+manent tenants show <tenant>
+manent deploy -f <yaml> --tenant <tenant> | --tenants <selector> [--max-parallel <n>]
+manent promote -a <application> --from <env> --to <env> --tenant <tenant> | --tenants <selector>
+manent rollback -a <application> -e <env> --tenant <tenant> | --run <multi-tenant release>
+manent list|inventory|activity|dora -t <tenant>          # dora --by-tenant: metrics per tenant
+manent status <multi-tenant release> | cancel <multi-tenant release> | approve <multi-tenant release>
+```
+
 ### Freezes and policies
 
 See [Policies in Rego](policy.md).

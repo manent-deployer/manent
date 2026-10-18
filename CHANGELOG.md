@@ -14,6 +14,22 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Tenant: terza dimensione facoltativa accanto ad applicazione e ambiente. Registro dei tenant
+  nel provider della configurazione di ambiente (`envconfig/tenants/<tenant>.yml` o
+  `manent/tenants/<tenant>` su Consul) con tag, ambienti collegati, parametri e segreti;
+  `tenancy` e `tenant_params` nella configurazione di ambiente, target dedicati e condivisi
+  con l'etichetta `tenant`, segnaposto `{tenant}`, fusione a tre strati. Deploy per tenant
+  (`tenant`, `--tenant`) con partizione `<app>/<env>/<tenant>`, inventario, DORA, callback e
+  chat per tenant, `requires`, promozione e rollback per tenant. Rilascio multi-tenant
+  (`tenants`: nomi o selettore, gruppi con bake e approvazioni tra gruppi, `maxParallel`,
+  `onFailure`, `onDenied`) con il workflow `manent.tenants`, anche dalle schedule ricorrenti,
+  promozione di gruppo e rollback di un rilascio. Tenant nelle policy Rego (input schema 2,
+  `lib.tenant_matches`), `tenants` nelle regole, nei freeze e nei binding RBAC. API
+  `/api/v1/tenants`, `manent tenants list|show`, matrice tenant × ambiente e stato del
+  rilascio nell'interfaccia web, attributo `tenant` e data source `manent_tenants` nel
+  provider Terraform, `manent-server admin tenants-adopt` per adottare un ambiente per
+  cliente. Caso d'uso UC24.
+
 - Governance in Rego: con `governance.engine: opa` le regole sono policy Rego valutate da OPA
   incorporato (built-in non deterministici esclusi, Rego v1 strict, timeout per valutazione,
   libreria `manent.lib` e `manent.lib.rules` con la semantica delle regole YAML, usata dalla

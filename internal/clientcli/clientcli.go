@@ -88,6 +88,13 @@ func Run(args []string) error {
 		"Gestisce le revisioni della policy di governance valutata da OPA: caricamento in bozza, test, impatto, approvazione e ritorno", policyCommands(g)); err != nil {
 		return err
 	}
+	if err := cliutil.AddGroup(p, "tenants", "Elenca i tenant del registro",
+		"Elenca i tenant (clienti o istanze) del registro, con tag e ambienti collegati", []cliutil.Command{
+			{Name: "list", Short: "Elenca i tenant, filtrati per applicazione, ambiente e selettore", Cmd: &TenantsListCmd{global: g}},
+			{Name: "show", Short: "Mostra un tenant (parametri e nomi dei segreti)", Cmd: &TenantShowCmd{global: g}},
+		}); err != nil {
+		return err
+	}
 	if err := cliutil.AddGroup(p, "freeze", "Crea ed elimina finestre di freeze a runtime",
 		"Crea ed elimina finestre di freeze senza modificare manent.yml né riavviare (es. un freeze d'emergenza)", freezeCommands(g)); err != nil {
 		return err
@@ -215,7 +222,16 @@ func follow(ctx context.Context, svc service.Service, sub *service.Submission, n
 	if sub.DryRun {
 		kind = "dry-run"
 	}
-	fmt.Fprintln(os.Stderr, kind, "accodato:", sub.ID, "(manent logs -f", sub.ID+" per seguirlo)")
+	if len(sub.Tenants) > 0 {
+		kind = "rilascio multi-tenant"
+		fmt.Fprintf(os.Stderr, "rilascio multi-tenant accodato: %s, %d tenant", sub.ID, len(sub.Tenants))
+		for _, s := range sub.Skipped {
+			fmt.Fprintf(os.Stderr, "\n  escluso %s: %s", s.Tenant, s.Reason)
+		}
+		fmt.Fprintln(os.Stderr, "\n  (manent status", sub.ID+" per lo stato di ogni tenant)")
+	} else {
+		fmt.Fprintln(os.Stderr, kind, "accodato:", sub.ID, "(manent logs -f", sub.ID+" per seguirlo)")
+	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)

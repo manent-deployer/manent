@@ -97,6 +97,14 @@ func policyInput(phase string, req Request, eff *descriptor.Descriptor, now time
 		RequestedBy: governance.InputIdentity{ID: req.RequestedBy, Method: method, Name: name, Groups: req.RequestedGroups},
 		Plugin:      src.Deploy.Plugin,
 	}
+	if req.Tenant != nil {
+		in.Tenant = &governance.InputTenant{Name: req.Tenant.Name, Tags: req.Tenant.Tags}
+	} else if d.Tenant != "" {
+		in.Tenant = &governance.InputTenant{Name: d.Tenant}
+	}
+	if req.Run != "" {
+		in.TenantsRun = &governance.InputTenantsRun{ID: req.Run}
+	}
 	if s := d.Schedule; s != nil {
 		in.Deployment.Schedule = governance.InputSchedule{At: s.At, Cron: s.Cron}
 	}
@@ -143,15 +151,19 @@ type inventoryReader interface {
 }
 
 // currentRelease returns the release in service in the environment, nil if none or unreadable.
-func currentRelease(ctx context.Context, r inventoryReader, application, environment string) *governance.InputRelease {
+func currentRelease(ctx context.Context, r inventoryReader, application, environment, tenantName string) *governance.InputRelease {
 	if r == nil {
 		return nil
 	}
-	inv, err := r.Inventory(ctx, InventoryFilter{Application: application, Environment: environment})
-	if err != nil || len(inv) == 0 || inv[0].Current == nil {
+	inv, err := r.Inventory(ctx, InventoryFilter{Application: application, Environment: environment, Tenant: tenantName})
+	if err != nil {
 		return nil
 	}
-	c := inv[0].Current
+	i := slices.IndexFunc(inv, func(e InventoryEntry) bool { return e.Tenant == tenantName && e.Current != nil })
+	if i < 0 {
+		return nil
+	}
+	c := inv[i].Current
 	return &governance.InputRelease{ID: c.ID, Version: c.Version, SHA256: c.SHA256, DeployedAt: c.UpdatedAt}
 }
 
@@ -168,7 +180,7 @@ func (e *Engine) govern(ctx context.Context, req *Request, eff *descriptor.Descr
 		at = *d.Schedule.At
 	}
 	in := policyInput(governance.PhaseSubmit, *req, eff, at)
-	in.Current = currentRelease(ctx, e, d.Application, d.Environment)
+	in.Current = currentRelease(ctx, e, d.Application, d.Environment, d.Tenant)
 	dec, err := e.governance.Evaluate(ctx, in)
 	if err != nil {
 		return policyError(err)
@@ -181,12 +193,12 @@ func (e *Engine) govern(ctx context.Context, req *Request, eff *descriptor.Descr
 		return fmt.Errorf("%w: %s", ErrInvalidRequest, freezeMessage(dec.Freeze))
 	}
 	for _, env := range dec.Requires {
-		rel, err := e.findRelease(ctx, d.Application, env, func(s Status) bool { return sameArtifact(s, d) })
+		rel, err := e.findRelease(ctx, d.Application, env, func(s Status) bool { return sameArtifact(s, d) && s.Tenant == d.Tenant })
 		if err != nil {
 			return err
 		}
 		if rel == nil {
-			return fmt.Errorf("%w: %s %s was not released successfully in %s: it must be promoted from there (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env)
+			return fmt.Errorf("%w: %s %s was not released successfully in %s%s: it must be promoted from there (governance)", ErrInvalidRequest, d.Artifact.Name, d.Artifact.Version, env, tenantSuffix(d.Tenant))
 		}
 	}
 	req.Approval, req.Change, req.Policy = dec.Approvals, dec.Change, dec.Snapshot()
@@ -211,7 +223,7 @@ func (e *Engine) describeGovernance(ctx context.Context, v *Validation, d *descr
 		at = *d.Schedule.At
 	}
 	in := policyInput(governance.PhaseValidate, req, eff, at)
-	in.Current = currentRelease(ctx, e, d.Application, d.Environment)
+	in.Current = currentRelease(ctx, e, d.Application, d.Environment, d.Tenant)
 	v.Governance = &GovernanceValidation{}
 	dec, err := e.governance.Evaluate(ctx, in)
 	if err != nil {
@@ -253,7 +265,7 @@ func (w *Worker) startPolicy(ctx context.Context, req Request, eff *descriptor.D
 		meta["freeze_override"] = d.FreezeOverride
 	}
 	in := policyInput(governance.PhaseStart, req, eff, time.Now())
-	in.Current = currentRelease(ctx, w.service, d.Application, d.Environment)
+	in.Current = currentRelease(ctx, w.service, d.Application, d.Environment, d.Tenant)
 	dec, err := w.governance.Evaluate(ctx, in)
 	if err != nil {
 		return err
@@ -431,7 +443,7 @@ type tickPolicy struct {
 // are those of the run, not of the schedule's creation. Freezes apply at the deploy start.
 func (w *Worker) evaluateTick(ctx context.Context, req Request, at time.Time) (tickPolicy, error) {
 	in := policyInput(governance.PhaseTick, req, nil, at)
-	in.Current = currentRelease(ctx, w.service, req.Descriptor.Application, req.Descriptor.Environment)
+	in.Current = currentRelease(ctx, w.service, req.Descriptor.Application, req.Descriptor.Environment, req.Descriptor.Tenant)
 	dec, err := w.governance.Evaluate(ctx, in)
 	if err != nil {
 		return tickPolicy{}, err
@@ -467,7 +479,7 @@ func (e *Engine) CreateFreeze(ctx context.Context, r FreezeRequest) (*governance
 	}
 	w := governance.Window{
 		Name: r.Name, Reason: r.Reason, Applications: r.Applications, Environments: r.Environments, Regions: r.Regions,
-		From: r.From, To: r.To, Hard: r.Hard, CreatedBy: auth.FromContext(ctx).String(), CreatedAt: e.now().UTC(),
+		Tenants: r.Tenants, From: r.From, To: r.To, Hard: r.Hard, CreatedBy: auth.FromContext(ctx).String(), CreatedAt: e.now().UTC(),
 	}
 	if w.CreatedBy == "" {
 		w.CreatedBy = "unknown"
@@ -582,7 +594,7 @@ func (e *Engine) EvaluatePolicy(ctx context.Context, revision int64, r PolicyEva
 		req.RequestedGroups = p.Groups
 	}
 	in := policyInput(phase, req, eff, e.now())
-	in.Current = currentRelease(ctx, e, d.Application, d.Environment)
+	in.Current = currentRelease(ctx, e, d.Application, d.Environment, d.Tenant)
 	dec, err := pa.EvaluateRevision(ctx, revision, in)
 	if err != nil {
 		return nil, policyError(err)

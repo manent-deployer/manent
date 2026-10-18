@@ -1,0 +1,13 @@
+# UC24: an environment per customer, before tenants (adopted into prod/umbrella).
+plugin: remote-copy
+targets:
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc24-shop-umbrella
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

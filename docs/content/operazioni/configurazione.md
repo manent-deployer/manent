@@ -62,6 +62,9 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | `consul.key` | `manent/{application}/{environment}` | KV key template. |
 | `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{environment}.yml` | Path template for the `file` provider. |
+| `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Path template of the [tenant](../guida/tenant.md) documents. |
+| `consul.tenants_key` | `manent/tenants/{tenant}` | KV key template of the tenant documents. |
+| `tenants_cache` | `30s` | How long the tenant listing is kept (selectors, permissions). |
 
 See [Environment configuration](../guida/configurazione-ambiente.md).
 
@@ -97,7 +100,7 @@ See [Rollback](../guida/rollback.md).
 | `auth.tokens` | `[]` | Static tokens: `name`, `sha256` (never the token), `groups`, `expires_at`. |
 | `auth.tokens_file` | | YAML file with more tokens (same format, `tokens` key), reloaded when it changes: revocation without restart. |
 | `rbac.roles` | `{}` | Additional roles: name → list of actions. |
-| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`). |
+| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`), `tenants` (selector: the binding applies only to the deploys of those [tenants](../guida/tenant.md#permessi)). |
 | `audit.file` | | JSON Lines file of audit entries, with a hash chain, in addition to the log and the SIEM. |
 | `audit.max_size_mb` | `0` | Size beyond which the file is rotated (`0` = no rotation). |
 | `audit.hmac_key_ref` | | Reference to the key (at least 16 bytes) that turns the chain into an HMAC. |

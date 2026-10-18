@@ -29,6 +29,7 @@ type inventoryModel struct {
 type inventoryEntry struct {
 	Application  types.String `tfsdk:"application"`
 	Environment  types.String `tfsdk:"environment"`
+	Tenant       types.String `tfsdk:"tenant"`
 	Version      types.String `tfsdk:"version"`
 	DeploymentID types.String `tfsdk:"deployment_id"`
 	SHA256       types.String `tfsdk:"sha256"`
@@ -52,6 +53,7 @@ func (d *inventoryDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"application":   schema.StringAttribute{Computed: true},
 					"environment":   schema.StringAttribute{Computed: true},
+					"tenant":        schema.StringAttribute{Computed: true},
 					"version":       schema.StringAttribute{Computed: true},
 					"deployment_id": schema.StringAttribute{Computed: true},
 					"sha256":        schema.StringAttribute{Computed: true},
@@ -90,7 +92,7 @@ func (d *inventoryDataSource) Read(ctx context.Context, req datasource.ReadReque
 			continue
 		}
 		m.Entries = append(m.Entries, inventoryEntry{
-			Application: types.StringValue(e.Application), Environment: types.StringValue(e.Environment),
+			Application: types.StringValue(e.Application), Environment: types.StringValue(e.Environment), Tenant: types.StringValue(e.Tenant),
 			Version: types.StringValue(e.Current.Version), DeploymentID: types.StringValue(e.Current.ID),
 			SHA256: types.StringValue(e.Current.SHA256), OutOfSync: types.BoolValue(e.OutOfSync),
 		})

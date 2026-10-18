@@ -29,7 +29,7 @@ The policy receives an **input** describing the deploy and returns a **decision*
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "phase": "submit",
   "now": "2026-10-18T09:30:00Z",
   "application": "shop",
@@ -55,6 +55,7 @@ The policy receives an **input** describing the deploy and returns a **decision*
 | `targets`, `plugin`, `rollout` | From the effective deploy (environment configuration merged), when it is known. |
 | `current` | Release in service in the environment; absent on the first release. |
 | `freezes.active` | Windows active at `now`, computed by manent. |
+| `tenant`, `tenants_run` | The [tenant](tenant.md) of the deploy (`name`, `tags`) and the multi-tenant release it belongs to (`id`); absent without tenant. Added in schema 2. |
 
 The input contains no secrets and no plugin parameters. The schema is versioned (`schema`): fields are only added.
 
@@ -137,6 +138,7 @@ decision := {
 | `semver_less(a, b)` | Versions compared by number; `v` prefix allowed, a pre-release precedes its release. |
 | `local_time(t, tz)` | `year`, `month`, `day`, `weekday` (0 = Sunday), `hour`, `minute` of an instant in a time zone. |
 | `business_hours(t, tz)` | 9:00–18:00, Monday to Friday. |
+| `tenant_matches(selector, tenant)` | A tenant selector on `input.tenant` (`{}` without tenant: never). |
 | `duration_ns(d)` | A duration (`"72h"`) in nanoseconds. |
 
 `data.manent.lib.rules` implements the semantics of the YAML rules on `data.manent.rules`: a policy can delegate to it the cases it does not handle (`decision := rules.decision if not mine`).

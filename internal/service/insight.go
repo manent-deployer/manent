@@ -41,6 +41,9 @@ type LogPage struct {
 type DORAFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
+	Tenant      string `json:"tenant,omitempty"`
+	// ByTenant computes the metrics per tenant too.
+	ByTenant bool `json:"by_tenant,omitempty"`
 	// Since is the start of the period (default 30 days ago).
 	Since time.Time `json:"since,omitzero"`
 	// Match, if set, is an extra filter (e.g. permissions).
@@ -51,6 +54,7 @@ type DORAFilter struct {
 type DORAMetrics struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
+	Tenant      string `json:"tenant,omitempty"`
 	// Deployments are the real deploys ended in the period (successful or failed; cancelled excluded).
 	Deployments int `json:"deployments"`
 	Failures    int `json:"failures"`

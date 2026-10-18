@@ -10,6 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/joeg-ita/manent/internal/labels"
 )
 
 // DefaultApprovalTimeout is the default duration of an approval request.
@@ -82,6 +83,9 @@ type Rule struct {
 	Approvals Approvals
 	// Change, if set, opens a change management ticket for every deploy.
 	Change *Change
+	// Tenants, if set, is a selector on the tenant (tags and "name"): the rule applies only to
+	// the deploys of the matching tenants.
+	Tenants string
 }
 
 // Change is the change management rule of a deploy, fixed at submission.
@@ -100,7 +104,9 @@ type Window struct {
 	Environments []string
 	// Regions, if set, limits the window to some regions: it applies to the rollout passes on
 	// those regions, not to the deploy submission.
-	Regions  []string
+	Regions []string
+	// Tenants, if set, is a selector limiting the window to the deploys of matching tenants.
+	Tenants  string
 	From, To time.Time
 	// Cron is the start of every occurrence (5 fields), interpreted in Timezone.
 	Cron     string
@@ -122,6 +128,7 @@ type WindowStatus struct {
 	Applications []string  `json:"applications"`
 	Environments []string  `json:"environments"`
 	Regions      []string  `json:"regions,omitempty"`
+	Tenants      string    `json:"tenants,omitempty"`
 	Active       bool      `json:"active"`
 	Start        time.Time `json:"start,omitzero"`
 	End          time.Time `json:"end,omitzero"`
@@ -161,6 +168,11 @@ func checkRules(rules []Rule) []error {
 		if w := r.Approvals.When; w != "" && w != ApprovalsBefore && w != ApprovalsRollout {
 			errs = append(errs, fmt.Errorf("invalid governance.rules[%d].approvals.when %q (before or rollout)", i, w))
 		}
+		if r.Tenants != "" {
+			if _, err := labels.Parse(r.Tenants); err != nil {
+				errs = append(errs, fmt.Errorf("governance.rules[%d].tenants: %w", i, err))
+			}
+		}
 		if r.Approvals.Required > 0 && r.Approvals.Timeout <= 0 {
 			rules[i].Approvals.Timeout = DefaultApprovalTimeout
 		}
@@ -176,6 +188,11 @@ func PrepareWindows(windows []Window, field string) []error {
 		w := &windows[i]
 		if w.Name == "" || len(w.Applications) == 0 || len(w.Environments) == 0 {
 			errs = append(errs, fmt.Errorf("%s[%d]: name, applications and environments are required", field, i))
+		}
+		if w.Tenants != "" {
+			if _, err := labels.Parse(w.Tenants); err != nil {
+				errs = append(errs, fmt.Errorf("%s[%d].tenants: %w", field, i, err))
+			}
 		}
 		switch {
 		case w.Cron != "" && (!w.From.IsZero() || !w.To.IsZero()):
@@ -203,15 +220,34 @@ func PrepareWindows(windows []Window, field string) []error {
 // Rule returns the first rule matching the application and environment, or an empty rule
 // (no constraint).
 func (p *Policy) Rule(application, environment string) Rule {
+	return p.RuleFor(application, environment, nil)
+}
+
+// RuleFor is Rule for a deploy of a tenant (labels: tags plus name; nil without tenant): a rule
+// with tenants applies only to the matching tenants.
+func (p *Policy) RuleFor(application, environment string, tenant map[string]string) Rule {
 	if p == nil {
 		return Rule{}
 	}
 	for _, r := range p.Rules {
-		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) {
+		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) && matchesTenant(r.Tenants, tenant) {
 			return r
 		}
 	}
 	return Rule{}
+}
+
+// matchesTenant reports whether a tenant selector applies: an empty one to every deploy, a
+// non-empty one only to the matching tenants.
+func matchesTenant(selector string, tenant map[string]string) bool {
+	if selector == "" {
+		return true
+	}
+	if tenant == nil {
+		return false
+	}
+	s, err := labels.Parse(selector)
+	return err == nil && s.Matches(tenant)
 }
 
 // Frozen returns the first freeze window active at instant t, or nil.
@@ -244,9 +280,15 @@ func (p *Policy) Windows(application, environment string, t time.Time) []WindowS
 // ActiveWindows returns the windows of ws active at t for the application and environment in
 // a region, in order (see FrozenIn for the region semantics).
 func ActiveWindows(ws []Window, application, environment, region string, t time.Time) []WindowStatus {
+	return ActiveWindowsFor(ws, application, environment, region, nil, t)
+}
+
+// ActiveWindowsFor is ActiveWindows for a deploy of a tenant (labels: tags plus name; nil
+// without tenant): a window with tenants applies only to the matching tenants.
+func ActiveWindowsFor(ws []Window, application, environment, region string, tenant map[string]string, t time.Time) []WindowStatus {
 	var out []WindowStatus
 	for _, w := range ws {
-		if !w.applies(application, environment) {
+		if !w.applies(application, environment) || !matchesTenant(w.Tenants, tenant) {
 			continue
 		}
 		if len(w.Regions) > 0 && (region == "" || !glob.Any(w.Regions, region)) {
@@ -284,7 +326,7 @@ func (w Window) applies(application, environment string) bool {
 
 // status computes the occurrence active at instant t or, if none, the next one.
 func (w Window) status(t time.Time) WindowStatus {
-	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions,
+	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions, Tenants: w.Tenants,
 		Hard: w.Hard, Dynamic: w.CreatedBy != "", CreatedBy: w.CreatedBy}
 	if w.schedule == nil {
 		st.Start, st.End = w.From, w.To

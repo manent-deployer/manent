@@ -138,6 +138,9 @@ func (r *Release) Validate() error {
 		if d.Schedule != nil || d.DryRun {
 			errs = append(errs, fmt.Errorf("deploys[%d] (%s): schedule and dryRun not allowed in a release", i, rd.Name))
 		}
+		if d.Tenants != nil {
+			errs = append(errs, fmt.Errorf("deploys[%d] (%s): tenants not allowed in a release: give one tenant per deploy", i, rd.Name))
+		}
 		id := r.DeploymentID(rd)
 		if !validName(id) || ids[id] {
 			errs = append(errs, fmt.Errorf("deploys[%d]: invalid or duplicate deploy id %q", i, id))

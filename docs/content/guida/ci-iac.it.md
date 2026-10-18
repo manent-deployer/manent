@@ -8,7 +8,7 @@ manent si usa da una pipeline senza scrivere chiamate all'API: il client ha le o
 | `manent env validate` | client | Verifica una configurazione di ambiente candidata prima di applicarla. |
 | GitHub Action | `integrations/github` | Installa il client e rilascia, valida un descrittore o una configurazione. |
 | Template GitLab | `integrations/gitlab/manent.yml` | Job di deploy con report dotenv. |
-| Provider Terraform | `integrations/terraform` | `manent_deployment`, `manent_inventory`, `manent_environment_check`. |
+| Provider Terraform | `integrations/terraform` | `manent_deployment`, `manent_inventory`, `manent_environment_check`, `manent_tenants`. |
 
 ## Il client nella CI
 
@@ -151,8 +151,12 @@ Attributi calcolati: `valid`, `plugin`, `targets` (host del deploy effettivo), `
 
 ```hcl
 data "manent_inventory" "prod" { environment = "prod" }
-# data.manent_inventory.prod.entries[*]: application, environment, version, deployment_id, sha256, out_of_sync
+# data.manent_inventory.prod.entries[*]: application, environment, tenant, version, deployment_id, sha256, out_of_sync
 ```
 
+### `manent_tenants` e i tenant
+
+`manent_deployment` accetta `tenant`. `manent_tenants` (`application`, `environment`, `selector`) restituisce `names` e `tenants` (nome, tag) per un `for_each` con una risorsa per tenant: vedi [Tenant](tenant.md#terraform). L'import usa `<applicazione>/<ambiente>/<tenant>`.
+
 !!! note "Cosa resta fuori"
-    Le regole di [governance](governance.md) (approvazioni, freeze, prerequisiti) e i permessi sono nella configurazione di manent (`manent.yml`), letta all'avvio: si gestiscono con lo strumento che installa manent (Helm, Ansible), non con il provider. La configurazione di ambiente resta nel suo sistema (Consul, file nel repository): il provider la verifica, la scrivono `consul_keys` o il repository.
+    I permessi sono nella configurazione di manent (`manent.yml`), letta all'avvio, come le regole YAML di [governance](governance.md). Le policy Rego e i freeze a runtime invece si gestiscono con `manent policy` e `manent freeze`, oppure arrivano da un bundle o da una directory versionati altrove ([Policy in Rego](policy.md)). La configurazione di ambiente resta nel suo sistema (Consul, file nel repository): il provider la verifica, la scrivono `consul_keys` o il repository.

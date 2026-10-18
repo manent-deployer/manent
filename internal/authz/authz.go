@@ -9,6 +9,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // Action is an operation subject to a permission.
@@ -75,6 +76,9 @@ type Binding struct {
 	Role         string   `yaml:"role"`
 	Applications []string `yaml:"applications"`
 	Environments []string `yaml:"environments"`
+	// Tenants, if set, is a selector on the tenant (tags and "name"): the binding applies only
+	// to the deploys of the matching tenants. Without it, to every deploy.
+	Tenants string `yaml:"tenants"`
 }
 
 // Policy decides whether an identity can perform an action on an application/environment.
@@ -109,6 +113,9 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 		if len(b.Applications) == 0 || len(b.Environments) == 0 {
 			return p, fmt.Errorf("rbac.bindings[%d]: applications and environments are required (\"*\" for all)", i)
 		}
+		if err := tenant.CheckSelector(b.Tenants); err != nil {
+			return p, fmt.Errorf("rbac.bindings[%d].tenants: %w", i, err)
+		}
 	}
 	return p, nil
 }
@@ -116,6 +123,12 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 // Allowed reports whether p can perform a on the given application and environment.
 // Without an identity the answer is always no, unless the policy is disabled.
 func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment string) bool {
+	return pol.AllowedFor(p, a, application, environment, nil)
+}
+
+// AllowedFor is Allowed for a deploy of a tenant (nil: untenanted deploy). A binding with
+// tenants applies only to the matching tenants.
+func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, environment string, t *tenant.Ref) bool {
 	if pol.Disabled {
 		return true
 	}
@@ -126,7 +139,7 @@ func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment 
 		if !pol.grants(b.Role, a) || !b.matches(p) {
 			continue
 		}
-		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) {
+		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) {
 			return true
 		}
 	}

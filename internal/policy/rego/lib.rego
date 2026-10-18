@@ -25,5 +25,9 @@ business_hours(t, tz) if {
 	local.hour < 18
 }
 
+# tenant_matches reports whether a tenant selector ("tier=gold, name in (acme, globex)")
+# matches the tenant of the input ({} without tenant: never).
+tenant_matches(selector, tenant) := manent.tenant_matches(selector, tenant)
+
 # duration_ns converts a duration ("72h", "90m") to nanoseconds.
 duration_ns(d) := manent.duration_ns(d)

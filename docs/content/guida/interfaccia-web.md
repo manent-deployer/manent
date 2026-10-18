@@ -13,14 +13,14 @@ It shows only what the user is allowed to see and offers only the actions they a
 | **Activity** | What is happening now: running deploys with worker, last step and wave progress; deploys awaiting approval, waiting for dependencies, queued and scheduled. With `platform.read`, the workers with state, region, heartbeat and running workflows. Refreshed every 5 seconds. | Open a deploy. |
 | **Approvals** | Deploys waiting for a decision that you can take, before the start or between two waves. | Approve with a comment, reject (comment required). |
 | **Releases** | [Composite releases](catene.md#release-composte) with the progress of each deploy, its dependencies and the rollbacks of `onFailure: rollback`. | Open a release or a deploy, cancel a release. |
-| **Inventory** | Live release per application and environment, last failure and drift. | Promote to another environment, roll back, always after a dry-run. |
+| **Inventory** | Live release per application and environment (a row per [tenant](tenant.md): the matrix tenant × environment), last failure and drift. | Promote to another environment, roll back, always after a dry-run. |
 | **Calendar** | Active and upcoming freeze windows (also per region, hard, created at runtime with their author), recurring schedules. | With `freeze.write`, create an emergency freeze and close those created at runtime. Pause, resume and delete schedules. |
 | **Metrics** | DORA metrics over 7, 30 or 90 days, per application and environment, with the data also as a table. | |
 | **Policy** | With `policy.read`: engine, source and revision of the [governance policy](policy.md) in force, the revisions with state, author, approver and tests, the files of each revision. | With `policy.write` compute the impact on the last 7 days; with `policy.approve` approve a draft or go back to a previous revision. |
 
 Every view has its own URL with filters in the query string, so a link pasted in a chat opens exactly the same page.
 
-**Promotions and rollbacks** always go through a [dry-run](dry-run.md): the dialog runs it on a worker and enables confirmation only if it succeeds. A freeze override reason is offered only to those with `deployment.freeze-override`. **Approvals** follow the rules of [governance](governance.md#approvazioni): whoever requested a deploy cannot approve it, and the button explains why. The detail of a deploy shows the revision of the governance policy that decided it and, if the policy limits them, the allowed approvers.
+**Promotions and rollbacks** always go through a [dry-run](dry-run.md): the dialog runs it on a worker and enables confirmation only if it succeeds. A freeze override reason is offered only to those with `deployment.freeze-override`. **Approvals** follow the rules of [governance](governance.md#approvazioni): whoever requested a deploy cannot approve it, and the button explains why. The detail of a deploy shows the revision of the governance policy that decided it and, if the policy limits them, the allowed approvers. The detail of a multi-tenant release shows the state of every tenant, its group and the reason a tenant was skipped or denied.
 
 ## Sign-in
 

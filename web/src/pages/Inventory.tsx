@@ -11,7 +11,7 @@ import { useI18n } from "@/i18n/i18n";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { can, canInApp } from "@/lib/permissions";
 
-type Open = { kind: "promote" | "rollback"; application: string; environment: string } | null;
+type Open = { kind: "promote" | "rollback"; application: string; environment: string; tenant?: string } | null;
 
 // Targets is the state read from the targets by the reconciliation: the hosts changed outside
 // manent are listed, the others only counted.
@@ -101,7 +101,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canPromote && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "promote", application: e.application, environment: e.environment })}
+              onClick={() => onAction({ kind: "promote", application: e.application, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-accent hover:text-accent"
             >
               <Rocket className="h-3.5 w-3.5" aria-hidden />
@@ -111,7 +111,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canRollback && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "rollback", application: e.application, environment: e.environment })}
+              onClick={() => onAction({ kind: "rollback", application: e.application, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-warn hover:text-warn"
             >
               <Undo2 className="h-3.5 w-3.5" aria-hidden />
@@ -134,14 +134,20 @@ export function InventoryPage() {
     queryFn: async () => unwrap(await api.GET("/api/v1/inventory")).inventory,
     refetchInterval: 30_000,
   });
-  const { apps, envs, byKey } = useMemo(() => {
+  // One row per application and tenant: the matrix tenant × environment of every application.
+  const { rows, envs, byKey, tenanted } = useMemo(() => {
     const entries = q.data ?? [];
     const envs = [...new Set(entries.map((e) => e.environment))].sort(envOrder);
-    const apps = [...new Set(entries.map((e) => e.application))].sort();
-    const byKey = new Map(entries.map((e) => [`${e.application}/${e.environment}`, e]));
-    return { apps, envs, byKey };
+    const keys = [...new Set(entries.map((e) => `${e.application}\u0000${e.tenant ?? ""}`))].sort();
+    const rows = keys.map((k) => {
+      const [application = "", tenant = ""] = k.split("\u0000");
+      return { application, tenant };
+    });
+    const byKey = new Map(entries.map((e) => [`${e.application}/${e.environment}/${e.tenant ?? ""}`, e]));
+    return { rows, envs, byKey, tenanted: entries.some((e) => e.tenant) };
   }, [q.data]);
-  const shown = apps.filter((a) => a.toLowerCase().includes(filter.trim().toLowerCase()));
+  const needle = filter.trim().toLowerCase();
+  const shown = rows.filter((r) => r.application.toLowerCase().includes(needle) || r.tenant.toLowerCase().includes(needle));
 
   return (
     <>
@@ -166,6 +172,11 @@ export function InventoryPage() {
                 <th scope="col" className="px-4 py-3 font-medium">
                   {t("inventory.application")}
                 </th>
+                {tenanted && (
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    {t("inventory.tenant")}
+                  </th>
+                )}
                 {envs.map((env) => (
                   <th key={env} scope="col" className="px-4 py-3 font-mono font-medium normal-case">
                     {env}
@@ -174,14 +185,15 @@ export function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {shown.map((app) => (
-                <tr key={app} className="border-b border-border/40 align-top last:border-0">
+              {shown.map(({ application: app, tenant }) => (
+                <tr key={`${app}/${tenant}`} className="border-b border-border/40 align-top last:border-0">
                   <th scope="row" className="px-4 py-3 font-medium">
                     {app}
                   </th>
+                  {tenanted && <td className="px-4 py-3 font-mono text-xs">{tenant || "—"}</td>}
                   {envs.map((env) => (
                     <td key={env} className="px-4 py-3">
-                      <Cell e={byKey.get(`${app}/${env}`)} onAction={setOpen} />
+                      <Cell e={byKey.get(`${app}/${env}/${tenant}`)} onAction={setOpen} />
                     </td>
                   ))}
                 </tr>
@@ -191,9 +203,11 @@ export function InventoryPage() {
         </div>
       )}
       {open?.kind === "promote" && (
-        <PromoteDialog application={open.application} from={open.environment} environments={envs} onClose={() => setOpen(null)} />
+        <PromoteDialog application={open.application} from={open.environment} tenant={open.tenant} environments={envs} onClose={() => setOpen(null)} />
       )}
-      {open?.kind === "rollback" && <RollbackDialog application={open.application} environment={open.environment} onClose={() => setOpen(null)} />}
+      {open?.kind === "rollback" && (
+        <RollbackDialog application={open.application} environment={open.environment} tenant={open.tenant} onClose={() => setOpen(null)} />
+      )}
     </>
   );
 }

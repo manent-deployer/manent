@@ -139,6 +139,8 @@ func TestPolicyPredefinitaUgualeAlleRegoleYAML(t *testing.T) {
 			Approvals: governance.Approvals{Required: 1, When: governance.ApprovalsRollout}, Change: &governance.Change{Approval: true, Timeout: 48 * time.Hour}},
 		{Name: "staging", Applications: []string{"*"}, Environments: []string{"staging"}, Change: &governance.Change{Timeout: 72 * time.Hour}},
 	}
+	rules = append([]governance.Rule{{Name: "gold", Applications: []string{"*"}, Environments: []string{"prod", "staging"}, Tenants: "tier=gold",
+		Approvals: governance.Approvals{Required: 3, Timeout: time.Hour}}}, rules...)
 	builtin, err := governance.New(rules, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -147,17 +149,20 @@ func TestPolicyPredefinitaUgualeAlleRegoleYAML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tenants := []*governance.InputTenant{nil, {Name: "acme", Tags: map[string]string{"tier": "gold"}}, {Name: "globex", Tags: map[string]string{"tier": "silver"}}}
 	for _, app := range []string{"pay-api", "shop", "x"} {
 		for _, env := range []string{"prod", "prod-eu", "staging", "test"} {
-			in := input(env, "deploy", "1.0.0")
-			in.Application = app
-			want, err := builtin.Evaluate(context.Background(), in)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got := decide(t, c, in)
-			if summary(got) != summary(want) {
-				t.Errorf("%s/%s: opa %s, builtin %s", app, env, summary(got), summary(want))
+			for _, tn := range tenants {
+				in := input(env, "deploy", "1.0.0")
+				in.Application, in.Tenant = app, tn
+				want, err := builtin.Evaluate(context.Background(), in)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := decide(t, c, in)
+				if summary(got) != summary(want) {
+					t.Errorf("%s/%s/%v: opa %s, builtin %s", app, env, tn, summary(got), summary(want))
+				}
 			}
 		}
 	}

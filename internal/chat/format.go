@@ -13,6 +13,7 @@ type text struct {
 	approvalRequested, approvalApproved                        string
 	approvalRejected, approvalExpired                          string
 	application, environment, version, requestedBy, deployment string
+	tenant                                                     string
 	kind, kinds                                                map[string]string
 	errorLabel, rollback, approvals, change, changeApproval    string
 	expires, open, approve, reject, approveIn                  string
@@ -24,7 +25,7 @@ var languages = map[string]text{
 		lang:    "en",
 		started: "Deploy started", succeeded: "Deploy succeeded", failed: "Deploy failed", dryRun: "dry-run",
 		approvalRequested: "Approval requested", approvalApproved: "Approved", approvalRejected: "Rejected", approvalExpired: "Approval expired",
-		application: "Application", environment: "Environment", version: "Version", requestedBy: "Requested by", deployment: "Deployment",
+		application: "Application", environment: "Environment", version: "Version", requestedBy: "Requested by", deployment: "Deployment", tenant: "Tenant",
 		kinds:      map[string]string{"promotion": "promotion", "rollback": "rollback"},
 		errorLabel: "Error", rollback: "Automatic rollback", approvals: "Approvals", change: "Change", changeApproval: "change approval in ITSM",
 		expires: "Expires", open: "Open in manent", approve: "Approve", reject: "Reject", approveIn: "Review in manent",
@@ -34,7 +35,7 @@ var languages = map[string]text{
 		lang:    "it",
 		started: "Deploy avviato", succeeded: "Deploy riuscito", failed: "Deploy fallito", dryRun: "dry-run",
 		approvalRequested: "Approvazione richiesta", approvalApproved: "Approvato", approvalRejected: "Respinto", approvalExpired: "Approvazione scaduta",
-		application: "Applicazione", environment: "Ambiente", version: "Versione", requestedBy: "Richiesto da", deployment: "Deploy",
+		application: "Applicazione", environment: "Ambiente", version: "Versione", requestedBy: "Richiesto da", deployment: "Deploy", tenant: "Tenant",
 		kinds:      map[string]string{"promotion": "promozione", "rollback": "rollback"},
 		errorLabel: "Errore", rollback: "Rollback automatico", approvals: "Approvazioni", change: "Change", changeApproval: "approvazione del change nell'ITSM",
 		expires: "Scade", open: "Apri in manent", approve: "Approva", reject: "Respingi", approveIn: "Valuta in manent",
@@ -88,6 +89,9 @@ func emoji(event string) string {
 // headline is the summary line, used as notification text.
 func headline(t text, m Message) string {
 	s := fmt.Sprintf("%s: %s %s → %s", t.title(m.Event), m.Application, m.Version, m.Environment)
+	if m.Tenant != "" {
+		s += " / " + m.Tenant
+	}
 	if k := t.kinds[m.Kind]; k != "" {
 		s += " (" + k + ")"
 	}
@@ -102,6 +106,9 @@ func facts(t text, m Message) [][2]string {
 	f := [][2]string{
 		{t.application, m.Application}, {t.environment, m.Environment},
 		{t.version, strings.TrimSpace(m.Artifact + " " + m.Version)},
+	}
+	if m.Tenant != "" {
+		f = append(f[:2], append([][2]string{{t.tenant, m.Tenant}}, f[2:]...)...)
 	}
 	if m.RequestedBy != "" {
 		f = append(f, [2]string{t.requestedBy, m.RequestedBy})

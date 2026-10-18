@@ -305,6 +305,9 @@ func RulesData(rules []governance.Rule) []any {
 	out := make([]any, 0, len(rules))
 	for _, r := range rules {
 		m := map[string]any{"name": r.Name, "applications": anySlice(r.Applications), "environments": anySlice(r.Environments)}
+		if r.Tenants != "" {
+			m["tenants"] = r.Tenants
+		}
 		if len(r.Requires) > 0 {
 			m["requires"] = anySlice(r.Requires)
 		}
@@ -383,6 +386,7 @@ type rawWindow struct {
 	Duration     string    `json:"duration"`
 	Timezone     string    `json:"timezone"`
 	Hard         bool      `json:"hard"`
+	Tenants      string    `json:"tenants"`
 }
 
 // revisionWindows reads the freeze windows of the revision (data.manent.freezes).
@@ -408,7 +412,7 @@ func revisionWindows(data map[string]any) ([]governance.Window, error) {
 			return nil, fmt.Errorf("data.manent.freezes[%d].duration: %w", i, err)
 		}
 		ws[i] = governance.Window{Name: r.Name, Reason: r.Reason, Applications: r.Applications, Environments: r.Environments,
-			Regions: r.Regions, From: r.From, To: r.To, Cron: r.Cron, Duration: d, Timezone: r.Timezone, Hard: r.Hard}
+			Regions: r.Regions, From: r.From, To: r.To, Cron: r.Cron, Duration: d, Timezone: r.Timezone, Hard: r.Hard, Tenants: r.Tenants}
 	}
 	if err := errors.Join(governance.PrepareWindows(ws, "data.manent.freezes")...); err != nil {
 		return nil, err

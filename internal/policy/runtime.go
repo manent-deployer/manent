@@ -262,7 +262,7 @@ func (r *Runtime) decide(ctx context.Context, c *Compiled, st *state, in governa
 	windows := r.windows(st)
 	if c == nil {
 		return governance.Decide(ctx, in, windows, func(_ context.Context, in governance.Input) (governance.Decision, error) {
-			return r.o.Static.RuleDecision(in.Application, in.Environment), nil
+			return r.o.Static.RuleDecisionFor(in), nil
 		})
 	}
 	if c != st.compiled {
@@ -407,6 +407,7 @@ type storedWindow struct {
 	Applications []string  `json:"applications"`
 	Environments []string  `json:"environments"`
 	Regions      []string  `json:"regions,omitempty"`
+	Tenants      string    `json:"tenants,omitempty"`
 	From         time.Time `json:"from"`
 	To           time.Time `json:"to"`
 	Hard         bool      `json:"hard,omitempty"`
@@ -426,7 +427,7 @@ func (r *Runtime) readFreezes(ctx context.Context) ([]governance.Window, error) 
 			continue
 		}
 		w := governance.Window{Name: rec.Name, Reason: sw.Reason, Applications: sw.Applications, Environments: sw.Environments,
-			Regions: sw.Regions, From: sw.From, To: sw.To, Hard: sw.Hard, CreatedBy: rec.CreatedBy, CreatedAt: rec.CreatedAt}
+			Regions: sw.Regions, Tenants: sw.Tenants, From: sw.From, To: sw.To, Hard: sw.Hard, CreatedBy: rec.CreatedBy, CreatedAt: rec.CreatedAt}
 		ws = append(ws, w)
 	}
 	if errs := governance.PrepareWindows(ws, "freeze"); len(errs) > 0 {
@@ -455,7 +456,7 @@ func (r *Runtime) CreateFreeze(ctx context.Context, w governance.Window) error {
 		}
 	}
 	data, err := json.Marshal(storedWindow{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments,
-		Regions: w.Regions, From: w.From, To: w.To, Hard: w.Hard})
+		Regions: w.Regions, Tenants: w.Tenants, From: w.From, To: w.To, Hard: w.Hard})
 	if err != nil {
 		return err
 	}

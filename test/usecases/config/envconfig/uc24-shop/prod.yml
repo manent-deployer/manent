@@ -1,0 +1,19 @@
+# UC24: production with tenants. eu1-a is shared (one installation per tenant), eu1-b is
+# dedicated to acme. Every tenant gives its banner.
+plugin: remote-copy
+tenancy: tenanted
+tenant_params:
+  banner: {pattern: '[A-Za-z0-9 -]{1,40}', required: true}
+  replicas: {pattern: '[1-9]', default: "1"}
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a, tenant: "*"}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b, tenant: acme}}
+params:
+  dest_dir: /home/deploy/apps/uc24-shop-{tenant}
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

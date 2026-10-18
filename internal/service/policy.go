@@ -34,13 +34,15 @@ type PolicyService interface {
 
 // FreezeRequest asks to create a freeze window at runtime: absolute (from-to).
 type FreezeRequest struct {
-	Name         string    `json:"name"`
-	Reason       string    `json:"reason,omitempty"`
-	Applications []string  `json:"applications"`
-	Environments []string  `json:"environments"`
-	Regions      []string  `json:"regions,omitempty"`
-	From         time.Time `json:"from,omitzero"`
-	To           time.Time `json:"to"`
+	Name         string   `json:"name"`
+	Reason       string   `json:"reason,omitempty"`
+	Applications []string `json:"applications"`
+	Environments []string `json:"environments"`
+	Regions      []string `json:"regions,omitempty"`
+	// Tenants limits the window to the deploys of the matching tenants (selector).
+	Tenants string    `json:"tenants,omitempty"`
+	From    time.Time `json:"from,omitzero"`
+	To      time.Time `json:"to"`
 	// Hard windows cannot be exempted by the policy nor overridden with freezeOverride.
 	Hard bool `json:"hard,omitempty"`
 }

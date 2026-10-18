@@ -96,7 +96,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		}
 		descs[i] = d
 		rs.Deploys = append(rs.Deploys, ReleaseDeployState{
-			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Environment: d.Environment,
+			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Environment: d.Environment, Tenant: d.Tenant,
 			Version: d.Artifact.Version, After: rd.After, State: StateEnqueued,
 		})
 		waitsFor = append(waitsFor, d.ID)

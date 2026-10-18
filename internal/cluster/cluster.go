@@ -83,8 +83,10 @@ type Registry interface {
 type TargetsRecord struct {
 	Application string
 	Environment string
-	Scope       string
-	CheckedAt   time.Time
+	// Tenant is the tenant of the deploy read ("" for untenanted deploys).
+	Tenant    string
+	Scope     string
+	CheckedAt time.Time
 	// Data is the state, in JSON (service.TargetsState).
 	Data string
 }
@@ -418,8 +420,19 @@ func (r *SQL) Lease(ctx context.Context, name, holder string, ttl time.Duration)
 func (r *SQL) SaveTargets(ctx context.Context, t TargetsRecord) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO `+r.targets+` (application, environment, scope, checked_at, data) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (application, environment, scope) DO UPDATE SET checked_at = excluded.checked_at, data = excluded.data`,
-		t.Application, t.Environment, t.Scope, ms(t.CheckedAt), t.Data)
+		t.Application, t.Environment, storedScope(t.Scope, t.Tenant), ms(t.CheckedAt), t.Data)
 	return err
+}
+
+// tenantSep separates scope and tenant in the stored scope: the key of the table stays
+// (application, environment, scope) and the records written before tenants stay valid.
+const tenantSep = "|"
+
+func storedScope(scope, tenant string) string {
+	if tenant == "" {
+		return scope
+	}
+	return scope + tenantSep + tenant
 }
 
 // ListTargets implements TargetStore.
@@ -436,6 +449,7 @@ func (r *SQL) ListTargets(ctx context.Context) ([]TargetsRecord, error) {
 		if err := rows.Scan(&t.Application, &t.Environment, &t.Scope, &at, &t.Data); err != nil {
 			return nil, err
 		}
+		t.Scope, t.Tenant, _ = strings.Cut(t.Scope, tenantSep)
 		t.CheckedAt = time.UnixMilli(at).UTC()
 		out = append(out, t)
 	}

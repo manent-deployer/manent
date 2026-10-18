@@ -22,12 +22,15 @@ import (
 // DeployCmd enqueues a deploy and, by default, waits for it to end.
 // Scheduled deploys (schedule in the descriptor) are not waited for.
 type DeployCmd struct {
-	global  *GlobalOptions
-	File    string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
-	NoWait  bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
-	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
-	DryRun  bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
-	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
+	global      *GlobalOptions
+	File        string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	NoWait      bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
+	Timeout     time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
+	DryRun      bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
+	After       []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
+	Tenant      string        `long:"tenant" description:"tenant del deploy, al posto di quello del descrittore"`
+	Tenants     string        `long:"tenants" description:"rilascio a più tenant scelti con un selettore sui tag (es. tier=gold) o sul nome (name in (acme, globex))"`
+	MaxParallel int           `long:"max-parallel" description:"deploy di tenant contemporanei in un rilascio multi-tenant (default 5)"`
 	ArtifactOverrides
 	Outputs string `long:"outputs" description:"file a cui aggiungere gli esiti come righe chiave=valore (deployment_id, state, ...): $GITHUB_OUTPUT o un report dotenv di GitLab"`
 	Summary string `long:"summary" description:"file a cui aggiungere il riepilogo del deploy in Markdown ($GITHUB_STEP_SUMMARY)"`
@@ -69,7 +72,20 @@ func (c *DeployCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	if c.ArtifactOverrides.apply(d) || c.DryRun || len(c.After) > 0 {
+	tenants := c.Tenant != "" || c.Tenants != "" || c.MaxParallel > 0
+	if c.Tenant != "" {
+		d.Tenant, d.Tenants = c.Tenant, nil
+	}
+	if c.Tenants != "" {
+		d.Tenant, d.Tenants = "", &descriptor.Tenants{Selector: c.Tenants}
+	}
+	if c.MaxParallel > 0 {
+		if d.Tenants == nil {
+			return errors.New("--max-parallel needs a multi-tenant release (--tenants or tenants in the descriptor)")
+		}
+		d.Tenants.MaxParallel = c.MaxParallel
+	}
+	if c.ArtifactOverrides.apply(d) || c.DryRun || len(c.After) > 0 || tenants {
 		d.DryRun = d.DryRun || c.DryRun
 		d.After = append(d.After, c.After...)
 		if err := d.Validate(); err != nil {
@@ -145,6 +161,7 @@ type ListCmd struct {
 	Schedule    string `short:"s" long:"schedule" description:"solo i deploy generati da questa schedule"`
 	Application string `short:"a" long:"application" description:"solo i deploy di questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo i deploy in questo ambiente"`
+	Tenant      string `short:"t" long:"tenant" description:"solo i deploy di questo tenant"`
 	State       string `long:"state" description:"solo i deploy in questo stato (es. SUCCESS, ERROR, AWAITING_APPROVAL)"`
 	Limit       int    `short:"n" long:"limit" default:"20" description:"numero massimo di deploy"`
 }
@@ -152,7 +169,7 @@ type ListCmd struct {
 // Execute implements flags.Commander.
 func (c *ListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, State: c.State, Limit: c.Limit})
+		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, State: c.State, Limit: c.Limit})
 		if err != nil {
 			return err
 		}
@@ -279,12 +296,14 @@ type PromoteCmd struct {
 	To          string `long:"to" required:"true" description:"ambiente di destinazione"`
 	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
 	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
+	Tenant      string `long:"tenant" description:"promuove la release di questo tenant"`
+	Tenants     string `long:"tenants" description:"promuove i tenant scelti dal selettore, ognuno dalla propria release nell'ambiente di origine"`
 	redeployOptions
 }
 
 // Execute implements flags.Commander.
 func (c *PromoteCmd) Execute([]string) error {
-	r := service.PromoteRequest{Application: c.Application, From: c.From, To: c.To, Version: c.Version, Redeploy: c.redeploy()}
+	r := service.PromoteRequest{Application: c.Application, From: c.From, To: c.To, Version: c.Version, Tenant: c.Tenant, Tenants: c.Tenants, Redeploy: c.redeploy()}
 	if c.DeployFile != "" {
 		data, err := os.ReadFile(c.DeployFile)
 		if err != nil {
@@ -313,13 +332,16 @@ type RollbackCmd struct {
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
 	Version     string `long:"to" description:"versione a cui tornare (default: la precedente a quella in esercizio)"`
+	Tenant      string `long:"tenant" description:"torna indietro sulla release di questo tenant"`
+	Run         string `long:"run" description:"riporta indietro i tenant riusciti di questo rilascio multi-tenant, in ordine inverso"`
 	redeployOptions
 }
 
 // Execute implements flags.Commander.
 func (c *RollbackCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Environment: c.Environment, Version: c.Version, Redeploy: c.redeploy()})
+		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Environment: c.Environment, Version: c.Version,
+			Tenant: c.Tenant, Run: c.Run, Redeploy: c.redeploy()})
 		if err != nil {
 			return err
 		}
@@ -332,13 +354,14 @@ type InventoryCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
+	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
 	OutOfSync   bool   `long:"out-of-sync" description:"solo gli ambienti con target cambiati fuori da manent (riconciliazione)"`
 }
 
 // Execute implements flags.Commander.
 func (c *InventoryCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment})
+		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant})
 		if err != nil {
 			return err
 		}
@@ -476,6 +499,8 @@ type DORACmd struct {
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
 	Since       string `long:"since" default:"30d" description:"inizio del periodo: giorni (30d), durata (720h) o data RFC 3339"`
+	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
+	ByTenant    bool   `long:"by-tenant" description:"metriche anche per tenant"`
 }
 
 // Execute implements flags.Commander.
@@ -485,7 +510,7 @@ func (c *DORACmd) Execute([]string) error {
 		return err
 	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		rep, err := svc.DORA(ctx, service.DORAFilter{Application: c.Application, Environment: c.Environment, Since: since})
+		rep, err := svc.DORA(ctx, service.DORAFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, ByTenant: c.ByTenant, Since: since})
 		if err != nil {
 			return err
 		}

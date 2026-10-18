@@ -19,6 +19,7 @@ const (
 	KindDeploy    = service.KindDeploy
 	KindPromotion = service.KindPromotion
 	KindRollback  = service.KindRollback
+	KindAdoption  = service.KindAdoption
 
 	ApprovalPending  = service.ApprovalPending
 	ApprovalApproved = service.ApprovalApproved

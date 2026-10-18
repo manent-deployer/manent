@@ -148,6 +148,8 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 
 `deployer` and `operator` cannot approve: whoever releases must not be able to approve themselves through a second role. Approvals are assigned to a dedicated group (e.g. the change advisory board) with the `approver` role.
 
+A binding with `tenants` (a selector on the tags and on `name`) applies only to the deploys of the matching [tenants](../guida/tenant.md#permessi); without it, to every deploy.
+
 Further roles are defined in `rbac.roles`:
 
 ```yaml

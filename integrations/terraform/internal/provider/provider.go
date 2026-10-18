@@ -103,7 +103,7 @@ func (p *manentProvider) Resources(context.Context) []func() resource.Resource {
 
 // DataSources implements provider.Provider.
 func (p *manentProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewInventoryDataSource, NewEnvironmentCheckDataSource}
+	return []func() datasource.DataSource{NewInventoryDataSource, NewEnvironmentCheckDataSource, NewTenantsDataSource}
 }
 
 // serviceFrom returns the client set by Configure (nil before the provider is configured).

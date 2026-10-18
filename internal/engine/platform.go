@@ -142,7 +142,7 @@ func (e *Engine) Activity(ctx context.Context, f ActivityFilter) (*Activity, err
 		return nil, err
 	}
 	a := &Activity{Running: []Status{}, AwaitingApproval: []Status{}, WaitingDependency: []Status{}, Queued: []Status{}, Delayed: []Status{}, Truncated: len(wfs) == maxActive}
-	match := ListFilter{Application: f.Application, Environment: f.Environment, Match: f.Match}
+	match := ListFilter{Application: f.Application, Environment: f.Environment, Tenant: f.Tenant, Match: f.Match}
 	detailed := 0
 	for _, w := range wfs {
 		s := toStatus(w)

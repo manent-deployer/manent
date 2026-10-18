@@ -57,12 +57,16 @@ type ChangeTicket struct {
 type InventoryFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
+	// Tenant filters by tenant; without it the inventory has an entry per tenant.
+	Tenant string `json:"tenant,omitempty"`
 }
 
 // InventoryEntry is the state of an application in an environment.
 type InventoryEntry struct {
 	Application string `json:"application"`
 	Environment string `json:"environment"`
+	// Tenant is the tenant of the entry ("" for the untenanted deploys).
+	Tenant string `json:"tenant,omitempty"`
 	// Current is the last successfully ended deploy.
 	Current *Status `json:"current,omitempty"`
 	// LastFailure is the last failed or cancelled deploy, if after Current: without a completed
@@ -136,6 +140,10 @@ type PromoteRequest struct {
 	To          string `json:"to"`
 	// Version, if given, chooses the version to promote; default the one in service in From.
 	Version string `json:"version,omitempty"`
+	// Tenant promotes the release of one tenant; Tenants (a selector) promotes several, each
+	// from its own release in From.
+	Tenant  string `json:"tenant,omitempty"`
+	Tenants string `json:"tenants,omitempty"`
 	// Deploy replaces the deploy section of the source descriptor; without it, the source
 	// targets are not copied and come from To's environment configuration.
 	Deploy *descriptor.Deploy `json:"deploy,omitempty"`
@@ -148,5 +156,10 @@ type RollbackRequest struct {
 	Environment string `json:"environment"`
 	// Version, if given, is the version to go back to; default the one before the version in service.
 	Version string `json:"version,omitempty"`
+	// Tenant goes back on the release of one tenant.
+	Tenant string `json:"tenant,omitempty"`
+	// Run, if set, rolls back the tenants that succeeded in that multi-tenant release, in
+	// reverse order, each to the release before it.
+	Run string `json:"run,omitempty"`
 	Redeploy
 }

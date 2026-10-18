@@ -16,6 +16,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/types"
 
 	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/joeg-ita/manent/internal/labels"
 )
 
 // libFS holds the Rego library of manent (packages manent.lib, manent.lib.rules) and the
@@ -86,6 +87,29 @@ var builtins = []builtin{
 				ast.Item(ast.StringTerm("hour"), ast.IntNumberTerm(lt.Hour())),
 				ast.Item(ast.StringTerm("minute"), ast.IntNumberTerm(lt.Minute())),
 			), nil
+		}),
+	newBuiltin2("manent.tenant_matches", types.Args(types.S, types.A), types.B,
+		func(selector, t *ast.Term) (*ast.Term, error) {
+			s, ok := selector.Value.(ast.String)
+			if !ok {
+				return nil, errors.New("manent.tenant_matches: the selector must be a string")
+			}
+			var tn struct {
+				Name string            `json:"name"`
+				Tags map[string]string `json:"tags"`
+			}
+			if err := ast.As(t.Value, &tn); err != nil || tn.Name == "" {
+				return ast.BooleanTerm(false), nil
+			}
+			sel, err := labels.Parse(string(s))
+			if err != nil {
+				return nil, fmt.Errorf("manent.tenant_matches: %w", err)
+			}
+			l := map[string]string{"name": tn.Name}
+			for k, v := range tn.Tags {
+				l[k] = v
+			}
+			return ast.BooleanTerm(sel.Matches(l)), nil
 		}),
 	newBuiltin1("manent.duration_ns", types.Args(types.S), types.N,
 		func(d *ast.Term) (*ast.Term, error) {

@@ -72,6 +72,18 @@ function Facts({ d }: { d: Status }) {
           )}
         </Fact>
       )}
+      {d.tenant && (
+        <Fact label={t("detail.tenant")}>
+          <span className="font-mono text-sm">{d.tenant}</span>
+        </Fact>
+      )}
+      {d.run && (
+        <Fact label={t("detail.run")}>
+          <Link className="font-mono text-sm text-accent hover:underline" to={`/deployments/${encodeURIComponent(d.run)}`}>
+            {d.run}
+          </Link>
+        </Fact>
+      )}
       {d.policy && (
         <Fact label={t("detail.policy")}>
           <span className="font-mono text-sm">
@@ -126,6 +138,52 @@ function DependenciesPanel({ d }: { d: Status }) {
         ))}
       </ul>
       {a.reason && <p className="mt-3 text-sm text-bad">{a.reason}</p>}
+    </Section>
+  );
+}
+
+function TenantsRunPanel({ run }: { run: NonNullable<Status["tenants_run"]> }) {
+  const { t } = useI18n();
+  return (
+    <Section title={t("detail.tenantsRun")}>
+      <p className="mb-3 text-sm">
+        {t(`detail.tenantsRun.status.${run.status}` as MessageKey)}
+        {run.group && <span className="text-muted"> · {t("detail.tenantsRun.group", { group: run.group })}</span>}
+        {run.paused && <span className="text-muted"> · {run.paused}</span>}
+        <span className="text-muted"> · {t("detail.tenantsRun.parallel", { n: run.max_parallel })}</span>
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] text-left text-sm">
+          <caption className="sr-only">{t("detail.tenantsRun.caption")}</caption>
+          <thead className="border-b border-border/70 text-xs uppercase tracking-wider text-muted">
+            <tr>
+              <th scope="col" className="py-2 pr-4 font-medium">{t("detail.tenantsRun.tenant")}</th>
+              <th scope="col" className="py-2 pr-4 font-medium">{t("detail.tenantsRun.groupCol")}</th>
+              <th scope="col" className="py-2 font-medium">{t("detail.tenantsRun.state")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {run.tenants.map((tr) => (
+              <tr key={tr.tenant} className="border-b border-border/40 align-top last:border-0">
+                <th scope="row" className="py-2 pr-4 font-normal">
+                  {tr.deployment_id ? (
+                    <Link className="font-mono text-accent hover:underline" to={`/deployments/${encodeURIComponent(tr.deployment_id)}`}>
+                      {tr.tenant}
+                    </Link>
+                  ) : (
+                    <span className="font-mono">{tr.tenant}</span>
+                  )}
+                </th>
+                <td className="py-2 pr-4 text-muted">{tr.group}</td>
+                <td className="py-2">
+                  <StatusBadge state={tr.state} />
+                  {(tr.reason || tr.error) && <p className="mt-1 text-xs text-muted">{tr.reason || tr.error}</p>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Section>
   );
 }
@@ -277,6 +335,7 @@ export function DeploymentDetailPage() {
         </Section>
         <DependenciesPanel d={d} />
         <ApprovalPanel d={d} />
+        {d.tenants_run && <TenantsRunPanel run={d.tenants_run} />}
         {d.rollout && (
           <Section title={t("detail.rollout")}>
             <RolloutView rollout={d.rollout} />
