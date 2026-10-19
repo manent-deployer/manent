@@ -41,6 +41,19 @@ func Label(deploymentID string) string {
 	return "manent-" + labelRe.ReplaceAllString(deploymentID, "-")
 }
 
+// issueLabels returns the labels of a new issue: manent's and the configured ones, without duplicates.
+func issueLabels(configured any, deploymentID string) []string {
+	labels := []string{"manent", Label(deploymentID)}
+	if list, ok := configured.([]any); ok {
+		for _, l := range list {
+			if s, ok := l.(string); ok && s != "" && !slices.Contains(labels, s) {
+				labels = append(labels, s)
+			}
+		}
+	}
+	return labels
+}
+
 func (j *Jira) api(path string) string { return strings.TrimRight(j.URL, "/") + "/rest/api/2" + path }
 
 func (j *Jira) auth(ctx context.Context) (func(*http.Request), error) {
@@ -126,6 +139,9 @@ func (j *Jira) Open(ctx context.Context, r Request) (Ticket, error) {
 	for _, k := range slices.Sorted(maps.Keys(j.Fields)) {
 		fields[k] = expandAny(j.Fields[k], r)
 	}
+	// Configured labels are added to manent's: the manent-<id> label is how search finds the
+	// issue again, so it must never be replaced.
+	fields["labels"] = issueLabels(fields["labels"], r.DeploymentID)
 	var created jiraIssue
 	if _, err := doJSON(ctx, j.Client, http.MethodPost, j.api("/issue"), auth, map[string]any{"fields": fields}, &created); err != nil {
 		return Ticket{}, fmt.Errorf("creating the issue: %w", err)

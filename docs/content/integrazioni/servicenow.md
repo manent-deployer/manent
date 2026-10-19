@@ -49,7 +49,7 @@ integrations:
       # close_codes: {success: successful, failure: unsuccessful}
 ```
 
-Field values accept `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}` and `{requested_by}`. manent already fills `short_description`, `description`, `correlation_id` and `correlation_display`; never override `correlation_id`, which is how manent finds the change again.
+Field values accept `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}` and `{requested_by}`. manent already fills `short_description`, `description`, `correlation_id` and `correlation_display`; the last two are refused in `fields` at startup, because `correlation_id` is how manent finds the change again.
 
 ## 3. Turn it on per environment
 

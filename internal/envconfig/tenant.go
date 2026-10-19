@@ -229,9 +229,12 @@ func (p *FileProvider) Tenants(ctx context.Context) ([]tenant.Tenant, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Glob returns cleaned paths ("./tenants/a.yml" becomes "tenants/a.yml"): the prefix is
+	// cleaned the same way before cutting the name out of a match.
+	cleanPrefix := strings.TrimSuffix(filepath.Clean(prefix+"x"), "x")
 	var out []tenant.Tenant
 	for _, m := range slices.Sorted(slices.Values(matches)) {
-		name := strings.TrimSuffix(strings.TrimPrefix(m, prefix), suffix)
+		name := strings.TrimSuffix(strings.TrimPrefix(m, cleanPrefix), suffix)
 		if tenant.ValidName(name) != nil {
 			continue
 		}

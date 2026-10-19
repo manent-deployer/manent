@@ -49,7 +49,7 @@ integrations:
       # close_codes: {success: successful, failure: unsuccessful}
 ```
 
-I valori dei campi accettano `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}` e `{requested_by}`. manent compila già `short_description`, `description`, `correlation_id` e `correlation_display`; non sovrascrivere mai `correlation_id`, che è il modo in cui manent ritrova il change.
+I valori dei campi accettano `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}` e `{requested_by}`. manent compila già `short_description`, `description`, `correlation_id` e `correlation_display`; gli ultimi due vengono rifiutati in `fields` all'avvio, perché `correlation_id` è il modo in cui manent ritrova il change.
 
 ## 3. Attivalo per ambiente
 

@@ -119,7 +119,7 @@ The Table API on `change_request`, with basic authentication (`username`, `passw
 |---|---|---|
 | `url` | | Instance address. |
 | `table` | `change_request` | Table of the changes. |
-| `fields` | | Extra fields of the ticket (`type`, `assignment_group`, `cmdb_ci`, `category`…). Values accept `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}`, `{requested_by}`. |
+| `fields` | | Extra fields of the ticket (`type`, `assignment_group`, `cmdb_ci`, `category`…). Values accept `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}`, `{requested_by}`. `correlation_id` and `correlation_display` are set by manent and refused here. |
 | `start_state` | `-1` (Implement) | State set when the deploy starts; `""` to leave it unchanged. |
 | `close_states` | `["0", "3"]` (Review, Closed) | States set in order at the end. |
 | `close_codes` | `success: successful`, `failure: unsuccessful` | `close_code` for each outcome; `close_notes` describes it. |
@@ -135,7 +135,7 @@ The REST API v2, on Jira Cloud (`username` with the email and an API token in `t
 | `integrations.change.jira` | Description |
 |---|---|
 | `url`, `project`, `issue_type` | Where to create the issue (for example project `CHG`, type `Change`). |
-| `fields` | Extra fields, with JSON values and the same placeholders as ServiceNow (for example `components: [{name: "{application}"}]`). |
+| `fields` | Extra fields, with JSON values and the same placeholders as ServiceNow (for example `components: [{name: "{application}"}]`). `labels` (a list of strings) are added to manent's `manent` and `manent-<id>`; `project` and `issuetype` are refused: use `project` and `issue_type`. |
 | `approved_statuses`, `rejected_statuses` | Statuses that approve or reject the change. Required with `approval: true`. |
 | `transitions` | Transition names: `start` (deploy started), `success` and `failure` (end). Missing transitions are skipped. |
 

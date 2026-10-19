@@ -151,7 +151,10 @@ governance:
 		"integrations: {slack: {bot_token_ref: x, identities: {U1: {subject: alice}}}}\n":                                                                                                                                       "U1",
 		"governance: {rules: [{applications: ['*'], environments: [prod], change: {}}]}\n":                                                                                                                                      "integrations.change.provider",
 		"integrations: {change: {provider: jira, jira: {url: 'https://jira', token_ref: x, project: CHG, issue_type: Change}}}\ngovernance: {rules: [{applications: ['*'], environments: [prod], change: {approval: true}}]}\n": "approved_statuses",
-		"integrations: {change: {provider: remedy}}\n":                                                                                                                                                                          "remedy",
+		"integrations: {change: {provider: jira, jira: {url: 'https://jira', token_ref: x, project: CHG, issue_type: Change, fields: {project: {key: X}}}}}\n":                                                                  "use integrations.change.jira.project",
+		"integrations: {change: {provider: jira, jira: {url: 'https://jira', token_ref: x, project: CHG, issue_type: Change, fields: {labels: release}}}}\n":                                                                    "list of strings",
+		"integrations: {change: {provider: servicenow, servicenow: {url: 'https://sn', token_ref: x, fields: {correlation_id: x}}}}\n":                                                                                          "correlation_id is set by manent",
+		"integrations: {change: {provider: remedy}}\n": "remedy",
 	} {
 		if _, err := load(t, in); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: errore %v, atteso %q", in, err, want)

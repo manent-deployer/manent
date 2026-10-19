@@ -320,6 +320,22 @@ func TestRollbackManuale(t *testing.T) {
 	}
 }
 
+func TestMessaggiSenzaReleaseDaUsare(t *testing.T) {
+	e := govEngine(t, nil, nil)
+	deploy(t, e, alice, appDescriptor("prod", "1.0.0"))
+
+	// First release: there is no previous version to go back to.
+	_, err := e.Rollback(alice, RollbackRequest{Application: "app", Environment: "prod"})
+	if !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "no version before 1.0.0 was released successfully in prod") {
+		t.Errorf("errore del rollback senza versione precedente inatteso: %v", err)
+	}
+	// Nothing was ever released in the source environment.
+	_, err = e.Promote(alice, PromoteRequest{Application: "app", From: "staging", To: "prod"})
+	if !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "app: no version was released successfully in staging") {
+		t.Errorf("errore della promozione senza release di origine inatteso: %v", err)
+	}
+}
+
 // waitState waits until the deploy reaches the given state (and condition, if any).
 func waitState(t *testing.T, e *Engine, id, state string, cond func(*Status) bool) *Status {
 	t.Helper()

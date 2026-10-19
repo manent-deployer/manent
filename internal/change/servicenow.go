@@ -120,6 +120,9 @@ func (s *ServiceNow) Open(ctx context.Context, r Request) (Ticket, error) {
 	for _, k := range slices.Sorted(maps.Keys(s.Fields)) {
 		body[k] = expand(s.Fields[k], r)
 	}
+	// correlation_id is how Open finds the change again: configured fields never replace it.
+	body["correlation_id"] = r.DeploymentID
+	body["correlation_display"] = "manent"
 	var created struct {
 		Result snRecord `json:"result"`
 	}

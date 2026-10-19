@@ -147,6 +147,24 @@ func TestRegistroDeiTenantSuFile(t *testing.T) {
 	}
 }
 
+// A relative template starting with "./", as the default one, finds the tenants: the paths
+// returned by Glob are cleaned.
+func TestRegistroDeiTenantConPercorsoRelativo(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "envconfig", "tenants"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "envconfig", "tenants", "acme.yml"), []byte("applications: {myapp: [prod]}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	p := &FileProvider{TenantTemplate: "./envconfig/tenants/{tenant}.yml"}
+	all, err := p.Tenants(context.Background())
+	if err != nil || len(all) != 1 || all[0].Name != "acme" {
+		t.Fatalf("elenco: %+v %v", all, err)
+	}
+}
+
 func TestRegistroDeiTenantSuConsul(t *testing.T) {
 	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

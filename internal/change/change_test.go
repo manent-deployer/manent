@@ -95,7 +95,7 @@ func TestServiceNow(t *testing.T) {
 	t.Cleanup(srv.Close)
 	sn := &ServiceNow{
 		URL: srv.URL, Username: "manent", PasswordRef: "pw-ref", Secrets: mapSecrets{"pw-ref": "pw\n"}, Client: srv.Client(),
-		Fields:     map[string]string{"cmdb_ci": "{application}-{environment}", "assignment_group": "CAB"},
+		Fields:     map[string]string{"cmdb_ci": "{application}-{environment}", "assignment_group": "CAB", "correlation_id": "other"},
 		StartState: SNStateImplement, CloseStates: []string{SNStateReview, SNStateClosed},
 		CloseCodes: map[string]string{"success": "successful", "failure": "unsuccessful"},
 	}
@@ -217,7 +217,7 @@ func TestJira(t *testing.T) {
 			t.Cleanup(srv.Close)
 			j := &Jira{
 				URL: srv.URL, TokenRef: "tok", Secrets: mapSecrets{"tok": "pat"}, Client: srv.Client(),
-				Project: "CHG", IssueType: "Change", Fields: map[string]any{"components": []any{map[string]any{"name": "{application}"}}},
+				Project: "CHG", IssueType: "Change", Fields: map[string]any{"components": []any{map[string]any{"name": "{application}"}}, "labels": []any{"release", "{environment}", "manent"}},
 				ApprovedStatuses: []string{"approved"}, RejectedStatuses: []string{"Declined"},
 				Transitions: map[string]string{"start": "Implement", "success": "Done", "failure": "Failed"},
 			}
@@ -230,7 +230,7 @@ func TestJira(t *testing.T) {
 				t.Fatalf("issue: %+v", t1)
 			}
 			fields := f.issues["CHG-1"]["fields"].(map[string]any)
-			if fmt.Sprint(fields["components"]) != "[map[name:shop]]" || fmt.Sprint(fields["labels"]) != "[manent manent-shop-1.4.0-prod]" {
+			if fmt.Sprint(fields["components"]) != "[map[name:shop]]" || fmt.Sprint(fields["labels"]) != "[manent manent-shop-1.4.0-prod release prod]" {
 				t.Errorf("campi: %v", fields)
 			}
 			if t2, _ := j.Open(ctx, request()); t2.Number != "CHG-1" || len(f.issues) != 1 {

@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -278,8 +277,10 @@ func (e *Engine) promoteDescriptor(ctx context.Context, r PromoteRequest) (*desc
 		return nil, nil, err
 	}
 	if src == nil {
-		v := cmp.Or(r.Version, "alcuna versione")
-		return nil, nil, fmt.Errorf("%w: %s: %s was not released successfully in %s%s", ErrInvalidRequest, r.Application, v, r.From, tenantSuffix(r.Tenant))
+		if r.Version == "" {
+			return nil, nil, fmt.Errorf("%w: %s: no version was released successfully in %s%s", ErrInvalidRequest, r.Application, r.From, tenantSuffix(r.Tenant))
+		}
+		return nil, nil, fmt.Errorf("%w: %s: %s was not released successfully in %s%s", ErrInvalidRequest, r.Application, r.Version, r.From, tenantSuffix(r.Tenant))
 	}
 	req, err := e.loadRequest(src.ID)
 	if err != nil {
@@ -355,8 +356,10 @@ func (e *Engine) rollbackDescriptor(ctx context.Context, r RollbackRequest) (*de
 	case target == nil && r.Version == current.Version:
 		return nil, nil, fmt.Errorf("%w: version %s is already in service in %s%s", ErrInvalidRequest, r.Version, r.Environment, tenantSuffix(r.Tenant))
 	case target == nil:
-		v := cmp.Or(r.Version, "una versione precedente a "+current.Version)
-		return nil, nil, fmt.Errorf("%w: %s was not released successfully in %s%s", ErrInvalidRequest, v, r.Environment, tenantSuffix(r.Tenant))
+		if r.Version == "" {
+			return nil, nil, fmt.Errorf("%w: no version before %s was released successfully in %s%s", ErrInvalidRequest, current.Version, r.Environment, tenantSuffix(r.Tenant))
+		}
+		return nil, nil, fmt.Errorf("%w: %s was not released successfully in %s%s", ErrInvalidRequest, r.Version, r.Environment, tenantSuffix(r.Tenant))
 	}
 	req, err := e.loadRequest(target.ID)
 	if err != nil {

@@ -224,6 +224,11 @@ func (c *Config) validateChange() []error {
 		if (s.Username != "" && s.PasswordRef != "") == (s.TokenRef != "") {
 			errs = append(errs, errors.New("integrations.change.servicenow: provide username and password_ref or token_ref"))
 		}
+		for _, k := range []string{"correlation_id", "correlation_display"} {
+			if _, ok := s.Fields[k]; ok {
+				errs = append(errs, fmt.Errorf("integrations.change.servicenow.fields.%s is set by manent: it identifies the deploy's change", k))
+			}
+		}
 	case ChangeJira:
 		j := ch.Jira
 		if !validURL(j.URL) {
@@ -231,6 +236,16 @@ func (c *Config) validateChange() []error {
 		}
 		if j.TokenRef == "" || j.Project == "" || j.IssueType == "" {
 			errs = append(errs, errors.New("integrations.change.jira: token_ref, project and issue_type are required"))
+		}
+		for k, use := range map[string]string{"project": "project", "issuetype": "issue_type"} {
+			if _, ok := j.Fields[k]; ok {
+				errs = append(errs, fmt.Errorf("integrations.change.jira.fields.%s is set by manent: use integrations.change.jira.%s", k, use))
+			}
+		}
+		if l, ok := j.Fields["labels"]; ok {
+			if list, isList := l.([]any); !isList || slices.ContainsFunc(list, func(v any) bool { _, isString := v.(string); return !isString }) {
+				errs = append(errs, errors.New("integrations.change.jira.fields.labels must be a list of strings (added to manent's labels)"))
+			}
 		}
 		for k := range j.Transitions {
 			if k != "start" && k != "success" && k != "failure" {

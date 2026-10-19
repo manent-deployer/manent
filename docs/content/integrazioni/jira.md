@@ -42,8 +42,8 @@ integrations:
       rejected_statuses: [Declined]
 ```
 
-- `fields` are JSON values with the placeholders `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}`, `{requested_by}`. manent already sets `project`, `issuetype`, `summary`, `description` and `labels`; a key in `fields` replaces manent's value.
-- Do not set `labels` in `fields`: manent finds the issue again by its `manent-<deploy id>` label.
+- `fields` are JSON values with the placeholders `{application}`, `{environment}`, `{version}`, `{artifact}`, `{deployment}`, `{requested_by}`. manent already sets `summary` and `description`, which a key in `fields` replaces.
+- `labels` in `fields` (a list of strings) are **added** to manent's `manent` and `manent-<deploy id>`: that label is how manent finds the issue again. `project` and `issuetype` are refused at startup: use `project` and `issue_type`.
 - A transition that is missing from the workflow is skipped.
 - `approved_statuses` and `rejected_statuses` are required with `change.approval: true`.
 
