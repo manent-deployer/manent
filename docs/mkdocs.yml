@@ -94,31 +94,60 @@ plugins:
                   icon: material/weather-night
                   name: Tema scuro
           nav_translations:
+            Get started: Inizia
+            Tutorials: Tutorial
             Quick start: Avvio rapido
+            1. First deploy: 1. Primo deploy
+            2. Environments and secrets: 2. Ambienti e segreti
+            3. Promotion and approvals: 3. Promozione e approvazioni
+            5. Progressive rollout: 5. Rilascio progressivo
+            6. Deploy from CI: 6. Deploy dalla CI
+            7. manent in production: 7. manent in produzione
             Concepts: Concetti
+            Overview: Panoramica
             Architecture: Architettura
+            Deploy types: Tipologie di deploy
+            Deploy lifecycle: Ciclo di vita di un deploy
+            Configuration model: Modello di configurazione
             Pipeline and steps: Pipeline e step
-            Guide: Guida
-            Deploy descriptor: Descrittore di deploy
-            CLI (manent client): CLI (client manent)
-            HTTP API: API HTTP
-            Scheduled deploys: Deploy pianificati
+            Glossary: Glossario
+            Guides: Guide
+            Deploying: Rilasciare
             Environment configuration: Configurazione di ambiente
-            Callbacks: Callback
-            Release governance: Governance dei rilasci
-            Policies in Rego: Policy in Rego
+            Scheduled deploys: Deploy pianificati
+            Deploy chains: Catene di deploy
             Tenants: Tenant
+            Progressive delivery: Rilasci progressivi
             Wave rollouts: Rilasci a ondate
             Load balancer draining: Svuotamento dal load balancer
             Percentage rollouts: Rilasci per percentuale
-            Deploy chains: Catene di deploy
+            Release governance: Governance dei rilasci
+            Policies in Rego: Policy in Rego
+            Extending: Estendere
             Custom steps: Step personalizzati
+            Callbacks: Callback
+            Web interface: Interfaccia web
+            Integrations: Integrazioni
+            CI/CD and IaC: CI/CD e IaC
+            Configuration and secrets: Configurazione e segreti
+            Artifact repositories: Repository degli artefatti
+            Identity: Identità
+            OIDC identity providers: Identity provider OIDC
+            Metrics and logs: Metriche e log
+            Prometheus and Alertmanager: Prometheus e Alertmanager
+            Metrics systems: Sistemi di metriche
+            SIEM and syslog: SIEM e syslog
+            Reference pages: Pagine di riferimento
             Chat and change management: Chat e change management
             CI and infrastructure as code: CI e infrastruttura come codice
-            Web interface: Interfaccia web
+            Plugins: Plugin
+            Writing a plugin: Scrivere un plugin
+            Servers and VMs: Server e VM
+            Cloud services: Servizi cloud
+            Application servers and Windows: Application server e Windows
+            External plugins: Plugin esterni
             Operations: Operazioni
             Installation: Installazione
-            Configuring manent: Configurazione di manent
             Scalability: Scalabilità
             Recovery, shutdown and retention: Recovery, arresto e retention
             Versions and upgrades: Versioni e aggiornamenti
@@ -127,12 +156,14 @@ plugins:
             Security: Sicurezza
             Authentication, permissions and audit: Autenticazione, permessi e audit
             Secrets and artifact sources: Segreti e sorgenti degli artefatti
-            Plugins: Plugin
-            Writing a plugin: Scrivere un plugin
-            External plugins: Plugin esterni
-            Use cases: Casi d'uso
+            Reference: Riferimento
+            Deploy descriptor: Descrittore di deploy
+            CLI (manent client): CLI (client manent)
+            HTTP API: API HTTP
+            Configuring manent: Configurazione di manent
             Development: Sviluppo
-
+            Contributing: Contribuire
+            End-to-end use cases: Casi d'uso end-to-end
 markdown_extensions:
   - admonition
   - attr_list
@@ -161,34 +192,87 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Quick start: avvio-rapido.md
+  - Get started:
+      - Tutorials: tutorial/index.md
+      - Quick start: avvio-rapido.md
+      - 1. First deploy: tutorial/primo-deploy.md
+      - 2. Environments and secrets: tutorial/ambienti.md
+      - 3. Promotion and approvals: tutorial/promozione.md
+      - 4. Kubernetes: tutorial/kubernetes.md
+      - 5. Progressive rollout: tutorial/rilascio-progressivo.md
+      - 6. Deploy from CI: tutorial/ci.md
+      - 7. manent in production: tutorial/produzione.md
   - Concepts:
+      - Overview: concetti/panoramica.md
       - Architecture: concetti/architettura.md
+      - Deploy types: concetti/tipologie-deploy.md
+      - Deploy lifecycle: concetti/ciclo-di-vita.md
+      - Configuration model: concetti/configurazione.md
       - Pipeline and steps: concetti/pipeline.md
-  - Guide:
-      - Deploy descriptor: guida/descrittore.md
-      - CLI (manent client): guida/cli.md
-      - HTTP API: guida/api.md
-      - Scheduled deploys: guida/pianificazione.md
-      - Environment configuration: guida/configurazione-ambiente.md
-      - Dry-run: guida/dry-run.md
-      - Callbacks: guida/callback.md
-      - Rollback: guida/rollback.md
-      - Release governance: guida/governance.md
-      - Policies in Rego: guida/policy.md
-      - Tenants: guida/tenant.md
-      - Wave rollouts: guida/ondate.md
-      - Load balancer draining: guida/svuotamento.md
-      - Percentage rollouts: guida/traffico.md
-      - Deploy chains: guida/catene.md
-      - Custom steps: guida/step-personalizzati.md
-      - Chat and change management: guida/integrazioni.md
-      - CI and infrastructure as code: guida/ci-iac.md
+      - Glossary: concetti/glossario.md
+  - Guides:
+      - Deploying:
+          - Environment configuration: guida/configurazione-ambiente.md
+          - Scheduled deploys: guida/pianificazione.md
+          - Dry-run: guida/dry-run.md
+          - Rollback: guida/rollback.md
+          - Deploy chains: guida/catene.md
+          - Tenants: guida/tenant.md
+      - Progressive delivery:
+          - Wave rollouts: guida/ondate.md
+          - Load balancer draining: guida/svuotamento.md
+          - Percentage rollouts: guida/traffico.md
+      - Governance:
+          - Release governance: guida/governance.md
+          - Policies in Rego: guida/policy.md
+      - Extending:
+          - Custom steps: guida/step-personalizzati.md
+          - Callbacks: guida/callback.md
       - Web interface: guida/interfaccia-web.md
+  - Integrations:
+      - integrazioni/index.md
+      - Chat:
+          - Slack: integrazioni/slack.md
+          - Microsoft Teams: integrazioni/teams.md
+      - Change management:
+          - ServiceNow: integrazioni/servicenow.md
+          - Jira: integrazioni/jira.md
+      - CI/CD and IaC:
+          - GitHub Actions: integrazioni/github-actions.md
+          - GitLab CI: integrazioni/gitlab-ci.md
+          - Terraform: integrazioni/terraform.md
+      - Configuration and secrets:
+          - HashiCorp Consul: integrazioni/consul.md
+          - HashiCorp Vault: integrazioni/vault.md
+          - Artifact repositories: integrazioni/repository-artefatti.md
+      - Identity:
+          - OIDC identity providers: integrazioni/oidc.md
+      - Metrics and logs:
+          - Prometheus and Alertmanager: integrazioni/prometheus.md
+          - Metrics systems: integrazioni/metriche.md
+          - SIEM and syslog: integrazioni/siem.md
+      - Reference pages:
+          - Chat and change management: guida/integrazioni.md
+          - CI and infrastructure as code: guida/ci-iac.md
+  - Plugins:
+      - Writing a plugin: plugins/index.md
+      - Servers and VMs:
+          - remote-copy: plugins/remote-copy.md
+          - container: plugins/container.md
+      - Kubernetes:
+          - kubernetes: plugins/kubernetes.md
+      - Cloud services:
+          - ecs: plugins/ecs.md
+          - lambda: plugins/lambda.md
+          - cloudrun: plugins/cloudrun.md
+          - appservice: plugins/appservice.md
+          - containerapps: plugins/containerapps.md
+      - Application servers and Windows:
+          - jboss: plugins/jboss.md
+          - windows: plugins/windows.md
+      - External plugins: plugins/esterni.md
   - Operations:
       - Installation: operazioni/installazione.md
-      - manent-server: operazioni/server.md
-      - Configuring manent: operazioni/configurazione.md
       - Scalability: operazioni/scalabilita.md
       - Recovery, shutdown and retention: operazioni/affidabilita.md
       - Versions and upgrades: operazioni/aggiornamenti.md
@@ -197,18 +281,12 @@ nav:
       - Security: operazioni/sicurezza.md
       - Authentication, permissions and audit: operazioni/accesso.md
       - Secrets and artifact sources: operazioni/segreti-artefatti.md
-  - Plugins:
-      - Writing a plugin: plugins/index.md
-      - remote-copy: plugins/remote-copy.md
-      - container: plugins/container.md
-      - kubernetes: plugins/kubernetes.md
-      - ecs: plugins/ecs.md
-      - lambda: plugins/lambda.md
-      - cloudrun: plugins/cloudrun.md
-      - appservice: plugins/appservice.md
-      - containerapps: plugins/containerapps.md
-      - jboss: plugins/jboss.md
-      - windows: plugins/windows.md
-      - External plugins: plugins/esterni.md
-  - Use cases: casi-uso.md
-  - Development: sviluppo.md
+  - Reference:
+      - Deploy descriptor: guida/descrittore.md
+      - CLI (manent client): guida/cli.md
+      - manent-server: operazioni/server.md
+      - HTTP API: guida/api.md
+      - Configuring manent: operazioni/configurazione.md
+  - Development:
+      - Contributing: sviluppo.md
+      - End-to-end use cases: casi-uso.md

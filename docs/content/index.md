@@ -18,9 +18,9 @@ hide:
 <p class="mn-hero__lead">The name comes from the Latin <em>manere</em>, "to remain, to stand firm": the artifact never changes along the way.</p>
 
 <div class="mn-hero__actions">
-<a class="md-button md-button--primary" href="avvio-rapido/">Quick start →</a>
-<a class="md-button" href="concetti/architettura/">Architecture</a>
-<a class="md-button" href="guida/descrittore/">Descriptor</a>
+<a class="md-button md-button--primary" href="tutorial/">Start the tutorials →</a>
+<a class="md-button" href="concetti/panoramica/">How it works</a>
+<a class="md-button" href="integrazioni/">Integrations</a>
 </div>
 
 </div>
@@ -170,24 +170,58 @@ artifact:
 
 </div>
 
+## How a release flows
+
+```mermaid
+flowchart LR
+    CI["CI builds and tests<br/>the artifact"] --> D["Descriptor<br/>what to release"]
+    D --> G{"Governance<br/>promotion · approvals · freezes"}
+    G --> W["Durable workflow<br/>secrets → artifact → QA → deploy → tests"]
+    W --> S["Strategy<br/>all at once · waves · percentage"]
+    S --> T["Targets<br/>VMs · Kubernetes · cloud · Windows"]
+    W -.->|"failure"| R["Automatic rollback"]
+```
+
+Every phase is recorded: the [deploy lifecycle](concetti/ciclo-di-vita.md) explains each state, and [deploy types](concetti/tipologie-deploy.md) every way a release can be triggered and rolled out.
+
 ## Where to start
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch-outline:{ .lg .middle } **[Quick start](avvio-rapido.md)**
+-   :material-school-outline:{ .lg .middle } **[Tutorials](tutorial/index.md)**
 
-    Build manent and run the first deploy locally.
+    ---
 
--   :material-console:{ .lg .middle } **[`manent` client](guida/cli.md)**
+    Seven hands-on steps, from the first deploy over SSH to Kubernetes, canary rollouts, CI pipelines and production.
 
-    The commands for developers and CI pipelines.
+-   :material-lightbulb-on-outline:{ .lg .middle } **[Concepts](concetti/panoramica.md)**
 
--   :material-server-outline:{ .lg .middle } **[`manent-server`](operazioni/server.md)**
+    ---
 
-    API, workers and platform operations.
+    What manent is and is not, the model, deploy types, lifecycle and the configuration layers.
 
--   :material-file-code-outline:{ .lg .middle } **[Deploy descriptor](guida/descrittore.md)**
+-   :material-connection:{ .lg .middle } **[Integrations](integrazioni/index.md)**
 
-    The complete format reference.
+    ---
+
+    Step-by-step setups for Slack, Teams, ServiceNow, Jira, GitHub, GitLab, Terraform, Vault, Consul, OIDC, Prometheus and more.
+
+-   :material-book-open-variant:{ .lg .middle } **[Reference](guida/descrittore.md)**
+
+    ---
+
+    Descriptor, [CLI](guida/cli.md), [HTTP API](guida/api.md), [`manent-server`](operazioni/server.md) and [`manent.yml`](operazioni/configurazione.md).
+
+-   :material-server-network:{ .lg .middle } **[Operations](operazioni/installazione.md)**
+
+    ---
+
+    Installation, scaling, recovery, upgrades, observability and security for the platform team.
+
+-   :material-puzzle-outline:{ .lg .middle } **[Plugins](plugins/index.md)**
+
+    ---
+
+    The built-in plugins for every platform, and how to write your own, also as a separate binary.
 
 </div>

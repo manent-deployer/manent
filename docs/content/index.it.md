@@ -18,9 +18,9 @@ hide:
 <p class="mn-hero__lead">Il nome viene dal latino <em>manere</em>, "rimanere, restare saldo": l'artefatto non cambia lungo il viaggio.</p>
 
 <div class="mn-hero__actions">
-<a class="md-button md-button--primary" href="avvio-rapido/">Avvio rapido →</a>
-<a class="md-button" href="concetti/architettura/">Architettura</a>
-<a class="md-button" href="guida/descrittore/">Descrittore</a>
+<a class="md-button md-button--primary" href="tutorial/">Inizia dai tutorial →</a>
+<a class="md-button" href="concetti/panoramica/">Come funziona</a>
+<a class="md-button" href="integrazioni/">Integrazioni</a>
 </div>
 
 </div>
@@ -170,24 +170,58 @@ artifact:
 
 </div>
 
+## Il percorso di un rilascio
+
+```mermaid
+flowchart LR
+    CI["La CI costruisce e testa<br/>l'artefatto"] --> D["Descrittore<br/>cosa rilasciare"]
+    D --> G{"Governance<br/>promozione · approvazioni · freeze"}
+    G --> W["Workflow durevole<br/>segreti → artefatto → QA → deploy → test"]
+    W --> S["Strategia<br/>tutti insieme · ondate · percentuale"]
+    S --> T["Target<br/>VM · Kubernetes · cloud · Windows"]
+    W -.->|"errore"| R["Rollback automatico"]
+```
+
+Ogni fase viene registrata: il [ciclo di vita di un deploy](concetti/ciclo-di-vita.md) spiega ogni stato, e le [tipologie di deploy](concetti/tipologie-deploy.md) tutti i modi in cui un rilascio può partire e raggiungere i target.
+
 ## Da dove iniziare
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch-outline:{ .lg .middle } **[Avvio rapido](avvio-rapido.md)**
+-   :material-school-outline:{ .lg .middle } **[Tutorial](tutorial/index.md)**
 
-    Compila manent ed esegui il primo deploy in locale.
+    ---
 
--   :material-console:{ .lg .middle } **[Client `manent`](guida/cli.md)**
+    Sette passi pratici, dal primo deploy via SSH a Kubernetes, rilasci canary, pipeline di CI e produzione.
 
-    I comandi per sviluppatori e pipeline CI.
+-   :material-lightbulb-on-outline:{ .lg .middle } **[Concetti](concetti/panoramica.md)**
 
--   :material-server-outline:{ .lg .middle } **[`manent-server`](operazioni/server.md)**
+    ---
 
-    API, worker e operazioni di piattaforma.
+    Cosa è e cosa non è manent, il modello, le tipologie di deploy, il ciclo di vita e i livelli di configurazione.
 
--   :material-file-code-outline:{ .lg .middle } **[Descrittore di deploy](guida/descrittore.md)**
+-   :material-connection:{ .lg .middle } **[Integrazioni](integrazioni/index.md)**
 
-    Il riferimento completo del formato.
+    ---
+
+    Configurazioni passo passo per Slack, Teams, ServiceNow, Jira, GitHub, GitLab, Terraform, Vault, Consul, OIDC, Prometheus e altro.
+
+-   :material-book-open-variant:{ .lg .middle } **[Riferimento](guida/descrittore.md)**
+
+    ---
+
+    Descrittore, [CLI](guida/cli.md), [API HTTP](guida/api.md), [`manent-server`](operazioni/server.md) e [`manent.yml`](operazioni/configurazione.md).
+
+-   :material-server-network:{ .lg .middle } **[Operazioni](operazioni/installazione.md)**
+
+    ---
+
+    Installazione, scalabilità, recovery, aggiornamenti, osservabilità e sicurezza per il team di piattaforma.
+
+-   :material-puzzle-outline:{ .lg .middle } **[Plugin](plugins/index.md)**
+
+    ---
+
+    I plugin incorporati per ogni piattaforma, e come scriverne di propri, anche come binari separati.
 
 </div>

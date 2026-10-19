@@ -216,7 +216,7 @@ manent freeze delete incident-881
 - **Permission.** `freeze.write` on every application/environment pattern of the window: a `*` pattern requires the permission on `*`. The predefined `release-manager` role grants it.
 - **Listing.** `manent freezes` and the Calendar page show them with their author (`dynamic`, `created_by`). Only the windows created at runtime can be deleted.
 
-## Determinism and recording
+## Determinism and recording { #determinismo-e-registrazione }
 
 A decision is taken once, at a recorded point, and reused:
 

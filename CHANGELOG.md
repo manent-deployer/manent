@@ -170,6 +170,7 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- Documentazione riorganizzata: sezioni Inizia, Concetti, Guide, Integrazioni, Plugin, Operazioni e Riferimento. Nuove pagine di concetti (panoramica, tipologie di deploy, ciclo di vita di un deploy, modello di configurazione, glossario), sette tutorial in sequenza (primo deploy via SSH, ambienti e segreti con Consul e Vault, promozione con approvazioni e freeze, Kubernetes, rilascio progressivo con health gate, deploy dalla CI, manent in produzione) e una guida passo passo per ogni integrazione: Slack, Teams, ServiceNow, Jira, GitHub Actions, GitLab CI, Terraform, Consul, Vault, repository degli artefatti, identity provider OIDC, Prometheus, sistemi di metriche e SIEM. In inglese e in italiano.
 - Tenant: senza `tenancy` nella configurazione di ambiente e senza `tenant` nel descrittore
   nulla cambia (partizione, ID, attributi, inventario, regole, binding, metriche). I nomi dei
   workflow esistenti restano invariati e si aggiunge `manent.tenants`. L'input delle policy

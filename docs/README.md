@@ -10,6 +10,19 @@ docs/
 └── site/             # sito generato (non versionato)
 ```
 
+## Struttura del sito
+
+| Sezione | Directory | Contenuto |
+|---|---|---|
+| Inizia | `tutorial/`, `avvio-rapido` | Tutorial pratici in sequenza (1–7), ognuno riparte dal precedente e usa comandi verificati. |
+| Concetti | `concetti/` | Panoramica, architettura, tipologie di deploy, ciclo di vita, modello di configurazione, pipeline, glossario. |
+| Guide | `guida/` | Una funzionalità per pagina, raggruppate in Rilasciare, Rilasci progressivi, Governance, Estendere. |
+| Integrazioni | `integrazioni/` | Una guida passo passo per strumento esterno (cosa preparare, cosa configurare, come verificare); i riferimenti delle chiavi restano in `guida/integrazioni` e `guida/ci-iac`. |
+| Plugin, Operazioni | `plugins/`, `operazioni/` | Plugin per piattaforma; installazione ed esercizio. |
+| Riferimento | `guida/`, `operazioni/` | Descrittore, CLI, `manent-server`, API, `manent.yml`: stesse pagine, raggruppate nel menu. |
+
+I percorsi dei file non dipendono dal menu: spostare una pagina in un'altra sezione si fa solo in `nav`, senza rompere i link esterni.
+
 ## Generare il sito
 
 ```sh
@@ -43,7 +56,7 @@ Il sito è in inglese (lingua di default, alla radice) e in italiano (sotto `/it
 
 - Il menu (`nav`) è in inglese; le voci in italiano sono in `nav_translations` (`plugins.i18n` di `mkdocs.yml`): una voce nuova del menu va tradotta lì.
 - I link tra pagine sono uguali nelle due lingue (`../guida/callback.md`): il plugin li risolve verso la pagina della stessa lingua.
-- Un titolo inglese a cui puntano link con ancora riporta l'id del titolo italiano, così le ancore valgono in entrambe le lingue: `## URL limits { #limiti-sugli-url }`.
+- Un titolo inglese a cui puntano link con ancora riporta l'id del titolo italiano, così le ancore valgono in entrambe le lingue: `## URL limits { #limiti-sugli-url }`. Un link con ancora verso un titolo senza id esplicito funziona in una sola lingua: aggiungi l'id o togli l'ancora.
 - Messaggi di errore e output dei comandi restano quelli reali del programma: gli errori sono in inglese, i log e l'output dei comandi in italiano.
 - `navigation.instant` non è attivo perché impedirebbe al selettore della lingua di restare sulla stessa pagina.
 

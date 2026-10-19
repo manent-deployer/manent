@@ -65,7 +65,7 @@ The deploy status reports the dependencies:
 - The dependencies may belong to other applications and environments, but the requester needs `deployment.read` on them: otherwise the outcome of the wait would reveal the state of other teams' deploys.
 - A [promotion](governance.md#promozione) or a [manual rollback](governance.md#rollback-manuale) does not inherit the dependencies of the source deploy.
 
-## Composite releases
+## Composite releases { #release-composte }
 
 A release groups several deploys with the dependencies between them. Independent deploys run in parallel, the others after their predecessors.
 

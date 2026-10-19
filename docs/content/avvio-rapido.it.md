@@ -53,6 +53,8 @@ curl -X POST localhost:8080/api/v1/deployments \
 
 ## Passi successivi
 
+- Capisci cosa è appena successo e costruisci su questo: i [tutorial](tutorial/index.md), a partire da [Primo deploy su un server Linux](tutorial/primo-deploy.md).
+- Le idee alla base: [Panoramica](concetti/panoramica.md) e [Tipologie di deploy](concetti/tipologie-deploy.md).
 - Il formato completo del descrittore: [Descrittore di deploy](guida/descrittore.md).
 - Tutti i comandi: [client `manent`](guida/cli.md), [`manent-server`](operazioni/server.md) e [API HTTP](guida/api.md).
 - Seguire un deploy: `bin/manent logs -f <id>` e [Osservabilità](operazioni/osservabilita.md).
