@@ -12,6 +12,9 @@ type PlatformService interface {
 	Workers(ctx context.Context) ([]WorkerInfo, error)
 	// Activity returns the deploys not yet ended, grouped by state.
 	Activity(ctx context.Context, f ActivityFilter) (*Activity, error)
+	// Queues lists the DBOS queues of manent with their limits, the workflows they hold and the
+	// workers that listen to them.
+	Queues(ctx context.Context) ([]QueueInfo, error)
 }
 
 // Worker states.
@@ -43,12 +46,84 @@ type WorkerInfo struct {
 	// RecoveredBy is who resumed the worker's workflows after it was lost.
 	RecoveredBy string     `json:"recovered_by,omitempty"`
 	RecoveredAt *time.Time `json:"recovered_at,omitempty"`
+	// Queues are the DBOS queues the worker dequeues from.
+	Queues []string `json:"queues,omitempty"`
+	// Resources is the last resource sample of the worker, sent at every heartbeat.
+	Resources *WorkerResources `json:"resources,omitempty"`
 	// Pending counts the worker's pending workflows per workflow version.
 	Pending map[string]int64 `json:"pending,omitempty"`
 	// Tasks are the workflows running on the worker that the identity can read.
 	Tasks []WorkerTask `json:"tasks"`
 	// HiddenTasks counts the running workflows of unreadable applications/environments.
 	HiddenTasks int `json:"hidden_tasks,omitempty"`
+}
+
+// WorkerResources describes the capacity and the use of a worker's host and process. Values
+// that cannot be read on the worker's operating system are zero (and omitted).
+type WorkerResources struct {
+	OS   string `json:"os"`
+	Arch string `json:"arch"`
+	// CPUs is the number of logical CPUs of the host; CPULimit the CPUs the process may use
+	// (GOMAXPROCS, which follows the container's CPU quota).
+	CPUs     int `json:"cpus"`
+	CPULimit int `json:"cpu_limit"`
+	// MemoryTotal is the host memory; MemoryAvailable the memory still available on the host;
+	// MemoryLimit the container's memory limit (cgroup), 0 without a limit. Bytes.
+	MemoryTotal     uint64 `json:"memory_total_bytes,omitempty"`
+	MemoryAvailable uint64 `json:"memory_available_bytes,omitempty"`
+	MemoryLimit     uint64 `json:"memory_limit_bytes,omitempty"`
+	// ProcessMemory is the resident memory of the worker process, in bytes.
+	ProcessMemory uint64 `json:"process_memory_bytes,omitempty"`
+	// ProcessCPU is the CPU used by the process since the previous sample, in cores (1.5 = one
+	// and a half CPUs busy).
+	ProcessCPU float64 `json:"process_cpu_cores"`
+	// Load1, Load5 and Load15 are the host load averages (Linux).
+	Load1  float64 `json:"load1,omitempty"`
+	Load5  float64 `json:"load5,omitempty"`
+	Load15 float64 `json:"load15,omitempty"`
+	// Goroutines is the number of goroutines of the process.
+	Goroutines int `json:"goroutines"`
+	// WorkdirFree is the free space of the file system of the working directory, in bytes.
+	WorkdirFree uint64 `json:"workdir_free_bytes,omitempty"`
+	// Concurrency is the number of deploys the worker runs at the same time (dbos.concurrency).
+	Concurrency int       `json:"concurrency,omitempty"`
+	SampledAt   time.Time `json:"sampled_at"`
+}
+
+// Kinds of queues.
+const (
+	// QueueDeployments is the deploy queue, partitioned by application/environment.
+	QueueDeployments = "deployments"
+	// QueueApprovals holds approvals, dependency waits, releases and multi-tenant releases:
+	// waits that take no deploy slot.
+	QueueApprovals = "approvals"
+	// QueueRegion holds the rollout passes of a region, run only by that region's workers.
+	QueueRegion = "region"
+	// QueueOther is a queue not created by manent (for example DBOS's internal queue).
+	QueueOther = "other"
+)
+
+// QueueInfo is a DBOS queue with its limits and content.
+type QueueInfo struct {
+	Name string `json:"name"`
+	// Kind is deployments, approvals, region or other.
+	Kind   string `json:"kind"`
+	Region string `json:"region,omitempty"`
+	// WorkerConcurrency is the workflows of the queue a single worker runs at the same time,
+	// GlobalConcurrency those on all workers, PartitionConcurrency those of a single
+	// partition (application/environment): 0 means no limit.
+	WorkerConcurrency    int `json:"worker_concurrency,omitempty"`
+	GlobalConcurrency    int `json:"global_concurrency,omitempty"`
+	PartitionConcurrency int `json:"partition_concurrency,omitempty"`
+	// Enqueued, Running and Delayed count the workflows waiting for a slot, running and
+	// scheduled for later.
+	Enqueued int64 `json:"enqueued"`
+	Running  int64 `json:"running"`
+	Delayed  int64 `json:"delayed"`
+	// OldestEnqueued is the creation time of the oldest workflow waiting for a slot.
+	OldestEnqueued *time.Time `json:"oldest_enqueued,omitempty"`
+	// Workers are the live workers that listen to the queue.
+	Workers []string `json:"workers"`
 }
 
 // Kinds of worker work.

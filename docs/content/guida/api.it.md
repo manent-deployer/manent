@@ -42,7 +42,8 @@ Authorization: Bearer <token>
 | `GET` | `/api/v1/releases` | Elenca le release più recenti. |
 | `GET` | `/api/v1/releases/{id}` | Stato di una release e dei suoi deploy. |
 | `POST` | `/api/v1/releases/{id}/cancel` | Annulla i deploy non conclusi e la release. |
-| `GET` | `/api/v1/workers` | Worker registrati con stato, heartbeat e workflow in esecuzione (`platform.read`). |
+| `GET` | `/api/v1/workers` | Worker registrati con stato, heartbeat, risorse, code e workflow in esecuzione (`platform.read`). |
+| `GET` | `/api/v1/queues` | Code con limiti, workflow in attesa, in esecuzione e pianificati e worker in ascolto (`platform.read`). |
 | `POST` | `/api/v1/promotions` | Promuove un artefatto da un ambiente a un altro. |
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
@@ -361,7 +362,11 @@ Un commento `: keep-alive` ogni 15 secondi tiene aperta la connessione attravers
 
 `GET /api/v1/activity[?application=&environment=]` restituisce i deploy non ancora conclusi, dal più recente, in cinque elenchi: `running` (con `executor`, `started_at`, `last_step`, l'ultimo step registrato, e `rollout_progress`), `awaiting_approval`, `waiting_dependency` (con `after`), `queued` (dal più vecchio: escono dalla coda in quest'ordine) e `delayed` (per orario di partenza). `truncated` è `true` se i workflow attivi erano più di quelli esaminati (1000). Contiene solo i deploy che il chiamante può leggere.
 
-`GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, `after`, `release`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. La CLI li espone come `manent activity` e `manent workers`.
+`GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, `after`, `release`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. Ogni worker ha anche `queues`, le code da cui preleva, e `resources`, il campione che invia a ogni heartbeat: `cpus` e `cpu_limit` (CPU dell'host e utilizzabili dal processo, che segue la quota del container), `process_cpu_cores` (CPU usata dal campione precedente), `memory_total_bytes`, `memory_available_bytes` e `memory_limit_bytes` (host e container), `process_memory_bytes`, `load1`/`load5`/`load15`, `workdir_free_bytes`, `concurrency`, `goroutines` e `sampled_at`; i valori che il sistema operativo non fornisce mancano.
+
+`GET /api/v1/queues` restituisce `{"queues": [...]}`: per ogni coda `name`, `kind` (`deployments`, `approvals`, `region`, `other`), `region`, i limiti `worker_concurrency`, `partition_concurrency` e `global_concurrency`, i conteggi `enqueued`, `running` e `delayed`, `oldest_enqueued` e `workers`, i worker attivi in ascolto. Richiede `platform.read`.
+
+La CLI li espone come `manent activity`, `manent workers` e `manent queues`.
 
 Le richieste propagano il contesto di tracing W3C (`traceparent`): la traccia di un client, ad esempio una pipeline di CI, prosegue nell'API e negli step del worker.
 

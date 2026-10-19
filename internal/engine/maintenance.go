@@ -75,6 +75,11 @@ func (w *Worker) maintain() {
 			w.logger.Error("i workflow di questo worker sono stati recuperati da un altro: va riavviato", "recovered_by", by)
 			warned = true
 		}
+		if err == nil {
+			if rerr := w.registry.Report(ctx, w.id, w.startedAt, w.resources.sampleJSON()); rerr != nil {
+				w.logger.Debug("risorse del worker non registrate", "error", rerr)
+			}
+		}
 		cancel()
 		if o.RecoverAfter > 0 {
 			w.autoRecover()

@@ -445,3 +445,123 @@ describe("tenant", () => {
     expect(within(table).getByText("contract 2025")).toBeInTheDocument();
   });
 });
+
+describe("piattaforma", () => {
+  const ops = identity({ grants: [{ role: "operator", actions: ["deployment.read", "platform.read"], applications: ["*"], environments: ["*"] }] });
+  const queues = {
+    queues: [
+      { name: "deployments", kind: "deployments", worker_concurrency: 4, partition_concurrency: 1, enqueued: 3, running: 2, delayed: 1, oldest_enqueued: "2026-10-11T09:58:00Z", workers: ["w1"] },
+      { name: "deployments.us", kind: "region", region: "us", partition_concurrency: 1, enqueued: 1, running: 0, delayed: 0, workers: [] },
+    ],
+  };
+  const workers = {
+    workers: [
+      {
+        id: "w1",
+        state: "alive",
+        heartbeat_at: "2026-10-11T09:59:58Z",
+        queues: ["deployments", "deployments-approvals"],
+        resources: {
+          os: "linux",
+          arch: "amd64",
+          cpus: 8,
+          cpu_limit: 2,
+          process_cpu_cores: 0.5,
+          memory_total_bytes: 16 * 2 ** 30,
+          memory_limit_bytes: 2 ** 30,
+          process_memory_bytes: 512 * 2 ** 20,
+          goroutines: 40,
+          concurrency: 4,
+          workdir_free_bytes: 20 * 2 ** 30,
+          load1: 0.4,
+          load5: 0.3,
+          load15: 0.2,
+          sampled_at: "2026-10-11T09:59:58Z",
+        },
+        tasks: [{ id: "r1", deployment_id: "r1", kind: "deploy", application: "shop", environment: "prod", queue: "deployments" }],
+      },
+      { id: "w2", state: "alive", tasks: [] },
+    ],
+  };
+
+  it("mostra code, limiti, risorse e code ascoltate dai worker", async () => {
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: ops };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/queues") return { json: queues };
+      if (path === "/api/v1/workers") return { json: workers };
+    });
+    renderApp(api, "/platform");
+    expect(await screen.findByRole("link", { name: "Platform" })).toHaveAttribute("href", "/platform");
+    const table = await screen.findByRole("table", { name: "Queues" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("deployments");
+    expect(rows[1]).toHaveTextContent("4 per worker, 1 per environment");
+    expect(rows[2]).toHaveTextContent("Region passes · us");
+    expect(rows[2]).toHaveTextContent("No worker");
+    expect(await screen.findByRole("meter", { name: "CPU" })).toHaveAttribute("aria-valuetext", "0.5 of 2 cores");
+    expect(screen.getByRole("meter", { name: "Memory" })).toHaveAttribute("aria-valuetext", "512 MiB / 1 GiB");
+    expect(screen.getByRole("meter", { name: "Deploy slots" })).toHaveAttribute("aria-valuetext", "1 of 4 busy");
+    expect(screen.getByText("deployments-approvals")).toBeInTheDocument();
+    expect(screen.getByText("This worker has not reported its resources (older version).")).toBeInTheDocument();
+  });
+
+  it("senza platform.read il menu non mostra la piattaforma", async () => {
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/deployments") return { json: { deployments: [] } };
+    });
+    renderApp(api, "/deployments");
+    expect(await screen.findByRole("link", { name: "Deployments" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Platform" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Tenants" })).not.toBeInTheDocument();
+  });
+});
+
+describe("tenant", () => {
+  const tenants = {
+    tenants: [
+      { name: "acme", description: "ACME Corp", tags: { tier: "gold" }, applications: { shop: ["prod", "staging"] }, params: { shop: { db: "acme_db" } }, secrets: { shop: ["db-password"] }, source: "file:envconfig/tenants/acme.yml" },
+      { name: "initech", tags: { tier: "silver" }, applications: { shop: ["prod"] }, disabled: true },
+    ],
+  };
+
+  it("elenca i tenant con tag e ambienti e filtra per selettore", async () => {
+    const { api, calls } = fakeApi(({ path, query }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/tenants") return { json: query.get("selector") === "tier=gold" ? { tenants: [tenants.tenants[0]] } : tenants };
+    });
+    renderApp(api, "/tenants");
+    expect(await screen.findByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/tenants");
+    const table = await screen.findByRole("table", { name: "Tenants" });
+    expect(within(table).getByRole("link", { name: "acme" })).toHaveAttribute("href", "/tenants/acme");
+    expect(within(table).getByText("tier=gold")).toBeInTheDocument();
+    expect(within(table).getByText("Disabled")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Selector/), "tier=gold");
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(within(screen.getByRole("table", { name: "Tenants" })).queryByText("initech")).not.toBeInTheDocument());
+    expect(calls.some((c) => c.path === "/api/v1/tenants")).toBe(true);
+  });
+
+  it("mostra il dettaglio con le release in esercizio, i parametri e solo i nomi dei segreti", async () => {
+    const { api } = fakeApi(({ path, query }) => {
+      if (path === "/api/v1/me") return { json: identity() };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/tenants") return { json: tenants };
+      if (path === "/api/v1/tenants/acme") return { json: tenants.tenants[0] };
+      if (path === "/api/v1/inventory" && query.get("tenant") === "acme")
+        return { json: { inventory: [{ application: "shop", environment: "prod", tenant: "acme", current: dep({ id: "shop-1.4.0-prod.acme", tenant: "acme" }) }] } };
+    });
+    renderApp(api, "/tenants/acme");
+    expect(await screen.findByRole("heading", { name: "acme" })).toBeInTheDocument();
+    const releases = await screen.findByRole("table", { name: "Releases in service" });
+    const rows = within(releases).getAllByRole("row");
+    await waitFor(() => expect(rows[1]).toHaveTextContent("1.4.0"));
+    expect(rows[2]).toHaveTextContent("never released");
+    expect(screen.getByText("acme_db")).toBeInTheDocument();
+    expect(screen.getByText("db-password")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Deployment history →" })).toHaveAttribute("href", "/deployments?application=shop&tenant=acme");
+  });
+});

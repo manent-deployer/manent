@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ func TestWorkerEAttivita(t *testing.T) {
 	e := NewService(ServiceOptions{
 		Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard,
 		Executors: w.Admin(), StaleAfter: time.Minute,
+		QueueLimits: QueueOptions{WorkerConcurrency: 4, PartitionConcurrency: 1},
 	})
 	ctx := context.Background()
 	defer close(block.release)
@@ -69,6 +71,33 @@ func TestWorkerEAttivita(t *testing.T) {
 	}
 	if len(ws[0].Tasks) != 1 || ws[0].Tasks[0].ID != "d1" || ws[0].Tasks[0].Kind != service.TaskDeploy || ws[0].Tasks[0].Application != "app" {
 		t.Errorf("lavoro del worker: %+v", ws[0].Tasks)
+	}
+	// A region worker listens to deploys, approvals and its region's passes, and reports its resources.
+	if got := strings.Join(ws[0].Queues, ","); got != "deployments,deployments-approvals,deployments.eu" {
+		t.Errorf("code del worker: %q", got)
+	}
+	if r := ws[0].Resources; r == nil || r.CPUs < 1 || r.CPULimit < 1 || r.Goroutines < 1 || r.ProcessMemory == 0 || r.SampledAt.IsZero() || r.Concurrency != opts.Queue.WorkerConcurrency {
+		t.Errorf("risorse del worker: %+v", r)
+	}
+
+	qs, err := e.Queues(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]service.QueueInfo{}
+	for _, q := range qs {
+		byName[q.Name] = q
+	}
+	dq := byName["deployments"]
+	if dq.Kind != service.QueueDeployments || dq.Running != 1 || dq.Enqueued != 1 || dq.Delayed != 2 || dq.OldestEnqueued == nil ||
+		dq.WorkerConcurrency != 4 || dq.PartitionConcurrency != 1 || strings.Join(dq.Workers, ",") != "w1" {
+		t.Errorf("coda dei deploy: %+v", dq)
+	}
+	if aq := byName["deployments-approvals"]; aq.Kind != service.QueueApprovals || strings.Join(aq.Workers, ",") != "w1" {
+		t.Errorf("coda delle approvazioni: %+v", aq)
+	}
+	if rq := byName["deployments.eu"]; rq.Kind != service.QueueRegion || rq.Region != "eu" || rq.PartitionConcurrency != 1 || strings.Join(rq.Workers, ",") != "w1" {
+		t.Errorf("coda della region: %+v", rq)
 	}
 }
 

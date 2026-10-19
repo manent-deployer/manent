@@ -212,7 +212,14 @@ function Workers() {
     refetchInterval: REFRESH,
   });
   return (
-    <Section title={t("activity.workers")}>
+    <Section
+      title={t("activity.workers")}
+      actions={
+        <Link to="/platform" className="text-sm hover:text-accent hover:underline">
+          {t("activity.platformLink")}
+        </Link>
+      }
+    >
       {q.isPending ? (
         <Loading />
       ) : q.isError ? (

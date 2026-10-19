@@ -182,14 +182,17 @@ manent release cancel <id>
 
 ```sh
 manent activity [-a <application>] [-e <environment>] [-w 5s] [--json]   # active deploys
-manent workers [-w 5s] [--json]                                           # workers and their work
+manent workers [-w 5s] [--json]                                           # workers, resources, queues and their work
+manent queues [-w 5s] [--json]                                            # queues, limits and listening workers
 ```
 
 `activity` shows the deploys that have not finished yet, grouped as **running** (with the worker that runs them, the last recorded step and the wave progress), **awaiting approval**, **waiting for dependencies** (with the deploys still awaited), **queued** (waiting for a free slot of the environment) and **scheduled** (`schedule.at`). Only deploys you can read are listed.
 
-`workers` lists the registered workers with state (`alive`, `stale` when the heartbeat is missing, `stopped`, `unregistered` for an executor that has pending workflows but is not in the registry), region, workflow and binary versions, last heartbeat and the workflows running on each: deploys, wave steps in a region, health gates, approvals waiting for a decision. It requires the [`platform.read`](../operazioni/accesso.md#permessi-rbac) permission; workflows of applications you cannot read are only counted.
+`workers` lists the registered workers with state (`alive`, `stale` when the heartbeat is missing, `stopped`, `unregistered` for an executor that has pending workflows but is not in the registry), region, workflow and binary versions, last heartbeat and the workflows running on each: deploys, wave steps in a region, health gates, approvals waiting for a decision. It requires the [`platform.read`](../operazioni/accesso.md#permessi-rbac) permission; workflows of applications you cannot read are only counted. A second table shows the resources each worker reports at every heartbeat (CPU used against the CPUs it may use, process memory against the container limit or the host memory, host load, free space of the workdir, deploys it runs together) and the queues it listens to.
 
-Both print a table; `--json` prints the API response, `-w` repeats the list at the given interval until Ctrl-C.
+`queues` lists the queues: the deploy queue, partitioned by application and environment, the queue of approvals and waits, which takes no deploy slot, and one queue per region with region routing. For each: workflows waiting for a slot, running and scheduled, the oldest wait, the concurrency limits and the live workers that listen to it. A queue with work and no listening worker (for example a region whose workers are all down) is the first thing to check when deploys do not start. It requires `platform.read`.
+
+All three print a table; `--json` prints the API response, `-w` repeats the list at the given interval until Ctrl-C.
 
 ## Schedules
 

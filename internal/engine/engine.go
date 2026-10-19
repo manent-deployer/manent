@@ -109,6 +109,9 @@ type ServiceOptions struct {
 	// delay beyond which a worker is considered lost.
 	Executors  ExecutorLister
 	StaleAfter time.Duration
+	// QueueLimits are the concurrency limits of the deploy queue (Name is ignored: it is
+	// QueueName), reported by Queues.
+	QueueLimits QueueOptions
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
@@ -130,24 +133,25 @@ type SourceChecker interface {
 // Engine implements Service using only the DBOS client APIs: it enqueues and queries
 // workflows but does not run them (Workers do).
 type Engine struct {
-	client     dbos.Client
-	queueName  string
-	planner    pipeline.Planner
-	callbacks  callback.Policy
-	rollback   RollbackPolicy
-	sources    SourceChecker
-	resolver   ConfigResolver
-	governance Governance
-	policies   PolicyAdmin
-	tenants    tenant.Directory
-	notify     NotificationRouter
-	health     rollout.Checker
-	traffic    TrafficOps
-	executors  ExecutorLister
-	targets    TargetStateReader
-	staleAfter time.Duration
-	logger     *slog.Logger
-	now        func() time.Time
+	client      dbos.Client
+	queueName   string
+	planner     pipeline.Planner
+	callbacks   callback.Policy
+	rollback    RollbackPolicy
+	sources     SourceChecker
+	resolver    ConfigResolver
+	governance  Governance
+	policies    PolicyAdmin
+	tenants     tenant.Directory
+	notify      NotificationRouter
+	health      rollout.Checker
+	traffic     TrafficOps
+	executors   ExecutorLister
+	targets     TargetStateReader
+	staleAfter  time.Duration
+	queueLimits QueueOptions
+	logger      *slog.Logger
+	now         func() time.Time
 	// inv is the process inventory, updated incrementally.
 	inv inventoryCache
 }
@@ -158,24 +162,25 @@ func NewService(opts ServiceOptions) *Engine {
 		opts.Now = time.Now
 	}
 	return &Engine{
-		client:     opts.Client,
-		queueName:  opts.QueueName,
-		planner:    opts.Planner,
-		callbacks:  opts.CallbackPolicy,
-		rollback:   opts.Rollback,
-		sources:    opts.Sources,
-		resolver:   opts.Resolver,
-		governance: opts.Governance,
-		policies:   opts.Policies,
-		tenants:    opts.Tenants,
-		notify:     opts.Notifications,
-		health:     opts.Health,
-		traffic:    opts.Traffic,
-		executors:  opts.Executors,
-		targets:    opts.TargetStates,
-		staleAfter: cmp.Or(opts.StaleAfter, time.Minute),
-		logger:     opts.Logger.With("component", "engine"),
-		now:        opts.Now,
+		client:      opts.Client,
+		queueName:   opts.QueueName,
+		planner:     opts.Planner,
+		callbacks:   opts.CallbackPolicy,
+		rollback:    opts.Rollback,
+		sources:     opts.Sources,
+		resolver:    opts.Resolver,
+		governance:  opts.Governance,
+		policies:    opts.Policies,
+		tenants:     opts.Tenants,
+		notify:      opts.Notifications,
+		health:      opts.Health,
+		traffic:     opts.Traffic,
+		executors:   opts.Executors,
+		targets:     opts.TargetStates,
+		staleAfter:  cmp.Or(opts.StaleAfter, time.Minute),
+		queueLimits: opts.QueueLimits,
+		logger:      opts.Logger.With("component", "engine"),
+		now:         opts.Now,
 	}
 }
 

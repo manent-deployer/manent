@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity as ActivityIcon, BarChart3, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, Scale, ShieldAlert, Sun } from "lucide-react";
+import { Activity as ActivityIcon, BarChart3, Building2, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, Scale, Server, ShieldAlert, Sun } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
-import { unwrap, type Status } from "@/api/client";
+import { unwrap, type Status, type TenantInfo } from "@/api/client";
 import { useApi, useMe, useUIConfig } from "@/api/context";
 import { useAuth } from "@/auth/auth";
 import { useI18n, type Lang } from "@/i18n/i18n";
@@ -33,6 +33,19 @@ function useApprovalsCount(enabled: boolean) {
     enabled,
     refetchInterval: 30_000,
   });
+}
+
+/** useHasTenants says whether the registry has tenants the user can read: only then the menu
+ * shows the Tenants page. Read once, the registry changes rarely. */
+function useHasTenants() {
+  const api = useApi();
+  const q = useQuery({
+    queryKey: ["tenants", "nav"],
+    queryFn: async (): Promise<TenantInfo[]> => unwrap(await api.GET("/api/v1/tenants")).tenants,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  return (q.data?.length ?? 0) > 0;
 }
 
 function UserMenu() {
@@ -117,6 +130,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const canApprove = canSomewhere(me.data, "deployment.approve");
   const approvals = useApprovalsCount(canApprove);
   const waiting = approvals.data?.length ?? 0;
+  const hasTenants = useHasTenants();
   const location = useLocation();
   const previous = useRef<string>();
   const callback = config.redirect_path ?? "/auth/callback";
@@ -152,10 +166,12 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },
     { to: "/approvals", label: t("nav.approvals"), icon: ListChecks, count: canApprove ? waiting : 0 },
     { to: "/inventory", label: t("nav.inventory"), icon: LayoutGrid },
+    ...(hasTenants ? [{ to: "/tenants", label: t("nav.tenants"), icon: Building2 }] : []),
     { to: "/releases", label: t("nav.releases"), icon: GitBranch },
     { to: "/calendar", label: t("nav.calendar"), icon: CalendarClock },
     { to: "/metrics", label: t("nav.metrics"), icon: BarChart3 },
     ...(canSomewhere(me.data, "policy.read") ? [{ to: "/policies", label: t("nav.policies"), icon: Scale }] : []),
+    ...(canSomewhere(me.data, "platform.read") ? [{ to: "/platform", label: t("nav.platform"), icon: Server }] : []),
   ];
 
   return (

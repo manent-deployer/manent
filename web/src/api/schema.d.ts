@@ -565,6 +565,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Code DBOS di manent con limiti, workflow in coda, in esecuzione e pianificati e worker in ascolto (permesso platform.read) */
+        get: operations["listQueues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/activity": {
         parameters: {
             query?: never;
@@ -979,9 +996,87 @@ export interface components {
             pending?: {
                 [key: string]: number;
             };
+            /** @description Code DBOS da cui il worker preleva */
+            queues?: string[];
+            resources?: components["schemas"]["WorkerResources"];
             tasks: components["schemas"]["WorkerTask"][];
             /** @description Workflow in esecuzione di applicazioni/ambienti non leggibili */
             hidden_tasks?: number;
+        };
+        /** @description Ultimo campione delle risorse del worker, inviato a ogni heartbeat. I valori che il sistema operativo non fornisce mancano. */
+        WorkerResources: {
+            os: string;
+            arch: string;
+            /** @description CPU logiche dell'host */
+            cpus: number;
+            /** @description CPU utilizzabili dal processo (GOMAXPROCS */
+            cpu_limit: number;
+            /**
+             * Format: int64
+             * @description Memoria dell'host
+             */
+            memory_total_bytes?: number;
+            /**
+             * Format: int64
+             * @description Memoria ancora disponibile sull'host
+             */
+            memory_available_bytes?: number;
+            /**
+             * Format: int64
+             * @description Limite di memoria del container (cgroup)
+             */
+            memory_limit_bytes?: number;
+            /**
+             * Format: int64
+             * @description Memoria residente del processo
+             */
+            process_memory_bytes?: number;
+            /** @description CPU usata dal processo dal campione precedente */
+            process_cpu_cores: number;
+            load1?: number;
+            load5?: number;
+            load15?: number;
+            goroutines: number;
+            /**
+             * Format: int64
+             * @description Spazio libero del file system della workdir
+             */
+            workdir_free_bytes?: number;
+            /** @description Deploy eseguiti insieme dal worker (dbos.concurrency) */
+            concurrency?: number;
+            /** Format: date-time */
+            sampled_at: string;
+        };
+        Queue: {
+            name: string;
+            /** @enum {string} */
+            kind: "deployments" | "approvals" | "region" | "other";
+            region?: string;
+            /** @description Workflow eseguiti insieme da un worker (assente = nessun limite) */
+            worker_concurrency?: number;
+            /** @description Workflow eseguiti insieme su tutti i worker */
+            global_concurrency?: number;
+            /** @description Workflow eseguiti insieme per applicazione/ambiente */
+            partition_concurrency?: number;
+            /**
+             * Format: int64
+             * @description Workflow in attesa di uno slot
+             */
+            enqueued: number;
+            /** Format: int64 */
+            running: number;
+            /**
+             * Format: int64
+             * @description Workflow pianificati (schedule.at)
+             */
+            delayed: number;
+            /**
+             * Format: date-time
+             * @description Creazione del workflow in attesa da più tempo
+             */
+            oldest_enqueued?: string;
+            /** @description Worker attivi in ascolto sulla coda */
+            workers: string[];
         };
         WorkerTask: {
             id: string;
@@ -2308,6 +2403,30 @@ export interface operations {
                 content: {
                     "application/json": {
                         workers: components["schemas"]["Worker"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    listQueues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Code */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queues: components["schemas"]["Queue"][];
                     };
                 };
             };

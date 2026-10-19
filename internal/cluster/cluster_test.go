@@ -2,7 +2,9 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -315,5 +317,40 @@ func TestNotificaDellaPolicy(t *testing.T) {
 	case <-got:
 	case <-time.After(10 * time.Second):
 		t.Fatal("notifica non ricevuta")
+	}
+}
+
+func TestCodeERisorseDelWorker(t *testing.T) {
+	r := openTest(t)
+	ctx := context.Background()
+	start := time.Now().UTC().Add(-time.Minute)
+	e := Executor{ID: "w1", Version: "1", Build: "dev", Hostname: "h1", StartedAt: start,
+		Queues: []string{"deployments", "deployments-approvals"}, Resources: json.RawMessage(`{"cpus":4}`)}
+	if ok, err := r.Register(ctx, e, time.Minute); err != nil || !ok {
+		t.Fatalf("registrazione: ok=%v err=%v", ok, err)
+	}
+	if err := r.Report(ctx, "w1", start, json.RawMessage(`{"cpus":4,"goroutines":12}`)); err != nil {
+		t.Fatal(err)
+	}
+	// A sample of another startup with the same ID is ignored.
+	if err := r.Report(ctx, "w1", start.Add(time.Second), json.RawMessage(`{"cpus":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	es, err := r.List(ctx)
+	if err != nil || len(es) != 1 {
+		t.Fatalf("registro: %+v %v", es, err)
+	}
+	if got := strings.Join(es[0].Queues, ","); got != "deployments,deployments-approvals" {
+		t.Errorf("code: %q", got)
+	}
+	if string(es[0].Resources) != `{"cpus":4,"goroutines":12}` {
+		t.Errorf("risorse: %s", es[0].Resources)
+	}
+	// An executor registered without queues and resources reads them as empty.
+	if ok, err := r.Register(ctx, Executor{ID: "w2", Version: "1", Build: "dev", Hostname: "h2", StartedAt: start}, time.Minute); err != nil || !ok {
+		t.Fatal(err)
+	}
+	if es, _ := r.List(ctx); len(es) != 2 || es[1].Queues != nil || es[1].Resources != nil {
+		t.Errorf("executor senza code e risorse: %+v", es)
 	}
 }

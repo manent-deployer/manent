@@ -36,6 +36,29 @@ func (c *WorkersCmd) Execute([]string) error {
 	})
 }
 
+// QueuesCmd lists the DBOS queues with limits, content and listening workers.
+type QueuesCmd struct {
+	global *GlobalOptions
+	JSON   bool          `long:"json" description:"output JSON"`
+	Watch  time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
+}
+
+// Execute implements flags.Commander.
+func (c *QueuesCmd) Execute([]string) error {
+	return withService(c.global, func(ctx context.Context, svc service.Service) error {
+		return repeat(ctx, c.Watch, func() error {
+			qs, err := svc.Queues(ctx)
+			if err != nil {
+				return err
+			}
+			if c.JSON {
+				return cliutil.PrintJSON(qs)
+			}
+			return printQueues(os.Stdout, qs, time.Now())
+		})
+	})
+}
+
 // ActivityCmd shows the deploys running, awaiting approval, queued and scheduled.
 type ActivityCmd struct {
 	global      *GlobalOptions
@@ -101,6 +124,9 @@ func printWorkers(out io.Writer, ws []service.WorkerInfo, now time.Time) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
+	if err := printResources(out, ws); err != nil {
+		return err
+	}
 	// Detail of the running work, per worker.
 	var tasks int
 	for _, w := range ws {
@@ -119,6 +145,111 @@ func printWorkers(out io.Writer, ws []service.WorkerInfo, now time.Time) error {
 		}
 	}
 	return tw.Flush()
+}
+
+// printResources prints the resources and the queues of the workers that reported them.
+func printResources(out io.Writer, ws []service.WorkerInfo) error {
+	var rows []service.WorkerInfo
+	for _, w := range ws {
+		if w.Resources != nil || len(w.Queues) > 0 {
+			rows = append(rows, w)
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	fmt.Fprintln(out)
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "WORKER\tCPU (USATE/DISPONIBILI)\tMEMORIA (PROCESSO/DISPONIBILE)\tCARICO\tDISCO WORKDIR\tDEPLOY INSIEME\tCODE")
+	for _, w := range rows {
+		cpu, mem, load, disk, conc := "-", "-", "-", "-", "-"
+		if r := w.Resources; r != nil {
+			cpu = fmt.Sprintf("%.2f/%d", r.ProcessCPU, r.CPULimit)
+			if r.CPULimit != r.CPUs {
+				cpu += fmt.Sprintf(" (host %d)", r.CPUs)
+			}
+			mem = bytesIEC(r.ProcessMemory) + "/" + bytesIEC(memoryCapacity(r))
+			if r.Load1 > 0 {
+				load = fmt.Sprintf("%.2f", r.Load1)
+			}
+			if r.WorkdirFree > 0 {
+				disk = bytesIEC(r.WorkdirFree) + " liberi"
+			}
+			if r.Concurrency > 0 {
+				conc = fmt.Sprint(r.Concurrency)
+			}
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w.ID, cpu, mem, load, disk, conc, dash(strings.Join(w.Queues, ", ")))
+	}
+	return tw.Flush()
+}
+
+// memoryCapacity is the memory the worker can use: the container limit, otherwise the host memory.
+func memoryCapacity(r *service.WorkerResources) uint64 {
+	if r.MemoryLimit > 0 {
+		return r.MemoryLimit
+	}
+	return r.MemoryTotal
+}
+
+// bytesIEC formats a size with binary units; "-" if unknown.
+func bytesIEC(n uint64) string {
+	if n == 0 {
+		return "-"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for m := n / unit; m >= unit && exp < 4; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTP"[exp])
+}
+
+func printQueues(out io.Writer, qs []service.QueueInfo, now time.Time) error {
+	if len(qs) == 0 {
+		_, err := fmt.Fprintln(out, "Nessuna coda.")
+		return err
+	}
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "CODA\tTIPO\tIN CODA\tIN CORSO\tPIANIFICATI\tATTESA MASSIMA\tLIMITI\tWORKER")
+	for _, q := range qs {
+		kind := q.Kind
+		if q.Region != "" {
+			kind += " " + q.Region
+		}
+		wait := "-"
+		if q.OldestEnqueued != nil {
+			wait = now.Sub(*q.OldestEnqueued).Round(time.Second).String()
+		}
+		workers := fmt.Sprint(len(q.Workers))
+		if len(q.Workers) > 0 {
+			workers += " (" + strings.Join(q.Workers, ", ") + ")"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%s\t%s\t%s\n", q.Name, kind, q.Enqueued, q.Running, q.Delayed, wait, queueLimits(q), workers)
+	}
+	return tw.Flush()
+}
+
+// queueLimits describes the concurrency limits of a queue.
+func queueLimits(q service.QueueInfo) string {
+	var parts []string
+	if q.WorkerConcurrency > 0 {
+		parts = append(parts, fmt.Sprintf("%d per worker", q.WorkerConcurrency))
+	}
+	if q.PartitionConcurrency > 0 {
+		parts = append(parts, fmt.Sprintf("%d per ambiente", q.PartitionConcurrency))
+	}
+	if q.GlobalConcurrency > 0 {
+		parts = append(parts, fmt.Sprintf("%d in totale", q.GlobalConcurrency))
+	}
+	if len(parts) == 0 {
+		return "nessuno"
+	}
+	return strings.Join(parts, ", ")
 }
 
 func printActivity(out io.Writer, a *service.Activity, now time.Time) error {

@@ -386,6 +386,14 @@ func (c *Client) CancelRelease(ctx context.Context, id string) error {
 }
 
 // Workers implements service.Service.
+func (c *Client) Queues(ctx context.Context) ([]service.QueueInfo, error) {
+	var out struct {
+		Queues []service.QueueInfo `json:"queues"`
+	}
+	err := c.do(ctx, http.MethodGet, "/queues", nil, nil, &out)
+	return out.Queues, err
+}
+
 func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
 	var out struct {
 		Workers []service.WorkerInfo `json:"workers"`

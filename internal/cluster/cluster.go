@@ -10,6 +10,7 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,6 +38,11 @@ type Executor struct {
 	// RecoveredBy is who claimed the executor's workflows after it was lost.
 	RecoveredBy string     `json:"recovered_by,omitempty"`
 	RecoveredAt *time.Time `json:"recovered_at,omitempty"`
+	// Queues are the DBOS queues the executor dequeues from.
+	Queues []string `json:"queues,omitempty"`
+	// Resources is the last resource sample sent by the executor, in JSON
+	// (service.WorkerResources): the registry stores it without interpreting it.
+	Resources json.RawMessage `json:"resources,omitempty"`
 }
 
 // Stale reports an executor that has sent no heartbeat for at least after, or that stopped.
@@ -61,6 +67,8 @@ type Registry interface {
 	// if that happened while it was unreachable, or ErrReplaced if another startup registered
 	// with the same ID.
 	Heartbeat(ctx context.Context, id string, startedAt time.Time) (recoveredBy string, err error)
+	// Report stores the resource sample (JSON) of the executor started at startedAt.
+	Report(ctx context.Context, id string, startedAt time.Time, resources json.RawMessage) error
 	// Stopped records the orderly shutdown of the executor started at startedAt.
 	Stopped(ctx context.Context, id string, startedAt time.Time) error
 	// List returns the registered executors, ordered by ID.
@@ -234,19 +242,30 @@ func (r *SQL) migrate(ctx context.Context, postgres bool) error {
 	return fmt.Errorf("executor registry: creating tables: %w", err)
 }
 
+// addedColumns are the executor columns introduced after the first registry version.
+var addedColumns = []string{"region", "queues", "resources"}
+
 // addColumns adds the columns introduced after the first registry version.
 func (r *SQL) addColumns(ctx context.Context, postgres bool) error {
-	if postgres {
-		_, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN IF NOT EXISTS region TEXT`)
-		return err
+	for _, col := range addedColumns {
+		if postgres {
+			if _, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN IF NOT EXISTS `+col+` TEXT`); err != nil {
+				return err
+			}
+			continue
+		}
+		// SQLite has no ADD COLUMN IF NOT EXISTS: check the schema first.
+		var n int
+		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('`+r.executors+`') WHERE name = '`+col+`'`).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN `+col+` TEXT`); err != nil {
+				return err
+			}
+		}
 	}
-	// SQLite has no ADD COLUMN IF NOT EXISTS: check the schema first.
-	var n int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('`+r.executors+`') WHERE name = 'region'`).Scan(&n); err != nil || n > 0 {
-		return err
-	}
-	_, err := r.db.ExecContext(ctx, `ALTER TABLE `+r.executors+` ADD COLUMN region TEXT`)
-	return err
+	return nil
 }
 
 func (r *SQL) exec(ctx context.Context, stmts []string) error {
@@ -296,15 +315,17 @@ func (r *SQL) Register(ctx context.Context, e Executor, staleAfter time.Duration
 				return false, &InUseError{ID: e.ID, Hostname: hostname, StartedAt: time.UnixMilli(started).UTC(), HeartbeatAt: time.UnixMilli(heartbeat).UTC()}
 			}
 		}
-		res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at, region)
-			VALUES ($1, $2, $3, $4, $5, $6, $8)
+		res, err := r.db.ExecContext(ctx, `INSERT INTO `+r.executors+` (executor_id, version, build, hostname, started_at, heartbeat_at, region, queues, resources)
+			VALUES ($1, $2, $3, $4, $5, $6, $8, $10, $11)
 			ON CONFLICT (executor_id) DO UPDATE SET
 				version = excluded.version, build = excluded.build, hostname = excluded.hostname, region = excluded.region,
+				queues = excluded.queues, resources = excluded.resources,
 				started_at = excluded.started_at, heartbeat_at = excluded.heartbeat_at,
 				stopped_at = NULL, recovered_by = NULL, recovered_at = NULL, recovery_done_at = NULL
 			WHERE `+t+`.started_at = $9
 			  AND (`+t+`.recovered_by IS NULL OR `+t+`.recovery_done_at IS NOT NULL OR `+t+`.recovered_at < $7)`,
-			e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)), e.Region, prev)
+			e.ID, e.Version, e.Build, e.Hostname, ms(e.StartedAt), ms(now), ms(now.Add(-ClaimTimeout)), e.Region, prev,
+			nullJSON(e.Queues), nullString(e.Resources))
 		if err != nil {
 			return false, err
 		}
@@ -336,6 +357,27 @@ func (r *SQL) Heartbeat(ctx context.Context, id string, startedAt time.Time) (st
 	return by.String, err
 }
 
+// Report implements Registry.
+func (r *SQL) Report(ctx context.Context, id string, startedAt time.Time, resources json.RawMessage) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE `+r.executors+` SET resources = $3 WHERE executor_id = $1 AND started_at = $2`,
+		id, ms(startedAt), nullString(resources))
+	return err
+}
+
+// nullJSON encodes queues as a JSON array, NULL if empty.
+func nullJSON(queues []string) sql.NullString {
+	if len(queues) == 0 {
+		return sql.NullString{}
+	}
+	b, _ := json.Marshal(queues)
+	return sql.NullString{String: string(b), Valid: true}
+}
+
+// nullString stores a JSON document, NULL if empty.
+func nullString(b json.RawMessage) sql.NullString {
+	return sql.NullString{String: string(b), Valid: len(b) > 0}
+}
+
 // Stopped implements Registry.
 func (r *SQL) Stopped(ctx context.Context, id string, startedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE `+r.executors+` SET stopped_at = $3 WHERE executor_id = $1 AND started_at = $2`,
@@ -346,7 +388,7 @@ func (r *SQL) Stopped(ctx context.Context, id string, startedAt time.Time) error
 // List implements Registry.
 func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT executor_id, version, build, hostname, started_at, heartbeat_at,
-		stopped_at, recovered_by, recovered_at, region FROM `+r.executors+` ORDER BY executor_id`)
+		stopped_at, recovered_by, recovered_at, region, queues, resources FROM `+r.executors+` ORDER BY executor_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -358,9 +400,17 @@ func (r *SQL) List(ctx context.Context) ([]Executor, error) {
 			started, heartbeat  int64
 			stopped, recoveredT sql.NullInt64
 			recoveredBy, region sql.NullString
+			queues, resources   sql.NullString
 		)
-		if err := rows.Scan(&e.ID, &e.Version, &e.Build, &e.Hostname, &started, &heartbeat, &stopped, &recoveredBy, &recoveredT, &region); err != nil {
+		if err := rows.Scan(&e.ID, &e.Version, &e.Build, &e.Hostname, &started, &heartbeat, &stopped, &recoveredBy, &recoveredT, &region, &queues, &resources); err != nil {
 			return nil, err
+		}
+		if queues.Valid {
+			// A malformed value (never written by manent) leaves the list empty.
+			_ = json.Unmarshal([]byte(queues.String), &e.Queues)
+		}
+		if resources.Valid && json.Valid([]byte(resources.String)) {
+			e.Resources = json.RawMessage(resources.String)
 		}
 		e.StartedAt, e.HeartbeatAt = time.UnixMilli(started).UTC(), time.UnixMilli(heartbeat).UTC()
 		e.StoppedAt, e.RecoveredBy, e.RecoveredAt = fromMs(stopped), recoveredBy.String, fromMs(recoveredT)

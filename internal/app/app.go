@@ -483,6 +483,11 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
 		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
+		QueueLimits: engine.QueueOptions{
+			WorkerConcurrency:    cfg.DBOS.Concurrency,
+			GlobalConcurrency:    cfg.DBOS.GlobalConcurrency,
+			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
+		},
 	}
 	if r, ok := executors.(engine.TargetStateReader); ok {
 		opts.TargetStates = r
@@ -663,6 +668,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
 		Hostname:             host,
+		Workdir:              cfg.WorkDir,
 		Maintenance: engine.MaintenanceOptions{
 			HeartbeatInterval: rc.HeartbeatInterval, StaleAfter: rc.StaleAfter, RecoverAfter: rc.AutoRecoverAfter,
 			Retention:         engine.RetentionOptions{MaxAge: cfg.Retention.MaxAge, KeepReleases: cfg.Retention.KeepReleases},

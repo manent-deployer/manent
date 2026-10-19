@@ -92,7 +92,9 @@ type WorkerOptions struct {
 	// Build is the binary version, registered with the worker.
 	Build string
 	// Hostname is registered with the worker.
-	Hostname    string
+	Hostname string
+	// Workdir is the artifact directory: its free space is reported with the resources.
+	Workdir     string
 	Maintenance MaintenanceOptions
 	// Health runs the health gate of wave rollouts.
 	Health rollout.Checker
@@ -166,13 +168,15 @@ type Worker struct {
 	inspector       TargetInspector
 	reconcile       ReconcileOptions
 	build, hostname string
-	version         string
-	startedAt       time.Time
-	stop            chan struct{}
-	stopOnce        sync.Once
-	wg              sync.WaitGroup
-	logger          *slog.Logger
-	id              string
+	// resources samples host and process for the registry.
+	resources *resourceSampler
+	version   string
+	startedAt time.Time
+	stop      chan struct{}
+	stopOnce  sync.Once
+	wg        sync.WaitGroup
+	logger    *slog.Logger
+	id        string
 	// reader reads the state of deploys (dependencies, releases) on the worker's context.
 	reader    *Engine
 	chainPoll time.Duration
@@ -226,6 +230,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		reconcile:       opts.Reconcile.withDefaults(),
 		build:           opts.Build,
 		hostname:        opts.Hostname,
+		resources:       newResourceSampler(opts.Workdir, opts.Queue.WorkerConcurrency),
 		version:         dbos.GetApplicationVersion(ctx),
 		stop:            make(chan struct{}),
 		id:              dbos.GetExecutorID(ctx),
@@ -332,13 +337,8 @@ func (w *Worker) Launch() error {
 	if err := dbos.Launch(w.dbos); err != nil {
 		return err
 	}
-	switch {
-	case w.region != "":
-		// A region worker runs deploys, approvals and only its region's passes.
-		dbos.ListenQueues(w.dbos, w.queueName, approvalQueue(w.queueName), regionQueue(w.queueName, w.region))
-	case w.regionRouting:
-		// Without a region, with routing enabled: orchestration only, no passes.
-		dbos.ListenQueues(w.dbos, w.queueName, approvalQueue(w.queueName))
+	if w.region != "" || w.regionRouting {
+		dbos.ListenQueues(w.dbos, w.listenedQueues()...)
 	}
 	if w.registry != nil {
 		w.wg.Add(1)
@@ -352,13 +352,24 @@ func (w *Worker) Launch() error {
 	return nil
 }
 
+// listenedQueues are the queues the worker dequeues from: deploys and approvals and, for a
+// region worker, only its region's passes. Without region routing, a worker without a region
+// listens to every queue it registered (the same two).
+func (w *Worker) listenedQueues() []string {
+	if w.region != "" {
+		return []string{w.queueName, approvalQueue(w.queueName), regionQueue(w.queueName, w.region)}
+	}
+	return []string{w.queueName, approvalQueue(w.queueName)}
+}
+
 // register records the worker's startup, waiting for a running recovery of its workflows to
 // end (at most cluster.ClaimTimeout). If the same executor_id is in use by another live
 // process, it waits for it to be declared lost (StaleAfter: the case of a restart after a
 // crash) and then gives up: two processes with the same ID would resume each other's deploys.
 func (w *Worker) register() error {
 	w.startedAt = time.Now().UTC()
-	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, Region: w.region, StartedAt: w.startedAt}
+	e := cluster.Executor{ID: w.id, Version: w.version, Build: w.build, Hostname: w.hostname, Region: w.region, StartedAt: w.startedAt,
+		Queues: w.listenedQueues(), Resources: w.resources.sampleJSON()}
 	deadline := time.Now().Add(cluster.ClaimTimeout + 10*time.Second)
 	inUseDeadline := time.Now().Add(w.maintenance.StaleAfter + w.maintenance.HeartbeatInterval)
 	warned := false

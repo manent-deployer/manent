@@ -182,14 +182,17 @@ manent release cancel <id>
 
 ```sh
 manent activity [-a <applicazione>] [-e <ambiente>] [-w 5s] [--json]   # deploy attivi
+manent queues [-w 5s] [--json]                                            # code, limiti e worker in ascolto
 manent workers [-w 5s] [--json]                                         # worker e lavoro in corso
 ```
 
 `activity` mostra i deploy non ancora conclusi, raggruppati in **in esecuzione** (con il worker che li esegue, l'ultimo step registrato e l'avanzamento delle ondate), **in attesa di approvazione**, **in attesa delle dipendenze** (con i deploy ancora attesi), **in coda** (in attesa di uno slot libero dell'ambiente) e **pianificati** (`schedule.at`). Sono elencati solo i deploy che puoi leggere.
 
-`workers` elenca i worker registrati con stato (`alive`, `stale` se manca l'heartbeat, `stopped`, `unregistered` per un executor con workflow in sospeso ma assente dal registro), region, versione dei workflow e del binario, ultimo heartbeat e i workflow in esecuzione su ciascuno: deploy, passi di un'ondata in una region, health gate, approvazioni in attesa di una decisione. Richiede il permesso [`platform.read`](../operazioni/accesso.md#permessi-rbac); i workflow delle applicazioni che non puoi leggere sono solo contati.
+`workers` elenca i worker registrati con stato (`alive`, `stale` se manca l'heartbeat, `stopped`, `unregistered` per un executor con workflow in sospeso ma assente dal registro), region, versione dei workflow e del binario, ultimo heartbeat e i workflow in esecuzione su ciascuno: deploy, passi di un'ondata in una region, health gate, approvazioni in attesa di una decisione. Richiede il permesso [`platform.read`](../operazioni/accesso.md#permessi-rbac); i workflow delle applicazioni che non puoi leggere sono solo contati. Una seconda tabella mostra le risorse che ogni worker comunica a ogni heartbeat (CPU usata rispetto alle CPU utilizzabili, memoria del processo rispetto al limite del container o alla memoria dell'host, carico dell'host, spazio libero della workdir, deploy eseguiti insieme) e le code che ascolta.
 
-Entrambi stampano una tabella; `--json` stampa la risposta dell'API, `-w` ripete l'elenco all'intervallo indicato fino a Ctrl-C.
+`queues` elenca le code: quella dei deploy, partizionata per applicazione e ambiente, quella delle approvazioni e delle attese, che non occupa slot di deploy, e una coda per region con il routing per region. Per ciascuna: workflow in attesa di uno slot, in esecuzione e pianificati, l'attesa più lunga, i limiti di concorrenza e i worker attivi in ascolto. Una coda con lavoro e nessun worker in ascolto (per esempio una region con tutti i worker fermi) è la prima cosa da controllare quando i deploy non partono. Richiede `platform.read`.
+
+Tutti e tre stampano una tabella; `--json` stampa la risposta dell'API, `-w` ripete l'elenco all'intervallo indicato fino a Ctrl-C.
 
 ## Schedule
 

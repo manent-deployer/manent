@@ -57,6 +57,8 @@ type (
 	AccessService        = service.AccessService
 	PlatformService      = service.PlatformService
 	WorkerInfo           = service.WorkerInfo
+	WorkerResources      = service.WorkerResources
+	QueueInfo            = service.QueueInfo
 	WorkerTask           = service.WorkerTask
 	ActivityFilter       = service.ActivityFilter
 	Activity             = service.Activity

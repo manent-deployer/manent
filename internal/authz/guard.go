@@ -570,6 +570,17 @@ func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	return ws, nil
 }
 
+// Queues requires platform.read, like Workers: queues hold no application data beyond counts.
+func (g *Guard) Queues(ctx context.Context) ([]engine.QueueInfo, error) {
+	p := auth.FromContext(ctx)
+	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
+		err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), PlatformRead)
+		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
+		return nil, err
+	}
+	return g.Next.Queues(ctx)
+}
+
 // Activity returns only the deploys the identity can read.
 func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.Activity, error) {
 	p := auth.FromContext(ctx)

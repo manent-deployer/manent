@@ -536,6 +536,23 @@ paths:
                   workers: {type: array, items: {$ref: '#/components/schemas/Worker'}}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
+  /api/v1/queues:
+    get:
+      tags: [platform]
+      summary: Code DBOS di manent con limiti, workflow in coda, in esecuzione e pianificati e worker in ascolto (permesso platform.read)
+      operationId: listQueues
+      responses:
+        '200':
+          description: Code
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queues]
+                properties:
+                  queues: {type: array, items: {$ref: '#/components/schemas/Queue'}}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
   /api/v1/activity:
     get:
       tags: [platform]
@@ -946,8 +963,46 @@ components:
         recovered_by: {type: string}
         recovered_at: {type: string, format: date-time}
         pending: {type: object, additionalProperties: {type: integer}, description: Workflow in sospeso per versione dei workflow}
+        queues: {type: array, items: {type: string}, description: Code DBOS da cui il worker preleva}
+        resources: {$ref: '#/components/schemas/WorkerResources'}
         tasks: {type: array, items: {$ref: '#/components/schemas/WorkerTask'}}
         hidden_tasks: {type: integer, description: Workflow in esecuzione di applicazioni/ambienti non leggibili}
+    WorkerResources:
+      type: object
+      description: Ultimo campione delle risorse del worker, inviato a ogni heartbeat. I valori che il sistema operativo non fornisce mancano.
+      required: [os, arch, cpus, cpu_limit, process_cpu_cores, goroutines, sampled_at]
+      properties:
+        os: {type: string}
+        arch: {type: string}
+        cpus: {type: integer, description: CPU logiche dell'host}
+        cpu_limit: {type: integer, description: CPU utilizzabili dal processo (GOMAXPROCS, segue la quota del container)}
+        memory_total_bytes: {type: integer, format: int64, description: Memoria dell'host}
+        memory_available_bytes: {type: integer, format: int64, description: Memoria ancora disponibile sull'host}
+        memory_limit_bytes: {type: integer, format: int64, description: Limite di memoria del container (cgroup)}
+        process_memory_bytes: {type: integer, format: int64, description: Memoria residente del processo}
+        process_cpu_cores: {type: number, description: CPU usata dal processo dal campione precedente, in core}
+        load1: {type: number}
+        load5: {type: number}
+        load15: {type: number}
+        goroutines: {type: integer}
+        workdir_free_bytes: {type: integer, format: int64, description: Spazio libero del file system della workdir}
+        concurrency: {type: integer, description: Deploy eseguiti insieme dal worker (dbos.concurrency)}
+        sampled_at: {type: string, format: date-time}
+    Queue:
+      type: object
+      required: [name, kind, enqueued, running, delayed, workers]
+      properties:
+        name: {type: string}
+        kind: {type: string, enum: [deployments, approvals, region, other]}
+        region: {type: string}
+        worker_concurrency: {type: integer, description: Workflow eseguiti insieme da un worker (assente = nessun limite)}
+        global_concurrency: {type: integer, description: Workflow eseguiti insieme su tutti i worker}
+        partition_concurrency: {type: integer, description: Workflow eseguiti insieme per applicazione/ambiente}
+        enqueued: {type: integer, format: int64, description: Workflow in attesa di uno slot}
+        running: {type: integer, format: int64}
+        delayed: {type: integer, format: int64, description: Workflow pianificati (schedule.at)}
+        oldest_enqueued: {type: string, format: date-time, description: Creazione del workflow in attesa da più tempo}
+        workers: {type: array, items: {type: string}, description: Worker attivi in ascolto sulla coda}
     WorkerTask:
       type: object
       required: [id, deployment_id, kind]

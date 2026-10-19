@@ -14,6 +14,10 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Interfaccia web: pagina **Tenant** (registro con tag, applicazioni e ambienti collegati e filtro per selettore; per ogni tenant la release in esercizio per ambiente, i parametri e i nomi dei segreti), pagina **Piattaforma** (code e worker), filtro per tenant nell'elenco dei deploy.
+- Code: `GET /api/v1/queues` e `manent queues` (permesso `platform.read`) con limiti di concorrenza, workflow in attesa, in esecuzione e pianificati, attesa più lunga e worker in ascolto di ogni coda.
+- Risorse dei worker: ogni worker registra le code che ascolta e, a ogni heartbeat, CPU dell'host e utilizzabili (quota del container), CPU usata dal processo, memoria dell'host, disponibile e limite del container, memoria del processo, carico, spazio libero della workdir e concorrenza; esposte da `GET /api/v1/workers`, `manent workers` e nella pagina Piattaforma.
+
 - Tenant: terza dimensione facoltativa accanto ad applicazione e ambiente. Registro dei tenant
   nel provider della configurazione di ambiente (`envconfig/tenants/<tenant>.yml` o
   `manent/tenants/<tenant>` su Consul) con tag, ambienti collegati, parametri, segreti e
@@ -201,6 +205,9 @@ ne usa il contenuto come note.
 
 ### Corretto
 
+- Registro dei tenant su file: con un modello di percorso che inizia con `./`, come quello predefinito (`./envconfig/tenants/{tenant}.yml`), l'elenco dei tenant restava vuoto.
+- Messaggi di errore di rollback manuale e promozione senza una release da usare interamente in inglese (`no version before 1.0.0 was released successfully in prod`, `no version was released successfully in staging`).
+- Jira: le `labels` in `integrations.change.jira.fields` si aggiungono a quelle di manent invece di sostituirle, così la issue di un deploy si ritrova sempre e non viene duplicata dopo un tentativo o una recovery. `project` e `issuetype` in `fields` (Jira) e `correlation_id` e `correlation_display` (ServiceNow) sono rifiutati dalla validazione della configurazione.
 - Plugin `jboss`: il cambio di versione usa `replace-deployment`; con `undeploy` e `deploy` nella
   stessa composite WildFly non avviava il nuovo deployment con lo stesso runtime-name.
 - `approvals.when: rollout`: il primo rilascio per percentuale, che salta i gradini intermedi,

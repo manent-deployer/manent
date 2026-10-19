@@ -20,6 +20,7 @@ export function DeploymentsPage() {
   const filters = {
     application: params.get("application") ?? "",
     environment: params.get("environment") ?? "",
+    tenant: params.get("tenant") ?? "",
     state: params.get("state") ?? "",
   };
   const [draft, setDraft] = useState(filters);
@@ -45,7 +46,7 @@ export function DeploymentsPage() {
     setParams(next);
   };
   const reset = () => {
-    setDraft({ application: "", environment: "", state: "" });
+    setDraft({ application: "", environment: "", tenant: "", state: "" });
     setParams(new URLSearchParams());
   };
 
@@ -60,12 +61,15 @@ export function DeploymentsPage() {
           </Button>
         }
       />
-      <form onSubmit={submit} className="card mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end" aria-label={t("common.filters")}>
+      <form onSubmit={submit} className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end" aria-label={t("common.filters")}>
         <Field label={t("deployments.filter.application")}>
           {(p) => <input {...p} className={inputClass} value={draft.application} onChange={(e) => setDraft({ ...draft, application: e.target.value })} />}
         </Field>
         <Field label={t("deployments.filter.environment")}>
           {(p) => <input {...p} className={inputClass} value={draft.environment} onChange={(e) => setDraft({ ...draft, environment: e.target.value })} />}
+        </Field>
+        <Field label={t("deployments.filter.tenant")}>
+          {(p) => <input {...p} className={inputClass} value={draft.tenant} onChange={(e) => setDraft({ ...draft, tenant: e.target.value })} />}
         </Field>
         <Field label={t("deployments.filter.state")}>
           {(p) => (

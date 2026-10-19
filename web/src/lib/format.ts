@@ -64,6 +64,19 @@ export function formatNumber(v: number | undefined, locale: string, digits = 2):
   return new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(v);
 }
 
+/** formatBytes formats a size with binary units (KiB, MiB, GiB…); "—" if unknown. */
+export function formatBytes(n: number | undefined, locale: string): string {
+  if (!n) return "—";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: i === 0 ? 0 : 1 }).format(v)} ${units[i]}`;
+}
+
 export function shortId(id: string): string {
   return id.length > 14 ? id.slice(0, 8) + "…" : id;
 }

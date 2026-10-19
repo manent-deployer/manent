@@ -3,6 +3,7 @@ package engine
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -57,12 +58,111 @@ func (e *Engine) Workers(ctx context.Context) ([]WorkerInfo, error) {
 	return out, nil
 }
 
+// Queues implements PlatformService: the queues of manent (deploys, approvals, regions) with
+// the configured limits, the count of enqueued, running and scheduled workflows and the live
+// workers that listen to each. Region queues are those of the registered workers and those
+// holding workflows.
+func (e *Engine) Queues(ctx context.Context) ([]QueueInfo, error) {
+	byName := map[string]*QueueInfo{}
+	get := func(name string) *QueueInfo {
+		if q := byName[name]; q != nil {
+			return q
+		}
+		q := e.describeQueue(name)
+		byName[name] = q
+		return q
+	}
+	get(e.queueName)
+	get(approvalQueue(e.queueName))
+	if e.executors != nil {
+		es, err := e.executors.Executors(ctx, e.staleAfter)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range es {
+			if x.Region != "" {
+				get(regionQueue(e.queueName, x.Region))
+			}
+			if !x.Alive || x.StoppedAt != nil {
+				continue
+			}
+			for _, name := range x.Queues {
+				q := get(name)
+				q.Workers = append(q.Workers, x.ID)
+			}
+		}
+	}
+	rows, err := dbos.GetWorkflowAggregates(e.client, dbos.GetWorkflowAggregatesInput{
+		GroupByQueueName: true, GroupByStatus: true, SelectCount: true, SelectMinCreatedAt: true,
+		Status: []dbos.WorkflowStatusType{dbos.WorkflowStatusEnqueued, dbos.WorkflowStatusPending, dbos.WorkflowStatusDelayed},
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		name := group(r.Group, "queue_name")
+		if name == "" {
+			// Workflows started without a queue (children run directly) belong to no queue.
+			continue
+		}
+		q := get(name)
+		var n int64
+		if r.Count != nil {
+			n = *r.Count
+		}
+		switch dbos.WorkflowStatusType(group(r.Group, "status")) {
+		case dbos.WorkflowStatusEnqueued:
+			q.Enqueued += n
+			if r.MinCreatedAt != nil {
+				at := time.UnixMilli(*r.MinCreatedAt).UTC()
+				if q.OldestEnqueued == nil || at.Before(*q.OldestEnqueued) {
+					q.OldestEnqueued = &at
+				}
+			}
+		case dbos.WorkflowStatusPending:
+			q.Running += n
+		case dbos.WorkflowStatusDelayed:
+			q.Delayed += n
+		}
+	}
+	out := make([]QueueInfo, 0, len(byName))
+	for _, name := range slices.Sorted(maps.Keys(byName)) {
+		q := byName[name]
+		slices.Sort(q.Workers)
+		out = append(out, *q)
+	}
+	return out, nil
+}
+
+// describeQueue returns kind and limits of a queue from its name, as registered by the workers.
+func (e *Engine) describeQueue(name string) *QueueInfo {
+	q := &QueueInfo{Name: name, Kind: service.QueueOther, Workers: []string{}}
+	l := e.queueLimits
+	switch {
+	case name == e.queueName:
+		q.Kind = service.QueueDeployments
+		q.WorkerConcurrency, q.GlobalConcurrency, q.PartitionConcurrency = l.WorkerConcurrency, l.GlobalConcurrency, l.PartitionConcurrency
+	case name == approvalQueue(e.queueName):
+		q.Kind = service.QueueApprovals
+	case strings.HasPrefix(name, e.queueName+"."):
+		q.Kind, q.Region = service.QueueRegion, strings.TrimPrefix(name, e.queueName+".")
+		q.WorkerConcurrency, q.PartitionConcurrency = l.WorkerConcurrency, 1
+	}
+	return q
+}
+
 // workerInfo converts the state of an executor into the format exposed by the service.
 func workerInfo(x ExecutorStatus) *WorkerInfo {
 	wi := &WorkerInfo{
 		ID: x.ID, Version: x.Version, Build: x.Build, Hostname: x.Hostname, Region: x.Region,
 		StoppedAt: x.StoppedAt, RecoveredBy: x.RecoveredBy, RecoveredAt: x.RecoveredAt,
-		Pending: x.Pending, Tasks: []WorkerTask{},
+		Pending: x.Pending, Tasks: []WorkerTask{}, Queues: x.Queues,
+	}
+	if len(x.Resources) > 0 {
+		var r service.WorkerResources
+		if json.Unmarshal(x.Resources, &r) == nil {
+			wi.Resources = &r
+		}
 	}
 	switch {
 	case !x.Registered:
