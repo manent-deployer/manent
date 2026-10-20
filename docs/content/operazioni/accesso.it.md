@@ -41,6 +41,7 @@ manent verifica i JWT emessi da un identity provider OIDC (Keycloak, Microsoft E
 | `audience` | | Valore atteso nel claim `aud`, tipicamente il client ID registrato per manent. |
 | `username_claim` | `preferred_username` | Claim con il nome dell'utente. Se manca si usa `sub`. |
 | `groups_claim` | `groups` | Claim con i gruppi, usati dai permessi. |
+| `policy_claims` | `[email, name]` | Claim esposti alla [policy dei permessi](../guida/permessi.md) (`input.identity.claims`); gli altri non le arrivano mai. |
 | `ca_file` | | CA aggiuntive per raggiungere l'issuer. |
 | `ui.client_id`, `ui.scopes`, `ui.redirect_path` | | Client pubblico (PKCE) dell'[interfaccia web](../guida/interfaccia-web.md#accesso). |
 
@@ -117,7 +118,7 @@ rbac:
       environments: [test]
 ```
 
-Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità corrisponde a uno dei `subjects` o appartiene a uno dei `groups`. Un'azione è consentita se almeno un binding la concede: non esistono regole di negazione.
+Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità corrisponde a uno dei `subjects` o appartiene a uno dei `groups`. Un'azione è consentita se almeno un binding la concede: non esistono regole di negazione. Per decidere permessi e divieti in Rego, con revisioni, approvazione e simulazione, vedi [Permessi come policy](../guida/permessi.md) (`rbac.engine: opa`).
 
 ### Ruoli e azioni
 

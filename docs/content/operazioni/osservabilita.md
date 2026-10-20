@@ -42,6 +42,11 @@ observability:
 | `manent_policy_evaluations_total` | counter | `phase`, `outcome` | Policy evaluations (`allowed`, `denied`, `frozen`, `error`, `unavailable`). |
 | `manent_policy_eval_duration_seconds` | histogram | `phase` | Duration of the evaluations. |
 | `manent_policy_load_errors_total` | counter | | Failed reads: revision refused or source unreachable. |
+| `manent_authz_grants_evaluations_total` | counter | `outcome` | Grants of an identity computed by the [permission policy](../guida/permessi.md) (`ok`, `cached`, `error`). |
+| `manent_authz_deny_evaluations_total` | counter | `action`, `outcome` | Denials evaluated (`allowed`, `denied`, `error`). |
+| `manent_authz_eval_duration_seconds` | histogram | `part` | Duration of the permission evaluations (`grants`, `deny`). |
+| `manent_authz_invalid_grants_total` | counter | | Grants discarded as invalid or with `policy.*` actions. |
+| `manent_authz_cache_entries` | gauge | | Identities in the grants cache. |
 
 Plus the standard Go runtime (`go_*`) and process (`process_*`) metrics.
 

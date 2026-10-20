@@ -94,7 +94,7 @@ func (f *fakeIssuer) token(t *testing.T, claims map[string]any) string {
 
 func TestOIDC(t *testing.T) {
 	iss := newFakeIssuer(t)
-	o, err := NewOIDC(context.Background(), OIDCConfig{Issuer: iss.srv.URL, Audience: "manent"})
+	o, err := NewOIDC(context.Background(), OIDCConfig{Issuer: iss.srv.URL, Audience: "manent", PolicyClaims: []string{"email", "employee_type", "admin"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +103,7 @@ func TestOIDC(t *testing.T) {
 		return map[string]any{
 			"iss": iss.srv.URL, "aud": aud, "sub": "u-123", "exp": exp.Unix(), "iat": now.Unix(),
 			"preferred_username": "alice", "groups": []string{"team-a", "release-managers"},
+			"email": "alice@example.com", "employee_type": "contractor", "admin": true, "salary": "secret",
 		}
 	}
 	ctx := context.Background()
@@ -112,6 +113,10 @@ func TestOIDC(t *testing.T) {
 	}
 	if p.String() != "oidc:alice" || !slices.Equal(p.Groups, []string{"team-a", "release-managers"}) {
 		t.Errorf("identità inattesa: %+v", p)
+	}
+	// Only the listed claims reach the permission policy.
+	if len(p.Claims) != 3 || p.Claims["email"] != "alice@example.com" || p.Claims["employee_type"] != "contractor" || p.Claims["admin"] != "true" {
+		t.Errorf("claim esposti: %v", p.Claims)
 	}
 	if _, err := o.Authenticate(ctx, iss.token(t, claims("altra-app", now.Add(time.Hour)))); err == nil {
 		t.Error("audience errata accettata")

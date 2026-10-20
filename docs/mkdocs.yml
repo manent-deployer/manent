@@ -123,6 +123,7 @@ plugins:
             Percentage rollouts: Rilasci per percentuale
             Release governance: Governance dei rilasci
             Policies in Rego: Policy in Rego
+            Permissions as a policy: Permessi come policy
             Extending: Estendere
             Custom steps: Step personalizzati
             Callbacks: Callback
@@ -225,6 +226,7 @@ nav:
       - Governance:
           - Release governance: guida/governance.md
           - Policies in Rego: guida/policy.md
+          - Permissions as a policy: guida/permessi.md
       - Extending:
           - Custom steps: guida/step-personalizzati.md
           - Callbacks: guida/callback.md

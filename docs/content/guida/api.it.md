@@ -56,6 +56,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/policies` | Carica una revisione in bozza (`policy.write`). |
 | `GET` | `/api/v1/policies/{revision}` | Una revisione con i suoi file. |
 | `POST` | `/api/v1/policies/{revision}/evaluate` | Decisione di una revisione su un descrittore (`policy.write`). |
+| `POST` | `/api/v1/policies/{revision}/access` | Permessi di un'identità indicata a mano, differenze rispetto alla revisione attiva ed esito di un'azione (`policy.write`, `rbac.engine: opa`). |
 | `GET` | `/api/v1/policies/{revision}/impact` | Decisioni dei deploy reali ricalcolate con una revisione (`policy.write`). |
 | `POST` | `/api/v1/policies/{revision}/approve` | Approva e attiva una bozza (`policy.approve`). |
 | `POST` | `/api/v1/policies/{revision}/activate` | Torna a una revisione precedente (`policy.approve`). |

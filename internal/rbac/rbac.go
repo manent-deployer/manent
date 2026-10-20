@@ -1,6 +1,8 @@
-// Package authz applies permissions (RBAC) per application and environment. Guard wraps the
-// engine service, so the same rules apply to the API and the CLI.
-package authz
+// Package rbac is the model of the permissions: actions, roles, bindings, the grants of an
+// identity and the Authorizer that decides them (bindings of manent.yml or a Rego policy). It
+// depends on no engine code: authz.Guard applies it to the service, policy implements the
+// Rego Authorizer.
+package rbac
 
 import (
 	"fmt"

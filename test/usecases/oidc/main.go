@@ -27,6 +27,16 @@ var users = map[string][]string{
 	"cab":    {"cab"},
 	"admin":  {"admins"},
 	"viewer": {"viewers"},
+	// UC25: two members of team-uc25, an employee and a contractor (claim employee_type).
+	"dave":  {"team-uc25"},
+	"carol": {"team-uc25"},
+}
+
+// extraClaims are the claims besides name and groups, exposed by manent to the permission
+// policy through auth.oidc.policy_claims.
+var extraClaims = map[string]map[string]any{
+	"dave":  {"employee_type": "employee", "email": "dave@uc.example"},
+	"carol": {"employee_type": "contractor", "email": "carol@uc.example"},
 }
 
 var order = []string{"viewer", "ci", "cab", "admin"}
@@ -68,6 +78,7 @@ func main() {
 	mux.HandleFunc("/authorize", s.authorize)
 	mux.HandleFunc("/token", s.token)
 	mux.HandleFunc("/logout", s.logout)
+	mux.HandleFunc("/lab/token", s.labToken)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	log.Printf("identity provider di prova su %s, issuer %s", *listen, *issuer)
 	srv := &http.Server{Addr: *listen, Handler: cors(mux), ReadHeaderTimeout: 10 * time.Second}
@@ -226,6 +237,9 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 	if g.nonce != "" {
 		claims["nonce"] = g.nonce
 	}
+	for k, v := range extraClaims[g.user] {
+		claims[k] = v
+	}
 	tok, err := jwt.Signed(s.signer).Claims(claims).Serialize()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
@@ -237,6 +251,30 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 		"access_token": tok, "id_token": tok, "refresh_token": rt, "token_type": "Bearer",
 		"expires_in": 900, "scope": "openid profile",
 	})
+}
+
+// labToken returns an access token of a test user without the browser (UC25 calls the API
+// with OIDC identities from the shell): it exists only because this server is lab-only.
+func (s *server) labToken(w http.ResponseWriter, r *http.Request) {
+	user := r.URL.Query().Get("user")
+	if _, ok := users[user]; !ok {
+		http.Error(w, "utente sconosciuto", http.StatusBadRequest)
+		return
+	}
+	now := time.Now()
+	claims := map[string]any{
+		"iss": s.issuer, "sub": user, "aud": []string{s.audience}, "iat": now.Unix(), "exp": now.Add(15 * time.Minute).Unix(),
+		"preferred_username": user, "name": user, "groups": users[user],
+	}
+	for k, v := range extraClaims[user] {
+		claims[k] = v
+	}
+	tok, err := jwt.Signed(s.signer).Claims(claims).Serialize()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, _ = w.Write([]byte(tok))
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {

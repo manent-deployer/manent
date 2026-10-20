@@ -32,6 +32,8 @@ type Principal struct {
 	Subject string   `json:"subject"`
 	Groups  []string `json:"groups,omitempty"`
 	Method  string   `json:"method"`
+	// Claims are the token claims exposed to the permission policy (auth.oidc.policy_claims).
+	Claims map[string]string `json:"claims,omitempty"`
 }
 
 // String returns the identifier "<method>:<subject>" (e.g. "oidc:alice", "token:ci"),

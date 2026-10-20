@@ -56,6 +56,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/policies` | Pushes a draft revision (`policy.write`). |
 | `GET` | `/api/v1/policies/{revision}` | A revision with its files. |
 | `POST` | `/api/v1/policies/{revision}/evaluate` | Decision of a revision on a descriptor (`policy.write`). |
+| `POST` | `/api/v1/policies/{revision}/access` | Permissions of an identity given by hand, difference from the active revision and outcome of an action (`policy.write`, `rbac.engine: opa`). |
 | `GET` | `/api/v1/policies/{revision}/impact` | Decisions of the real deploys recomputed with a revision (`policy.write`). |
 | `POST` | `/api/v1/policies/{revision}/approve` | Approves and activates a draft (`policy.approve`). |
 | `POST` | `/api/v1/policies/{revision}/activate` | Goes back to a previous revision (`policy.approve`). |

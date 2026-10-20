@@ -96,9 +96,12 @@ See [Rollback](../guida/rollback.md).
 | Key | Default | Description |
 |---|---|---|
 | `auth.mode` | `none` | `none`: no authentication or permissions (development only). `enabled`: bearer token required and RBAC. |
-| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`. |
+| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`, `policy_claims` (default `[email, name]`: claims exposed to the [permission policy](../guida/permessi.md)). |
 | `auth.tokens` | `[]` | Static tokens: `name`, `sha256` (never the token), `groups`, `expires_at`. |
 | `auth.tokens_file` | | YAML file with more tokens (same format, `tokens` key), reloaded when it changes: revocation without restart. |
+| `rbac.engine` | `builtin` | `builtin` (the bindings below) or `opa` (the [permission policy](../guida/permessi.md) of the revisions; requires `governance.engine: opa`). `policy.*` always come from `rbac.bindings`. |
+| `rbac.opa.cache` | `30s` | How long the grants of an identity are reused with `opa`. |
+| `rbac.opa.cache_size` | `10000` | Identities in the grants cache. |
 | `rbac.roles` | `{}` | Additional roles: name → list of actions. |
 | `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`), `tenants` (selector: the binding applies only to the deploys of those [tenants](../guida/tenant.md#permessi)). |
 | `audit.file` | | JSON Lines file of audit entries, with a hash chain, in addition to the log and the SIEM. |

@@ -266,3 +266,19 @@ func TestRiconciliazione(t *testing.T) {
 		}
 	}
 }
+
+func TestMotoreDeiPermessi(t *testing.T) {
+	for in, want := range map[string]string{
+		"rbac: {engine: opa}\n":       "requires governance.engine: opa",
+		"rbac: {engine: casbin}\n":    "not supported",
+		"rbac: {opa: {cache: -1s}}\n": "cache",
+	} {
+		if _, err := load(t, in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: errore %v, atteso %q", in, err, want)
+		}
+	}
+	cfg, err := load(t, "governance: {engine: opa}\nrbac: {engine: opa, opa: {cache: 1m}}\n")
+	if err != nil || cfg.RBAC.Engine != RBACOPA || cfg.RBAC.OPA.Cache != time.Minute {
+		t.Errorf("motore opa: %+v %v", cfg.RBAC, err)
+	}
+}

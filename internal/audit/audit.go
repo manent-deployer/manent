@@ -39,6 +39,10 @@ type Entry struct {
 	// Comment is the comment of an approval or the reason of a freeze override.
 	Comment string `json:"comment,omitempty"`
 	Reason  string `json:"reason,omitempty"`
+	// AuthzRevision is the permission policy revision that decided (rbac.engine: opa); Grant the
+	// grant of that policy that allowed the action.
+	AuthzRevision string `json:"authz_revision,omitempty"`
+	Grant         string `json:"grant,omitempty"`
 	// PrevHash is the hash of the previous entry in the audit file (chain).
 	PrevHash string `json:"prev_hash,omitempty"`
 }
@@ -64,7 +68,7 @@ func (r LogRecorder) Record(ctx context.Context, e Entry) error {
 	for _, kv := range [][2]string{
 		{"application", e.Application}, {"environment", e.Environment}, {"deployment", e.Deployment},
 		{"schedule", e.Schedule}, {"rollback", e.Rollback}, {"step", e.Step}, {"spec", e.Spec},
-		{"comment", e.Comment}, {"reason", e.Reason},
+		{"comment", e.Comment}, {"reason", e.Reason}, {"authz_revision", e.AuthzRevision}, {"grant", e.Grant},
 	} {
 		if kv[1] != "" {
 			attrs = append(attrs, kv[0], kv[1])

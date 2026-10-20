@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // AccessService describes the caller's identity and what it can do: interfaces (UI,
 // "manent whoami") use it to show only the allowed actions. The real check stays in the
@@ -22,14 +25,22 @@ type Identity struct {
 	// Grants are the roles assigned to the identity, with the applications and environments they
 	// apply to ("*" patterns).
 	Grants []Grant `json:"grants"`
+	// AuthzEngine and AuthzRevision are the permission engine (opa) and the policy revision in
+	// force; empty with the builtin engine.
+	AuthzEngine   string `json:"authz_engine,omitempty"`
+	AuthzRevision string `json:"authz_revision,omitempty"`
 }
 
 // Grant is a role assigned on a set of applications and environments.
 type Grant struct {
-	Role         string   `json:"role"`
+	// Name labels the grant (a binding's position, or the name given by the policy).
+	Name         string   `json:"name,omitempty"`
+	Role         string   `json:"role,omitempty"`
 	Actions      []string `json:"actions"`
 	Applications []string `json:"applications"`
 	Environments []string `json:"environments"`
 	// Tenants is the selector of the tenants the grant is limited to ("" for all).
 	Tenants string `json:"tenants,omitempty"`
+	// Until, if set, is when the grant stops applying.
+	Until *time.Time `json:"until,omitempty"`
 }

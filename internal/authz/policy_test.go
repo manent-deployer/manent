@@ -33,6 +33,9 @@ func (f *fakeService) PolicyImpact(context.Context, int64, time.Duration) (*engi
 		{Deployment: "b1", Application: "team-b-api", Environment: "test"},
 	}}, nil
 }
+func (f *fakeService) PolicyAccess(context.Context, int64, engine.PolicyAccessRequest) (*engine.PolicyAccess, error) {
+	return &engine.PolicyAccess{}, nil
+}
 func (f *fakeService) ApprovePolicy(context.Context, int64) error  { return nil }
 func (f *fakeService) ActivatePolicy(context.Context, int64) error { return nil }
 

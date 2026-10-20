@@ -115,6 +115,30 @@ func (s *Server) evaluatePolicy(c *gin.Context) {
 	c.JSON(http.StatusOK, ev)
 }
 
+// policyAccess simulates the permissions of an identity with a revision.
+func (s *Server) policyAccess(c *gin.Context) {
+	rev, ok := policyRevision(c)
+	if !ok {
+		return
+	}
+	var r engine.PolicyAccessRequest
+	if !readJSON(c, &r) {
+		return
+	}
+	if r.Check != nil && r.Check.Descriptor != nil {
+		if err := r.Check.Descriptor.Validate(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	acc, err := s.svc.PolicyAccess(c.Request.Context(), rev, r)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, acc)
+}
+
 // policyImpact recomputes with a revision the decisions of the deploys since ?since= (default 7d).
 func (s *Server) policyImpact(c *gin.Context) {
 	rev, ok := policyRevision(c)

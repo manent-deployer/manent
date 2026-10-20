@@ -27,6 +27,8 @@ export type FreezeRequest = components["schemas"]["FreezeRequest"];
 export type PolicyList = components["schemas"]["PolicyList"];
 export type PolicyRevision = components["schemas"]["PolicyRevision"];
 export type PolicyImpact = components["schemas"]["PolicyImpact"];
+export type Grant = components["schemas"]["Grant"];
+export type PolicyAccessRequest = components["schemas"]["PolicyAccessRequest"];
 
 /** API error with the HTTP status and the server message. */
 export class ApiError extends Error {

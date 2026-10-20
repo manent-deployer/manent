@@ -17,6 +17,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/rbac"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/service"
 )
@@ -33,6 +34,10 @@ type (
 	PolicyEvaluation        = service.PolicyEvaluation
 	PolicyImpact            = service.PolicyImpact
 	PolicyChange            = service.PolicyChange
+	PolicyAccessRequest     = service.PolicyAccessRequest
+	PolicyAccess            = service.PolicyAccess
+	AccessCheck             = service.AccessCheck
+	AccessOutcome           = service.AccessOutcome
 )
 
 // Governance evaluates the governance policy and lists the freeze windows. The built-in
@@ -56,6 +61,10 @@ type PolicyAdmin interface {
 	Activate(ctx context.Context, revision int64, by string, draft bool) error
 	// EvaluateRevision evaluates a revision (0 = the one in force).
 	EvaluateRevision(ctx context.Context, revision int64, in governance.Input) (governance.Decision, error)
+	// AccessRevision returns the grants of an identity with a revision (0 = the one in force),
+	// the revision label and the grants discarded; DenyRevision the denials for a change.
+	AccessRevision(ctx context.Context, revision int64, p *auth.Principal) (string, []rbac.Grant, []string, error)
+	DenyRevision(ctx context.Context, revision int64, r rbac.DenyRequest) ([]string, error)
 }
 
 // Values of governance.opa.start (WorkerOptions.PolicyStart).

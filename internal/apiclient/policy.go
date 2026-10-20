@@ -69,6 +69,15 @@ func (c *Client) EvaluatePolicy(ctx context.Context, revision int64, r service.P
 	return &ev, nil
 }
 
+// PolicyAccess implements service.Service.
+func (c *Client) PolicyAccess(ctx context.Context, revision int64, r service.PolicyAccessRequest) (*service.PolicyAccess, error) {
+	var acc service.PolicyAccess
+	if err := c.do(ctx, http.MethodPost, revisionPath(revision)+"/access", nil, r, &acc); err != nil {
+		return nil, err
+	}
+	return &acc, nil
+}
+
 // PolicyImpact implements service.Service.
 func (c *Client) PolicyImpact(ctx context.Context, revision int64, since time.Duration) (*service.PolicyImpact, error) {
 	var imp service.PolicyImpact

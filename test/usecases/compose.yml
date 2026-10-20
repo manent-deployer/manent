@@ -77,6 +77,8 @@ services:
     command: ["-listen", ":9000", "-issuer", "http://oidc:9000"]
     hostname: oidc
     networks: [core]
+    # UC25 asks for the tokens of the OIDC users from the host (/lab/token).
+    ports: ["127.0.0.1:19000:9000"]
 
   # Fakes of Slack, Teams, ServiceNow and of a generic HTTP endpoint (UC12, UC13); the host
   # reads what manent sent on 127.0.0.1:19100/records.

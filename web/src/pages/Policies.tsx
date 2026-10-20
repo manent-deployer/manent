@@ -12,6 +12,8 @@ import { useI18n } from "@/i18n/i18n";
 import { formatDateTime } from "@/lib/format";
 import { canSomewhere } from "@/lib/permissions";
 
+import { PolicyAccess } from "./PolicyAccess";
+
 const statusTone = { draft: "info", active: "ok", superseded: "muted" } as const;
 
 function StatusBadge({ status }: { status: PolicyRevision["status"] }) {
@@ -156,6 +158,7 @@ function Revision({ revision, onClose }: { revision: number; onClose: () => void
 export function PoliciesPage() {
   const { t, locale } = useI18n();
   const api = useApi();
+  const me = useMe();
   const [open, setOpen] = useState<number>();
   const q = useQuery({ queryKey: ["policies"], queryFn: async () => unwrap(await api.GET("/api/v1/policies")), refetchInterval: 30_000 });
   return (
@@ -232,6 +235,11 @@ export function PoliciesPage() {
               </div>
             )}
           </Section>
+          {me.data?.authz_engine === "opa" && canSomewhere(me.data, "policy.write") && (
+            <Section title={t("policies.access.title")} id="access">
+              <PolicyAccess revisions={q.data.revisions} />
+            </Section>
+          )}
         </div>
       )}
       {open !== undefined && <Revision revision={open} onClose={() => setOpen(undefined)} />}

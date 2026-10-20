@@ -41,6 +41,7 @@ manent verifies JWTs issued by an OIDC identity provider (Keycloak, Microsoft En
 | `audience` | | Expected value of the `aud` claim, typically the client ID registered for manent. |
 | `username_claim` | `preferred_username` | Claim with the user name. If missing, `sub` is used. |
 | `groups_claim` | `groups` | Claim with the groups, used by permissions. |
+| `policy_claims` | `[email, name]` | Claims exposed to the [permission policy](../guida/permessi.md) (`input.identity.claims`); the others never reach it. |
 | `ca_file` | | Additional CAs to reach the issuer. |
 | `ui.client_id`, `ui.scopes`, `ui.redirect_path` | | Public client (PKCE) of the [web interface](../guida/interfaccia-web.md#sign-in). |
 
@@ -117,7 +118,7 @@ rbac:
       environments: [test]
 ```
 
-All fields accept patterns with `*`. A binding applies if the identity matches one of the `subjects` or belongs to one of the `groups`. An action is allowed if at least one binding grants it: there are no deny rules.
+All fields accept patterns with `*`. A binding applies if the identity matches one of the `subjects` or belongs to one of the `groups`. An action is allowed if at least one binding grants it: there are no deny rules. To decide permissions and denials in Rego, with revisions, approval and simulation, see [Permissions as a policy](../guida/permessi.md) (`rbac.engine: opa`).
 
 ### Roles and actions
 

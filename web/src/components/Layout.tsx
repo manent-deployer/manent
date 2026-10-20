@@ -100,7 +100,7 @@ function UserMenu() {
               <ul className="mt-1 space-y-1">
                 {id.grants.map((g, i) => (
                   <li key={i} className="font-mono text-xs">
-                    {g.role} · {g.applications.join(",")} / {g.environments.join(",")}
+                    {g.role || g.name} · {g.applications.join(",")} / {g.environments.join(",")}
                   </li>
                 ))}
               </ul>

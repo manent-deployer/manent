@@ -288,6 +288,7 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config, log *slog.Logger)
 	if o := cfg.Auth.OIDC; o != nil {
 		v, err := auth.NewOIDC(ctx, auth.OIDCConfig{
 			Issuer: o.Issuer, Audience: o.Audience, UsernameClaim: o.UsernameClaim, GroupsClaim: o.GroupsClaim, CAFile: o.CAFile,
+			PolicyClaims: policyClaims(o),
 		})
 		if err != nil {
 			return nil, err
@@ -297,11 +298,26 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config, log *slog.Logger)
 	return chain, nil
 }
 
+// policyClaims are the claims exposed to the permission policy: the default ones (email,
+// name) unless auth.oidc.policy_claims sets them (also to an empty list).
+func policyClaims(o *config.OIDC) []string {
+	if o.PolicyClaims == nil {
+		return config.DefaultPolicyClaims
+	}
+	return o.PolicyClaims
+}
+
 // NewAuthzPolicy creates the RBAC policy; with auth.mode none it allows everything.
 func NewAuthzPolicy(cfg *config.Config) (authz.Policy, error) {
 	if cfg.Auth.Mode == config.AuthModeNone {
 		return authz.Policy{Disabled: true}, nil
 	}
+	roles, bindings := RBACConfig(cfg)
+	return authz.NewPolicy(roles, bindings)
+}
+
+// RBACConfig converts rbac.roles and rbac.bindings of the configuration.
+func RBACConfig(cfg *config.Config) (map[string][]authz.Action, []authz.Binding) {
 	roles := map[string][]authz.Action{}
 	for name, acts := range cfg.RBAC.Roles {
 		for _, a := range acts {
@@ -312,7 +328,17 @@ func NewAuthzPolicy(cfg *config.Config) (authz.Policy, error) {
 	for i, b := range cfg.RBAC.Bindings {
 		bindings[i] = authz.Binding{Subjects: b.Subjects, Groups: b.Groups, Role: b.Role, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants}
 	}
-	return authz.NewPolicy(roles, bindings)
+	return roles, bindings
+}
+
+// AuthzCompileOptions returns the permission options of the revisions: nil unless rbac.engine
+// is opa.
+func AuthzCompileOptions(cfg *config.Config) *policy.AuthzOptions {
+	if cfg.RBAC.Engine != config.RBACOPA {
+		return nil
+	}
+	roles, bindings := RBACConfig(cfg)
+	return &policy.AuthzOptions{Roles: roles, Bindings: bindings}
 }
 
 // NewAuditRecorder creates the audit recorder: application log (and SIEM) and, if configured,
@@ -443,18 +469,20 @@ func NewCallbackPolicy(cfg *config.Config) callback.Policy {
 
 // components holds the components shared by worker and client.
 type components struct {
-	log        *slog.Logger
-	plugins    *plugin.Registry
-	siem       logging.SIEMSender
-	steps      *pipeline.Registry
-	store      *artifact.Store
-	planner    pipeline.Planner
-	resolver   envconfig.Resolver
-	policy     callback.Policy
-	notifier   callback.Notifier
-	rollback   rollback.Policy
-	sources    *artifact.Sources
-	authz      authz.Policy
+	log      *slog.Logger
+	plugins  *plugin.Registry
+	siem     logging.SIEMSender
+	steps    *pipeline.Registry
+	store    *artifact.Store
+	planner  pipeline.Planner
+	resolver envconfig.Resolver
+	policy   callback.Policy
+	notifier callback.Notifier
+	rollback rollback.Policy
+	sources  *artifact.Sources
+	authz    authz.Policy
+	// authzOPA: rbac.engine opa, the governance runtime decides the permissions.
+	authzOPA   bool
 	audit      audit.Recorder
 	governance *policy.Runtime
 	// tenants is the tenant registry with the cache (nil without registry).
@@ -516,7 +544,11 @@ func (c *components) chatNotifier() engine.ChatNotifier {
 
 // guard wraps the Engine with permissions.
 func (c *components) guard(eng *engine.Engine) engine.Service {
-	return &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz")}
+	g := &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz")}
+	if c.authzOPA {
+		g.Authorizer = c.governance
+	}
+	return g
 }
 
 func newComponents(cfg *config.Config) (*components, error) {
@@ -599,6 +631,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 		rollback:   NewRollbackPolicy(cfg, locators),
 		sources:    sources,
 		authz:      authzPolicy,
+		authzOPA:   cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
 		audit:      auditRec,
 		governance: gov,
 		tenants:    NewTenantCache(cfg, resolver),

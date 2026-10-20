@@ -370,7 +370,13 @@ type OIDC struct {
 	// UI is the public OIDC client (Authorization Code + PKCE) of the web interface: its access
 	// tokens must have the audience and the groups claim verified above.
 	UI *OIDCUI `yaml:"ui"`
+	// PolicyClaims are the token claims exposed to the permission policy (default email and
+	// name): tokens may carry other personal data the policy must not see.
+	PolicyClaims []string `yaml:"policy_claims"`
 }
+
+// DefaultPolicyClaims are the claims exposed to the permission policy by default.
+var DefaultPolicyClaims = []string{"email", "name"}
 
 // OIDCUI is the OIDC client of the web interface.
 type OIDCUI struct {
@@ -391,9 +397,28 @@ type APIToken struct {
 
 // RBAC assigns roles per application and environment.
 type RBAC struct {
+	// Engine is builtin (default: the bindings below) or opa (the permission policy of the
+	// governance revisions; policy.* stay decided by the bindings).
+	Engine string         `yaml:"engine"`
+	OPA    RBACOPAOptions `yaml:"opa"`
 	// Roles defines roles in addition to the predefined ones (viewer, tester, deployer, operator, admin).
 	Roles    map[string][]string `yaml:"roles"`
 	Bindings []RBACBinding       `yaml:"bindings"`
+}
+
+// Engines of the permissions.
+const (
+	RBACBuiltin = "builtin"
+	RBACOPA     = "opa"
+)
+
+// RBACOPAOptions configures the permission policy in Rego.
+type RBACOPAOptions struct {
+	// Cache is how long the grants of an identity are reused (default 30s): the maximum delay with
+	// which a removed permission stops applying, besides a new revision.
+	Cache time.Duration `yaml:"cache"`
+	// CacheSize is the maximum number of identities in the cache (default 10000).
+	CacheSize int `yaml:"cache_size"`
 }
 
 // RBACBinding assigns a role to users or groups on applications and environments ("*" patterns).
@@ -802,6 +827,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateIntegrations()...)
 	errs = append(errs, c.validateMetricSources()...)
 	errs = append(errs, c.validateGovernance()...)
+	errs = append(errs, c.validateRBACEngine()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency cannot exceed global_concurrency"))
@@ -975,6 +1001,25 @@ func (c *Config) validateSecurity() []error {
 	}
 	if c.Audit.HMACKeyRef != "" && c.Audit.File == "" {
 		errs = append(errs, errors.New("audit.hmac_key_ref requires audit.file"))
+	}
+	return errs
+}
+
+// validateRBACEngine checks the permission engine: opa needs the Rego revisions of the
+// governance.
+func (c *Config) validateRBACEngine() []error {
+	var errs []error
+	switch c.RBAC.Engine {
+	case "", RBACBuiltin:
+	case RBACOPA:
+		if c.Governance.Engine != GovernanceOPA {
+			errs = append(errs, errors.New("rbac.engine: opa requires governance.engine: opa (the permissions live in the same policy revisions)"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("rbac.engine %q not supported (builtin|opa)", c.RBAC.Engine))
+	}
+	if c.RBAC.OPA.Cache < 0 || c.RBAC.OPA.CacheSize < 0 {
+		errs = append(errs, errors.New("rbac.opa: cache and cache_size must be >= 0"))
 	}
 	return errs
 }

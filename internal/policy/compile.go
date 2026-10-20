@@ -38,6 +38,8 @@ type CompileOptions struct {
 	EvalTimeout time.Duration
 	// RequireTests rejects a revision without tests (*_test.rego).
 	RequireTests bool
+	// Authz, if set, compiles also the permission policy (rbac.engine: opa).
+	Authz *AuthzOptions
 }
 
 // Compiled is a compiled revision, ready to evaluate. It is immutable and safe for concurrent use.
@@ -49,6 +51,8 @@ type Compiled struct {
 	Windows []governance.Window
 	query   rego.PreparedEvalQuery
 	timeout time.Duration
+	// authz holds the permission queries (nil without rbac.engine: opa).
+	authz *authzQueries
 }
 
 // Compile parses, compiles and checks a revision: forbidden built-ins and reserved packages
@@ -74,6 +78,11 @@ func Compile(ctx context.Context, files Files, label string, o CompileOptions) (
 	if _, ok := lookup(data, "manent", "rules"); !ok {
 		setPath(data, RulesData(o.Rules), "manent", "rules")
 	}
+	if o.Authz != nil {
+		if _, ok := lookup(data, "manent", "rbac"); !ok {
+			setPath(data, RBACData(o.Authz.Roles, o.Authz.Bindings), "manent", "rbac")
+		}
+	}
 	windows, err := revisionWindows(data)
 	if err != nil {
 		return nil, nil, err
@@ -81,7 +90,7 @@ func Compile(ctx context.Context, files Files, label string, o CompileOptions) (
 	caps := capabilities()
 	parse := func(includeTests bool) (map[string]*ast.Module, bool, error) {
 		mods := map[string]*ast.Module{}
-		governs := false
+		governs, authorizes := false, false
 		for _, p := range slices.Sorted(maps.Keys(files)) {
 			if !strings.HasSuffix(p, ".rego") || (isTest(p) && !includeTests) {
 				continue
@@ -97,11 +106,20 @@ func Compile(ctx context.Context, files Files, label string, o CompileOptions) (
 			if pkg == "data.manent.governance" && !isTest(p) {
 				governs = true
 			}
+			if pkg == "data.manent.authz" && !isTest(p) {
+				authorizes = true
+			}
 			mods[p] = m
 		}
 		lib := slices.Clone(libModules)
 		if !governs {
 			lib = append(lib, defaultModule)
+		}
+		if o.Authz != nil {
+			lib = append(lib, authzLibModule)
+			if !authorizes {
+				lib = append(lib, authzDefaultModule)
+			}
 		}
 		for _, p := range lib {
 			src, err := libFS.ReadFile(p)
@@ -120,21 +138,30 @@ func Compile(ctx context.Context, files Files, label string, o CompileOptions) (
 	if err != nil {
 		return nil, nil, err
 	}
-	opts := []func(*rego.Rego){
-		rego.Query(query), rego.Store(inmem.NewFromObject(data)), rego.Capabilities(caps),
+	base := []func(*rego.Rego){
+		rego.Store(inmem.NewFromObject(data)), rego.Capabilities(caps),
 		rego.SetRegoVersion(ast.RegoV1), rego.Strict(true), rego.StrictBuiltinErrors(true),
 	}
 	for _, p := range slices.Sorted(maps.Keys(mods)) {
-		opts = append(opts, rego.ParsedModule(mods[p]))
+		base = append(base, rego.ParsedModule(mods[p]))
 	}
 	for _, b := range builtins {
-		opts = append(opts, b.opt)
+		base = append(base, b.opt)
 	}
-	pq, err := rego.New(opts...).PrepareForEval(ctx)
+	pq, err := rego.New(append(slices.Clone(base), rego.Query(query))...).PrepareForEval(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	c := &Compiled{Revision: label, SHA256: sha, Windows: windows, query: pq, timeout: cmp.Or(o.EvalTimeout, DefaultEvalTimeout)}
+	if o.Authz != nil {
+		roles, err := revisionRoles(data)
+		if err != nil {
+			return nil, nil, err
+		}
+		if c.authz, err = prepareAuthz(ctx, base, roles); err != nil {
+			return nil, nil, err
+		}
+	}
 	tests, err := runTests(ctx, files, data, parse, o.RequireTests)
 	if err != nil {
 		return nil, tests, err
@@ -146,6 +173,11 @@ func Compile(ctx context.Context, files Files, label string, o CompileOptions) (
 		}
 		if err != nil {
 			return nil, tests, fmt.Errorf("sample evaluation (phase %s, kind %s): %w", in.Phase, in.Deployment.Kind, err)
+		}
+	}
+	if c.authz != nil {
+		if err := c.checkAuthzSamples(ctx); err != nil {
+			return nil, tests, err
 		}
 	}
 	return c, tests, nil

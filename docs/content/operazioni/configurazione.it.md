@@ -96,9 +96,12 @@ Vedi [Rollback](../guida/rollback.md).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `auth.mode` | `none` | `none`: nessuna autenticazione né permessi (solo sviluppo). `enabled`: token bearer obbligatorio e RBAC. |
-| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`. |
+| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`, `policy_claims` (default `[email, name]`: claim esposti alla [policy dei permessi](../guida/permessi.md)). |
 | `auth.tokens` | `[]` | Token statici: `name`, `sha256` (mai il token), `groups`, `expires_at`. |
 | `auth.tokens_file` | | File YAML con altri token (stesso formato, chiave `tokens`), riletto quando cambia: revoca senza riavvio. |
+| `rbac.engine` | `builtin` | `builtin` (i binding qui sotto) o `opa` (la [policy dei permessi](../guida/permessi.md) delle revisioni; richiede `governance.engine: opa`). Le `policy.*` arrivano sempre da `rbac.bindings`. |
+| `rbac.opa.cache` | `30s` | Per quanto si riusano i permessi di un'identità con `opa`. |
+| `rbac.opa.cache_size` | `10000` | Identità nella cache dei permessi. |
 | `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. |
 | `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`), `tenants` (selettore: il binding vale solo per i deploy di quei [tenant](../guida/tenant.md#permessi)). |
 | `audit.file` | | File JSON Lines delle voci di audit, con catena di hash, oltre al log e al SIEM. |

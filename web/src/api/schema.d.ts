@@ -394,6 +394,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policies/{revision}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Permessi di un'identità indicata a mano con una revisione, confronto con quella attiva ed esito di un'azione (policy.write, rbac.engine opa) */
+        post: operations["policyAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policies/{revision}/impact": {
         parameters: {
             query?: never;
@@ -1445,12 +1462,59 @@ export interface components {
             run?: string;
         };
         Grant: {
-            role: string;
+            /** @description Etichetta del permesso (posizione del binding o nome dato dalla policy) */
+            name?: string;
+            /** @description Ruolo da cui vengono le azioni */
+            role?: string;
             actions: string[];
             applications: string[];
             environments: string[];
             /** @description Selettore dei tenant a cui il permesso è limitato */
             tenants?: string;
+            /**
+             * Format: date-time
+             * @description Istante in cui il permesso smette di valere
+             */
+            until?: string;
+        };
+        PolicyAccessRequest: {
+            /** @description <metodo>:<nome> (es. oidc:alice); senza metodo vale oidc */
+            subject: string;
+            groups?: string[];
+            claims?: {
+                [key: string]: string;
+            };
+            /** @description Calcola anche i permessi guadagnati e persi rispetto alla revisione attiva */
+            compare?: boolean;
+            check?: components["schemas"]["AccessCheck"];
+        };
+        AccessCheck: {
+            action: string;
+            application?: string;
+            environment?: string;
+            tenant?: string;
+            descriptor?: components["schemas"]["Descriptor"];
+        };
+        PolicyAccess: {
+            revision: string;
+            subject: string;
+            grants: components["schemas"]["Grant"][];
+            /** @description Permessi della revisione scartati perché non validi o con azioni policy.* */
+            warnings?: string[];
+            /** @description Revisione attiva usata per il confronto */
+            compared?: string;
+            gained?: components["schemas"]["Grant"][];
+            lost?: components["schemas"]["Grant"][];
+            check?: components["schemas"]["AccessOutcome"];
+        };
+        AccessOutcome: {
+            allowed: boolean;
+            /** @description Nome del permesso che consente l'azione */
+            granted_by?: string;
+            /** @description Motivi dei divieti (deny) della revisione */
+            denied?: string[];
+            /** @description Motivo di un rifiuto senza divieti */
+            reason?: string;
         };
         Identity: {
             subject: string;
@@ -1459,6 +1523,10 @@ export interface components {
             groups?: string[];
             auth_enabled: boolean;
             grants: components["schemas"]["Grant"][];
+            /** @description Motore dei permessi (opa); assente con il motore builtin */
+            authz_engine?: string;
+            /** @description Revisione della policy dei permessi in vigore */
+            authz_revision?: string;
         };
         UIConfig: {
             /** @enum {string} */
@@ -2145,6 +2213,38 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    policyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numero della revisione, oppure current per quella in vigore */
+                revision: components["parameters"]["revision"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Permessi simulati */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyAccess"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };

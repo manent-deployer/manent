@@ -12,7 +12,7 @@ import (
 
 // checkTenants checks the action on every tenant a multi-tenant release selects: the
 // selection is resolved here as the engine will resolve it.
-func (g *Guard) checkTenants(ctx context.Context, a Action, application, environment string, names []string, selector string) error {
+func (g *Guard) checkTenants(ctx context.Context, a Action, application, environment string, names []string, selector string, dep *DeploymentInfo) error {
 	if g.Registry == nil {
 		return fmt.Errorf("%w: tenants: no tenant registry configured", engine.ErrInvalidRequest)
 	}
@@ -25,7 +25,7 @@ func (g *Guard) checkTenants(ctx context.Context, a Action, application, environ
 		return fmt.Errorf("%w: %w", engine.ErrInvalidRequest, err)
 	}
 	for _, t := range ts {
-		if err := g.check(ctx, a, target{application: application, environment: environment, tenant: t.Name}); err != nil {
+		if err := g.check(ctx, a, target{application: application, environment: environment, tenant: t.Name, dep: dep}); err != nil {
 			return err
 		}
 	}
@@ -38,7 +38,7 @@ func (g *Guard) checkRun(ctx context.Context, a Action, st *engine.Status) error
 		return nil
 	}
 	for _, t := range st.TenantsRun.Tenants {
-		if err := g.check(ctx, a, target{application: st.Application, environment: st.Environment, tenant: t.Tenant, deployment: st.ID}); err != nil {
+		if err := g.check(ctx, a, target{application: st.Application, environment: st.Environment, tenant: t.Tenant, deployment: st.ID, dep: statusInfo(st)}); err != nil {
 			return err
 		}
 	}
@@ -48,14 +48,15 @@ func (g *Guard) checkRun(ctx context.Context, a Action, st *engine.Status) error
 // promoteTenants checks the promotion of the selected tenants: read on the source and submit
 // on the destination, for every tenant.
 func (g *Guard) promoteTenants(ctx context.Context, r engine.PromoteRequest) (*engine.Submission, error) {
-	if err := g.checkTenants(ctx, DeploymentRead, r.Application, r.To, nil, r.Tenants); err != nil {
+	dep := &DeploymentInfo{Kind: engine.KindPromotion, DryRun: r.DryRun, Version: r.Version, RequestedBy: actor(auth.FromContext(ctx))}
+	if err := g.checkTenants(ctx, DeploymentRead, r.Application, r.To, nil, r.Tenants, nil); err != nil {
 		return nil, err
 	}
-	if err := g.checkTenants(ctx, submitAction(DeploymentSubmit, r.DryRun), r.Application, r.To, nil, r.Tenants); err != nil {
+	if err := g.checkTenants(ctx, submitAction(DeploymentSubmit, r.DryRun), r.Application, r.To, nil, r.Tenants, dep); err != nil {
 		return nil, err
 	}
 	if r.FreezeOverride != "" {
-		if err := g.checkTenants(ctx, FreezeOverride, r.Application, r.To, nil, r.Tenants); err != nil {
+		if err := g.checkTenants(ctx, FreezeOverride, r.Application, r.To, nil, r.Tenants, dep); err != nil {
 			return nil, err
 		}
 	}
@@ -77,7 +78,7 @@ func (g *Guard) Tenants(ctx context.Context, f engine.TenantFilter) ([]engine.Te
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, t := range all {
-		if g.readableTenant(p, t) {
+		if g.readableTenant(ctx, p, t) {
 			out = append(out, t)
 		}
 	}
@@ -91,7 +92,7 @@ func (g *Guard) Tenant(ctx context.Context, name string) (*engine.TenantInfo, er
 		return nil, err
 	}
 	p := auth.FromContext(ctx)
-	if !g.readableTenant(p, *t) {
+	if !g.readableTenant(ctx, p, *t) {
 		err := fmt.Errorf("%w: %s cannot read tenant %s", engine.ErrForbidden, actor(p), name)
 		g.record(ctx, DeploymentRead, target{tenant: name}, audit.OutcomeDenied, err)
 		return nil, err
@@ -100,11 +101,11 @@ func (g *Guard) Tenant(ctx context.Context, name string) (*engine.TenantInfo, er
 }
 
 // readableTenant reports whether the identity can read a deploy of the tenant somewhere.
-func (g *Guard) readableTenant(p *auth.Principal, t engine.TenantInfo) bool {
+func (g *Guard) readableTenant(ctx context.Context, p *auth.Principal, t engine.TenantInfo) bool {
 	ref := &tenant.Ref{Name: t.Name, Tags: t.Tags}
 	for app, envs := range t.Applications {
 		for _, env := range envs {
-			if g.Policy.AllowedFor(p, DeploymentRead, app, env, ref) {
+			if g.permitted(ctx, p, DeploymentRead, app, env, ref) {
 				return true
 			}
 		}

@@ -14,6 +14,29 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Permessi come policy (`rbac.engine: opa`, richiede `governance.engine: opa`): i permessi e i
+  divieti sono decisi dalle stesse revisioni Rego della governance (bozza, test, approvazione a
+  quattro occhi, attivazione senza riavvio). `data.manent.authz.grants` restituisce i permessi di
+  un'identità (ruolo o azioni, applicazioni, ambienti, selettore dei tenant, `until` per gli
+  accessi temporanei), tenuti in cache per revisione e identità (`rbac.opa.cache`, default 30s);
+  `data.manent.authz.deny` rifiuta le modifiche con un motivo (submit, dry-run, cancel, rollback,
+  approve, freeze-override, `schedule.write`, `freeze.write`) guardando identità, claim, tenant e
+  deploy. Senza `package manent.authz` vale un modulo predefinito equivalente ai `rbac.bindings`.
+  Le azioni `policy.*` restano sempre e solo nei binding statici di `manent.yml`, così una
+  revisione sbagliata non blocca chi deve correggerla. Fail-closed: senza revisione caricata
+  `503`, con un errore di valutazione azione negata.
+- Claim per la policy dei permessi: `auth.oidc.policy_claims` (default `[email, name]`) in
+  `input.identity.claims`; gli altri claim del token non arrivano alla policy.
+- Simulazione degli accessi: `POST /api/v1/policies/{revision}/access`, `manent policy access`
+  e la sezione **Accessi** della pagina Policy mostrano i permessi di un'identità indicata a
+  mano, quelli guadagnati e persi rispetto alla revisione attiva e l'esito di un'azione con i
+  motivi dei divieti (permesso `policy.write`). Nessuna identità viene salvata.
+- `manent-server policy export-rbac` scrive i binding come dati della revisione
+  (`manent/rbac/data.json`) e un `authz.rego` di partenza.
+- Audit con `authz_revision` e `grant` (il permesso che ha consentito l'azione); `GET /me`
+  riporta `authz_engine`, `authz_revision` e i permessi con `name` e `until`. Metriche
+  `manent_authz_*` (calcoli dei permessi, divieti, durate, permessi scartati, cache).
+
 - Interfaccia web: pagina **Tenant** (registro con tag, applicazioni e ambienti collegati e filtro per selettore; per ogni tenant la release in esercizio per ambiente, i parametri e i nomi dei segreti), pagina **Piattaforma** (code e worker), filtro per tenant nell'elenco dei deploy.
 - Code: `GET /api/v1/queues` e `manent queues` (permesso `platform.read`) con limiti di concorrenza, workflow in attesa, in esecuzione e pianificati, attesa più lunga e worker in ascolto di ogni coda.
 - Risorse dei worker: ogni worker registra le code che ascolta e, a ogni heartbeat, CPU dell'host e utilizzabili (quota del container), CPU usata dal processo, memoria dell'host, disponibile e limite del container, memoria del processo, carico, spazio libero della workdir e concorrenza; esposte da `GET /api/v1/workers`, `manent workers` e nella pagina Piattaforma.
@@ -174,6 +197,7 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- `Grant` in `GET /api/v1/me`: nuovi campi `name` e `until`; `role` è facoltativo, perché un permesso della policy può elencare direttamente le azioni (l'interfaccia web mostra il nome quando manca il ruolo).
 - Documentazione riorganizzata: sezioni Inizia, Concetti, Guide, Integrazioni, Plugin, Operazioni e Riferimento. Nuove pagine di concetti (panoramica, tipologie di deploy, ciclo di vita di un deploy, modello di configurazione, glossario), sette tutorial in sequenza (primo deploy via SSH, ambienti e segreti con Consul e Vault, promozione con approvazioni e freeze, Kubernetes, rilascio progressivo con health gate, deploy dalla CI, manent in produzione) e una guida passo passo per ogni integrazione: Slack, Teams, ServiceNow, Jira, GitHub Actions, GitLab CI, Terraform, Consul, Vault, repository degli artefatti, identity provider OIDC, Prometheus, sistemi di metriche e SIEM. In inglese e in italiano.
 - Tenant: senza `tenancy` nella configurazione di ambiente e senza `tenant` nel descrittore
   nulla cambia (partizione, ID, attributi, inventario, regole, binding, metriche). I nomi dei

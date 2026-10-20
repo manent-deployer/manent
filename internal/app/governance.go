@@ -56,7 +56,8 @@ func NewGovernance(cfg *config.Config, sp secrets.Provider, log *slog.Logger) (*
 	o := policy.Options{
 		Engine: cmp.Or(g.Engine, policy.EngineBuiltin), Static: static, Review: g.OPA.Store.Review,
 		Refresh: g.Refresh, MaxStaleness: g.MaxStaleness, Logger: log,
-		Compile: policy.CompileOptions{Query: g.OPA.Query, EvalTimeout: g.OPA.EvalTimeout, RequireTests: g.OPA.Store.Tests == "required"},
+		Compile:    policy.CompileOptions{Query: g.OPA.Query, EvalTimeout: g.OPA.EvalTimeout, RequireTests: g.OPA.Store.Tests == "required", Authz: AuthzCompileOptions(cfg)},
+		AuthzCache: cfg.RBAC.OPA.Cache, AuthzCacheSize: cfg.RBAC.OPA.CacheSize,
 	}
 	if o.Engine == policy.EngineOPA {
 		o.SourceName = cmp.Or(g.OPA.Source, policy.SourceStore)

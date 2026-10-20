@@ -164,6 +164,7 @@ I moduli `*_test.rego` sono i test della revisione (`opa test`, con `with input 
 ```sh
 manent-server policy test -d policies/                # compila e testa in locale, senza server
 manent-server -c manent.yml policy eval -d policies/ -f deploy.yml [--phase start] [--kind rollback]
+manent-server -c manent.yml policy export-rbac -d policies/   # binding di manent.yml come dati, rbac.engine: opa
 ```
 
 Con `-c` le regole della configurazione diventano `data.manent.rules`, come sul server.
@@ -248,7 +249,7 @@ Una recovery rilegge le decisioni registrate e non rivaluta mai: una revisione c
 | `policy.approve` | Approvare le bozze e tornare a revisioni precedenti. |
 | `freeze.write` | Creare ed eliminare freeze a runtime. |
 
-Le azioni `policy.*` non dipendono da applicazione e ambiente, come `platform.read`; tra i ruoli predefiniti le concede solo `admin`. L'RBAC resta in `manent.yml`: una revisione non può concedersi permessi da sola.
+Le azioni `policy.*` non dipendono da applicazione e ambiente, come `platform.read`; tra i ruoli predefiniti le concede solo `admin`. Arrivano sempre da `rbac.bindings` di `manent.yml`, anche quando gli altri permessi li decidono le revisioni ([Permessi come policy](permessi.md)): una revisione non può concedersi il potere di cambiare la policy.
 
 Ogni operazione è registrata nell'[audit](../operazioni/accesso.md#audit) (`policy.push`, `policy.activate`, `freeze.create`, `freeze.delete`). Ogni decisione è nei log (e arriva al SIEM) con revisione e hash dell'input.
 
@@ -279,6 +280,7 @@ Un allarme su `manent_policy_age_seconds` che si avvicina a `max_staleness` arri
 | `POST` | `/api/v1/policies` | Carica una bozza (`{"files": {...}, "comment": ...}`). |
 | `GET` | `/api/v1/policies/{revision}` | Una revisione con i suoi file (`current`: quella in vigore). |
 | `POST` | `/api/v1/policies/{revision}/evaluate` | Decisione su un descrittore (`phase`, `kind`). |
+| `POST` | `/api/v1/policies/{revision}/access` | Permessi di un'identità, con `rbac.engine: opa` ([simulazione](permessi.md#simulazione-e-impatto)). |
 | `GET` | `/api/v1/policies/{revision}/impact?since=30d` | Decisioni dei deploy reali ricalcolate. |
 | `POST` | `/api/v1/policies/{revision}/approve` | Approva una bozza. |
 | `POST` | `/api/v1/policies/{revision}/activate` | Torna a una revisione precedente. |

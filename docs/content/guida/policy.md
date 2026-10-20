@@ -164,6 +164,7 @@ Modules `*_test.rego` are the revision's tests (`opa test`, with `with input as 
 ```sh
 manent-server policy test -d policies/                # compile and test locally, without server
 manent-server -c manent.yml policy eval -d policies/ -f deploy.yml [--phase start] [--kind rollback]
+manent-server -c manent.yml policy export-rbac -d policies/   # bindings of manent.yml as data, rbac.engine: opa
 ```
 
 With `-c` the rules of the configuration become `data.manent.rules`, as on the server.
@@ -248,7 +249,7 @@ A recovery reads the recorded decisions again and never evaluates again: a revis
 | `policy.approve` | Approving drafts and going back to previous revisions. |
 | `freeze.write` | Creating and deleting freezes at runtime. |
 
-The `policy.*` actions do not depend on application and environment, like `platform.read`; only `admin` grants them among the predefined roles. RBAC stays in `manent.yml`: a revision cannot grant permissions to itself.
+The `policy.*` actions do not depend on application and environment, like `platform.read`; only `admin` grants them among the predefined roles. They always come from `rbac.bindings` in `manent.yml`, even when the other permissions are decided by the revisions ([Permissions as a policy](permessi.md)): a revision cannot grant itself the power to change the policy.
 
 Every operation is in the [audit](../operazioni/accesso.md#audit): `policy.push`, `policy.activate`, `freeze.create`, `freeze.delete`. Every decision is logged (and sent to the SIEM) with revision and input hash.
 
@@ -279,6 +280,7 @@ An alert on `manent_policy_age_seconds` approaching `max_staleness` comes before
 | `POST` | `/api/v1/policies` | Push a draft (`{"files": {...}, "comment": ...}`). |
 | `GET` | `/api/v1/policies/{revision}` | A revision with its files (`current`: the one in force). |
 | `POST` | `/api/v1/policies/{revision}/evaluate` | Decision on a descriptor (`phase`, `kind`). |
+| `POST` | `/api/v1/policies/{revision}/access` | Permissions of an identity, with `rbac.engine: opa` ([simulation](permessi.md#simulation-and-impact)). |
 | `GET` | `/api/v1/policies/{revision}/impact?since=30d` | Decisions of the real deploys recomputed. |
 | `POST` | `/api/v1/policies/{revision}/approve` | Approve a draft. |
 | `POST` | `/api/v1/policies/{revision}/activate` | Back to a previous revision. |

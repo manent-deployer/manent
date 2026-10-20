@@ -63,6 +63,10 @@ type Options struct {
 	Logger       *slog.Logger
 	// Now replaces the clock in tests.
 	Now func() time.Time
+	// AuthzCache and AuthzCacheSize configure the cache of the permission grants
+	// (rbac.opa.cache, rbac.opa.cache_size).
+	AuthzCache     time.Duration
+	AuthzCacheSize int
 }
 
 // Runtime is the governance policy in force in the process: it implements engine.Governance
@@ -80,6 +84,8 @@ type Runtime struct {
 	cacheMu sync.Mutex
 	cache   map[string]*Compiled
 	metrics *collector
+	// grants caches the permission grants per revision and identity.
+	grants *grantsCache
 }
 
 // state is the policy in force.
@@ -123,7 +129,7 @@ func New(o Options) (*Runtime, error) {
 	if o.Compile.Rules == nil {
 		o.Compile.Rules = o.Static.Rules
 	}
-	r := &Runtime{o: o, log: o.Logger.With("component", "policy"), now: o.Now, refresh: make(chan struct{}, 1), cache: map[string]*Compiled{}}
+	r := &Runtime{o: o, log: o.Logger.With("component", "policy"), now: o.Now, refresh: make(chan struct{}, 1), cache: map[string]*Compiled{}, grants: newGrantsCache(o)}
 	r.metrics = newCollector(r)
 	r.state.Store(&state{})
 	return r, nil
@@ -684,24 +690,36 @@ func (r *Runtime) EvaluateRevision(ctx context.Context, revision int64, in gover
 		}
 		return r.decide(ctx, cur.compiled, cur, in)
 	}
-	store, err := r.requireRevisions()
-	if err != nil {
-		return governance.Decision{}, err
-	}
-	rec, err := store.Policy(ctx, revision)
-	if err != nil {
-		return governance.Decision{}, err
-	}
-	if rec == nil {
-		return governance.Decision{}, fmt.Errorf("%w: policy revision %d", service.ErrNotFound, revision)
-	}
-	var files Files
-	if err := json.Unmarshal([]byte(rec.Files), &files); err != nil {
-		return governance.Decision{}, err
-	}
-	c, err := r.compile(ctx, files, strconv.FormatInt(revision, 10))
+	c, err := r.compiledRevision(ctx, revision)
 	if err != nil {
 		return governance.Decision{}, err
 	}
 	return r.decide(ctx, c, st, in)
+}
+
+// compiledRevision compiles a stored revision (0 = the one in force).
+func (r *Runtime) compiledRevision(ctx context.Context, revision int64) (*Compiled, error) {
+	if revision == 0 {
+		cur, err := r.current()
+		if err != nil {
+			return nil, err
+		}
+		return cur.compiled, nil
+	}
+	store, err := r.requireRevisions()
+	if err != nil {
+		return nil, err
+	}
+	rec, err := store.Policy(ctx, revision)
+	if err != nil {
+		return nil, err
+	}
+	if rec == nil {
+		return nil, fmt.Errorf("%w: policy revision %d", service.ErrNotFound, revision)
+	}
+	var files Files
+	if err := json.Unmarshal([]byte(rec.Files), &files); err != nil {
+		return nil, err
+	}
+	return r.compile(ctx, files, strconv.FormatInt(revision, 10))
 }

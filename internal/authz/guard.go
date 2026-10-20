@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/joeg-ita/manent/internal/audit"
 	"github.com/joeg-ita/manent/internal/auth"
@@ -22,12 +23,18 @@ import (
 // records in the audit the state-changing actions and the denied ones. A denied action returns
 // engine.ErrForbidden.
 type Guard struct {
-	Next   engine.Service
+	Next engine.Service
+	// Policy is the static configuration (rbac.roles, rbac.bindings): it decides the actions
+	// policy.* always, and every other action when Authorizer is nil.
 	Policy Policy
-	Audit  audit.Recorder
-	Logger *slog.Logger
+	// Authorizer, if set, decides the actions other than policy.* (rbac.engine: opa).
+	Authorizer Authorizer
+	Audit      audit.Recorder
+	Logger     *slog.Logger
 	// Tenants, if set, gives the tags of the tenants for the bindings with tenants.
 	Registry tenant.Directory
+	// Now returns the current time, for the grants with until; replaceable in tests.
+	Now func() time.Time
 }
 
 var _ engine.Service = (*Guard)(nil)
@@ -40,27 +47,121 @@ type target struct {
 	dryRun bool
 	// comment is the comment of an approval or the reason of a freeze override.
 	comment string
+	// dep describes the deploy of a change, for the Deny of the authorizer.
+	dep *DeploymentInfo
 }
 
-// check verifies the permission; if denied it records the audit entry and returns the error.
+// check verifies the permission and, for a change, the denials of the authorizer; if refused
+// it records the audit entry and returns the error.
 func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	p := auth.FromContext(ctx)
-	if g.allowed(ctx, p, a, t.application, t.environment, t.tenant) {
-		return nil
-	}
+	ref := g.tenantRef(ctx, t.tenant)
 	where := t.application + "/" + t.environment
 	if t.tenant != "" {
 		where += " (tenant " + t.tenant + ")"
 	}
-	err := fmt.Errorf("%w: %s cannot perform %s on %s", engine.ErrForbidden, actor(p), a, where)
+	if err := g.authzUnavailable(ctx, p, a); err != nil {
+		return err
+	}
+	if !g.permitted(ctx, p, a, t.application, t.environment, ref) {
+		err := fmt.Errorf("%w: %s cannot perform %s on %s", engine.ErrForbidden, actor(p), a, where)
+		g.record(ctx, a, t, audit.OutcomeDenied, err)
+		return err
+	}
+	if g.Authorizer == nil || g.Policy.Disabled || !IsWrite(a) {
+		return nil
+	}
+	reasons, err := g.Authorizer.Deny(ctx, DenyRequest{Principal: p, Action: a, Application: t.application, Environment: t.environment, Tenant: ref, Deployment: t.dep})
+	_, rev := g.Authorizer.Info()
+	switch {
+	case errors.Is(err, governance.ErrUnavailable):
+		return fmt.Errorf("%w: permission policy unavailable: %v", engine.ErrUnavailable, err)
+	case err != nil:
+		g.Logger.Error("valutazione dei divieti della policy fallita", "action", a, "error", err)
+		err = fmt.Errorf("%w: %s cannot perform %s on %s: policy evaluation failed: %v (policy %s)", engine.ErrForbidden, actor(p), a, where, err, rev)
+	case len(reasons) > 0:
+		err = fmt.Errorf("%w: %s cannot perform %s on %s: %s (policy %s)", engine.ErrForbidden, actor(p), a, where, strings.Join(reasons, "; "), rev)
+	default:
+		return nil
+	}
 	g.record(ctx, a, t, audit.OutcomeDenied, err)
 	return err
 }
 
+// grantName returns the name of the first grant that allows the action on the target, for the
+// audit ("" if none: actions recorded with another action name, such as the approvals).
+func (g *Guard) grantName(ctx context.Context, a Action, t target) string {
+	p := auth.FromContext(ctx)
+	if p == nil {
+		return ""
+	}
+	gr, _ := GrantFor(g.grantsOf(ctx, p), a, t.application, t.environment, g.tenantRef(ctx, t.tenant), g.now())
+	return gr.Name
+}
+
+// authzUnavailable returns ErrUnavailable when the permission policy is not loaded (or older
+// than max_staleness): a temporary condition, not a denial. The static actions are unaffected.
+func (g *Guard) authzUnavailable(ctx context.Context, p *auth.Principal, a Action) error {
+	if g.Authorizer == nil || g.Policy.Disabled || IsStatic(a) || p == nil {
+		return nil
+	}
+	if _, err := g.Authorizer.Grants(ctx, p); errors.Is(err, governance.ErrUnavailable) {
+		return fmt.Errorf("%w: permission policy unavailable: %v", engine.ErrUnavailable, err)
+	}
+	return nil
+}
+
 // allowed checks a permission on a deploy of the tenant (name "" without tenant), with the
-// tags read from the tenant registry.
+// tags read from the tenant registry. It looks only at the grants: it is for reads and lists.
 func (g *Guard) allowed(ctx context.Context, p *auth.Principal, a Action, application, environment, tenantName string) bool {
-	return g.Policy.AllowedFor(p, a, application, environment, g.tenantRef(ctx, tenantName))
+	return g.permitted(ctx, p, a, application, environment, g.tenantRef(ctx, tenantName))
+}
+
+// permitted reports whether the grants of the identity allow the action. policy.* are decided
+// by the static configuration; without an authorizer every action is (the fast path of the
+// builtin engine).
+func (g *Guard) permitted(ctx context.Context, p *auth.Principal, a Action, application, environment string, t *tenant.Ref) bool {
+	if g.Authorizer == nil || g.Policy.Disabled || IsStatic(a) {
+		return g.Policy.AllowedFor(p, a, application, environment, t)
+	}
+	if p == nil {
+		return false
+	}
+	return GrantsAllow(g.grantsOf(ctx, p), a, application, environment, t, g.now())
+}
+
+// permittedAnywhere reports whether the identity has the action on some application: it is
+// for the platform actions.
+func (g *Guard) permittedAnywhere(ctx context.Context, p *auth.Principal, a Action) bool {
+	if g.Authorizer == nil || g.Policy.Disabled || IsStatic(a) {
+		return g.Policy.AllowedAnywhere(p, a)
+	}
+	if p == nil {
+		return false
+	}
+	now := g.now()
+	return slices.ContainsFunc(g.grantsOf(ctx, p), func(gr Grant) bool { return gr.Anywhere(a, now) })
+}
+
+// grantsOf returns the grants of the identity; an error of the authorizer means none.
+func (g *Guard) grantsOf(ctx context.Context, p *auth.Principal) []Grant {
+	if g.Authorizer == nil {
+		gs, _ := g.Policy.Grants(ctx, p)
+		return gs
+	}
+	gs, err := g.Authorizer.Grants(ctx, p)
+	if err != nil {
+		g.Logger.Warn("permessi dell'identità non disponibili: tutto negato", "subject", actor(p), "error", err)
+		return nil
+	}
+	return gs
+}
+
+func (g *Guard) now() time.Time {
+	if g.Now != nil {
+		return g.Now()
+	}
+	return time.Now()
 }
 
 // tenantRef returns the tenant with its tags (the name alone if the registry cannot be read).
@@ -88,6 +189,12 @@ func (g *Guard) record(ctx context.Context, a Action, t target, outcome string, 
 	}
 	if err != nil {
 		e.Reason = err.Error()
+	}
+	if g.Authorizer != nil && !g.Policy.Disabled && !IsStatic(a) {
+		_, e.AuthzRevision = g.Authorizer.Info()
+		if outcome == audit.OutcomeAllowed {
+			e.Grant = g.grantName(ctx, a, t)
+		}
 	}
 	if rerr := g.Audit.Record(ctx, e); rerr != nil {
 		g.Logger.Error("registrazione nell'audit fallita", "action", a, "error", rerr)
@@ -139,15 +246,15 @@ func (g *Guard) checkOverride(ctx context.Context, override string, t target) er
 // application or environment also requires schedule.write on that one, since it would be
 // overwritten. A freeze override requires deployment.freeze-override.
 func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.Submission, error) {
-	t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, dryRun: d.DryRun, comment: d.FreezeOverride}
+	t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, dryRun: d.DryRun, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
 	act := submitAction(DeploymentSubmit, d.DryRun)
 	if d.Tenants != nil {
 		// A multi-tenant release requires the permission on every selected tenant.
-		if err := g.checkTenants(ctx, act, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector); err != nil {
+		if err := g.checkTenants(ctx, act, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector, t.dep); err != nil {
 			return nil, err
 		}
 		if d.FreezeOverride != "" {
-			if err := g.checkTenants(ctx, FreezeOverride, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector); err != nil {
+			if err := g.checkTenants(ctx, FreezeOverride, d.Application, d.Environment, d.Tenants.Names, d.Tenants.Selector, t.dep); err != nil {
 				return nil, err
 			}
 		}
@@ -228,7 +335,7 @@ func (g *Guard) Cancel(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id}
+	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id, dep: statusInfo(st)}
 	if err := g.checkRun(ctx, DeploymentCancel, st); err != nil {
 		return err
 	}
@@ -249,7 +356,7 @@ func (g *Guard) ListSchedules(ctx context.Context) ([]engine.ScheduleInfo, error
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, s := range all {
-		if g.Policy.Allowed(p, ScheduleRead, s.Application, s.Environment) {
+		if g.permitted(ctx, p, ScheduleRead, s.Application, s.Environment, nil) {
 			out = append(out, s)
 		}
 	}
@@ -324,7 +431,8 @@ func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.S
 	if err := g.check(ctx, DeploymentRead, target{application: r.Application, environment: r.From, tenant: r.Tenant}); err != nil {
 		return nil, err
 	}
-	t := target{application: r.Application, environment: r.To, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride}
+	t := target{application: r.Application, environment: r.To, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride,
+		dep: &DeploymentInfo{Kind: engine.KindPromotion, DryRun: r.DryRun, Version: r.Version, RequestedBy: actor(auth.FromContext(ctx))}}
 	if err := g.check(ctx, submitAction(DeploymentSubmit, r.DryRun), t); err != nil {
 		return nil, err
 	}
@@ -341,7 +449,8 @@ func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.S
 
 // Rollback requires deployment.rollback (or deployment.dry-run).
 func (g *Guard) Rollback(ctx context.Context, r engine.RollbackRequest) (*engine.Submission, error) {
-	t := target{application: r.Application, environment: r.Environment, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride}
+	t := target{application: r.Application, environment: r.Environment, tenant: r.Tenant, dryRun: r.DryRun, comment: r.FreezeOverride,
+		dep: &DeploymentInfo{Kind: engine.KindRollback, DryRun: r.DryRun, Version: r.Version, RequestedBy: actor(auth.FromContext(ctx))}}
 	if r.Run != "" {
 		st, err := g.Next.Status(ctx, r.Run)
 		if err != nil {
@@ -376,7 +485,7 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	if !r.Approve {
 		act = ActionReject
 	}
-	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id, comment: r.Comment}
+	t := target{application: st.Application, environment: st.Environment, tenant: st.Tenant, deployment: id, comment: r.Comment, dep: statusInfo(st)}
 	if err := g.checkRun(ctx, DeploymentApprove, st); err != nil {
 		return err
 	}
@@ -397,6 +506,19 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	err = g.Next.Decide(ctx, id, r)
 	g.done(ctx, act, t, err)
 	return err
+}
+
+// requestInfo describes a deploy request for Deny.
+func requestInfo(ctx context.Context, d *descriptor.Descriptor, kind string) *DeploymentInfo {
+	return &DeploymentInfo{
+		ID: d.ID, Kind: kind, DryRun: d.DryRun, Artifact: d.Artifact.Name, Type: d.Artifact.Type,
+		Version: d.Artifact.Version, RequestedBy: actor(auth.FromContext(ctx)),
+	}
+}
+
+// statusInfo describes an existing deploy for Deny.
+func statusInfo(st *engine.Status) *DeploymentInfo {
+	return &DeploymentInfo{ID: st.ID, Kind: st.Kind, DryRun: st.DryRun, Artifact: st.Artifact, Version: st.Version, RequestedBy: st.RequestedBy}
 }
 
 // pendingApproval returns the approval the deploy waits for: before the deploy or between
@@ -506,18 +628,46 @@ func (g *Guard) Me(ctx context.Context) (*engine.Identity, error) {
 	if p == nil {
 		return id, nil
 	}
-	for _, b := range g.Policy.Bindings {
-		if !b.matches(p) {
+	if g.Authorizer != nil {
+		id.AuthzEngine, id.AuthzRevision = g.Authorizer.Info()
+		// policy.* come from the static configuration whatever the engine.
+		for _, gr := range g.staticGrants(ctx, p) {
+			id.Grants = append(id.Grants, toServiceGrant(gr))
+		}
+	}
+	now := g.now()
+	for _, gr := range g.grantsOf(ctx, p) {
+		if gr.Until != nil && !now.Before(*gr.Until) {
 			continue
 		}
-		acts := make([]string, len(g.Policy.Roles[b.Role]))
-		for i, a := range g.Policy.Roles[b.Role] {
-			acts[i] = string(a)
-		}
-		id.Grants = append(id.Grants, engine.Grant{Role: b.Role, Actions: acts, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants})
+		id.Grants = append(id.Grants, toServiceGrant(gr))
 	}
 	return id, nil
 }
+
+// staticGrants are the bindings of the static configuration limited to the static actions.
+func (g *Guard) staticGrants(ctx context.Context, p *auth.Principal) []Grant {
+	gs, _ := g.Policy.Grants(ctx, p)
+	var out []Grant
+	for _, gr := range gs {
+		var acts []Action
+		for _, a := range gr.Actions {
+			if a == All {
+				acts = append(acts, StaticActions...)
+			} else if IsStatic(a) {
+				acts = append(acts, a)
+			}
+		}
+		if len(acts) > 0 {
+			gr.Actions, gr.Name = acts, gr.Name+" (static)"
+			out = append(out, gr)
+		}
+	}
+	return out
+}
+
+// toServiceGrant converts a grant into the format of the service.
+func toServiceGrant(gr Grant) engine.Grant { return engine.ServiceGrant(gr) }
 
 // Approvals returns only the deploys the identity can decide: deployment.approve on the
 // application/environment and, unless a rule has allow_self, not requested by it.
@@ -547,7 +697,7 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 // applications/environments stay visible: the others are only counted.
 func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	p := auth.FromContext(ctx)
-	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
+	if !g.permittedAnywhere(ctx, p, PlatformRead) {
 		err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), PlatformRead)
 		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
 		return nil, err
@@ -559,7 +709,7 @@ func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	for i := range ws {
 		tasks := ws[i].Tasks[:0]
 		for _, t := range ws[i].Tasks {
-			if g.Policy.Allowed(p, DeploymentRead, t.Application, t.Environment) {
+			if g.permitted(ctx, p, DeploymentRead, t.Application, t.Environment, nil) {
 				tasks = append(tasks, t)
 			} else {
 				ws[i].HiddenTasks++
@@ -573,7 +723,7 @@ func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 // Queues requires platform.read, like Workers: queues hold no application data beyond counts.
 func (g *Guard) Queues(ctx context.Context) ([]engine.QueueInfo, error) {
 	p := auth.FromContext(ctx)
-	if !g.Policy.AllowedAnywhere(p, PlatformRead) {
+	if !g.permittedAnywhere(ctx, p, PlatformRead) {
 		err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), PlatformRead)
 		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
 		return nil, err
@@ -626,7 +776,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 		if d == nil {
 			continue // rejected by the engine validation
 		}
-		t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, comment: d.FreezeOverride}
+		t := target{application: d.Application, environment: d.Environment, tenant: d.Tenant, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
 		if err := g.check(ctx, DeploymentSubmit, t); err != nil {
 			return nil, err
 		}
@@ -685,7 +835,7 @@ func (g *Guard) ListReleases(ctx context.Context, limit int) ([]engine.ReleaseSt
 	out := []engine.ReleaseStatus{}
 	for _, rs := range all {
 		if !slices.ContainsFunc(rs.Deploys, func(d engine.ReleaseDeployState) bool {
-			return !g.Policy.Allowed(p, DeploymentRead, d.Application, d.Environment)
+			return !g.allowed(ctx, p, DeploymentRead, d.Application, d.Environment, d.Tenant)
 		}) {
 			out = append(out, rs)
 		}

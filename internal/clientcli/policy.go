@@ -1,9 +1,11 @@
 package clientcli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/joeg-ita/manent/internal/cliutil"
@@ -29,6 +32,7 @@ func policyCommands(g *GlobalOptions) []cliutil.Command {
 		{Name: "diff", Short: "Mostra le differenze tra due revisioni", Cmd: &PolicyDiffCmd{global: g}},
 		{Name: "eval", Short: "Valuta una revisione su un descrittore", Cmd: &PolicyEvalCmd{global: g}},
 		{Name: "impact", Short: "Ricalcola con una revisione le decisioni dei deploy reali di un periodo", Cmd: &PolicyImpactCmd{global: g}},
+		{Name: "access", Short: "Simula i permessi di un'identità con una revisione (rbac.engine: opa)", Cmd: &PolicyAccessCmd{global: g}},
 		{Name: "approve", Short: "Approva e attiva una revisione in bozza", Cmd: &PolicyActivateCmd{global: g, draft: true}},
 		{Name: "activate", Short: "Torna a una revisione già attiva in passato", Cmd: &PolicyActivateCmd{global: g}},
 	}
@@ -361,6 +365,109 @@ func (c *PolicyImpactCmd) Execute([]string) error {
 		fmt.Fprintf(os.Stderr, "%d deploy valutati, %d con una decisione diversa\n", imp.Evaluated, len(imp.Changes))
 		return cliutil.PrintJSON(imp)
 	})
+}
+
+// PolicyAccessCmd simulates with a revision the permissions of an identity given by hand.
+type PolicyAccessCmd struct {
+	global      *GlobalOptions
+	Subject     string            `long:"subject" required:"true" description:"identità <metodo>:<nome> (es. oidc:alice)"`
+	Groups      []string          `long:"group" description:"gruppo dell'identità (ripetibile)"`
+	Claims      map[string]string `long:"claim" key-value-delimiter:"=" description:"claim dell'identità chiave=valore (ripetibile)"`
+	Compare     bool              `long:"compare" description:"mostra i permessi guadagnati e persi rispetto alla revisione attiva"`
+	Action      string            `long:"action" description:"azione di cui simulare l'esito (es. deployment.submit)"`
+	Application string            `short:"a" long:"application" description:"applicazione dell'azione"`
+	Environment string            `short:"e" long:"environment" description:"ambiente dell'azione"`
+	Tenant      string            `short:"t" long:"tenant" description:"tenant dell'azione"`
+	File        string            `short:"f" long:"file" description:"descrittore YAML del deploy (artefatto per i divieti)"`
+	JSON        bool              `long:"json" description:"output JSON"`
+	Args        revisionArg       `positional-args:"yes"`
+}
+
+// Execute implements flags.Commander.
+func (c *PolicyAccessCmd) Execute([]string) error {
+	rev, err := parseRevision(c.Args.Revision)
+	if err != nil {
+		return err
+	}
+	r := service.PolicyAccessRequest{Subject: c.Subject, Groups: c.Groups, Claims: c.Claims, Compare: c.Compare}
+	if c.Action != "" {
+		r.Check = &service.AccessCheck{Action: c.Action, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant}
+		if c.File != "" {
+			if r.Check.Descriptor, err = descriptor.LoadYAMLFile(c.File); err != nil {
+				return err
+			}
+		}
+	} else if c.File != "" || c.Application != "" || c.Environment != "" || c.Tenant != "" {
+		return errors.New("--application, --environment, --tenant and --file need --action")
+	}
+	return withService(c.global, func(ctx context.Context, svc service.Service) error {
+		acc, err := svc.PolicyAccess(ctx, rev, r)
+		if err != nil {
+			return err
+		}
+		if c.JSON {
+			return cliutil.PrintJSON(acc)
+		}
+		printAccess(os.Stdout, acc)
+		return nil
+	})
+}
+
+// printAccess prints the simulation as tables: grants, differences and outcome of the action.
+func printAccess(out io.Writer, acc *service.PolicyAccess) {
+	fmt.Fprintf(out, "Identità %s, revisione %s\n\n", acc.Subject, acc.Revision)
+	printGrants(out, acc.Grants, "")
+	for _, w := range acc.Warnings {
+		fmt.Fprintf(out, "attenzione: permesso scartato: %s\n", w)
+	}
+	if acc.Compared != "" {
+		fmt.Fprintf(out, "\nRispetto alla revisione attiva %s:", acc.Compared)
+		if len(acc.Gained)+len(acc.Lost) == 0 {
+			fmt.Fprintln(out, " nessuna differenza")
+		} else {
+			fmt.Fprintln(out)
+			printGrants(out, acc.Gained, "+ ")
+			printGrants(out, acc.Lost, "- ")
+		}
+	}
+	if ch := acc.Check; ch != nil {
+		fmt.Fprintln(out)
+		switch {
+		case ch.Allowed:
+			fmt.Fprintf(out, "Esito: consentito (permesso %s)\n", ch.GrantedBy)
+		case len(ch.Denied) > 0:
+			fmt.Fprintf(out, "Esito: negato dalla policy (permesso %s)\n", ch.GrantedBy)
+			for _, d := range ch.Denied {
+				fmt.Fprintf(out, "  - %s\n", d)
+			}
+		default:
+			fmt.Fprintf(out, "Esito: negato: %s\n", ch.Reason)
+		}
+	}
+}
+
+func printGrants(out io.Writer, gs []service.Grant, prefix string) {
+	if len(gs) == 0 && prefix == "" {
+		fmt.Fprintln(out, "nessun permesso")
+		return
+	}
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	if prefix == "" {
+		fmt.Fprintln(tw, "PERMESSO\tAZIONI\tAPPLICAZIONI\tAMBIENTI\tTENANT\tFINO A")
+	}
+	for _, g := range gs {
+		acts := g.Role
+		if acts == "" {
+			acts = strings.Join(g.Actions, ",")
+		}
+		until := "-"
+		if g.Until != nil {
+			until = g.Until.Local().Format(time.DateTime)
+		}
+		fmt.Fprintf(tw, "%s%s\t%s\t%s\t%s\t%s\t%s\n", prefix, g.Name, acts, strings.Join(g.Applications, ","),
+			strings.Join(g.Environments, ","), cmp.Or(g.Tenants, "*"), until)
+	}
+	tw.Flush()
 }
 
 // PolicyActivateCmd approves a draft or goes back to a previous revision.

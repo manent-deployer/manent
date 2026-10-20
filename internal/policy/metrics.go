@@ -12,6 +12,7 @@ type collector struct {
 	evaluations *prometheus.CounterVec
 	durations   *prometheus.HistogramVec
 	loadErrors  prometheus.Counter
+	authz       authzMetrics
 }
 
 var (
@@ -33,6 +34,7 @@ func newCollector(r *Runtime) *collector {
 		loadErrors: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "manent_policy_load_errors_total", Help: "Aggiornamenti della policy o dei freeze falliti (revisione rifiutata o sorgente irraggiungibile).",
 		}),
+		authz: newAuthzMetrics(),
 	}
 }
 
@@ -55,6 +57,13 @@ func (c *collector) Describe(ch chan<- *prometheus.Desc) {
 	c.evaluations.Describe(ch)
 	c.durations.Describe(ch)
 	c.loadErrors.Describe(ch)
+	if c.r.o.Compile.Authz != nil {
+		ch <- descAuthzCache
+		c.authz.grantEvals.Describe(ch)
+		c.authz.denyEvals.Describe(ch)
+		c.authz.durations.Describe(ch)
+		c.authz.invalidGrants.Describe(ch)
+	}
 }
 
 // Collect implements prometheus.Collector.
@@ -67,4 +76,11 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	c.evaluations.Collect(ch)
 	c.durations.Collect(ch)
 	c.loadErrors.Collect(ch)
+	if c.r.o.Compile.Authz != nil {
+		ch <- prometheus.MustNewConstMetric(descAuthzCache, prometheus.GaugeValue, float64(c.r.grants.len()))
+		c.authz.grantEvals.Collect(ch)
+		c.authz.denyEvals.Collect(ch)
+		c.authz.durations.Collect(ch)
+		c.authz.invalidGrants.Collect(ch)
+	}
 }

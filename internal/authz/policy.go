@@ -24,7 +24,7 @@ const (
 // checkPlatform verifies an action that does not depend on application and environment.
 func (g *Guard) checkPlatform(ctx context.Context, a Action, t target) error {
 	p := auth.FromContext(ctx)
-	if g.Policy.AllowedAnywhere(p, a) {
+	if g.permittedAnywhere(ctx, p, a) {
 		return nil
 	}
 	err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), a)
@@ -37,7 +37,7 @@ func (g *Guard) checkFreeze(ctx context.Context, applications, environments []st
 	p := auth.FromContext(ctx)
 	for _, a := range applications {
 		for _, e := range environments {
-			if !g.Policy.Allowed(p, FreezeWrite, a, e) {
+			if !g.permitted(ctx, p, FreezeWrite, a, e, nil) {
 				err := fmt.Errorf("%w: %s cannot perform %s on %s/%s", engine.ErrForbidden, actor(p), FreezeWrite, a, e)
 				g.record(ctx, FreezeWrite, t, audit.OutcomeDenied, err)
 				return err
@@ -117,6 +117,14 @@ func (g *Guard) PushPolicy(ctx context.Context, r engine.PolicyPush) (*engine.Po
 	return rev, err
 }
 
+// PolicyAccess requires policy.write: the simulation shows the permissions of any identity.
+func (g *Guard) PolicyAccess(ctx context.Context, revision int64, r engine.PolicyAccessRequest) (*engine.PolicyAccess, error) {
+	if err := g.checkPlatform(ctx, PolicyWrite, target{}); err != nil {
+		return nil, err
+	}
+	return g.Next.PolicyAccess(ctx, revision, r)
+}
+
 // EvaluatePolicy requires policy.write: the evaluation shows the effective configuration of
 // the deploy, so it also requires reading the application/environment.
 func (g *Guard) EvaluatePolicy(ctx context.Context, revision int64, r engine.PolicyEvaluationRequest) (*engine.PolicyEvaluation, error) {
@@ -143,7 +151,7 @@ func (g *Guard) PolicyImpact(ctx context.Context, revision int64, since time.Dur
 	p := auth.FromContext(ctx)
 	changes := imp.Changes[:0]
 	for _, c := range imp.Changes {
-		if g.Policy.Allowed(p, DeploymentRead, c.Application, c.Environment) {
+		if g.permitted(ctx, p, DeploymentRead, c.Application, c.Environment, nil) {
 			changes = append(changes, c)
 		}
 	}

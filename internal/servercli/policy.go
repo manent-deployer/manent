@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/joeg-ita/manent/internal/app"
@@ -66,6 +70,7 @@ func policyCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
 		{Name: "test", Short: "Compila una directory di policy ed esegue i suoi test, senza server", Cmd: &PolicyTestCmd{global: g}},
 		{Name: "eval", Short: "Valuta una directory di policy su un descrittore, senza server", Cmd: &PolicyEvalCmd{global: g}},
+		{Name: "export-rbac", Short: "Scrive i binding di rbac come dati di una revisione e un modulo authz.rego di partenza", Cmd: &PolicyExportRBACCmd{global: g}},
 	}
 }
 
@@ -98,7 +103,7 @@ func compileDir(ctx context.Context, cfg *config.Config, dir string) (*policy.Co
 		return nil, nil, err
 	}
 	o := cfg.Governance.OPA
-	return policy.Compile(ctx, files, "local", policy.CompileOptions{Query: o.Query, Rules: static.Rules, EvalTimeout: o.EvalTimeout})
+	return policy.Compile(ctx, files, "local", policy.CompileOptions{Query: o.Query, Rules: static.Rules, EvalTimeout: o.EvalTimeout, Authz: app.AuthzCompileOptions(cfg)})
 }
 
 // PolicyTestCmd compiles a directory and runs its tests.
@@ -122,6 +127,48 @@ func (c *PolicyTestCmd) Execute([]string) error {
 	}
 	out["sha256"], out["valid"] = comp.SHA256, true
 	return cliutil.PrintJSON(out)
+}
+
+// PolicyExportRBACCmd writes rbac.roles and rbac.bindings as data (manent/rbac/data.json) and
+// a starting authz.rego, to move the bindings into a policy revision.
+type PolicyExportRBACCmd struct {
+	global *GlobalOptions
+	Dir    string `short:"d" long:"dir" required:"true" description:"directory della revisione"`
+	Force  bool   `long:"force" description:"sovrascrive i file esistenti"`
+}
+
+// Execute implements flags.Commander.
+func (c *PolicyExportRBACCmd) Execute([]string) error {
+	if c.global.Config == "" {
+		return errors.New("export-rbac needs the configuration (-c manent.yml)")
+	}
+	cfg, err := config.Load(c.global.Config)
+	if err != nil {
+		return err
+	}
+	files, err := policy.ExportRBAC(app.RBACConfig(cfg))
+	if err != nil {
+		return err
+	}
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		p := filepath.Join(c.Dir, filepath.FromSlash(name))
+		if _, err := os.Stat(p); err == nil && !c.Force {
+			return fmt.Errorf("%s already exists (--force to overwrite it)", p)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		p := filepath.Join(c.Dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, []byte(files[name]), 0o644); err != nil {
+			return err
+		}
+		fmt.Println("scritto", p)
+	}
+	fmt.Fprintf(os.Stderr, "%d binding esportati: verifica la revisione con \"manent-server policy test -d %s\" e caricala con \"manent policy push -d %s\"\n",
+		len(cfg.RBAC.Bindings), c.Dir, c.Dir)
+	return nil
 }
 
 // PolicyEvalCmd evaluates a directory of policies on a descriptor.

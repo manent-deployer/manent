@@ -112,6 +112,8 @@ auth:
     audience: manent
     username_claim: preferred_username
     groups_claim: groups
+    # UC25: the permission policy denies production to contractors (claim employee_type).
+    policy_claims: [email, name, employee_type]
     ui:
       client_id: manent-ui
   tokens:
@@ -125,6 +127,10 @@ auth:
     - {name: pol, sha256: 572161b46d0d0dd2ebc3e39fbc5fcb9c0dc8745153e5103480a720977a68f825, groups: [policy-authors]}
 
 rbac:
+  # UC25: permissions decided by the policy revisions. Until a revision defines manent.authz the
+  # default policy applies the bindings below: every use case runs on it. policy.* always come
+  # from these bindings.
+  engine: opa
   roles:
     # UC23: pushes and measures policy revisions, without activating them.
     policy-author: [deployment.read, policy.read, policy.write]

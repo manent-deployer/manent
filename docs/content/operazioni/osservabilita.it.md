@@ -41,6 +41,11 @@ observability:
 | `manent_policy_age_seconds` | gauge | | Secondi dall'ultima lettura riuscita della policy e dei freeze a runtime. |
 | `manent_policy_evaluations_total` | counter | `phase`, `outcome` | Valutazioni della policy (`allowed`, `denied`, `frozen`, `error`, `unavailable`). |
 | `manent_policy_eval_duration_seconds` | histogram | `phase` | Durata delle valutazioni. |
+| `manent_authz_grants_evaluations_total` | counter | `outcome` | Permessi di un'identità calcolati dalla [policy dei permessi](../guida/permessi.md) (`ok`, `cached`, `error`). |
+| `manent_authz_deny_evaluations_total` | counter | `action`, `outcome` | Divieti valutati (`allowed`, `denied`, `error`). |
+| `manent_authz_eval_duration_seconds` | histogram | `part` | Durata delle valutazioni dei permessi (`grants`, `deny`). |
+| `manent_authz_invalid_grants_total` | counter | | Permessi scartati perché non validi o con azioni `policy.*`. |
+| `manent_authz_cache_entries` | gauge | | Identità nella cache dei permessi. |
 | `manent_policy_load_errors_total` | counter | | Letture fallite: revisione rifiutata o sorgente irraggiungibile. |
 
 Più le metriche standard del runtime Go (`go_*`) e del processo (`process_*`).

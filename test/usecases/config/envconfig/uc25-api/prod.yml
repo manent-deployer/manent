@@ -1,0 +1,14 @@
+# UC25: prod environment of the permission policy in Rego.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+params:
+  dest_dir: /home/deploy/apps/uc25-api
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

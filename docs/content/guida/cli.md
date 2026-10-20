@@ -153,6 +153,8 @@ manent policy push -d <dir> [-m <comment>]
 manent policy diff <revision> <revision>
 manent policy eval <revision|current> -f <yaml> [--phase submit|validate|start|stage|tick] [--kind deploy|promotion|rollback]
 manent policy impact <revision> [--since 7d]
+manent policy access <revision|current> --subject <method:name> [--group <g>]... [--claim k=v]... [--compare]
+                     [--action <action> -a <app> -e <env> [-t <tenant>] [-f <yaml>]] [--json]   # rbac.engine: opa
 manent policy approve <revision>         # activates a draft
 manent policy activate <revision>        # back to a revision already active in the past
 ```

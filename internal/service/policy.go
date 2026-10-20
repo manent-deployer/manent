@@ -25,6 +25,9 @@ type PolicyService interface {
 	EvaluatePolicy(ctx context.Context, revision int64, r PolicyEvaluationRequest) (*PolicyEvaluation, error)
 	// PolicyImpact recomputes with a revision the decisions of the real deploys of a period.
 	PolicyImpact(ctx context.Context, revision int64, since time.Duration) (*PolicyImpact, error)
+	// PolicyAccess simulates with a revision (0 = the active one) the permissions of an identity
+	// given by hand and, optionally, the outcome of an action (rbac.engine: opa).
+	PolicyAccess(ctx context.Context, revision int64, r PolicyAccessRequest) (*PolicyAccess, error)
 	// ApprovePolicy activates a draft revision (by an identity other than its author when
 	// governance.opa.store.review is set).
 	ApprovePolicy(ctx context.Context, revision int64) error
@@ -127,4 +130,52 @@ type PolicyChange struct {
 	CreatedAt   time.Time `json:"created_at"`
 	Before      string    `json:"before"`
 	After       string    `json:"after"`
+}
+
+// PolicyAccessRequest is the identity whose permissions are simulated: nothing is read from the
+// identity provider, subject, groups and claims are those given.
+type PolicyAccessRequest struct {
+	// Subject is "<method>:<name>" (e.g. "oidc:alice"); a name without method is oidc.
+	Subject string            `json:"subject"`
+	Groups  []string          `json:"groups,omitempty"`
+	Claims  map[string]string `json:"claims,omitempty"`
+	// Compare also computes the grants gained and lost against the active revision.
+	Compare bool `json:"compare,omitempty"`
+	// Check, if set, is an action whose outcome is simulated.
+	Check *AccessCheck `json:"check,omitempty"`
+}
+
+// AccessCheck is an action on an application, environment and optionally tenant; Descriptor
+// gives the artifact to the denials (deny) of the changes.
+type AccessCheck struct {
+	Action      string                 `json:"action"`
+	Application string                 `json:"application"`
+	Environment string                 `json:"environment"`
+	Tenant      string                 `json:"tenant,omitempty"`
+	Descriptor  *descriptor.Descriptor `json:"descriptor,omitempty"`
+}
+
+// PolicyAccess is the outcome of the simulation of an identity's permissions.
+type PolicyAccess struct {
+	Revision string  `json:"revision"`
+	Subject  string  `json:"subject"`
+	Grants   []Grant `json:"grants"`
+	// Warnings are the grants of the revision discarded as invalid or with policy.* actions.
+	Warnings []string `json:"warnings,omitempty"`
+	// Compared is the active revision the grants were compared with (Compare).
+	Compared string         `json:"compared,omitempty"`
+	Gained   []Grant        `json:"gained,omitempty"`
+	Lost     []Grant        `json:"lost,omitempty"`
+	Check    *AccessOutcome `json:"check,omitempty"`
+}
+
+// AccessOutcome is the simulated outcome of an action.
+type AccessOutcome struct {
+	Allowed bool `json:"allowed"`
+	// GrantedBy is the name of the grant that allows the action.
+	GrantedBy string `json:"granted_by,omitempty"`
+	// Denied are the reasons of the denials (deny) of the revision.
+	Denied []string `json:"denied,omitempty"`
+	// Reason explains a refusal without denials: no grant, or a static action.
+	Reason string `json:"reason,omitempty"`
 }

@@ -112,6 +112,7 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.POST("/policies", s.pushPolicy)
 	v1.GET("/policies/:revision", s.policy)
 	v1.POST("/policies/:revision/evaluate", s.evaluatePolicy)
+	v1.POST("/policies/:revision/access", s.policyAccess)
 	v1.GET("/policies/:revision/impact", s.policyImpact)
 	v1.POST("/policies/:revision/approve", s.activatePolicy(true))
 	v1.POST("/policies/:revision/activate", s.activatePolicy(false))

@@ -393,6 +393,66 @@ describe("governance", () => {
     await user.click(within(dialog).getByRole("button", { name: "Approve and activate" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/policies/2/approve")).toBe(true));
   });
+
+  it("simula gli accessi di un'identità con una revisione", async () => {
+    const user = userEvent.setup();
+    const admin = identity({
+      authz_engine: "opa",
+      authz_revision: "1:abc",
+      grants: [{ name: "binding 0 (static)", actions: ["policy.read", "policy.write", "policy.approve"], applications: ["*"], environments: ["*"] }],
+    });
+    const { api, calls } = fakeApi(({ method, path }) => {
+      if (path === "/api/v1/me") return { json: admin };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/policies")
+        return { json: { engine: "opa", source: "store", current: "1:abc", revisions: [{ revision: 2, sha256: "def", status: "draft", author: "oidc:alice", created_at: now }] } };
+      if (method === "POST" && path === "/api/v1/policies/2/access")
+        return {
+          json: {
+            revision: "2:def",
+            subject: "oidc:carol",
+            grants: [{ name: "team-shop", role: "deployer", actions: [], applications: ["shop"], environments: ["*"] }],
+            compared: "1:abc",
+            gained: [{ name: "team-shop", role: "deployer", actions: [], applications: ["shop"], environments: ["*"] }],
+            check: { allowed: false, granted_by: "team-shop", denied: ["contractors cannot change production"] },
+          },
+        };
+    });
+    renderApp(api, "/policies");
+    await screen.findByRole("heading", { name: "Access" });
+    await user.selectOptions(screen.getByLabelText("Revision"), "2");
+    await user.type(screen.getByLabelText("Subject"), "oidc:carol");
+    await user.type(screen.getByLabelText("Groups"), "team-shop, oncall");
+    await user.type(screen.getByLabelText("Claims"), "employee_type=contractor");
+    await user.type(screen.getByLabelText("Action to check"), "deployment.submit");
+    await user.type(screen.getByLabelText("Application"), "shop");
+    await user.type(screen.getByLabelText("Environment"), "prod");
+    await user.click(screen.getByRole("button", { name: "Simulate" }));
+    expect(await screen.findByText("Permissions of oidc:carol with revision 2:def")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Permissions gained" })).toHaveTextContent("team-shop");
+    expect(screen.getByText("Denied")).toBeInTheDocument();
+    expect(screen.getByText(/contractors cannot change production/)).toBeInTheDocument();
+    const body = calls.find((c) => c.method === "POST" && c.path === "/api/v1/policies/2/access")?.body as Record<string, unknown>;
+    expect(body).toMatchObject({
+      subject: "oidc:carol",
+      groups: ["team-shop", "oncall"],
+      claims: { employee_type: "contractor" },
+      compare: true,
+      check: { action: "deployment.submit", application: "shop", environment: "prod" },
+    });
+  });
+
+  it("senza rbac.engine opa non mostra gli accessi", async () => {
+    const admin = identity({ grants: [{ role: "admin", actions: ["*"], applications: ["*"], environments: ["*"] }] });
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: admin };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/policies") return { json: { engine: "opa", source: "store", current: "1:abc", revisions: [] } };
+    });
+    renderApp(api, "/policies");
+    await screen.findByRole("heading", { name: "Revisions" });
+    expect(screen.queryByRole("heading", { name: "Access" })).toBeNull();
+  });
 });
 
 describe("tenant", () => {

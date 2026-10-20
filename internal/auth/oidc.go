@@ -27,6 +27,9 @@ type OIDCConfig struct {
 	GroupsClaim string
 	// CAFile is a bundle of extra CAs to reach the issuer.
 	CAFile string
+	// PolicyClaims are the claims copied into Principal.Claims for the permission policy; the
+	// others are never exposed.
+	PolicyClaims []string
 }
 
 // OIDC verifies signature, issuer, audience and expiry of bearer tokens.
@@ -34,6 +37,7 @@ type OIDC struct {
 	verifier      *oidc.IDTokenVerifier
 	usernameClaim string
 	groupsClaim   string
+	policyClaims  []string
 }
 
 // NewOIDC runs the issuer discovery. Signing keys are reloaded automatically when they
@@ -67,6 +71,7 @@ func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 		verifier:      provider.Verifier(&oidc.Config{ClientID: cfg.Audience}),
 		usernameClaim: cfg.UsernameClaim,
 		groupsClaim:   cfg.GroupsClaim,
+		policyClaims:  cfg.PolicyClaims,
 	}
 	if o.usernameClaim == "" {
 		o.usernameClaim = "preferred_username"
@@ -105,5 +110,20 @@ func (o *OIDC) Authenticate(ctx context.Context, token string) (*Principal, erro
 	case string:
 		p.Groups = []string{g}
 	}
+	for _, name := range o.policyClaims {
+		switch v := claims[name].(type) {
+		case string:
+			p.setClaim(name, v)
+		case bool, float64:
+			p.setClaim(name, fmt.Sprint(v))
+		}
+	}
 	return p, nil
+}
+
+func (p *Principal) setClaim(name, value string) {
+	if p.Claims == nil {
+		p.Claims = map[string]string{}
+	}
+	p.Claims[name] = value
 }

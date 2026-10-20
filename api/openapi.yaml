@@ -404,6 +404,24 @@ paths:
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  /api/v1/policies/{revision}/access:
+    post:
+      tags: [policies]
+      summary: Permessi di un'identità indicata a mano con una revisione, confronto con quella attiva ed esito di un'azione (policy.write, rbac.engine opa)
+      operationId: policyAccess
+      parameters: [{$ref: '#/components/parameters/revision'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PolicyAccessRequest'}
+      responses:
+        '200': {description: Permessi simulati, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyAccess'}}}}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}/impact:
     get:
       tags: [policies]
@@ -1380,13 +1398,53 @@ components:
             run: {type: string, description: Rilascio multi-tenant di cui riportare indietro i tenant riusciti}
     Grant:
       type: object
-      required: [role, actions, applications, environments]
+      required: [actions, applications, environments]
       properties:
-        role: {type: string}
+        name: {type: string, description: Etichetta del permesso (posizione del binding o nome dato dalla policy)}
+        role: {type: string, description: Ruolo da cui vengono le azioni, se il permesso ne nomina uno}
         actions: {type: array, items: {type: string}}
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
         tenants: {type: string, description: Selettore dei tenant a cui il permesso è limitato}
+        until: {type: string, format: date-time, description: Istante in cui il permesso smette di valere}
+    PolicyAccessRequest:
+      type: object
+      required: [subject]
+      properties:
+        subject: {type: string, description: "<metodo>:<nome> (es. oidc:alice); senza metodo vale oidc"}
+        groups: {type: array, items: {type: string}}
+        claims: {type: object, additionalProperties: {type: string}}
+        compare: {type: boolean, description: Calcola anche i permessi guadagnati e persi rispetto alla revisione attiva}
+        check: {$ref: '#/components/schemas/AccessCheck'}
+    AccessCheck:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string}
+        application: {type: string}
+        environment: {type: string}
+        tenant: {type: string}
+        descriptor: {$ref: '#/components/schemas/Descriptor'}
+    PolicyAccess:
+      type: object
+      required: [revision, subject, grants]
+      properties:
+        revision: {type: string}
+        subject: {type: string}
+        grants: {type: array, items: {$ref: '#/components/schemas/Grant'}}
+        warnings: {type: array, items: {type: string}, description: Permessi della revisione scartati perché non validi o con azioni policy.*}
+        compared: {type: string, description: Revisione attiva usata per il confronto}
+        gained: {type: array, items: {$ref: '#/components/schemas/Grant'}}
+        lost: {type: array, items: {$ref: '#/components/schemas/Grant'}}
+        check: {$ref: '#/components/schemas/AccessOutcome'}
+    AccessOutcome:
+      type: object
+      required: [allowed]
+      properties:
+        allowed: {type: boolean}
+        granted_by: {type: string, description: Nome del permesso che consente l'azione}
+        denied: {type: array, items: {type: string}, description: Motivi dei divieti (deny) della revisione}
+        reason: {type: string, description: Motivo di un rifiuto senza divieti}
     Identity:
       type: object
       required: [subject, name, method, auth_enabled, grants]
@@ -1397,6 +1455,8 @@ components:
         groups: {type: array, items: {type: string}}
         auth_enabled: {type: boolean}
         grants: {type: array, items: {$ref: '#/components/schemas/Grant'}}
+        authz_engine: {type: string, description: Motore dei permessi (opa); assente con il motore builtin}
+        authz_revision: {type: string, description: Revisione della policy dei permessi in vigore}
     UIConfig:
       type: object
       required: [auth_mode, version]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -43,6 +44,10 @@ func (m *mockService) EvaluatePolicy(_ context.Context, rev int64, r engine.Poli
 func (m *mockService) PolicyImpact(_ context.Context, rev int64, since time.Duration) (*engine.PolicyImpact, error) {
 	m.op = "impact:" + since.String()
 	return &engine.PolicyImpact{Evaluated: 3}, nil
+}
+func (m *mockService) PolicyAccess(_ context.Context, rev int64, r engine.PolicyAccessRequest) (*engine.PolicyAccess, error) {
+	m.op = "access:" + r.Subject
+	return &engine.PolicyAccess{Revision: strconv.FormatInt(rev, 10), Subject: r.Subject, Grants: []engine.Grant{{Name: "team", Actions: []string{"deployment.read"}}}}, nil
 }
 func (m *mockService) ApprovePolicy(_ context.Context, rev int64) error {
 	m.op = "approve"
@@ -84,6 +89,12 @@ func TestRottePolicyEFreeze(t *testing.T) {
 	}
 	if w := do(r, http.MethodPost, "/api/v1/policies/9/evaluate", `{"descriptor":`+validJSON+`}`); w.Code != http.StatusServiceUnavailable {
 		t.Errorf("policy non disponibile: atteso 503, ricevuto %d", w.Code)
+	}
+	if w := do(r, http.MethodPost, "/api/v1/policies/3/access", `{"subject":"oidc:alice","groups":["team-a"]}`); w.Code != http.StatusOK || svc.op != "access:oidc:alice" {
+		t.Errorf("simulazione degli accessi: %d %s %s", w.Code, w.Body, svc.op)
+	}
+	if w := do(r, http.MethodPost, "/api/v1/policies/3/access", `{"subject":"x","check":{"action":"deployment.submit","descriptor":{}}}`); w.Code != http.StatusBadRequest {
+		t.Errorf("descrittore non valido nella simulazione: %d", w.Code)
 	}
 	if w := do(r, http.MethodGet, "/api/v1/policies/2/impact?since=30d", ""); w.Code != http.StatusOK || svc.op != "impact:720h0m0s" {
 		t.Errorf("impatto: %d %s %s", w.Code, w.Body, svc.op)
