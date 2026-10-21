@@ -51,7 +51,7 @@ The boolean parameters accept `true` and `false`. The authentication follows the
 
 `artifact.version` is required and becomes part of the deployment name. The extension comes from the downloaded file or from `artifact.type` (`.war`, `.ear`, `.jar`, `.rar`, `.sar`).
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: jboss
 targets:
   - {host: eap1.example.com, labels: {region: eu-1, az: eu-1a}}

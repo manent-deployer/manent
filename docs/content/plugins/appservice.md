@@ -48,7 +48,7 @@ Credentials, in order:
 
 The identity of the worker is the recommended choice: no secret to rotate. The identity needs the **Website Contributor** role on the web app (content, settings, swap) and **Tag Contributor** for the tags. Kudu accepts the same Entra ID token, so basic publishing credentials can stay disabled.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: appservice
 targets:
   - {host: shop-weu, labels: {region: westeurope}}

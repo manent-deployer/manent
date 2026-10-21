@@ -133,7 +133,7 @@ jobs:
           command: env-validate
           application: shop
           environment: prod
-          env-config: envconfig/shop/prod.yml
+          env-config: envconfig/shop/shop/prod.yml
 ```
 
 Il server fonde la candidata con la richiesta del deploy in esercizio ed esegue tutti i controlli dell'invio (fusione, policy sui descrittori, piano di rollout e di traffico, plugin). Non scrive nulla; il permesso necessario è `deployment.read`.

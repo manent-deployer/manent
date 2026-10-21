@@ -1,6 +1,6 @@
 # Applications with several artifacts
 
-An application is often made of several artifacts released separately: a frontend, a backend, the database migrations. With the **artifact identity** every artifact is a release of its own: environment configuration, queue, inventory, rollback, promotion and retention are per application, artifact and environment. The artifact is `artifact.name`, already required in every descriptor: there is no new field.
+An application is often made of several artifacts released separately: a frontend, a backend, the database migrations. Every artifact is a release of its own: environment configuration, queue, inventory, rollback, promotion and retention are per application, artifact and environment. The artifact is `artifact.name`, required in every descriptor.
 
 ```yaml
 # backend
@@ -14,32 +14,21 @@ environment: prod
 artifact: {type: tgz, name: shop-web, version: 3.2.0, source: https://repo.example.com/shop-web-3.2.0.tgz}
 ```
 
-## Turning it on
+| | Per application, artifact and environment |
+|---|---|
+| Release in service (inventory) | one entry per artifact |
+| Queue partition (`environment_concurrency`) | `<app>+<artifact>/<env>`: different artifacts deploy in parallel |
+| Rollback, promotion, `requires` | of the artifact |
+| Retention `keep_releases` | per artifact |
+| Default schedule name | `<app>-<artifact>-<env>` |
 
-```yaml title="manent.yml"
-deploy:
-  identity: artifact        # application (default) | artifact
-```
-
-| | `application` (default) | `artifact` |
-|---|---|---|
-| Release in service (inventory) | one per application/environment | one per application/artifact/environment |
-| Queue partition (`environment_concurrency`) | `<app>/<env>` | `<app>+<artifact>/<env>`: different artifacts deploy in parallel |
-| Rollback, promotion, `requires` | of the application | of the artifact |
-| Retention `keep_releases` | per application/environment | per artifact |
-| Default schedule name | `<app>-<env>` | `<app>-<artifact>-<env>` |
-| `artifact.name` | any (a warning if not valid) | letters, digits, `.`, `_`, `:`, `-` (an image path goes in `source`) |
+`artifact.name` accepts letters, digits, `.`, `_`, `:` and `-` (at most 128 characters, starting with a letter or digit): it becomes part of queue partitions, keys and paths. The path of an image goes in `source`. An application with a single artifact usually names it after the application.
 
 The order between artifacts (migrations, then backend, then frontend) is expressed with [`after` or a composed release](catene.md).
 
-!!! warning "Change it with the workers drained"
-    The deploys already enqueued keep the old queue partition: for a moment a deploy enqueued before and one enqueued after the change could run together in the same environment. Change `deploy.identity` with the workers drained (`Worker.Drain`, `/readyz` 503) and set the same value on API and workers.
-
-The history needs no migration: every workflow already records the artifact name, and the inventory is rebuilt per artifact from it.
-
 ## Environment configuration per artifact
 
-The templates of the providers accept `{artifact}`: one document per artifact, with nothing shared (common targets and secrets are repeated in every document).
+The templates of the providers contain `{artifact}`: one document per artifact, with nothing shared (common targets and secrets are repeated in every document).
 
 ```yaml title="manent.yml"
 envconfig:
@@ -47,10 +36,8 @@ envconfig:
   required: true                                   # a missing document is an error: it catches a misspelled artifact
   file:
     path: "envconfig/{application}/{artifact}/{environment}.yml"
-    legacy_path: "envconfig/{application}/{environment}.yml"   # only during the transition
   # consul:
   #   key: "manent/{application}/{artifact}/{environment}"
-  #   legacy_key: "manent/{application}/{environment}"
 ```
 
 ```text
@@ -61,9 +48,8 @@ envconfig/
     shop-db/prod.yml
 ```
 
-- **Transition:** with `legacy_path`/`legacy_key` an artifact without its own document reads the application's one; the `config` step records `legacy: true` in its result. Remove them when every artifact has its document.
-- **Names:** with `{artifact}` in the template an `artifact.name` that cannot be part of a path or key (e.g. `team/api`) is a permanent error.
-- **Templates without `{artifact}`** keep working as before: one document per application/environment, whatever the identity.
+- **Names:** an `artifact.name` that cannot be part of a path or key (e.g. `team/api`) is refused.
+- **A template without `{artifact}`** reads one document per application/environment, shared by all its artifacts.
 - **`descriptor_policy.secret_refs`** accepts `{artifact}`: `vault:secret/{application}/{artifact}/{environment}/*`.
 - **`manent env validate --artifact <name>`** checks a candidate document of an artifact.
 

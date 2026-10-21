@@ -2,7 +2,7 @@
 
 Con la strategia `traffic` la nuova versione, la **candidata**, viene rilasciata accanto a quella in esercizio, la **stabile**, senza ricevere traffico. Poi manent sposta il traffico per gradini (per esempio 1, 5, 25, 50, 100%), con un tempo di osservazione e un health gate dopo ogni gradino. Se qualcosa va storto il traffico torna alla stabile con un cambio di peso, senza rifare il deploy.
 
-```yaml title="envconfig/shop/prod.yml (o descrittore)"
+```yaml title="envconfig/shop/shop/prod.yml (o descrittore)"
 rollout:
   strategy: traffic
   traffic:
@@ -57,7 +57,7 @@ Le metriche dell'applicazione devono avere l'etichetta dello slot: su Kubernetes
 
 Una soglia su una lettura singola è fragile: un picco della stabile, o pochi errori della candidata a basso traffico, decidono il gradino. Con `analysis: mann-whitney` la metrica è giudicata come in Kayenta: a ogni lettura del gate manent legge le **serie** di candidata e stabile sul tempo trascorso nel gradino (o `lookback`), con un punto ogni `step`, e le confronta con il test **U di Mann-Whitney** a due code. La metrica fallisce solo se la differenza è significativa (`p < alpha`) **e** va nella direzione considerata peggiore oltre il rapporto tollerato tra le medie.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   strategy: traffic
   traffic: {steps: [5, 25, 50, 100], bake: 15m}
@@ -132,7 +132,7 @@ Su Lambda e Cloud Run le versioni senza traffico non consumano risorse: un blue/
 
 Con plugin che aggiornano i target in place (`remote-copy`, `container`, `ecs` con due servizi), gli slot sono **gruppi di target**: ogni target ha l'etichetta `slot: a` o `slot: b`, il deploy aggiorna solo i target dello slot libero e un router della configurazione di ambiente sposta il traffico tra i due gruppi.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 targets:
   - {host: 10.0.1.10, labels: {slot: a}}
   - {host: 10.0.2.10, labels: {slot: b}}

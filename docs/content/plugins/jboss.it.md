@@ -51,7 +51,7 @@ I parametri booleani accettano `true` e `false`. L'autenticazione segue la sfida
 
 `artifact.version` è obbligatoria e diventa parte del nome del deployment. L'estensione viene dal file scaricato o da `artifact.type` (`.war`, `.ear`, `.jar`, `.rar`, `.sar`).
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: jboss
 targets:
   - {host: eap1.example.com, labels: {region: eu-1, az: eu-1a}}

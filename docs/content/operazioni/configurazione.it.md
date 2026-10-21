@@ -59,9 +59,9 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
 | `consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
 | `consul.datacenter` | | Datacenter Consul. |
-| `consul.key` | `manent/{application}/{environment}` | Modello della chiave KV. |
+| `consul.key` | `manent/{application}/{artifact}/{environment}` | Modello della chiave KV. |
 | `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{application}/{environment}.yml` | Modello del percorso per il provider `file`. |
+| `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
 | `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Modello del percorso dei documenti dei [tenant](../guida/tenant.md). |
 | `consul.tenants_key` | `manent/tenants/{tenant}` | Modello della chiave KV dei documenti dei tenant. |
 | `tenants_cache` | `30s` | Per quanto resta in cache l'elenco dei tenant (selettori, permessi). |

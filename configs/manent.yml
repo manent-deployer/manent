@@ -89,11 +89,11 @@ envconfig:
   consul:
     address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
     datacenter: ""
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
     # token: from CONSUL_HTTP_TOKEN or from a file
     # token_file: /run/secrets/consul-token
   file:
-    path: "./examples/envconfig/{application}/{environment}.yml"
+    path: "./examples/envconfig/{application}/{artifact}/{environment}.yml"
 
 # HTTP callbacks named in descriptors (callbacks section): they receive the outcome of steps and deploy.
 callbacks:

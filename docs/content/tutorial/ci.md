@@ -176,7 +176,7 @@ build:
 The environment configuration often lives in its own repository, synchronized to Consul. `manent env validate` checks a candidate configuration with every submission-time check (merge, descriptor policy, rollout plan, plugins), merged with the request of the deploy currently in service, and writes nothing:
 
 ```sh
-manent env validate -a hello -e prod -f envconfig/hello/prod.yml
+manent env validate -a hello -e prod -f envconfig/hello/hello/prod.yml
 ```
 
 Run it in the merge request pipeline of the configuration repository: a wave that selects no target or a forbidden parameter fails the review, not the next release. The GitHub Action does the same with `command: env-validate`.

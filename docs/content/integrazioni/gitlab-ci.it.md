@@ -110,7 +110,7 @@ envconfig-check:
       changes: ["envconfig/**/*"]
   script:
     - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
-    - manent env validate -a shop -e prod -f envconfig/shop/prod.yml
+    - manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml
 ```
 
 Riferimento: [CI e infrastruttura come codice](../guida/ci-iac.md).

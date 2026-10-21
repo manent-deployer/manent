@@ -115,10 +115,7 @@ type ServiceOptions struct {
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
-	// ByArtifact identifies releases by application/artifact/environment (deploy.identity:
-	// artifact) instead of application/environment.
-	ByArtifact bool
-	Logger     *slog.Logger
+	Logger       *slog.Logger
 	// Now returns the current time; replaceable in tests.
 	Now func() time.Time
 }
@@ -153,7 +150,6 @@ type Engine struct {
 	targets     TargetStateReader
 	staleAfter  time.Duration
 	queueLimits QueueOptions
-	byArtifact  bool
 	logger      *slog.Logger
 	now         func() time.Time
 	// inv is the process inventory, updated incrementally.
@@ -183,7 +179,6 @@ func NewService(opts ServiceOptions) *Engine {
 		targets:     opts.TargetStates,
 		staleAfter:  cmp.Or(opts.StaleAfter, time.Minute),
 		queueLimits: opts.QueueLimits,
-		byArtifact:  opts.ByArtifact,
 		logger:      opts.Logger.With("component", "engine"),
 		now:         opts.Now,
 	}
@@ -222,10 +217,6 @@ func (e *Engine) Submit(ctx context.Context, d *descriptor.Descriptor) (*Submiss
 func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta submitMeta) (*Submission, error) {
 	if sub, ok := e.alreadyScheduled(ctx, d); ok {
 		return sub, nil
-	}
-	if e.byArtifact && d.Schedule != nil && d.Schedule.Cron != "" && d.Schedule.Name == "" {
-		// The default name is recorded: the ticks read it from the stored descriptor.
-		d.Schedule.Name = d.ScheduleNameFor(true)
 	}
 	if d.Tenants != nil {
 		return e.submitTenants(ctx, d, meta)
@@ -330,7 +321,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 			"required", req.Approval.RequiredOrZero(), "change_approval", req.Change != nil && req.Change.Approval, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
-	opts := deployOptions(req, id, e.byArtifact)
+	opts := deployOptions(req, id)
 	if delay > 0 {
 		opts = append(opts, dbos.WithEnqueueDelay(delay))
 	}
@@ -352,7 +343,7 @@ func (e *Engine) alreadyScheduled(ctx context.Context, d *descriptor.Descriptor)
 		return nil, false
 	}
 	st, err := e.Status(ctx, workflowID(d))
-	if err != nil || st.Application != d.Application || st.Environment != d.Environment || (e.byArtifact && st.Artifact != d.Artifact.Name) {
+	if err != nil || st.Application != d.Application || st.Environment != d.Environment || st.Artifact != d.Artifact.Name {
 		return nil, false
 	}
 	return &Submission{ID: st.ID, State: st.State, ScheduledAt: d.Schedule.At}, true
@@ -486,14 +477,6 @@ func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 		}
 	}
 	v := &Validation{Valid: true}
-	if !descriptor.ValidArtifactName(d.Artifact.Name) {
-		// The artifact name identifies the release: with the artifact identity it becomes part
-		// of the queue partition and keys, so it must be valid.
-		if e.byArtifact {
-			return nil, nil, fmt.Errorf("%w: invalid artifact.name %q: %s", ErrInvalidRequest, d.Artifact.Name, descriptor.ArtifactNameRule)
-		}
-		v.Warnings = append(v.Warnings, fmt.Sprintf("artifact.name %q non sarà più ammesso con deploy.identity: artifact (%s): il percorso dell'immagine va in source", d.Artifact.Name, descriptor.ArtifactNameRule))
-	}
 	eff := *d
 	if resolve != nil {
 		r, meta, err := resolve(ctx, *d)
@@ -602,9 +585,9 @@ func sameArtifact(s Status, d *descriptor.Descriptor) bool {
 
 // deployOptions are the enqueue options of a deploy: queue partition, user, attributes for
 // listings and inventory and, if given, workflow ID.
-func deployOptions(req Request, id string, byArtifact bool) []dbos.EnqueueOption {
+func deployOptions(req Request, id string) []dbos.EnqueueOption {
 	opts := []dbos.EnqueueOption{
-		dbos.WithEnqueueQueuePartitionKey(partitionKey(&req.Descriptor, byArtifact)),
+		dbos.WithEnqueueQueuePartitionKey(partitionKey(&req.Descriptor)),
 		dbos.WithEnqueueAttributes(attributes(req)),
 	}
 	if req.RequestedBy != "" {
@@ -1059,15 +1042,11 @@ func workflowID(d *descriptor.Descriptor) string {
 	return d.ID
 }
 
-// partitionKey is the queue partition key: deploys of the same application/environment obey
-// the environment_concurrency limit across all workers. With the artifact identity the first
-// segment is "<application>+<artifact>": '+' is not allowed in names, so the key stays
-// unambiguous and the keys of the application identity do not change.
-func partitionKey(d *descriptor.Descriptor, byArtifact bool) string {
-	app := d.Application
-	if byArtifact {
-		app += artifactSep + d.Artifact.Name
-	}
+// partitionKey is the queue partition key: deploys of the same application artifact in an
+// environment obey the environment_concurrency limit across all workers. The first segment is
+// "<application>+<artifact>": '+' is not allowed in names, so the key stays unambiguous.
+func partitionKey(d *descriptor.Descriptor) string {
+	app := d.Application + artifactSep + d.Artifact.Name
 	if d.Tenant != "" {
 		return app + "/" + d.Environment + "/" + d.Tenant
 	}

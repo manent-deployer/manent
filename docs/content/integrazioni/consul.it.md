@@ -48,7 +48,7 @@ envconfig:
   consul:
     address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR o http://127.0.0.1:8500
     datacenter: ""
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
     token_file: /run/secrets/consul-token        # oppure CONSUL_HTTP_TOKEN
 ```
 
@@ -57,8 +57,8 @@ Il token ACL non si scrive mai in `manent.yml`: arriva da `CONSUL_HTTP_TOKEN` o 
 ## 4. Scrivi una configurazione
 
 ```sh
-consul kv put manent/shop/prod @envconfig/shop/prod.yml
-consul kv get -detailed manent/shop/prod | grep ModifyIndex
+consul kv put manent/shop/shop/prod @envconfig/shop/shop/prod.yml
+consul kv get -detailed manent/shop/shop/prod | grep ModifyIndex
 ```
 
 ```sh
@@ -66,7 +66,7 @@ manent validate -f deploy/prod.yml | jq .config
 ```
 
 ```json
-{"source": "consul:manent/shop/prod", "revision": "4127", "targets": "6"}
+{"source": "consul:manent/shop/shop/prod", "revision": "4127", "targets": "6"}
 ```
 
 `revision` è il `ModifyIndex` della chiave. L'output dello step `config` di ogni deploy riporta la stessa coppia, quindi alla domanda "quale configurazione ha usato il deploy X?" c'è una risposta precisa.
@@ -75,7 +75,7 @@ manent validate -f deploy/prod.yml | jq .config
 
 Tieni la configurazione in un repository e lascia che sia una pipeline a scriverla, dopo la verifica di manent:
 
-1. **Merge request:** `manent env validate -a shop -e prod -f envconfig/shop/prod.yml` esegue tutti i controlli dell'invio (fusione con il deploy in esercizio, policy sui descrittori, piano del rollout, plugin) e non scrive nulla. Vedi [GitHub Actions](github-actions.md) o [GitLab CI](gitlab-ci.md).
+1. **Merge request:** `manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml` esegue tutti i controlli dell'invio (fusione con il deploy in esercizio, policy sui descrittori, piano del rollout, plugin) e non scrive nulla. Vedi [GitHub Actions](github-actions.md) o [GitLab CI](gitlab-ci.md).
 2. **Merge:** la pipeline esegue `consul kv put`, oppure Terraform con `consul_keys` condizionato al data source [`manent_environment_check`](terraform.md).
 
 ## Quando viene letta

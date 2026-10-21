@@ -77,7 +77,7 @@ rollback:
 
 The environment configuration and the descriptor can enable or disable rollback, narrow `on` or pick the locator, always within `allowed`. The merge rules of the [environment configuration](configurazione-ambiente.md) apply: the environment is authoritative and a conflicting value is an error. For example, a production environment can enforce rollback without a descriptor being able to disable it:
 
-```yaml title="Environment configuration (manent/myapp/prod)"
+```yaml title="Environment configuration (manent/myapp/myapp/prod)"
 rollback:
   enabled: true
 ```

@@ -120,8 +120,8 @@ tf apply -auto-approve -input=false -var app_version=1.1.0
 expect_eq "apply riallinea il target" "$(current eu1-b $APP)" 1.1.0
 
 info "-- configurazione di ambiente verificata nel plan"
-cp config/envconfig/$APP/prod.yml "$TF/env-ok.yml"
-sed 's/^plugin: remote-copy/plugn: remote-copy/' config/envconfig/$APP/prod.yml >"$TF/env-bad.yml"
+cp config/envconfig/$APP/$APP/prod.yml "$TF/env-ok.yml"
+sed 's/^plugin: remote-copy/plugn: remote-copy/' config/envconfig/$APP/$APP/prod.yml >"$TF/env-bad.yml"
 tf apply -auto-approve -input=false -var app_version=1.1.0 -var env_config=env-ok.yml
 expect_eq "configurazione candidata valida: apply senza deploy" "$(code)" 0
 expect_eq "il data source riporta i target della configurazione" "$(dc --profile terraform run --rm -T terraform output -json checked_targets 2>/dev/null | tr -d ' \n')" '["eu1-b"]'

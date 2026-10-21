@@ -17,7 +17,7 @@ artifact:
 
 La configurazione di un ambiente è un documento YAML o JSON:
 
-```yaml title="manent/myapp/test"
+```yaml title="manent/myapp/myapp/test"
 plugin: remote-copy
 policy: default
 targets:
@@ -52,14 +52,14 @@ Si configura in `manent.yml`, sezione `envconfig`:
       consul:
         address: http://consul:8500            # default: CONSUL_HTTP_ADDR o http://127.0.0.1:8500
         datacenter: ""
-        key: "manent/{application}/{environment}"
+        key: "manent/{application}/{artifact}/{environment}"
         # token_file: /run/secrets/consul-token
     ```
 
     La configurazione è il valore della chiave KV. Il token ACL si legge da `CONSUL_HTTP_TOKEN` oppure da `token_file`, mai dal file di configurazione.
 
     ```sh
-    consul kv put manent/myapp/test @examples/envconfig/myapp/test.yml
+    consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
     ```
 
 === "File"
@@ -68,7 +68,7 @@ Si configura in `manent.yml`, sezione `envconfig`:
     envconfig:
       provider: file
       file:
-        path: "./envconfig/{application}/{environment}.yml"
+        path: "./envconfig/{application}/{artifact}/{environment}.yml"
     ```
 
     Utile per sviluppo e test.
@@ -87,7 +87,7 @@ Si configura in `manent.yml`, sezione `envconfig`:
 | `required` | `true`: il deploy fallisce se per l'ambiente non esiste configurazione. `false`: si usa solo il descrittore. |
 | `max_retries` | Tentativi aggiuntivi se il provider non risponde (es. Consul non raggiungibile). |
 
-I template (`consul.key`, `file.path`) accettano anche `{artifact}`, l'`artifact.name` del descrittore: un documento per artefatto di un'applicazione, con `consul.legacy_key`/`file.legacy_path` come fallback durante la transizione. Vedi [Applicazioni con più artefatti](artefatti.md).
+I template (`consul.key`, `file.path`) contengono `{artifact}`, l'`artifact.name` del descrittore: un documento per artefatto di un'applicazione. Vedi [Applicazioni con più artefatti](artefatti.md).
 
 ## Quando viene letta
 
@@ -96,7 +96,7 @@ La configurazione viene letta all'inizio di ogni deploy, nello step `config`. Ne
 - un deploy pianificato usa la configurazione valida al momento dell'esecuzione, non quella del momento in cui è stato pianificato;
 - una volta letta, viene salvata da DBOS. Se il deploy viene ripreso dopo un crash, riusa la stessa configurazione anche se nel frattempo è cambiata.
 
-L'output dello step `config` riporta la fonte (`source`, es. `consul:manent/myapp/test`) e la revisione (`revision`, il `ModifyIndex` di Consul), così ogni deploy è riconducibile alla configurazione esatta che ha usato.
+L'output dello step `config` riporta la fonte (`source`, es. `consul:manent/myapp/myapp/test`) e la revisione (`revision`, il `ModifyIndex` di Consul), così ogni deploy è riconducibile alla configurazione esatta che ha usato.
 
 ## Regole di fusione
 

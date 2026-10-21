@@ -279,7 +279,7 @@ type AdminTenantsAdoptCmd struct {
 	From        string `long:"environment" required:"true" description:"ambiente per cliente di oggi, es. prod-acme"`
 	To          string `long:"as" required:"true" description:"ambiente con i tenant, es. prod"`
 	Tenant      string `long:"tenant" required:"true" description:"tenant"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto (deploy.identity: artifact; obbligatorio se l'ambiente ne ha più di uno)"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto (obbligatorio se l'ambiente ne ha più di uno)"`
 }
 
 // Execute implements flags.Commander.

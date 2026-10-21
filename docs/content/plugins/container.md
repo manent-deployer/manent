@@ -63,7 +63,7 @@ plugins:
 !!! warning "`run_args` and `command` are commands"
     They reach the target's shell as written. Define them in the [environment configuration](../guida/configurazione-ambiente.md) and exclude them from the `descriptor_policy`, like the remote-copy commands.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: container
 targets:
   - {host: vm1.example.com, user: deploy, labels: {region: eu-1, az: eu-1a}}

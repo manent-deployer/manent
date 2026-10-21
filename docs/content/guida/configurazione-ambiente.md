@@ -17,7 +17,7 @@ artifact:
 
 An environment's configuration is a YAML or JSON document:
 
-```yaml title="manent/myapp/test"
+```yaml title="manent/myapp/myapp/test"
 plugin: remote-copy
 policy: default
 targets:
@@ -52,14 +52,14 @@ Configured in `manent.yml`, section `envconfig`:
       consul:
         address: http://consul:8500            # default: CONSUL_HTTP_ADDR or http://127.0.0.1:8500
         datacenter: ""
-        key: "manent/{application}/{environment}"
+        key: "manent/{application}/{artifact}/{environment}"
         # token_file: /run/secrets/consul-token
     ```
 
     The configuration is the value of the KV key. The ACL token is read from `CONSUL_HTTP_TOKEN` or from `token_file`, never from the configuration file.
 
     ```sh
-    consul kv put manent/myapp/test @examples/envconfig/myapp/test.yml
+    consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
     ```
 
 === "File"
@@ -68,7 +68,7 @@ Configured in `manent.yml`, section `envconfig`:
     envconfig:
       provider: file
       file:
-        path: "./envconfig/{application}/{environment}.yml"
+        path: "./envconfig/{application}/{artifact}/{environment}.yml"
     ```
 
     Useful for development and testing.
@@ -87,7 +87,7 @@ Configured in `manent.yml`, section `envconfig`:
 | `required` | `true`: the deploy fails if there is no configuration for the environment. `false`: only the descriptor is used. |
 | `max_retries` | Additional attempts if the provider does not respond (e.g. Consul unreachable). |
 
-Templates (`consul.key`, `file.path`) also accept `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application, with `consul.legacy_key`/`file.legacy_path` as a fallback during the transition. See [Applications with several artifacts](artefatti.md).
+Templates (`consul.key`, `file.path`) contain `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application. See [Applications with several artifacts](artefatti.md).
 
 ## When it is read
 
@@ -96,7 +96,7 @@ The configuration is read at the start of every deploy, in the `config` step. Tw
 - a scheduled deploy uses the configuration valid at run time, not the one at the time it was scheduled;
 - once read, it is saved by DBOS. If the deploy is resumed after a crash, it reuses the same configuration even if it has changed in the meantime.
 
-The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/test`) and the revision (`revision`, Consul's `ModifyIndex`), so every deploy can be traced back to the exact configuration it used.
+The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/myapp/test`) and the revision (`revision`, Consul's `ModifyIndex`), so every deploy can be traced back to the exact configuration it used.
 
 ## Merge rules { #regole-di-fusione }
 

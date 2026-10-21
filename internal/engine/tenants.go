@@ -45,7 +45,7 @@ type Adoption struct {
 // in From (an environment per customer, before tenants).
 type AdoptRequest struct {
 	Application string
-	// Artifact chooses the artifact with the artifact identity, required when From has more
+	// Artifact chooses the artifact, required when From has more
 	// than one.
 	Artifact string
 	From, To string
@@ -89,7 +89,7 @@ func (e *Engine) Adopt(ctx context.Context, r AdoptRequest) (*Submission, error)
 	}
 	areq := Request{Descriptor: d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: KindAdoption, Source: src.ID,
 		Tenant: e.tenantRef(ctx, r.Tenant), Adopted: &Adoption{Source: src.ID, SHA256: src.SHA256}}
-	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, areq, deployOptions(areq, uuid.NewString(), e.byArtifact)...)
+	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, areq, deployOptions(areq, uuid.NewString())...)
 	if err != nil {
 		return nil, err
 	}

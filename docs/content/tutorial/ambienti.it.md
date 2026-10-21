@@ -16,7 +16,7 @@ Nel tutorial 1 il descrittore contiene tutto: host, directory di destinazione, i
 
 Crea la configurazione di `hello` in `test`, con ciò che prima stava nel descrittore:
 
-```yaml title="envconfig/hello/test.yml"
+```yaml title="envconfig/hello/hello/test.yml"
 plugin: remote-copy
 targets:
   - {host: 127.0.0.1, port: 2222, user: deploy}
@@ -41,7 +41,7 @@ envconfig:
   provider: file
   required: true
   file:
-    path: "./envconfig/{application}/{environment}.yml"
+    path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
 Riavvia `manent-server -c manent.yml serve`. Ora il descrittore dice solo cosa rilasciare:
@@ -64,7 +64,7 @@ manent validate -f hello-min.yml | jq '{valid, config, rollback}'
 ```json
 {
   "valid": true,
-  "config": {"source": "file:./envconfig/hello/test.yml", "targets": "1"},
+  "config": {"source": "file:./envconfig/hello/hello/test.yml", "targets": "1"},
   "rollback": {"enabled": true, "on": ["deploy", "post-test", "activation"], "locator": "plugin"}
 }
 ```
@@ -143,7 +143,7 @@ secrets:
 
 ```sh
 docker cp envconfig/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
-docker exec manent-tutorial-consul consul kv put manent/hello/test @/tmp/test.yml
+docker exec manent-tutorial-consul consul kv put manent/hello/hello/test @/tmp/test.yml
 ```
 
 ## 5. Metti la chiave SSH in Vault
@@ -177,7 +177,7 @@ envconfig:
   required: true
   consul:
     address: http://127.0.0.1:8500
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
 secrets:
   vault:
     enabled: true
@@ -199,7 +199,7 @@ manent validate -f hello-min.yml | jq -c '{valid, config, secrets}'
 ```
 
 ```json
-{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
+{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
 ```
 
 `revision` è il `ModifyIndex` della chiave in Consul: cambia ogni volta che qualcuno scrive la configurazione. Rilascia:

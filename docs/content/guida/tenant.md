@@ -44,7 +44,7 @@ manent tenants show acme              # parameters and secret names, never the r
 
 ## Environment configuration
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 tenancy: tenanted              # untenanted (default) | tenanted | both
 tenant_params:

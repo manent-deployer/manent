@@ -165,7 +165,7 @@ func (e *Engine) readImport(_ context.Context, d descriptor.Descriptor, imp desc
 		}
 	}
 	switch {
-	case len(found) == 1 || (len(found) > 1 && !e.byArtifact):
+	case len(found) == 1:
 		return found[0].Current.ID + "@" + found[0].Current.Version, found[0].Current.Exports, nil
 	case len(found) > 1:
 		return "", nil, pipeline.Permanent(fmt.Errorf("%s/%s has %d artifacts in service: choose one with imports.<name>.current.artifact", app, env, len(found)))

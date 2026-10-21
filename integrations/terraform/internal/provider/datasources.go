@@ -55,7 +55,7 @@ func (d *inventoryDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"application":   schema.StringAttribute{Computed: true},
-					"artifact":      schema.StringAttribute{Computed: true, Description: "Artefatto della voce con deploy.identity: artifact."},
+					"artifact":      schema.StringAttribute{Computed: true, Description: "Artefatto (artifact.name) della voce."},
 					"environment":   schema.StringAttribute{Computed: true},
 					"tenant":        schema.StringAttribute{Computed: true},
 					"version":       schema.StringAttribute{Computed: true},

@@ -788,7 +788,7 @@ export interface components {
                 application: string;
                 /** @description Default l'ambiente del deploy che importa */
                 environment?: string;
-                /** @description Artefatto dell'applicazione (deploy.identity: artifact); obbligatorio se l'ambiente ne ha più di uno */
+                /** @description Artefatto dell'applicazione; obbligatorio se l'ambiente ne ha più di uno */
                 artifact?: string;
             };
         };
@@ -1216,8 +1216,8 @@ export interface components {
         };
         InventoryEntry: {
             application: string;
-            /** @description Artefatto della voce con deploy.identity: artifact */
-            artifact?: string;
+            /** @description Artefatto (artifact.name) della voce */
+            artifact: string;
             environment: string;
             tenant?: string;
             current?: components["schemas"]["Status"];
@@ -1489,7 +1489,7 @@ export interface components {
             application: string;
             from: string;
             to: string;
-            /** @description Artefatto da promuovere; con deploy.identity: artifact obbligatorio se from ne ha più di uno */
+            /** @description Artefatto da promuovere; obbligatorio se from ne ha più di uno */
             artifact?: string;
             version?: string;
             /** @description Promuove la release di questo tenant */
@@ -1501,7 +1501,7 @@ export interface components {
         RollbackRequest: components["schemas"]["Redeploy"] & {
             application: string;
             environment: string;
-            /** @description Artefatto da riportare indietro; con deploy.identity: artifact obbligatorio se l'ambiente ne ha più di uno */
+            /** @description Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno */
             artifact?: string;
             version?: string;
             /** @description Torna indietro sulla release di questo tenant */

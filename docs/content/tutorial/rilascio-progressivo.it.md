@@ -24,7 +24,7 @@ flowchart LR
 
 Region e AZ non sono ambienti separati: sono **etichette** dei target di un solo ambiente, così governance, inventario e promozione continuano a ragionare su `prod`. `region` e `az` sono riservate; ogni altra etichetta (qui `canary`) è tua.
 
-```yaml title="envconfig/hello/prod.yml (target)"
+```yaml title="envconfig/hello/hello/prod.yml (target)"
 plugin: remote-copy
 targets:
   - {host: web-1.prod.internal, user: deploy, labels: {region: eu-1, az: eu-1a, canary: "true"}}
@@ -47,7 +47,7 @@ rollback:
 
 La strategia sta nella stessa configurazione di ambiente, che è autorevole: i team applicativi non possono allentarla dal descrittore.
 
-```yaml title="envconfig/hello/prod.yml (rollout)"
+```yaml title="envconfig/hello/hello/prod.yml (rollout)"
 rollout:
   waves:
     - {name: canary, select: "canary=true", bake: 10m}

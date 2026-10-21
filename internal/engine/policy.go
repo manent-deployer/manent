@@ -160,7 +160,7 @@ type inventoryReader interface {
 }
 
 // currentRelease returns the release in service in the environment, nil if none or unreadable.
-// artifact restricts it to an artifact (artifact identity; empty: the application's entry).
+// artifact restricts it to an artifact (empty: any).
 func currentRelease(ctx context.Context, r inventoryReader, application, artifact, environment, tenantName string) *governance.InputRelease {
 	if r == nil {
 		return nil
@@ -190,7 +190,7 @@ func (e *Engine) govern(ctx context.Context, req *Request, eff *descriptor.Descr
 		at = *d.Schedule.At
 	}
 	in := policyInput(governance.PhaseSubmit, *req, eff, at)
-	in.Current = currentRelease(ctx, e, d.Application, e.releaseArtifact(d.Artifact.Name), d.Environment, d.Tenant)
+	in.Current = currentRelease(ctx, e, d.Application, d.Artifact.Name, d.Environment, d.Tenant)
 	dec, err := e.governance.Evaluate(ctx, in)
 	if err != nil {
 		return policyError(err)
@@ -233,7 +233,7 @@ func (e *Engine) describeGovernance(ctx context.Context, v *Validation, d *descr
 		at = *d.Schedule.At
 	}
 	in := policyInput(governance.PhaseValidate, req, eff, at)
-	in.Current = currentRelease(ctx, e, d.Application, e.releaseArtifact(d.Artifact.Name), d.Environment, d.Tenant)
+	in.Current = currentRelease(ctx, e, d.Application, d.Artifact.Name, d.Environment, d.Tenant)
 	v.Governance = &GovernanceValidation{}
 	dec, err := e.governance.Evaluate(ctx, in)
 	if err != nil {
@@ -275,7 +275,7 @@ func (w *Worker) startPolicy(ctx context.Context, req Request, eff *descriptor.D
 		meta["freeze_override"] = d.FreezeOverride
 	}
 	in := policyInput(governance.PhaseStart, req, eff, time.Now())
-	in.Current = currentRelease(ctx, w.service, d.Application, w.reader.releaseArtifact(d.Artifact.Name), d.Environment, d.Tenant)
+	in.Current = currentRelease(ctx, w.service, d.Application, d.Artifact.Name, d.Environment, d.Tenant)
 	dec, err := w.governance.Evaluate(ctx, in)
 	if err != nil {
 		return err
@@ -453,7 +453,7 @@ type tickPolicy struct {
 // are those of the run, not of the schedule's creation. Freezes apply at the deploy start.
 func (w *Worker) evaluateTick(ctx context.Context, req Request, at time.Time) (tickPolicy, error) {
 	in := policyInput(governance.PhaseTick, req, nil, at)
-	in.Current = currentRelease(ctx, w.service, req.Descriptor.Application, w.reader.releaseArtifact(req.Descriptor.Artifact.Name), req.Descriptor.Environment, req.Descriptor.Tenant)
+	in.Current = currentRelease(ctx, w.service, req.Descriptor.Application, req.Descriptor.Artifact.Name, req.Descriptor.Environment, req.Descriptor.Tenant)
 	dec, err := w.governance.Evaluate(ctx, in)
 	if err != nil {
 		return tickPolicy{}, err
@@ -604,7 +604,7 @@ func (e *Engine) EvaluatePolicy(ctx context.Context, revision int64, r PolicyEva
 		req.RequestedGroups = p.Groups
 	}
 	in := policyInput(phase, req, eff, e.now())
-	in.Current = currentRelease(ctx, e, d.Application, e.releaseArtifact(d.Artifact.Name), d.Environment, d.Tenant)
+	in.Current = currentRelease(ctx, e, d.Application, d.Artifact.Name, d.Environment, d.Tenant)
 	dec, err := pa.EvaluateRevision(ctx, revision, in)
 	if err != nil {
 		return nil, policyError(err)

@@ -2,7 +2,7 @@
 
 An in-place deploy on servers or VMs behind a load balancer interrupts the requests in flight and sends traffic to a node that is restarting. With a **pool** in the environment configuration, manent takes each batch of a [wave rollout](ondate.md) out of the load balancer before updating it and puts it back in service only when the load balancer sees it healthy.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   waves:
     - {name: canary, select: "canary=true"}

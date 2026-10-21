@@ -125,7 +125,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 	busy := map[string]bool{}
 	if act, err := w.reader.Activity(ctx, ActivityFilter{}); err == nil {
 		for _, s := range slices.Concat(act.Running, act.AwaitingApproval) {
-			busy[w.reader.releaseKey(s.Application, s.Artifact, s.Environment, s.Tenant)] = true
+			busy[releaseKey(s.Application, s.Artifact, s.Environment, s.Tenant)] = true
 		}
 	} else {
 		w.logger.Warn("riconciliazione: lettura dei deploy in corso fallita", "error", err)
@@ -136,12 +136,12 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 		for _, r := range recs {
 			var st service.TargetsState
 			if r.Scope == w.reconcileScope() && json.Unmarshal([]byte(r.Data), &st) == nil {
-				prev[w.reader.releaseKey(r.Application, r.Artifact, r.Environment, r.Tenant)] = st
+				prev[releaseKey(r.Application, r.Artifact, r.Environment, r.Tenant)] = st
 			}
 		}
 	}
 	for _, ie := range inv {
-		key := w.reader.releaseKey(ie.Application, ie.Artifact, ie.Environment, ie.Tenant)
+		key := releaseKey(ie.Application, ie.Artifact, ie.Environment, ie.Tenant)
 		if ie.Current == nil || busy[key] {
 			continue
 		}

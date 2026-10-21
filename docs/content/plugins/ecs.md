@@ -51,7 +51,7 @@ Define `role_arn` and credentials in the [environment configuration](../guida/co
 
 The role needs `ecs:DescribeServices`, `ecs:DescribeTaskDefinition`, `ecs:ListTaskDefinitions`, `ecs:RegisterTaskDefinition`, `ecs:TagResource`, `ecs:UpdateService` and `iam:PassRole` on the task role and the execution role of the task definition.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: ecs
 targets:
   - {host: eu-west-1/prod, labels: {region: eu-west-1}}

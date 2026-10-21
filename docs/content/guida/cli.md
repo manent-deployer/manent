@@ -126,7 +126,7 @@ manent whoami                   # your identity on the server and your roles
 
 ### Artifacts
 
-See [Applications with several artifacts](artefatti.md) (`deploy.identity: artifact`).
+See [Applications with several artifacts](artefatti.md).
 
 ```sh
 manent list|inventory|dora -A <artifact>

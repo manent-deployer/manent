@@ -328,7 +328,7 @@ type PromoteCmd struct {
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	From        string `long:"from" required:"true" description:"ambiente di origine"`
 	To          string `long:"to" required:"true" description:"ambiente di destinazione"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (deploy.identity: artifact; obbligatorio se l'ambiente di origine ne ha più di uno)"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (obbligatorio se l'ambiente di origine ne ha più di uno)"`
 	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
 	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
 	Tenant      string `long:"tenant" description:"promuove la release di questo tenant"`
@@ -366,7 +366,7 @@ type RollbackCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto da riportare indietro (deploy.identity: artifact; obbligatorio se l'ambiente ne ha più di uno)"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto da riportare indietro (obbligatorio se l'ambiente ne ha più di uno)"`
 	Version     string `long:"to" description:"versione a cui tornare (default: la precedente a quella in esercizio)"`
 	Tenant      string `long:"tenant" description:"torna indietro sulla release di questo tenant"`
 	Run         string `long:"run" description:"riporta indietro i tenant riusciti di questo rilascio multi-tenant, in ordine inverso"`

@@ -143,7 +143,7 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
 	}
-	// With deploy.identity: artifact every artifact has its own entry: the resource's is the
+	// Every artifact has its own entry: the resource's is the
 	// descriptor's artifact.
 	artifact := descriptorArtifact(&m)
 	i := slices.IndexFunc(inv, func(e service.InventoryEntry) bool {

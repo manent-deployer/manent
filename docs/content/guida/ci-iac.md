@@ -31,7 +31,7 @@ Server and token come from `MANENT_SERVER` and `MANENT_TOKEN` (a CI secret, with
 ### Candidate environment configuration { #env-validate }
 
 ```sh
-manent env validate -a shop -e prod -f envconfig/shop/prod.yml [-d deploy/prod.yml]
+manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml [-d deploy/prod.yml]
 ```
 
 The server merges the configuration with an example descriptor (default: the request of the deploy in service) and applies the enqueue-time checks: unknown fields, [descriptor policy](../operazioni/configurazione.md), merge, rollback, [wave](ondate.md) and [traffic](traffico.md) plan, plugins and health checks. It writes nothing: it is the check to run in the merge request of the configuration repository, before Consul or the file receive it. API: `POST /api/v1/environments/validate`, permission `deployment.read`.
@@ -139,7 +139,7 @@ data "manent_environment_check" "shop_prod" {
 
 resource "consul_keys" "shop_prod" {
   key {
-    path  = "manent/shop/prod"
+    path  = "manent/shop/shop/prod"
     value = data.manent_environment_check.shop_prod.valid ? local.shop_prod_config : null
   }
 }

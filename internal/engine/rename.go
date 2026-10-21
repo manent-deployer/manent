@@ -32,7 +32,7 @@ type RenameReport struct {
 }
 
 // RenameArtifact changes the artifact attribute of the ended workflows (deploys, approvals,
-// dependency waits) of an application from From to To: with the artifact identity, inventory,
+// dependency waits) of an application from From to To: inventory,
 // history, rollbacks and promotions follow the new name (applyRedeploy takes the name from the
 // attribute). The input of the deploys is not changed. Workflows not ended are skipped: their
 // end would record the old name again.

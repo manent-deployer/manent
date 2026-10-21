@@ -57,7 +57,7 @@ envconfig:
   provider: file
   required: false
   file:
-    path: /etc/manent/envconfig/{application}/{environment}.yml
+    path: /etc/manent/envconfig/{application}/{artifact}/{environment}.yml
     # UC24: tenant registry.
     tenants: /etc/manent/envconfig/tenants/{tenant}.yml
   tenants_cache: 2s

@@ -113,9 +113,6 @@ type WorkerOptions struct {
 	Region string
 	// RegionRouting runs rollout passes on the workers of the targets' region.
 	RegionRouting bool
-	// ByArtifact identifies releases by application/artifact/environment (deploy.identity:
-	// artifact): queue partitions, inventory and reconciliation.
-	ByArtifact bool
 	// ChainPollInterval is the first interval for reading the state of dependencies and of a
 	// release's deploys (default 5s); it doubles at every read up to 1 minute.
 	ChainPollInterval time.Duration
@@ -164,7 +161,6 @@ type Worker struct {
 	healthTimeout   time.Duration
 	region          string
 	regionRouting   bool
-	byArtifact      bool
 	queueName       string
 	metrics         telemetry.Recorder
 	registry        cluster.Registry
@@ -227,7 +223,6 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		healthTimeout:   cmp.Or(opts.HealthTimeout, 30*time.Second),
 		region:          opts.Region,
 		regionRouting:   opts.RegionRouting,
-		byArtifact:      opts.ByArtifact,
 		queueName:       opts.Queue.Name,
 		metrics:         opts.Metrics,
 		registry:        opts.Registry,
@@ -245,8 +240,8 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		w.metrics = telemetry.Noop{}
 	}
 	w.logger = opts.Logger.With("component", "worker", "executor", w.id)
-	w.admin = NewAdmin(AdminOptions{Client: ctx, Registry: opts.Registry, Version: w.version, Audit: opts.Audit, ByArtifact: opts.ByArtifact, Logger: opts.Logger})
-	w.reader = NewService(ServiceOptions{Client: ctx, QueueName: opts.Queue.Name, ByArtifact: opts.ByArtifact, Logger: opts.Logger})
+	w.admin = NewAdmin(AdminOptions{Client: ctx, Registry: opts.Registry, Version: w.version, Audit: opts.Audit, Logger: opts.Logger})
+	w.reader = NewService(ServiceOptions{Client: ctx, QueueName: opts.Queue.Name, Logger: opts.Logger})
 	w.chainPoll = cmp.Or(opts.ChainPollInterval, defaultChainPoll)
 	dbos.RegisterWorkflow(ctx, w.deployWorkflow, dbos.WithWorkflowName(workflowName))
 	dbos.RegisterWorkflow(ctx, w.scheduledWorkflow, dbos.WithWorkflowName(scheduledWorkflowName))

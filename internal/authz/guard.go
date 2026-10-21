@@ -37,8 +37,6 @@ type Guard struct {
 	Registry tenant.Directory
 	// Now returns the current time, for the grants with until; replaceable in tests.
 	Now func() time.Time
-	// ByArtifact is deploy.identity: artifact, for the default schedule names.
-	ByArtifact bool
 }
 
 var _ engine.Service = (*Guard)(nil)
@@ -281,7 +279,7 @@ func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.S
 		return nil, err
 	}
 	if d.Schedule != nil && d.Schedule.Cron != "" {
-		t.schedule = d.ScheduleNameFor(g.ByArtifact)
+		t.schedule = d.ScheduleName()
 		if err := g.check(ctx, ScheduleWrite, t); err != nil {
 			return nil, err
 		}
@@ -428,7 +426,7 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, ie := range all {
-		if g.allowed(ctx, p, DeploymentRead, ie.Application, entryArtifact(ie), ie.Environment, ie.Tenant) {
+		if g.allowed(ctx, p, DeploymentRead, ie.Application, ie.Artifact, ie.Environment, ie.Tenant) {
 			out = append(out, ie)
 		}
 	}

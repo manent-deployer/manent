@@ -52,7 +52,7 @@ type ImportCurrent struct {
 	// Environment defaults to the importing deploy's: a promotion then reads the exports of
 	// the target environment.
 	Environment string `json:"environment,omitempty" yaml:"environment,omitempty"`
-	// Artifact chooses the artifact of the application (deploy.identity: artifact); required
+	// Artifact chooses the artifact of the application; required
 	// when the environment has more than one.
 	Artifact string `json:"artifact,omitempty" yaml:"artifact,omitempty"`
 }

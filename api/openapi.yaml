@@ -775,7 +775,7 @@ components:
           properties:
             application: {type: string}
             environment: {type: string, description: Default l'ambiente del deploy che importa}
-            artifact: {type: string, description: "Artefatto dell'applicazione (deploy.identity: artifact); obbligatorio se l'ambiente ne ha più di uno"}
+            artifact: {type: string, description: "Artefatto dell'applicazione; obbligatorio se l'ambiente ne ha più di uno"}
     Export:
       type: object
       required: [from]
@@ -1141,10 +1141,10 @@ components:
         descriptor: {$ref: '#/components/schemas/Descriptor'}
     InventoryEntry:
       type: object
-      required: [application, environment]
+      required: [application, artifact, environment]
       properties:
         application: {type: string}
-        artifact: {type: string, description: "Artefatto della voce con deploy.identity: artifact"}
+        artifact: {type: string, description: "Artefatto (artifact.name) della voce"}
         environment: {type: string}
         tenant: {type: string}
         current: {$ref: '#/components/schemas/Status'}
@@ -1419,7 +1419,7 @@ components:
             application: {type: string}
             from: {type: string}
             to: {type: string}
-            artifact: {type: string, description: "Artefatto da promuovere; con deploy.identity: artifact obbligatorio se from ne ha più di uno"}
+            artifact: {type: string, description: "Artefatto da promuovere; obbligatorio se from ne ha più di uno"}
             version: {type: string}
             tenant: {type: string, description: Promuove la release di questo tenant}
             tenants: {type: string, description: Selettore dei tenant da promuovere, ognuno dalla propria release}
@@ -1432,7 +1432,7 @@ components:
           properties:
             application: {type: string}
             environment: {type: string}
-            artifact: {type: string, description: "Artefatto da riportare indietro; con deploy.identity: artifact obbligatorio se l'ambiente ne ha più di uno"}
+            artifact: {type: string, description: "Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno"}
             version: {type: string}
             tenant: {type: string, description: Torna indietro sulla release di questo tenant}
             run: {type: string, description: Rilascio multi-tenant di cui riportare indietro i tenant riusciti}

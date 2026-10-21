@@ -134,7 +134,7 @@ export function InventoryPage() {
     queryFn: async () => unwrap(await api.GET("/api/v1/inventory")).inventory,
     refetchInterval: 30_000,
   });
-  // One row per application, artifact (deploy.identity: artifact) and tenant: the matrix
+  // One row per application, artifact and tenant: the matrix
   // environment × artifact and tenant of every application.
   const { rows, envs, byKey, tenanted, byArtifact } = useMemo(() => {
     const entries = q.data ?? [];

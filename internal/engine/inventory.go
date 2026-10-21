@@ -30,7 +30,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 	}
 	byEnv := map[string][]cluster.TargetsRecord{}
 	for _, r := range recs {
-		k := e.releaseKey(r.Application, r.Artifact, r.Environment, r.Tenant)
+		k := releaseKey(r.Application, r.Artifact, r.Environment, r.Tenant)
 		byEnv[k] = append(byEnv[k], r)
 	}
 	for i, ie := range out {
@@ -38,7 +38,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 			continue
 		}
 		// Only readings of the deploy in service count: an earlier one says nothing about it.
-		if st := mergeTargets(byEnv[e.releaseKey(ie.Application, ie.Artifact, ie.Environment, ie.Tenant)], ie.Current.ID); st != nil {
+		if st := mergeTargets(byEnv[releaseKey(ie.Application, ie.Artifact, ie.Environment, ie.Tenant)], ie.Current.ID); st != nil {
 			out[i].Targets = st
 			out[i].OutOfSync = slices.ContainsFunc(st.Targets, TargetState.Changed)
 		}
@@ -57,7 +57,7 @@ func (e *Engine) inventory(f InventoryFilter) ([]InventoryEntry, error) {
 	for _, k := range slices.Sorted(maps.Keys(e.inv.entries)) {
 		ie := *e.inv.entries[k]
 		if (f.Application != "" && ie.Application != f.Application) || (f.Environment != "" && ie.Environment != f.Environment) ||
-			(f.Tenant != "" && ie.Tenant != f.Tenant) || (f.Artifact != "" && entryArtifact(ie) != f.Artifact) {
+			(f.Tenant != "" && ie.Tenant != f.Tenant) || (f.Artifact != "" && ie.Artifact != f.Artifact) {
 			continue
 		}
 		ie.Drift = ie.LastFailure != nil && progressStarted(ie.LastFailure.RolloutProgress)
@@ -107,7 +107,7 @@ func (e *Engine) refreshInventory() error {
 			return err
 		}
 		for _, w := range ws {
-			c.apply(w, e.byArtifact)
+			c.apply(w)
 		}
 	}
 	const page = 500
@@ -126,7 +126,7 @@ func (e *Engine) refreshInventory() error {
 			}
 			fresh++
 			c.see(w)
-			c.apply(w, e.byArtifact)
+			c.apply(w)
 		}
 		if len(ws) < page {
 			break
@@ -160,7 +160,7 @@ func (e *Engine) rebuildInventory() error {
 	c.entries, c.pending, c.recent, c.mark = map[string]*InventoryEntry{}, map[string]bool{}, map[string]time.Time{}, time.Time{}
 	err := e.scanRaw(nil, func(w dbos.WorkflowStatus) bool {
 		c.see(w)
-		c.apply(w, e.byArtifact)
+		c.apply(w)
 		return true
 	})
 	if err != nil {
@@ -173,9 +173,9 @@ func (e *Engine) rebuildInventory() error {
 
 // apply updates the inventory with a read workflow: a successful deploy becomes the release in
 // service if it is the most recent; a failed or cancelled deploy is the last failure if more
-// recent than the release in service. Unfinished workflows remain to be read again. With the
-// artifact identity every artifact of an application has its own entry.
-func (c *inventoryCache) apply(w dbos.WorkflowStatus, byArtifact bool) {
+// recent than the release in service. Unfinished workflows remain to be read again. Every
+// artifact of an application has its own entry.
+func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 	delete(c.pending, w.ID)
 	if superseded(w) {
 		return
@@ -188,14 +188,10 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus, byArtifact bool) {
 		c.pending[w.ID] = true
 		return
 	}
-	artifact := ""
-	if byArtifact {
-		artifact = s.Artifact
-	}
-	k := s.Application + "/" + artifact + "/" + s.Environment + "/" + s.Tenant
+	k := s.Application + "/" + s.Artifact + "/" + s.Environment + "/" + s.Tenant
 	ie := c.entries[k]
 	if ie == nil {
-		ie = &InventoryEntry{Application: s.Application, Artifact: artifact, Environment: s.Environment, Tenant: s.Tenant}
+		ie = &InventoryEntry{Application: s.Application, Artifact: s.Artifact, Environment: s.Environment, Tenant: s.Tenant}
 		c.entries[k] = ie
 	}
 	switch s.State {
@@ -212,20 +208,6 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus, byArtifact bool) {
 			ie.LastFailure = &s
 		}
 	}
-}
-
-// entryArtifact is the artifact of an inventory entry: its own with the artifact identity,
-// the last one released with the application identity.
-func entryArtifact(ie InventoryEntry) string {
-	switch {
-	case ie.Artifact != "":
-		return ie.Artifact
-	case ie.Current != nil:
-		return ie.Current.Artifact
-	case ie.LastFailure != nil:
-		return ie.LastFailure.Artifact
-	}
-	return ""
 }
 
 // findRelease returns the most recent successfully ended deploy (not dry-run) in the

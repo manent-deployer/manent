@@ -162,8 +162,8 @@ type Validation struct {
 // repository or in Terraform) before it reaches the configuration system.
 type EnvironmentCheck struct {
 	Application string `json:"application"`
-	// Artifact is the artifact the configuration is for (templates with {artifact}); with the
-	// artifact identity it chooses the deploy in service used as example.
+	// Artifact is the artifact the configuration is for (templates with {artifact}); it chooses
+	// the deploy in service used as example.
 	Artifact    string `json:"artifact,omitempty"`
 	Environment string `json:"environment"`
 	// Config is the configuration in YAML or JSON, as it would be stored in the provider.

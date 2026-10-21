@@ -166,14 +166,14 @@ envconfig:
   required: true
   consul:
     address: http://consul:8500             # default: CONSUL_HTTP_ADDR
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
     # token ACL: CONSUL_HTTP_TOKEN oppure token_file
 ```
 
-Il valore della chiave Consul è YAML o JSON ([esempio](examples/envconfig/myapp/test.yml)):
+Il valore della chiave Consul è YAML o JSON ([esempio](examples/envconfig/myapp/myapp/test.yml)):
 
 ```sh
-consul kv put manent/myapp/test @examples/envconfig/myapp/test.yml
+consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
 manent-server -c configs/manent.yml validate -f examples/descriptor-envconfig.yml   # mostra il deploy effettivo
 ```
 

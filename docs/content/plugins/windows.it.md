@@ -71,7 +71,7 @@ plugins:
 
 Il `user` del target è l'account di servizio (ad esempio `CONTOSO\svc-deploy`), che deve poter amministrare IIS o il servizio. `artifact.version` è obbligatoria e diventa il nome della directory della release.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: windows
 targets:
   - {host: web1.contoso.local, user: 'CONTOSO\svc-deploy', labels: {region: eu-1, az: eu-1a}}
@@ -153,7 +153,7 @@ Due [pool di traffico](../guida/svuotamento.md) tolgono gli host dal bilanciator
 
 I membri sono gli indirizzi dei server della farm (`iis-arr`) o i nomi dei nodi (`nlb`); di default l'host del target (`traffic.pool.member`).
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   waves:
     - {name: all, select: "region=eu-1", by: az}

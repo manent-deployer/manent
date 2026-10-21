@@ -93,7 +93,7 @@ type TargetsRecord struct {
 	Environment string
 	// Tenant is the tenant of the deploy read ("" for untenanted deploys).
 	Tenant string
-	// Artifact is the artifact of the release read with the artifact identity ("" otherwise).
+	// Artifact is the artifact of the release read.
 	Artifact  string
 	Scope     string
 	CheckedAt time.Time
@@ -477,7 +477,7 @@ func (r *SQL) SaveTargets(ctx context.Context, t TargetsRecord) error {
 }
 
 // artifactSep separates application and artifact in the stored application, as in the queue
-// partition keys: '+' is not allowed in names, and the records of the application identity
+// partition keys: '+' is not allowed in names, and the records without an artifact
 // stay valid.
 const artifactSep = "+"
 

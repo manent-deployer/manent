@@ -1,6 +1,6 @@
 # Applicazioni con più artefatti
 
-Un'applicazione è spesso fatta di più artefatti rilasciati separatamente: un frontend, un backend, le migrazioni del database. Con l'**identità per artefatto** ogni artefatto è una release a sé: configurazione di ambiente, coda, inventario, rollback, promozione e retention sono per applicazione, artefatto e ambiente. L'artefatto è `artifact.name`, già obbligatorio in ogni descrittore: non c'è un campo nuovo.
+Un'applicazione è spesso fatta di più artefatti rilasciati separatamente: un frontend, un backend, le migrazioni del database. Ogni artefatto è una release a sé: configurazione di ambiente, coda, inventario, rollback, promozione e retention sono per applicazione, artefatto e ambiente. L'artefatto è `artifact.name`, obbligatorio in ogni descrittore.
 
 ```yaml
 # backend
@@ -14,32 +14,21 @@ environment: prod
 artifact: {type: tgz, name: shop-web, version: 3.2.0, source: https://repo.example.com/shop-web-3.2.0.tgz}
 ```
 
-## Attivazione
+| | Per applicazione, artefatto e ambiente |
+|---|---|
+| Release in esercizio (inventario) | una voce per artefatto |
+| Partizione della coda (`environment_concurrency`) | `<app>+<artifact>/<env>`: artefatti diversi si rilasciano in parallelo |
+| Rollback, promozione, `requires` | dell'artefatto |
+| Retention `keep_releases` | per artefatto |
+| Nome di default delle schedule | `<app>-<artifact>-<env>` |
 
-```yaml title="manent.yml"
-deploy:
-  identity: artifact        # application (default) | artifact
-```
-
-| | `application` (default) | `artifact` |
-|---|---|---|
-| Release in esercizio (inventario) | una per applicazione/ambiente | una per applicazione/artefatto/ambiente |
-| Partizione della coda (`environment_concurrency`) | `<app>/<env>` | `<app>+<artifact>/<env>`: artefatti diversi si rilasciano in parallelo |
-| Rollback, promozione, `requires` | dell'applicazione | dell'artefatto |
-| Retention `keep_releases` | per applicazione/ambiente | per artefatto |
-| Nome di default delle schedule | `<app>-<env>` | `<app>-<artifact>-<env>` |
-| `artifact.name` | qualsiasi (avviso se non valido) | lettere, cifre, `.`, `_`, `:`, `-` (il percorso di un'immagine va in `source`) |
+`artifact.name` accetta lettere, cifre, `.`, `_`, `:` e `-` (al più 128 caratteri, iniziale alfanumerica): entra nelle partizioni della coda, nelle chiavi e nei percorsi. Il percorso di un'immagine va in `source`. Un'applicazione con un solo artefatto di solito gli dà il nome dell'applicazione.
 
 L'ordine tra artefatti (migrazioni, poi backend, poi frontend) si esprime con [`after` o con una release composta](catene.md).
 
-!!! warning "Cambiarla con i worker in drain"
-    I deploy già accodati conservano la partizione vecchia: per un momento un deploy accodato prima e uno accodato dopo il cambio potrebbero girare insieme nello stesso ambiente. Cambiare `deploy.identity` con i worker in drain (`Worker.Drain`, `/readyz` 503) e con lo stesso valore su API e worker.
-
-Lo storico non va migrato: ogni workflow registra già il nome dell'artefatto, e l'inventario viene ricostruito per artefatto da quello.
-
 ## Configurazione di ambiente per artefatto
 
-I template dei provider accettano `{artifact}`: un documento per artefatto, senza nulla di condiviso (target e segreti comuni si ripetono in ogni documento).
+I template dei provider contengono `{artifact}`: un documento per artefatto, senza nulla di condiviso (target e segreti comuni si ripetono in ogni documento).
 
 ```yaml title="manent.yml"
 envconfig:
@@ -47,10 +36,8 @@ envconfig:
   required: true                                   # un documento mancante è un errore: intercetta un artefatto scritto male
   file:
     path: "envconfig/{application}/{artifact}/{environment}.yml"
-    legacy_path: "envconfig/{application}/{environment}.yml"   # solo durante la transizione
   # consul:
   #   key: "manent/{application}/{artifact}/{environment}"
-  #   legacy_key: "manent/{application}/{environment}"
 ```
 
 ```text
@@ -61,9 +48,8 @@ envconfig/
     shop-db/prod.yml
 ```
 
-- **Transizione:** con `legacy_path`/`legacy_key` un artefatto senza documento proprio legge quello dell'applicazione; lo step `config` registra `legacy: true` nel risultato. Vanno rimossi quando ogni artefatto ha il suo documento.
-- **Nomi:** con `{artifact}` nel template un `artifact.name` che non può stare in un percorso o in una chiave (es. `team/api`) è un errore permanente.
-- **I template senza `{artifact}`** funzionano come prima: un documento per applicazione/ambiente, qualunque sia l'identità.
+- **Nomi:** un `artifact.name` che non può stare in un percorso o in una chiave (es. `team/api`) è rifiutato.
+- **Un template senza `{artifact}`** legge un documento per applicazione/ambiente, condiviso da tutti i suoi artefatti.
 - **`descriptor_policy.secret_refs`** accetta `{artifact}`: `vault:secret/{application}/{artifact}/{environment}/*`.
 - **`manent env validate --artifact <nome>`** verifica un documento candidato di un artefatto.
 

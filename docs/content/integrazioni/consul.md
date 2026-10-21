@@ -48,7 +48,7 @@ envconfig:
   consul:
     address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR or http://127.0.0.1:8500
     datacenter: ""
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
     token_file: /run/secrets/consul-token        # or CONSUL_HTTP_TOKEN
 ```
 
@@ -57,8 +57,8 @@ The ACL token is never written in `manent.yml`: it comes from `CONSUL_HTTP_TOKEN
 ## 4. Write a configuration
 
 ```sh
-consul kv put manent/shop/prod @envconfig/shop/prod.yml
-consul kv get -detailed manent/shop/prod | grep ModifyIndex
+consul kv put manent/shop/shop/prod @envconfig/shop/shop/prod.yml
+consul kv get -detailed manent/shop/shop/prod | grep ModifyIndex
 ```
 
 ```sh
@@ -66,7 +66,7 @@ manent validate -f deploy/prod.yml | jq .config
 ```
 
 ```json
-{"source": "consul:manent/shop/prod", "revision": "4127", "targets": "6"}
+{"source": "consul:manent/shop/shop/prod", "revision": "4127", "targets": "6"}
 ```
 
 `revision` is the key's `ModifyIndex`. The output of the `config` step of every deploy carries the same pair, so "which configuration did deploy X use?" has a precise answer.
@@ -75,7 +75,7 @@ manent validate -f deploy/prod.yml | jq .config
 
 Keep the configuration in a repository and let a pipeline write it, after manent has checked it:
 
-1. **Merge request:** `manent env validate -a shop -e prod -f envconfig/shop/prod.yml` runs every submission check (merge with the deploy in service, descriptor policy, rollout plan, plugins) and writes nothing. See [GitHub Actions](github-actions.md) or [GitLab CI](gitlab-ci.md).
+1. **Merge request:** `manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml` runs every submission check (merge with the deploy in service, descriptor policy, rollout plan, plugins) and writes nothing. See [GitHub Actions](github-actions.md) or [GitLab CI](gitlab-ci.md).
 2. **Merge:** the pipeline runs `consul kv put`, or Terraform with `consul_keys` gated by the [`manent_environment_check`](terraform.md) data source.
 
 ## When it is read

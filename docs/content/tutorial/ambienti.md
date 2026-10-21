@@ -16,7 +16,7 @@ In tutorial 1 the descriptor holds everything: hosts, the destination directory,
 
 Create the configuration of `hello` in `test`, with what used to be in the descriptor:
 
-```yaml title="envconfig/hello/test.yml"
+```yaml title="envconfig/hello/hello/test.yml"
 plugin: remote-copy
 targets:
   - {host: 127.0.0.1, port: 2222, user: deploy}
@@ -41,7 +41,7 @@ envconfig:
   provider: file
   required: true
   file:
-    path: "./envconfig/{application}/{environment}.yml"
+    path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
 Restart `manent-server -c manent.yml serve`. The descriptor now only says what to release:
@@ -64,7 +64,7 @@ manent validate -f hello-min.yml | jq '{valid, config, rollback}'
 ```json
 {
   "valid": true,
-  "config": {"source": "file:./envconfig/hello/test.yml", "targets": "1"},
+  "config": {"source": "file:./envconfig/hello/hello/test.yml", "targets": "1"},
   "rollback": {"enabled": true, "on": ["deploy", "post-test", "activation"], "locator": "plugin"}
 }
 ```
@@ -143,7 +143,7 @@ secrets:
 
 ```sh
 docker cp envconfig/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
-docker exec manent-tutorial-consul consul kv put manent/hello/test @/tmp/test.yml
+docker exec manent-tutorial-consul consul kv put manent/hello/hello/test @/tmp/test.yml
 ```
 
 ## 5. Put the SSH key in Vault
@@ -177,7 +177,7 @@ envconfig:
   required: true
   consul:
     address: http://127.0.0.1:8500
-    key: "manent/{application}/{environment}"
+    key: "manent/{application}/{artifact}/{environment}"
 secrets:
   vault:
     enabled: true
@@ -199,7 +199,7 @@ manent validate -f hello-min.yml | jq -c '{valid, config, secrets}'
 ```
 
 ```json
-{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
+{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
 ```
 
 `revision` is Consul's `ModifyIndex` of the key: it changes every time someone writes the configuration. Release:

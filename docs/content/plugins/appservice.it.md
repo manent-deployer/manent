@@ -48,7 +48,7 @@ Le credenziali, in quest'ordine:
 
 L'identità del worker è la scelta consigliata: nessun segreto da ruotare. L'identità ha bisogno del ruolo **Website Contributor** sulla web app (contenuto, impostazioni, swap) e di **Tag Contributor** per i tag. Kudu accetta lo stesso token di Entra ID, quindi le credenziali di pubblicazione basic possono restare disattivate.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: appservice
 targets:
   - {host: shop-weu, labels: {region: westeurope}}

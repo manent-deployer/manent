@@ -167,8 +167,8 @@ func TestFileProviderEResolver(t *testing.T) {
 }
 
 func TestEsempio(t *testing.T) {
-	p := &FileProvider{PathTemplate: "../../examples/envconfig/{application}/{environment}.yml"}
-	doc, err := p.Get(context.Background(), "myapp", "myapp-api", "test")
+	p := &FileProvider{PathTemplate: "../../examples/envconfig/{application}/{artifact}/{environment}.yml"}
+	doc, err := p.Get(context.Background(), "myapp", "myapp", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,60 +407,33 @@ func TestMergeImportEExport(t *testing.T) {
 	}
 }
 
-// TestFileProviderPerArtefatto verifica il template con {artifact}, il fallback al template
-// per applicazione durante la transizione e il rifiuto dei nomi che non possono stare in un
-// percorso.
+// TestFileProviderPerArtefatto verifica il template con {artifact} e il rifiuto dei nomi che
+// non possono stare in un percorso.
 func TestFileProviderPerArtefatto(t *testing.T) {
 	dir := t.TempDir()
-	write := func(rel, cfg string) {
-		t.Helper()
-		path := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(filepath.Join(dir, "myapp", "api"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	write("myapp/api/prod.json", `{"plugin": "remote-copy", "targets": [{"host": "api1"}]}`)
-	write("myapp/prod.json", `{"plugin": "remote-copy", "targets": [{"host": "old1"}]}`)
-	p := &FileProvider{
-		PathTemplate:   filepath.Join(dir, "{application}", "{artifact}", "{environment}.json"),
-		LegacyTemplate: filepath.Join(dir, "{application}", "{environment}.json"),
+	if err := os.WriteFile(filepath.Join(dir, "myapp", "api", "prod.json"), []byte(`{"plugin": "remote-copy", "targets": [{"host": "api1"}]}`), 0o644); err != nil {
+		t.Fatal(err)
 	}
+	p := &FileProvider{PathTemplate: filepath.Join(dir, "{application}", "{artifact}", "{environment}.json")}
 	ctx := context.Background()
 
 	d := baseDescriptor()
 	d.Artifact.Name = "api"
-	eff, meta, err := Resolver{Provider: p, Required: true}.Resolve(ctx, d)
+	eff, _, err := Resolver{Provider: p, Required: true}.Resolve(ctx, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if eff.Deploy.Targets[0].Host != "api1" || meta["legacy"] != "" {
-		t.Errorf("atteso il documento dell'artefatto: %+v %v", eff.Deploy.Targets, meta)
+	if eff.Deploy.Targets[0].Host != "api1" {
+		t.Errorf("atteso il documento dell'artefatto: %+v", eff.Deploy.Targets)
 	}
-
 	d.Artifact.Name = "web"
-	eff, meta, err = Resolver{Provider: p, Required: true}.Resolve(ctx, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if eff.Deploy.Targets[0].Host != "old1" || meta["legacy"] != "true" {
-		t.Errorf("atteso il fallback al template per applicazione: %+v %v", eff.Deploy.Targets, meta)
-	}
-
-	p.LegacyTemplate = ""
 	if _, _, err := (Resolver{Provider: p, Required: true}).Resolve(ctx, d); !errors.Is(err, ErrNotFound) {
-		t.Errorf("senza fallback atteso ErrNotFound, ricevuto %v", err)
+		t.Errorf("artefatto senza documento: atteso ErrNotFound, ricevuto %v", err)
 	}
-
-	d.Artifact.Name = "../escape"
-	if _, err := p.Get(ctx, d.Application, d.Artifact.Name, d.Environment); err == nil || !strings.Contains(err.Error(), "invalid artifact.name") {
+	if _, err := p.Get(ctx, "myapp", "../escape", "prod"); err == nil || !strings.Contains(err.Error(), "invalid artifact.name") {
 		t.Errorf("atteso il rifiuto del nome dell'artefatto, ricevuto %v", err)
-	}
-	// A template without {artifact} ignores the name.
-	legacy := &FileProvider{PathTemplate: filepath.Join(dir, "{application}", "{environment}.json")}
-	if _, err := legacy.Get(ctx, d.Application, d.Artifact.Name, d.Environment); err != nil {
-		t.Errorf("un template senza {artifact} non usa il nome: %v", err)
 	}
 }

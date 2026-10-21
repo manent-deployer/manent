@@ -159,7 +159,7 @@ GET /api/v1/deployments/{id}
   "result": {
     "deployment_id": "myapp-1.2.3-test",
     "steps": [
-      {"name": "config", "output": {"source": "consul:manent/myapp/test", "revision": "42", "targets": "1"}},
+      {"name": "config", "output": {"source": "consul:manent/myapp/myapp/test", "revision": "42", "targets": "1"}},
       {"name": "artifacts", "output": {"local_path": "…", "sha256": "…", "size": "10240"}},
       {"name": "deploy", "output": {"plugin": "remote-copy", "result": "{…}"}}
     ]

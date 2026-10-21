@@ -443,12 +443,11 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 			Token:             token,
 			Datacenter:        ec.Consul.Datacenter,
 			KeyTemplate:       ec.Consul.Key,
-			LegacyKeyTemplate: ec.Consul.LegacyKey,
 			TenantKeyTemplate: ec.Consul.TenantsKey,
 			Client:            &http.Client{Timeout: 10 * time.Second},
 		}
 	case config.EnvProviderFile:
-		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path, LegacyTemplate: ec.File.LegacyPath, TenantTemplate: ec.File.Tenants}
+		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path, TenantTemplate: ec.File.Tenants}
 	}
 	r.Tenants = envconfig.TenantDirectory(r.Provider)
 	return r, nil
@@ -496,8 +495,6 @@ type components struct {
 	traffic *steps.Traffic
 	metrics *telemetry.Metrics
 	closers []io.Closer
-	// byArtifact is deploy.identity: artifact.
-	byArtifact bool
 }
 
 // service builds the service exposed to CLI and API: the Engine wrapped by permissions.
@@ -513,7 +510,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
 		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, Health: c.health, Traffic: c.traffic, Logger: c.log,
-		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter, ByArtifact: cfg.Deploy.ByArtifact(),
+		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 		QueueLimits: engine.QueueOptions{
 			WorkerConcurrency:    cfg.DBOS.Concurrency,
 			GlobalConcurrency:    cfg.DBOS.GlobalConcurrency,
@@ -547,7 +544,7 @@ func (c *components) chatNotifier() engine.ChatNotifier {
 
 // guard wraps the Engine with permissions.
 func (c *components) guard(eng *engine.Engine) engine.Service {
-	g := &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, ByArtifact: c.byArtifact, Logger: c.log.With("component", "authz")}
+	g := &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz")}
 	if c.authzOPA {
 		g.Authorizer = c.governance
 	}
@@ -618,7 +615,6 @@ func newComponents(cfg *config.Config) (*components, error) {
 		}
 	}
 	return &components{
-		byArtifact: cfg.Deploy.ByArtifact(),
 		metrics:    metrics,
 		health:     health,
 		traffic:    trafficOps,
@@ -701,7 +697,6 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Inspector:            c.traffic.Deploy,
 		Reconcile:            engine.ReconcileOptions{Interval: cfg.Reconcile.Interval, Timeout: cfg.Reconcile.Timeout, Concurrency: cfg.Reconcile.Concurrency},
 		Region:               cfg.DBOS.Region,
-		ByArtifact:           cfg.Deploy.ByArtifact(),
 		RegionRouting:        cfg.DBOS.RegionRouting,
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
@@ -825,7 +820,7 @@ func (a *App) Admin() *engine.Admin {
 			a.registry = r
 		}
 		a.admin = engine.NewAdmin(engine.AdminOptions{
-			Client: a.client, Registry: a.registry, Version: a.Config.App.Version, Audit: a.audit, ByArtifact: a.Config.Deploy.ByArtifact(), Logger: a.Logger,
+			Client: a.client, Registry: a.registry, Version: a.Config.App.Version, Audit: a.audit, Logger: a.Logger,
 		})
 	})
 	return a.admin

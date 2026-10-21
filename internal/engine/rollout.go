@@ -394,7 +394,7 @@ func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descript
 	}
 	opts := []dbos.WorkflowOption{
 		dbos.WithWorkflowID(childID), dbos.WithQueue(q),
-		dbos.WithQueuePartitionKey(partitionKey(d, w.byArtifact) + "/" + p.Region),
+		dbos.WithQueuePartitionKey(partitionKey(d) + "/" + p.Region),
 	}
 	if req.RequestedBy != "" {
 		opts = append(opts, dbos.WithAuthenticatedUser(req.RequestedBy))
@@ -592,7 +592,7 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 				gi := in
 				gi.Passes, gi.Health = byRegion[region], descriptor.Health{Probes: in.Health.Probes}
 				h, err := dbos.RunWorkflow(ctx, w.gateWorkflow, gi, dbos.WithWorkflowID(id+".gate."+label+"."+region),
-					dbos.WithQueue(q), dbos.WithQueuePartitionKey(partitionKey(d, w.byArtifact)+"/"+region+"/gate"))
+					dbos.WithQueue(q), dbos.WithQueuePartitionKey(partitionKey(d)+"/"+region+"/gate"))
 				if err != nil {
 					return rollout.GateResult{}, fmt.Errorf("health gate in region %s: %w", region, err)
 				}

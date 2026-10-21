@@ -73,8 +73,8 @@ code=$(gh INPUT_COMMAND=validate INPUT_DESCRIPTOR=/uc/uc18.yml)
 expect_eq "command validate" "$code" 0
 expect_match "validate mostra il deploy effettivo" "$(cat "$WORK/ci/gh.log")" '"valid": true'
 
-cp config/envconfig/$APP/prod.yml "$WORK/uc/uc18-env-ok.yml"
-sed 's/^targets:/targetz:/' config/envconfig/$APP/prod.yml >"$WORK/uc/uc18-env-bad.yml"
+cp config/envconfig/$APP/$APP/prod.yml "$WORK/uc/uc18-env-ok.yml"
+sed 's/^targets:/targetz:/' config/envconfig/$APP/$APP/prod.yml >"$WORK/uc/uc18-env-bad.yml"
 code=$(gh INPUT_COMMAND=env-validate INPUT_APPLICATION=$APP INPUT_ENVIRONMENT=prod INPUT_ENV_CONFIG=/uc/uc18-env-ok.yml)
 expect_eq "env-validate: configurazione candidata valida" "$code" 0
 expect_match "env-validate usa il deploy in esercizio come esempio" "$(cat "$WORK/ci/gh.log")" '"source": "configurazione candidata"'

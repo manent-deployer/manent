@@ -118,7 +118,7 @@ spec:
 
 ## 3. Configurazione di ambiente
 
-```yaml title="envconfig/hello/test.yml"
+```yaml title="envconfig/hello/hello/test.yml"
 plugin: kubernetes
 targets:
   - {host: <host-api>, port: <porta-api>}     # dall'indirizzo del server, es. 127.0.0.1 e 6443
@@ -147,7 +147,7 @@ envconfig:
   provider: file
   required: true
   file:
-    path: "./envconfig/{application}/{environment}.yml"
+    path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
 ```yaml title="hello.yml"
@@ -222,7 +222,7 @@ Passata la scadenza, il plugin ha dichiarato il rollout bloccato e il rollback h
 
 Lo stesso plugin rilascia un chart impacchettato con `helm package` (un `.tgz` con `<nome>/Chart.yaml`, riconosciuto in automatico). manent lo **renderizza** soltanto, con `helm template` e le capability del cluster di destinazione, e ne applica il risultato come un manifest: Helm non tiene stato nel cluster, e storico e rollback funzionano come sopra.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: k8s-eu1.example.com, labels: {region: eu-1}}

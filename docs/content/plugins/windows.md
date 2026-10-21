@@ -71,7 +71,7 @@ plugins:
 
 The target `user` is the service account (for example `CONTOSO\svc-deploy`), which must be able to administer IIS or the service. `artifact.version` is required and becomes the name of the release directory.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: windows
 targets:
   - {host: web1.contoso.local, user: 'CONTOSO\svc-deploy', labels: {region: eu-1, az: eu-1a}}
@@ -153,7 +153,7 @@ Two [traffic pools](../guida/svuotamento.md) take the hosts out of the load bala
 
 Members are the server addresses of the farm (`iis-arr`) or the node names (`nlb`); by default the host of the target (`traffic.pool.member`).
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   waves:
     - {name: all, select: "region=eu-1", by: az}

@@ -176,7 +176,7 @@ build:
 Spesso la configurazione di ambiente sta in un repository a parte, sincronizzato con Consul. `manent env validate` verifica una configurazione candidata con tutti i controlli dell'invio (fusione, policy sui descrittori, piano del rollout, plugin), fusa con la richiesta del deploy in esercizio, e non scrive nulla:
 
 ```sh
-manent env validate -a hello -e prod -f envconfig/hello/prod.yml
+manent env validate -a hello -e prod -f envconfig/hello/hello/prod.yml
 ```
 
 Eseguilo nella pipeline delle merge request del repository della configurazione: un'ondata che non seleziona alcun target o un parametro non ammesso fa fallire la revisione, non il rilascio successivo. La GitHub Action fa lo stesso con `command: env-validate`.

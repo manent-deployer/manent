@@ -77,7 +77,7 @@ rollback:
 
 Configurazione di ambiente e descrittore possono attivare o disattivare il rollback, restringere `on` o scegliere il locator, sempre entro `allowed`. Valgono le regole di fusione della [configurazione di ambiente](configurazione-ambiente.md): l'ambiente è autorevole e un valore in conflitto è un errore. Ad esempio, un ambiente di produzione può imporre il rollback senza che un descrittore possa disattivarlo:
 
-```yaml title="Configurazione di ambiente (manent/myapp/prod)"
+```yaml title="Configurazione di ambiente (manent/myapp/myapp/prod)"
 rollback:
   enabled: true
 ```

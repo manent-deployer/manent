@@ -85,7 +85,7 @@ func TestSchedule(t *testing.T) {
 			if tt.wantCron != "" && d.Schedule.CronExpr() != tt.wantCron {
 				t.Errorf("CronExpr = %q, atteso %q", d.Schedule.CronExpr(), tt.wantCron)
 			}
-			if d.ScheduleName() != "app-prod" {
+			if d.ScheduleName() != "app-app-prod" {
 				t.Errorf("nome schedule di default inatteso: %q", d.ScheduleName())
 			}
 		})
@@ -247,5 +247,14 @@ func TestRelease(t *testing.T) {
 	}
 	if _, err := ParseReleaseJSON([]byte(`{"apiVersion":"manent/v1","kind":"Release","id":"r","deploys":[{"name":"a","file":"a.yml"}]}`)); err == nil {
 		t.Error("file non ammesso via API")
+	}
+}
+
+// artifact.name identifies the release: it must be a valid name.
+func TestNomeArtefatto(t *testing.T) {
+	d := Descriptor{APIVersion: APIVersion, Application: "app", Environment: "prod",
+		Artifact: Artifact{Type: "application", Name: "team/api", Version: "1", Source: "/srv/a.tgz"}}
+	if err := d.Validate(); err == nil || !strings.Contains(err.Error(), "artifact.name") {
+		t.Errorf("atteso il rifiuto di artifact.name, ottenuto %v", err)
 	}
 }

@@ -62,9 +62,6 @@ type Document struct {
 	Source string
 	// Revision is the configuration version (e.g. Consul ModifyIndex), if available.
 	Revision string
-	// Legacy says the document was read from the legacy template (per application, without
-	// {artifact}) because the artifact has no document yet: allowed only during the transition.
-	Legacy bool
 }
 
 // Provider reads the configuration of an artifact of an application in an environment.
@@ -89,25 +86,13 @@ func expandKey(tmpl, application, artifact, environment string) string {
 	return strings.NewReplacer("{application}", application, "{artifact}", artifact, "{environment}", environment).Replace(tmpl)
 }
 
-// withLegacy reads with get from the template and, if the document is missing and a legacy
-// template is set, from the legacy one. An artifact name that cannot be part of a key or
-// path is a permanent error when the template uses it.
-func withLegacy(tmpl, legacy, artifact string, get func(tmpl string) (*Document, error)) (*Document, error) {
+// readKey expands the template and reads it with read. An artifact name that cannot be part
+// of a key or path is a permanent error when the template uses it.
+func readKey(tmpl, application, artifact, environment string, read func(key string) (*Document, error)) (*Document, error) {
 	if strings.Contains(tmpl, "{artifact}") && !descriptor.ValidArtifactName(artifact) {
 		return nil, pipeline.Permanent(fmt.Errorf("invalid artifact.name %q for the environment configuration key: %s", artifact, descriptor.ArtifactNameRule))
 	}
-	doc, err := get(tmpl)
-	if legacy == "" || !errors.Is(err, ErrNotFound) {
-		return doc, err
-	}
-	doc, lerr := get(legacy)
-	if errors.Is(lerr, ErrNotFound) {
-		return nil, err
-	}
-	if doc != nil {
-		doc.Legacy = true
-	}
-	return doc, lerr
+	return read(expandKey(tmpl, application, artifact, environment))
 }
 
 // Merge applies the environment configuration to the descriptor and returns the effective
@@ -398,9 +383,6 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			meta["source"] = doc.Source
 			if doc.Revision != "" {
 				meta["revision"] = doc.Revision
-			}
-			if doc.Legacy {
-				meta["legacy"] = "true"
 			}
 		}
 	}

@@ -31,7 +31,7 @@ Server e token arrivano da `MANENT_SERVER` e `MANENT_TOKEN` (un secret della CI,
 ### Configurazione di ambiente candidata { #env-validate }
 
 ```sh
-manent env validate -a shop -e prod -f envconfig/shop/prod.yml [-d deploy/prod.yml]
+manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml [-d deploy/prod.yml]
 ```
 
 Il server fonde la configurazione con un descrittore di esempio (default: la richiesta del deploy in esercizio) e applica le verifiche dell'accodamento: campi sconosciuti, [policy sui descrittori](../operazioni/configurazione.md), fusione, rollback, piano delle [ondate](ondate.md) e del [traffico](traffico.md), plugin e controlli di salute. Non scrive nulla: è il controllo da eseguire nella merge request del repository delle configurazioni, prima che Consul o il file le ricevano. API: `POST /api/v1/environments/validate`, permesso `deployment.read`.
@@ -139,7 +139,7 @@ data "manent_environment_check" "shop_prod" {
 
 resource "consul_keys" "shop_prod" {
   key {
-    path  = "manent/shop/prod"
+    path  = "manent/shop/shop/prod"
     value = data.manent_environment_check.shop_prod.valid ? local.shop_prod_config : null
   }
 }

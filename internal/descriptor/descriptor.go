@@ -315,6 +315,10 @@ func (d *Descriptor) Validate() error {
 	}
 	if d.Artifact.Type == "" || d.Artifact.Name == "" || d.Artifact.Source == "" {
 		errs = append(errs, errors.New("artifact.type, artifact.name and artifact.source are required"))
+	} else if !validName(d.Artifact.Name) {
+		// The artifact name identifies the release: it becomes part of queue partitions, keys
+		// and paths. An image keeps its path in source.
+		errs = append(errs, fmt.Errorf("invalid artifact.name %q: %s", d.Artifact.Name, nameRule))
 	}
 	for i, t := range d.Deploy.Targets {
 		if t.Host == "" {
@@ -470,7 +474,7 @@ const nameRule = "ammessi lettere, cifre, '.', '_', ':', '-' (max 128, iniziale 
 func validName(s string) bool { return nameRe.MatchString(s) }
 
 // ValidArtifactName reports whether artifact.name can identify a release: it becomes part of
-// queue partitions, configuration keys and paths. Images keep their path in source.
+// queue partitions, configuration keys and paths.
 func ValidArtifactName(s string) bool { return validName(s) }
 
 // ArtifactNameRule describes the names ValidArtifactName accepts.
@@ -513,19 +517,13 @@ func (s *Schedule) CronExpr() string {
 }
 
 // ScheduleName returns the name of the recurring schedule.
-func (d *Descriptor) ScheduleName() string { return d.ScheduleNameFor(false) }
-
-// ScheduleNameFor returns the name of the recurring schedule; the default is
-// "<application>-<environment>", "<application>-<artifact>-<environment>" with the artifact
-// identity (two artifacts of an application can have a schedule each).
-func (d *Descriptor) ScheduleNameFor(byArtifact bool) string {
-	switch {
-	case d.Schedule != nil && d.Schedule.Name != "":
+// The default is "<application>-<artifact>-<environment>": two artifacts of an application can
+// have a schedule each.
+func (d *Descriptor) ScheduleName() string {
+	if d.Schedule != nil && d.Schedule.Name != "" {
 		return d.Schedule.Name
-	case byArtifact:
-		return d.Application + "-" + d.Artifact.Name + "-" + d.Environment
 	}
-	return d.Application + "-" + d.Environment
+	return d.Application + "-" + d.Artifact.Name + "-" + d.Environment
 }
 
 // SecretRefByName returns the reference mapped to a logical name.

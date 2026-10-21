@@ -67,7 +67,7 @@ Il chart viene solo **renderizzato** con `helm template`, per ogni cluster, come
 - **Isolamento.** Helm gira con un ambiente vuoto e una home temporanea: non eredita le variabili del worker né legge `KUBECONFIG`, repository o credenziali locali. Con `helm.sha256` il binario viene verificato prima di ogni uso.
 - Le variabili `${...}` dei manifest non si applicano ai chart: si usano i values.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: k8s-eu1.example.com, labels: {region: eu-1}}
@@ -96,7 +96,7 @@ Ogni target è il server API di un cluster: `host` (o un URL `https://…`) e `p
 
 Con manent in esecuzione nel cluster, il token del service account si legge con il secret provider `file:`:
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: kubernetes.default.svc, port: 443, labels: {region: eu-1}}

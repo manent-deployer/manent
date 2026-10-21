@@ -37,7 +37,7 @@ scrape_configs:
 
 ### Scrivi il gate
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   waves:
     - {name: canary, select: "canary=true", bake: 10m}

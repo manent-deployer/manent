@@ -133,7 +133,7 @@ jobs:
           command: env-validate
           application: shop
           environment: prod
-          env-config: envconfig/shop/prod.yml
+          env-config: envconfig/shop/shop/prod.yml
 ```
 
 The server merges the candidate with the request of the deploy in service and runs every submission check (merge, descriptor policy, rollout and traffic plan, plugins). It writes nothing; the permission needed is `deployment.read`.

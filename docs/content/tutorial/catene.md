@@ -69,7 +69,7 @@ envconfig:
   provider: file
   required: true
   file:
-    path: "./envconfig/{application}/{environment}.yml"
+    path: "./envconfig/{application}/{artifact}/{environment}.yml"
 pipeline:
   custom:
     known_hosts: ../lab/known_hosts
@@ -96,7 +96,7 @@ pipeline:
 
 The environment configurations: `infra-web` runs on the infrastructure host; `motd` has **no targets and no `dest_dir`**, because they will come from the exports. Replace `/home/you/manent-tutorial` with your path.
 
-```yaml title="envconfig/infra-web/test.yml"
+```yaml title="envconfig/infra-web/infra-web/test.yml"
 plugin: remote-copy
 targets:
   - {host: 127.0.0.1, port: 2222, user: deploy}
@@ -110,7 +110,7 @@ secrets:
     ref: file:/home/you/manent-tutorial/lab/deploy_key
 ```
 
-```yaml title="envconfig/motd/test.yml"
+```yaml title="envconfig/motd/motd/test.yml"
 plugin: remote-copy
 params:
   layout: releases
@@ -212,7 +212,7 @@ manent status $MOTD | jq -c '.result.steps[] | select(.name == "config") | .outp
 ```
 
 ```json
-{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","rollback":"disabled","source":"file:./envconfig/motd/test.yml","targets":"2"}
+{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","rollback":"disabled","source":"file:./envconfig/motd/motd/test.yml","targets":"2"}
 ```
 
 The `config` step records where the targets came from: the infrastructure deploy and its version. On the VMs:
@@ -227,9 +227,9 @@ The imports were resolved when `motd` started and saved with the step: a deploy 
 
 ## 7. Move the import into the environment
 
-An import of a given deploy is right for the first deploy of a chain. Everything that comes later (a new version of `motd`, a rollback, a promotion, the [reconciliation](../guida/governance.md#inventario)) should read the infrastructure **in service**, whatever deploy created it. That belongs to the environment configuration, which is authoritative. Add to `envconfig/motd/test.yml`:
+An import of a given deploy is right for the first deploy of a chain. Everything that comes later (a new version of `motd`, a rollback, a promotion, the [reconciliation](../guida/governance.md#inventario)) should read the infrastructure **in service**, whatever deploy created it. That belongs to the environment configuration, which is authoritative. Add to `envconfig/motd/motd/test.yml`:
 
-```yaml title="envconfig/motd/test.yml (addition)"
+```yaml title="envconfig/motd/motd/test.yml (addition)"
 imports:
   infra: {current: {application: infra-web}}     # the release in service of infra-web in test
 targets_from:
@@ -258,7 +258,7 @@ manent validate -f motd-min.yml | jq -c '{config, targets: [.deploy.targets[] | 
 ```
 
 ```json
-{"config":{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","source":"file:./envconfig/motd/test.yml","targets":"2"},"targets":["127.0.0.1:2223","127.0.0.1:2224"],"dest":"/home/deploy/motd"}
+{"config":{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","source":"file:./envconfig/motd/motd/test.yml","targets":"2"},"targets":["127.0.0.1:2223","127.0.0.1:2224"],"dest":"/home/deploy/motd"}
 ```
 
 `validate` already resolves the imports and shows the effective targets. Release:

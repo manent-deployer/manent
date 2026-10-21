@@ -51,7 +51,7 @@ pipeline:
           fail: {path: "$.status", in: [failed]}
 ```
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 step_params:
   db-migrate: {database: shop}
   cdn-purge: {zone: 0f3a9c1e5b7d42a8a1c3e5f7091b2d4c}

@@ -23,9 +23,6 @@ type ConsulProvider struct {
 	// KeyTemplate is the key template, with {application}, {artifact} and {environment}
 	// placeholders.
 	KeyTemplate string
-	// LegacyKeyTemplate, if set, is read when the KeyTemplate key is missing: the
-	// per-application template used before {artifact}, kept only during the transition.
-	LegacyKeyTemplate string
 	// TenantKeyTemplate is the key template of the tenant documents, with {tenant} (empty: no
 	// tenant registry).
 	TenantKeyTemplate string
@@ -42,9 +39,7 @@ type consulKV struct {
 // Get reads and decodes the key of the artifact in the application/environment; the revision
 // is the ModifyIndex.
 func (p *ConsulProvider) Get(ctx context.Context, application, artifact, environment string) (*Document, error) {
-	return withLegacy(p.KeyTemplate, p.LegacyKeyTemplate, artifact, func(tmpl string) (*Document, error) {
-		return p.read(ctx, expandKey(tmpl, application, artifact, environment))
-	})
+	return readKey(p.KeyTemplate, application, artifact, environment, func(key string) (*Document, error) { return p.read(ctx, key) })
 }
 
 // read reads and decodes a Consul key.

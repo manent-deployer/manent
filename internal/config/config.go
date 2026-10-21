@@ -51,27 +51,7 @@ type Config struct {
 	Retention        Retention                 `yaml:"retention"`
 	Reconcile        Reconcile                 `yaml:"reconcile"`
 	Integrations     Integrations              `yaml:"integrations"`
-	Deploy           Deploy                    `yaml:"deploy"`
 }
-
-// Identity of a deploy: what identifies a release in service (queue partition, inventory,
-// rollback, promotion, retention, reconciliation).
-const (
-	// IdentityApplication: application/environment[/tenant] (default).
-	IdentityApplication = "application"
-	// IdentityArtifact: application/artifact/environment[/tenant], with artifact = artifact.name.
-	IdentityArtifact = "artifact"
-)
-
-// Deploy configures how deploys are identified.
-type Deploy struct {
-	// Identity is application (default) or artifact. Change it with the workers drained: the
-	// deploys already enqueued keep the old queue partition.
-	Identity string `yaml:"identity"`
-}
-
-// ByArtifact reports whether every artifact of an application is a release of its own.
-func (d Deploy) ByArtifact() bool { return d.Identity == IdentityArtifact }
 
 // Observability configures metrics, tracing and probes of long-running processes.
 type Observability struct {
@@ -312,10 +292,7 @@ type ConsulConfig struct {
 	Address    string `yaml:"address"`
 	Datacenter string `yaml:"datacenter"`
 	// Key is the key template, with {application}, {artifact} and {environment}.
-	Key string `yaml:"key"`
-	// LegacyKey, if set, is read when the Key key is missing: the per-application template
-	// used before {artifact}, kept only during the transition.
-	LegacyKey string `yaml:"legacy_key"`
+	Key       string `yaml:"key"`
 	TokenFile string `yaml:"token_file"`
 	// TenantsKey is the key template of the tenant documents, with {tenant}.
 	TenantsKey string `yaml:"tenants_key"`
@@ -325,9 +302,6 @@ type ConsulConfig struct {
 type FileConfig struct {
 	// Path is the path template, with {application}, {artifact} and {environment}.
 	Path string `yaml:"path"`
-	// LegacyPath, if set, is read when the Path file is missing: the per-application template
-	// used before {artifact}, kept only during the transition.
-	LegacyPath string `yaml:"legacy_path"`
 	// Tenants is the path template of the tenant documents, with {tenant}.
 	Tenants string `yaml:"tenants"`
 }
@@ -718,8 +692,8 @@ func Default() *Config {
 		EnvConfig: EnvConfig{
 			Provider:     EnvProviderNone,
 			MaxRetries:   3,
-			Consul:       ConsulConfig{Key: "manent/{application}/{environment}", TenantsKey: "manent/tenants/{tenant}"},
-			File:         FileConfig{Path: "./envconfig/{application}/{environment}.yml", Tenants: "./envconfig/tenants/{tenant}.yml"},
+			Consul:       ConsulConfig{Key: "manent/{application}/{artifact}/{environment}", TenantsKey: "manent/tenants/{tenant}"},
+			File:         FileConfig{Path: "./envconfig/{application}/{artifact}/{environment}.yml", Tenants: "./envconfig/tenants/{tenant}.yml"},
 			TenantsCache: 30 * time.Second,
 		},
 		Callbacks: Callbacks{Timeout: 10 * time.Second, MaxRetries: 3},
@@ -850,11 +824,6 @@ func (c *Config) Validate() error {
 	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
 	default:
 		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file)", c.EnvConfig.Provider))
-	}
-	switch c.Deploy.Identity {
-	case "", IdentityApplication, IdentityArtifact:
-	default:
-		errs = append(errs, fmt.Errorf("deploy.identity %q not supported (application|artifact)", c.Deploy.Identity))
 	}
 	if c.Callbacks.Timeout <= 0 || c.Callbacks.MaxRetries < 0 {
 		errs = append(errs, errors.New("callbacks: timeout must be > 0 and max_retries >= 0"))

@@ -1,6 +1,7 @@
-# UC9: deploy chains. A deploy waiting for another (after), a failing dependency, a successful
-# composite release (db → api → web) and a failed one with onFailure: rollback.
-# Every application has its own target: uc9-db on eu1-a, uc9-api on eu1-b, uc9-web on eu1-c.
+# UC9: deploy chains of one application with three artifacts (uc9-shop: uc9-db, uc9-api,
+# uc9-web). A deploy waiting for another (after), a failing dependency, a successful composite
+# release (db → api → web), a failed one with onFailure: rollback, inventory and rollback per
+# artifact. Every artifact has its own target: uc9-db on eu1-a, uc9-api on eu1-b, uc9-web on eu1-c.
 log "UC9 · catene di deploy: dipendenze e release composte"
 
 for v in 1.0.0 1.1.0 1.2.0 1.3.0; do
@@ -17,12 +18,12 @@ after_ok() {
 
 info "-- after: api attende la migrazione del database"
 fault eu1-a uc9-db sleep 8
-db=$(submit "$(descriptor uc9-db-100 uc9-db-100 uc9-db prod 1.0.0)")
-api=$(submit "$(descriptor uc9-api-100 uc9-api-100 uc9-api prod 1.0.0 "after: [$db]")")
+db=$(submit "$(component uc9-db-100 uc9-db-100 uc9-shop uc9-db prod 1.0.0)")
+api=$(submit "$(component uc9-api-100 uc9-api-100 uc9-shop uc9-api prod 1.0.0 "after: [$db]")")
 expect_eq "api è in attesa delle dipendenze" "$(state "$api")" WAITING_DEPENDENCY
 expect_eq "lo stato riporta la dipendenza" "$(manent status "$api" | jq -r '.after.dependencies[0].id')" "$db"
 expect_eq "activity: api tra i deploy in attesa delle dipendenze" \
-  "$(manent activity --json -a uc9-api | jq -r '[.waiting_dependency[].id] | join(" ")')" "$api"
+  "$(manent activity --json -a uc9-shop | jq -r '[.waiting_dependency[].id] | join(" ")')" "$api"
 expect_eq "il target di api non è toccato" "$(current eu1-b uc9-api)" none
 fault eu1-a uc9-db clear
 expect_eq "il database riesce" "$(wait_state "$db" terminal 90)" SUCCESS
@@ -33,18 +34,18 @@ expect_eq "dipendenze soddisfatte nello stato di api" "$(manent status "$api" | 
 info "-- una dipendenza fallisce: il deploy non viene eseguito"
 fault eu1-a uc9-db sleep 6
 fault eu1-a uc9-db fail
-db=$(submit "$(descriptor uc9-db-110 uc9-db-110 uc9-db prod 1.1.0)")
-api=$(submit "$(descriptor uc9-api-110 uc9-api-110 uc9-api prod 1.1.0 "after: [$db]")")
+db=$(submit "$(component uc9-db-110 uc9-db-110 uc9-shop uc9-db prod 1.1.0)")
+api=$(submit "$(component uc9-api-110 uc9-api-110 uc9-shop uc9-api prod 1.1.0 "after: [$db]")")
 expect_eq "il database fallisce" "$(wait_state "$db" terminal 90)" ERROR
 expect_eq "api si conclude in DEPENDENCY_FAILED" "$(wait_state "$api" DEPENDENCY_FAILED 60)" DEPENDENCY_FAILED
 expect_match "il motivo cita la dipendenza" "$(manent status "$api" | jq -r .error)" "$db ended in ERROR"
 expect_eq "api resta sulla 1.0.0" "$(current eu1-b uc9-api)" 1.0.0
 fault eu1-a uc9-db clear
 expect_match "una dipendenza già fallita è rifiutata all'invio" \
-  "$(manent_err deploy --no-wait -f "$(descriptor uc9-api-111 uc9-api-111 uc9-api prod 1.1.0)" --after "$db")" "ended in ERROR"
+  "$(manent_err deploy --no-wait -f "$(component uc9-api-111 uc9-api-111 uc9-shop uc9-api prod 1.1.0)" --after "$db")" "ended in ERROR"
 
 info "-- release composta: db, poi api, poi web"
-for n in db api web; do descriptor "uc9-r1-$n" "uc9-r1-$n" "uc9-$n" prod 1.2.0 >/dev/null; done
+for n in db api web; do component "uc9-r1-$n" "uc9-r1-$n" uc9-shop "uc9-$n" prod 1.2.0 >/dev/null; done
 cat >"$WORK/uc/uc9-r1.yml" <<'EOF'
 apiVersion: manent/v1
 kind: Release
@@ -66,7 +67,7 @@ expect_match "release list" "$(manent release list | jq -r '[.[].id] | join(" ")
 
 info "-- release fallita con onFailure: rollback"
 fault eu1-c uc9-web fail
-for n in db api web; do descriptor "uc9-r2-$n" "uc9-r2-$n" "uc9-$n" prod 1.3.0 >/dev/null; done
+for n in db api web; do component "uc9-r2-$n" "uc9-r2-$n" uc9-shop "uc9-$n" prod 1.3.0 >/dev/null; done
 cat >"$WORK/uc/uc9-r2.yml" <<'EOF'
 apiVersion: manent/v1
 kind: Release
@@ -86,3 +87,17 @@ expect_eq "web fallisce, api e db riescono e vengono riportati indietro" \
 expect_eq "api e db di nuovo sulla 1.2.0" "$(current eu1-a uc9-db) $(current eu1-b uc9-api)" "1.2.0 1.2.0"
 expect_eq "il rollback di api è un rollback manuale della release" \
   "$(manent status uc9-r2.rollback.api | jq -r '.kind + " " + .version')" "rollback 1.2.0"
+
+info "-- un'applicazione, tre artefatti: inventario e rollback per artefatto"
+expect_eq "inventario: una voce per artefatto" \
+  "$(manent inventory -a uc9-shop -e prod | jq -r '[.[] | .artifact + "=" + .current.version] | sort | join(" ")')" \
+  "uc9-api=1.2.0 uc9-db=1.2.0 uc9-web=1.2.0"
+expect_eq "inventario filtrato per artefatto" "$(manent inventory -a uc9-shop -A uc9-web | jq -r '.[0].last_failure.version')" 1.3.0
+expect_match "rollback senza artefatto: rifiutato con l'elenco degli artefatti" \
+  "$(manent_err rollback -a uc9-shop -e prod --no-wait)" "uc9-api, uc9-db, uc9-web"
+api_runs=$(runs eu1-b uc9-api)
+rb=$(manent rollback -a uc9-shop -e prod -A uc9-web --no-wait | jq -r .id)
+expect_eq "rollback del solo frontend" "$(wait_state "$rb" terminal 90)" SUCCESS
+expect_eq "il rollback riguarda uc9-web" "$(manent status "$rb" | jq -r '.artifact + " " + .version')" "uc9-web 1.2.0"
+expect_eq "web sulla 1.2.0" "$(current eu1-c uc9-web)" 1.2.0
+expect_eq "api non è toccata" "$(runs eu1-b uc9-api)" "$api_runs"

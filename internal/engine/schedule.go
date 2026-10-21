@@ -82,7 +82,7 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 		}
 		return id, nil
 	}
-	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, req, deployOptions(req, id, w.byArtifact)...)
+	h, err := dbos.Enqueue[Result](ctx, sc.QueueName, workflowName, req, deployOptions(req, id)...)
 	if err != nil {
 		return "", err
 	}

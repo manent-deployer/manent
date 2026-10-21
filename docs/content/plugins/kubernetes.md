@@ -67,7 +67,7 @@ The chart is only **rendered** with `helm template`, for each cluster, as Argo C
 - **Isolation.** Helm runs with an empty environment and a temporary home: it does not inherit the worker's variables and reads no `KUBECONFIG`, repositories or local credentials. With `helm.sha256` the binary is checked before every use.
 - The `${...}` manifest variables do not apply to charts: use values.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: k8s-eu1.example.com, labels: {region: eu-1}}
@@ -96,7 +96,7 @@ Each target is a cluster's API server: `host` (or an `https://…` URL) and `por
 
 With manent running inside the cluster, the service account token is read with the `file:` secret provider:
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: kubernetes.default.svc, port: 443, labels: {region: eu-1}}

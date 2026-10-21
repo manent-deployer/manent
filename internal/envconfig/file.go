@@ -13,9 +13,6 @@ type FileProvider struct {
 	// PathTemplate is the path template, with {application}, {artifact} and {environment}
 	// placeholders.
 	PathTemplate string
-	// LegacyTemplate, if set, is read when the PathTemplate document is missing: the
-	// per-application template used before {artifact}, kept only during the transition.
-	LegacyTemplate string
 	// TenantTemplate is the path template of the tenant documents, with {tenant} (empty: no
 	// tenant registry).
 	TenantTemplate string
@@ -23,9 +20,7 @@ type FileProvider struct {
 
 // Get reads the file of the artifact in the application/environment.
 func (p *FileProvider) Get(_ context.Context, application, artifact, environment string) (*Document, error) {
-	return withLegacy(p.PathTemplate, p.LegacyTemplate, artifact, func(tmpl string) (*Document, error) {
-		return p.read(expandKey(tmpl, application, artifact, environment))
-	})
+	return readKey(p.PathTemplate, application, artifact, environment, p.read)
 }
 
 // read reads and decodes a configuration file.

@@ -98,7 +98,7 @@ Con `approle` e `kubernetes` manent esegue il login, tiene il token in memoria e
 
 ## 4. Usa i riferimenti
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 secrets:
   - name: deploy-key
     ref: "vault:secret/data/shop/prod#ssh_key"     # KV v2: data/ nel percorso

@@ -3,8 +3,6 @@ package authz
 import (
 	"context"
 	"sync"
-
-	"github.com/joeg-ita/manent/internal/engine"
 )
 
 // scopeKey is the context key of deploymentScope.
@@ -44,18 +42,4 @@ func recall(ctx context.Context, id string) (target, bool) {
 	defer s.mu.Unlock()
 	t, ok := s.m[id]
 	return t, ok
-}
-
-// entryArtifact is the artifact of an inventory entry: its own with the artifact identity,
-// the last one released with the application identity.
-func entryArtifact(ie engine.InventoryEntry) string {
-	switch {
-	case ie.Artifact != "":
-		return ie.Artifact
-	case ie.Current != nil:
-		return ie.Current.Artifact
-	case ie.LastFailure != nil:
-		return ie.LastFailure.Artifact
-	}
-	return ""
 }

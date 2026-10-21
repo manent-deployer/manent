@@ -54,7 +54,7 @@ type DORAFilter struct {
 // DORAMetrics are the DORA metrics of an application in an environment (or of the total).
 type DORAMetrics struct {
 	Application string `json:"application,omitempty"`
-	// Artifact is set with the artifact identity: metrics per artifact.
+	// Artifact is the artifact of the metrics.
 	Artifact    string `json:"artifact,omitempty"`
 	Environment string `json:"environment,omitempty"`
 	Tenant      string `json:"tenant,omitempty"`

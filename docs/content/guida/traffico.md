@@ -2,7 +2,7 @@
 
 With the `traffic` strategy the new version, the **candidate**, is released next to the one in service, the **stable** version, without receiving traffic. Then manent shifts traffic in steps (for example 1, 5, 25, 50, 100%), with an observation time and a health gate after each step. If something goes wrong traffic goes back to the stable version with a weight change, without redeploying.
 
-```yaml title="envconfig/shop/prod.yml (or descriptor)"
+```yaml title="envconfig/shop/shop/prod.yml (or descriptor)"
 rollout:
   strategy: traffic
   traffic:
@@ -57,7 +57,7 @@ The application metrics need the slot label: on Kubernetes it is `manent.io/trac
 
 A threshold on a single reading is fragile: a spike of the stable version, or a few errors of the candidate at low traffic, decide the step. With `analysis: mann-whitney` the metric is judged as in Kayenta: at every reading of the gate manent reads the **series** of candidate and stable over the time elapsed in the step (or `lookback`), with points every `step`, and compares them with the two-sided **Mann-Whitney U** test. The metric fails only when the difference is significant (`p < alpha`) **and** goes in the direction that counts as worse beyond the tolerated ratio between the means.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   strategy: traffic
   traffic: {steps: [5, 25, 50, 100], bake: 15m}
@@ -132,7 +132,7 @@ On Lambda and Cloud Run versions without traffic use no resources: a blue/green 
 
 With plugins that update targets in place (`remote-copy`, `container`, `ecs` with two services), slots are **groups of targets**: every target has the `slot: a` or `slot: b` label, the deploy updates only the targets of the free slot and a router of the environment configuration shifts traffic between the two groups.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 targets:
   - {host: 10.0.1.10, labels: {slot: a}}
   - {host: 10.0.2.10, labels: {slot: b}}

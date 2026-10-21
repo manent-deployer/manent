@@ -44,7 +44,7 @@ Define `project` and `credentials_secret` in the [environment configuration](../
 
 The service account needs the Cloud Run Developer role (`roles/run.developer`) on the service and Service Account User (`roles/iam.serviceAccountUser`) on the service's runtime service account.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 plugin: cloudrun
 targets:
   - {host: europe-west1, labels: {region: europe-west1}}

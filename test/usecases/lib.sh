@@ -81,6 +81,24 @@ EOF
   echo "/uc/$1.yml"
 }
 
+# component <file> <id> <app> <artifact> <env> <version> [extra yaml]: writes .work/uc/<file>.yml
+# for an artifact of an application with several artifacts and prints its path in the client.
+component() {
+  cat >"$WORK/uc/$1.yml" <<EOF
+apiVersion: manent/v1
+id: $2
+application: $3
+environment: $5
+artifact:
+  type: application
+  name: $4
+  version: "$6"
+  source: file:///srv/artifacts/$4-$6.tar.gz
+${7:-}
+EOF
+  echo "/uc/$1.yml"
+}
+
 # image <name> <tag> [broken] [version]: builds the test application (webapp), pushes it
 # to the lab registry as uc/<name>:<tag> and prints the digest (without sha256:).
 # A "broken" image has no /healthz: HEALTHCHECK and readinessProbe stay red.

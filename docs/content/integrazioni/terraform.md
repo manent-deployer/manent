@@ -78,7 +78,7 @@ When Terraform also writes the environment configuration to Consul, let manent c
 
 ```hcl title="envconfig.tf"
 locals {
-  shop_prod_config = file("${path.module}/envconfig/shop/prod.yml")
+  shop_prod_config = file("${path.module}/envconfig/shop/shop/prod.yml")
 }
 
 data "manent_environment_check" "shop_prod" {
@@ -89,7 +89,7 @@ data "manent_environment_check" "shop_prod" {
 
 resource "consul_keys" "shop_prod" {
   key {
-    path  = "manent/shop/prod"
+    path  = "manent/shop/shop/prod"
     value = data.manent_environment_check.shop_prod.valid ? local.shop_prod_config : null
   }
 }

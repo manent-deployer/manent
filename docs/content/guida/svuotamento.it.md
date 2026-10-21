@@ -2,7 +2,7 @@
 
 Un deploy in place su server o VM dietro un load balancer interrompe le richieste in corso e manda traffico a un nodo che sta ripartendo. Con un **pool** nella configurazione di ambiente manent toglie ogni lotto di un [rilascio a ondate](ondate.md) dal load balancer prima di aggiornarlo e lo rimette in servizio solo quando il load balancer lo vede sano.
 
-```yaml title="envconfig/shop/prod.yml"
+```yaml title="envconfig/shop/shop/prod.yml"
 rollout:
   waves:
     - {name: canary, select: "canary=true"}

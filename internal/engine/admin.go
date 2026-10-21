@@ -29,10 +29,8 @@ type Admin struct {
 	registry cluster.Registry
 	version  string
 	audit    audit.Recorder
-	// byArtifact counts keep_releases per application/artifact/environment.
-	byArtifact bool
-	logger     *slog.Logger
-	now        func() time.Time
+	logger   *slog.Logger
+	now      func() time.Time
 
 	// countsMu guards the counts of finished workflows, read at most every finishedCountsTTL.
 	countsMu       sync.Mutex
@@ -48,16 +46,14 @@ type AdminOptions struct {
 	// Version is the current workflow version (app.version).
 	Version string
 	// Audit, if set, records recoveries and retention.
-	Audit audit.Recorder
-	// ByArtifact keeps the releases of the retention per artifact (deploy.identity: artifact).
-	ByArtifact bool
-	Logger     *slog.Logger
+	Audit  audit.Recorder
+	Logger *slog.Logger
 }
 
 // NewAdmin creates Admin.
 func NewAdmin(opts AdminOptions) *Admin {
 	return &Admin{
-		client: opts.Client, registry: opts.Registry, version: opts.Version, audit: opts.Audit, byArtifact: opts.ByArtifact,
+		client: opts.Client, registry: opts.Registry, version: opts.Version, audit: opts.Audit,
 		logger: opts.Logger.With("component", "admin"), now: time.Now,
 	}
 }

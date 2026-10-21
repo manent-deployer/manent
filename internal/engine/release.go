@@ -342,7 +342,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 			}
 			c = auth.WithPrincipal(c, &auth.Principal{Method: method, Subject: subject})
 			_, err := w.service.Rollback(c, RollbackRequest{
-				Application: d.Application, Artifact: w.reader.releaseArtifact(d.Artifact), Environment: d.Environment, Redeploy: service.Redeploy{ID: d.RollbackID},
+				Application: d.Application, Artifact: d.Artifact, Environment: d.Environment, Redeploy: service.Redeploy{ID: d.RollbackID},
 			})
 			return "", err
 		}, dbos.WithStepName("rollback:"+d.Name))

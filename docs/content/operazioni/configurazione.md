@@ -59,9 +59,9 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | `max_retries` | `3` | Additional read attempts. |
 | `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
 | `consul.datacenter` | | Consul datacenter. |
-| `consul.key` | `manent/{application}/{environment}` | KV key template. |
+| `consul.key` | `manent/{application}/{artifact}/{environment}` | KV key template. |
 | `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{application}/{environment}.yml` | Path template for the `file` provider. |
+| `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
 | `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Path template of the [tenant](../guida/tenant.md) documents. |
 | `consul.tenants_key` | `manent/tenants/{tenant}` | KV key template of the tenant documents. |
 | `tenants_cache` | `30s` | How long the tenant listing is kept (selectors, permissions). |

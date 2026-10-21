@@ -65,7 +65,7 @@ La produzione usa un'altra directory sullo stesso container e un proprio percors
 sed -e 's#/opt/hello#/home/deploy/hello-prod#' -e 's#hello/test#hello/prod#' \
   envconfig/hello/test-consul.yml > envconfig/hello/prod-consul.yml
 docker cp envconfig/hello/prod-consul.yml manent-tutorial-consul:/tmp/prod.yml
-docker exec manent-tutorial-consul consul kv put manent/hello/prod @/tmp/prod.yml
+docker exec manent-tutorial-consul consul kv put manent/hello/hello/prod @/tmp/prod.yml
 
 docker cp lab/deploy_key manent-tutorial-vault:/tmp/k
 docker exec -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=tutorial-root manent-tutorial-vault \

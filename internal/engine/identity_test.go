@@ -11,15 +11,14 @@ import (
 	"github.com/joeg-ita/manent/internal/testdb"
 )
 
-// artifactEngine starts a worker and an engine with the artifact identity.
+// artifactEngine starts a worker and an engine.
 func artifactEngine(t *testing.T) *Engine {
 	t.Helper()
 	reg, planner := testRegistry(t, artifactStep{})
 	opts := workerOpts(testdb.URL(t), "w1", reg)
-	opts.ByArtifact = true
 	w := startWorker(t, opts)
 	return NewService(ServiceOptions{
-		Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, ByArtifact: true,
+		Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard,
 		Rollback: rollback.NewPolicy(config.Default(), []string{"plugin"}),
 	})
 }
@@ -87,44 +86,32 @@ func TestIdentitaPerArtefatto(t *testing.T) {
 
 	// The artifact name becomes part of keys: it must be valid.
 	bad := artifactDescriptor("team/api", "prod", "1.0.0")
-	if _, err := e.Submit(alice, bad); !errors.Is(err, ErrInvalidRequest) {
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "artifact.name") {
 		t.Errorf("atteso il rifiuto del nome dell'artefatto, ottenuto %v", err)
 	}
 }
 
 func TestPartizionePerArtefatto(t *testing.T) {
 	d := artifactDescriptor("api", "prod", "1.0.0")
-	if k := partitionKey(d, false); k != "app/prod" {
-		t.Errorf("chiave con l'identità per applicazione: %s", k)
-	}
-	if k := partitionKey(d, true); k != "app+api/prod" {
-		t.Errorf("chiave con l'identità per artefatto: %s", k)
+	if k := partitionKey(d); k != "app+api/prod" {
+		t.Errorf("chiave inattesa: %s", k)
 	}
 	d.Tenant = "acme"
-	if k := partitionKey(d, true); k != "app+api/prod/acme" {
+	if k := partitionKey(d); k != "app+api/prod/acme" {
 		t.Errorf("chiave con tenant: %s", k)
 	}
-}
-
-func TestAvvisoNomeArtefatto(t *testing.T) {
-	e := govEngine(t, nil, nil)
-	v, err := e.Validate(alice, artifactDescriptor("team/api", "prod", "1.0.0"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(v.Warnings) == 0 || !strings.Contains(strings.Join(v.Warnings, " "), "artifact.name") {
-		t.Errorf("atteso un avviso sul nome dell'artefatto: %+v", v.Warnings)
+	if d.ScheduleName() != "app-api-prod" {
+		t.Errorf("nome di default della schedule: %s", d.ScheduleName())
 	}
 }
 
 func TestRinominaArtefatto(t *testing.T) {
 	reg, planner := testRegistry(t, artifactStep{})
 	opts := workerOpts(testdb.URL(t), "w1", reg)
-	opts.ByArtifact = true
 	w := startWorker(t, opts)
 	newEngine := func() *Engine {
 		return NewService(ServiceOptions{
-			Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, ByArtifact: true,
+			Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard,
 			Rollback: rollback.NewPolicy(config.Default(), []string{"plugin"}),
 		})
 	}

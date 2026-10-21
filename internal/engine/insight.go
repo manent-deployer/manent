@@ -120,12 +120,8 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 		default:
 			return true
 		}
-		k := s.Application + "/" + s.Environment
-		m := DORAMetrics{Application: s.Application, Environment: s.Environment}
-		if e.byArtifact {
-			k += "/" + s.Artifact
-			m.Artifact = s.Artifact
-		}
+		k := s.Application + "/" + s.Artifact + "/" + s.Environment
+		m := DORAMetrics{Application: s.Application, Artifact: s.Artifact, Environment: s.Environment}
 		if f.ByTenant || f.Tenant != "" {
 			k += "/" + s.Tenant
 			m.Tenant = s.Tenant
