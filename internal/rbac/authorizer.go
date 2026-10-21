@@ -41,19 +41,22 @@ type Grant struct {
 	Environments []string
 	// Tenants is a selector on the tenant (tags and "name"); "" applies to every deploy.
 	Tenants string
+	// Artifacts are patterns on artifact.name; empty applies to every artifact.
+	Artifacts []string
 	// Until, if set, is the instant the grant stops applying.
 	Until *time.Time
 }
 
-// grants reports whether the grant allows a on application/environment/tenant at now.
-func (g Grant) grants(a Action, application, environment string, t *tenant.Ref, now time.Time) bool {
+// grants reports whether the grant allows a on application/artifact/environment/tenant at now.
+func (g Grant) grants(a Action, application, artifact, environment string, t *tenant.Ref, now time.Time) bool {
 	if g.Until != nil && !now.Before(*g.Until) {
 		return false
 	}
 	if !slices.Contains(g.Actions, All) && !slices.Contains(g.Actions, a) {
 		return false
 	}
-	return glob.Any(g.Applications, application) && glob.Any(g.Environments, environment) && tenant.Matches(g.Tenants, t)
+	return glob.Any(g.Applications, application) && glob.Any(g.Environments, environment) && tenant.Matches(g.Tenants, t) &&
+		ArtifactMatches(g.Artifacts, artifact)
 }
 
 // Anywhere reports whether the grant allows a on some application, at now.
@@ -117,7 +120,7 @@ func (pol Policy) Grants(_ context.Context, p *auth.Principal) ([]Grant, error) 
 		}
 		out = append(out, Grant{
 			Name: fmt.Sprintf("binding %d", i), Role: b.Role, Actions: slices.Clone(pol.Roles[b.Role]),
-			Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants,
+			Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants, Artifacts: b.Artifacts,
 		})
 	}
 	return out, nil
@@ -129,16 +132,17 @@ func (Policy) Deny(context.Context, DenyRequest) ([]string, error) { return nil,
 // Info implements Authorizer.
 func (Policy) Info() (string, string) { return EngineBuiltin, "" }
 
-// GrantsAllow reports whether any grant allows the action.
-func GrantsAllow(gs []Grant, a Action, application, environment string, t *tenant.Ref, now time.Time) bool {
-	_, ok := GrantFor(gs, a, application, environment, t, now)
+// GrantsAllow reports whether any grant allows the action on a deploy of the artifact (""
+// for the actions on the whole environment).
+func GrantsAllow(gs []Grant, a Action, application, artifact, environment string, t *tenant.Ref, now time.Time) bool {
+	_, ok := GrantFor(gs, a, application, artifact, environment, t, now)
 	return ok
 }
 
 // GrantFor returns the first grant that allows the action.
-func GrantFor(gs []Grant, a Action, application, environment string, t *tenant.Ref, now time.Time) (Grant, bool) {
+func GrantFor(gs []Grant, a Action, application, artifact, environment string, t *tenant.Ref, now time.Time) (Grant, bool) {
 	for _, g := range gs {
-		if g.grants(a, application, environment, t, now) {
+		if g.grants(a, application, artifact, environment, t, now) {
 			return g, true
 		}
 	}

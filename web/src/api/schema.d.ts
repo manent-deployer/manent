@@ -788,6 +788,8 @@ export interface components {
                 application: string;
                 /** @description Default l'ambiente del deploy che importa */
                 environment?: string;
+                /** @description Artefatto dell'applicazione (deploy.identity: artifact); obbligatorio se l'ambiente ne ha più di uno */
+                artifact?: string;
             };
         };
         Export: {
@@ -1013,6 +1015,7 @@ export interface components {
                 name: string;
                 deployment_id: string;
                 application: string;
+                artifact?: string;
                 environment: string;
                 version?: string;
                 after?: string[];
@@ -1204,6 +1207,8 @@ export interface components {
         };
         EnvironmentCheck: {
             application: string;
+            /** @description Artefatto a cui si riferisce la configurazione (template con {artifact}) */
+            artifact?: string;
             environment: string;
             /** @description Configurazione di ambiente in YAML o JSON */
             config: string;
@@ -1211,6 +1216,8 @@ export interface components {
         };
         InventoryEntry: {
             application: string;
+            /** @description Artefatto della voce con deploy.identity: artifact */
+            artifact?: string;
             environment: string;
             tenant?: string;
             current?: components["schemas"]["Status"];
@@ -1252,6 +1259,7 @@ export interface components {
             end?: string;
             recurring?: boolean;
             tenants?: string;
+            artifacts?: string[];
             /** @description Non esentabile dalla policy né superabile con freezeOverride */
             hard?: boolean;
             /** @description Creata a runtime */
@@ -1326,6 +1334,8 @@ export interface components {
             regions?: string[];
             /** @description Selettore dei tenant */
             tenants?: string;
+            /** @description Pattern sui nomi degli artefatti */
+            artifacts?: string[];
             /**
              * Format: date-time
              * @description Default adesso
@@ -1451,6 +1461,7 @@ export interface components {
         };
         DORAMetrics: {
             application?: string;
+            artifact?: string;
             environment?: string;
             tenant?: string;
             deployments: number;
@@ -1478,6 +1489,8 @@ export interface components {
             application: string;
             from: string;
             to: string;
+            /** @description Artefatto da promuovere; con deploy.identity: artifact obbligatorio se from ne ha più di uno */
+            artifact?: string;
             version?: string;
             /** @description Promuove la release di questo tenant */
             tenant?: string;
@@ -1488,6 +1501,8 @@ export interface components {
         RollbackRequest: components["schemas"]["Redeploy"] & {
             application: string;
             environment: string;
+            /** @description Artefatto da riportare indietro; con deploy.identity: artifact obbligatorio se l'ambiente ne ha più di uno */
+            artifact?: string;
             version?: string;
             /** @description Torna indietro sulla release di questo tenant */
             tenant?: string;
@@ -1504,6 +1519,8 @@ export interface components {
             environments: string[];
             /** @description Selettore dei tenant a cui il permesso è limitato */
             tenants?: string;
+            /** @description Pattern degli artefatti a cui il permesso è limitato */
+            artifacts?: string[];
             /**
              * Format: date-time
              * @description Istante in cui il permesso smette di valere
@@ -1526,6 +1543,7 @@ export interface components {
             application?: string;
             environment?: string;
             tenant?: string;
+            artifact?: string;
             descriptor?: components["schemas"]["Descriptor"];
         };
         PolicyAccess: {
@@ -1609,6 +1627,8 @@ export interface operations {
                 application?: string;
                 environment?: string;
                 tenant?: string;
+                /** @description Nome dell'artefatto (artifact.name) */
+                artifact?: string;
                 state?: string;
                 limit?: number;
                 /** @description next_cursor della pagina precedente */
@@ -2003,6 +2023,8 @@ export interface operations {
                 application?: string;
                 environment?: string;
                 tenant?: string;
+                /** @description Nome dell'artefatto (artifact.name) */
+                artifact?: string;
             };
             header?: never;
             path?: never;
@@ -2364,6 +2386,7 @@ export interface operations {
                 application?: string;
                 environment?: string;
                 tenant?: string;
+                artifact?: string;
                 /** @description tenant: metriche anche per tenant */
                 by?: "tenant";
                 /** @description Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni */

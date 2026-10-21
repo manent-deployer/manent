@@ -53,9 +53,10 @@ manent-server admin recover --executor <id> [--dry-run] [--force]   # resumes th
 manent-server admin recover --from-version <v> [--to-version <v>] [--from-start] [--dry-run]
 manent-server admin prune [--max-age 2160h] [--keep-releases 10] [--dry-run]
 manent-server admin specs [--hash <sha256>…] [--all]                # workflows and schedules with revoked custom step specifications
+manent-server admin rename-artifact -a <application> --from <name> --to <name> [--dry-run]   # renames an artifact in the history
 ```
 
-`admin executors` reads the database; to see workers from a workstation, through the API and with manent's permissions, use [`manent workers`](../guida/cli.md#attivita-e-worker) (`platform.read`). Recovery and retention are recorded in the audit log (`admin.recover`, `admin.prune`). `admin specs` is described in [Custom steps](../guida/step-personalizzati.md#the-specification-in-the-plan). See [Recovery, shutdown and retention](affidabilita.md) and [Versions and upgrades](aggiornamenti.md).
+`admin executors` reads the database; to see workers from a workstation, through the API and with manent's permissions, use [`manent workers`](../guida/cli.md#attivita-e-worker) (`platform.read`). Recovery, retention and renames are recorded in the audit log (`admin.recover`, `admin.prune`, `admin.rename-artifact`). `admin rename-artifact` is described in [Applications with several artifacts](../guida/artefatti.md#renaming-an-artifact). `admin specs` is described in [Custom steps](../guida/step-personalizzati.md#the-specification-in-the-plan). See [Recovery, shutdown and retention](affidabilita.md) and [Versions and upgrades](aggiornamenti.md).
 
 In Kubernetes they run in a server pod, which already has configuration and credentials:
 

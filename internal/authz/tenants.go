@@ -105,7 +105,7 @@ func (g *Guard) readableTenant(ctx context.Context, p *auth.Principal, t engine.
 	ref := &tenant.Ref{Name: t.Name, Tags: t.Tags}
 	for app, envs := range t.Applications {
 		for _, env := range envs {
-			if g.permitted(ctx, p, DeploymentRead, app, env, ref) {
+			if g.permitted(ctx, p, DeploymentRead, app, "", env, ref) {
 				return true
 			}
 		}

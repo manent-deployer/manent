@@ -14,7 +14,15 @@ matching contains i if {
 	lib.match_any(r.applications, input.application)
 	lib.match_any(r.environments, input.environment)
 	tenant_ok(r)
+	artifact_ok(r)
 }
+
+# A rule without artifacts applies to every artifact, one with artifacts only to those.
+artifact_ok(r) if not r.artifacts
+
+artifact_ok(r) if count(r.artifacts) == 0
+
+artifact_ok(r) if lib.match_any(r.artifacts, input.artifact.name)
 
 # A rule without tenants applies to every deploy, one with tenants only to matching tenants.
 tenant_ok(r) if not r.tenants

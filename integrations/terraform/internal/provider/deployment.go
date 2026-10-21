@@ -143,7 +143,12 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
 	}
-	i := slices.IndexFunc(inv, func(e service.InventoryEntry) bool { return e.Tenant == tn && e.Current != nil })
+	// With deploy.identity: artifact every artifact has its own entry: the resource's is the
+	// descriptor's artifact.
+	artifact := descriptorArtifact(&m)
+	i := slices.IndexFunc(inv, func(e service.InventoryEntry) bool {
+		return e.Tenant == tn && e.Current != nil && (e.Artifact == "" || e.Artifact == artifact)
+	})
 	if i < 0 {
 		// Nothing in service (e.g. history deleted): the next apply deploys again.
 		resp.State.RemoveResource(ctx)
@@ -151,6 +156,15 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 	readInventory(&m, inv[i])
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+}
+
+// descriptorArtifact returns artifact.name of the resource's descriptor ("" if unreadable).
+func descriptorArtifact(m *deploymentModel) string {
+	d, err := descriptor.ParseYAML([]byte(m.Descriptor.ValueString()))
+	if err != nil {
+		return ""
+	}
+	return d.Artifact.Name
 }
 
 // readInventory writes into the model the release in service.

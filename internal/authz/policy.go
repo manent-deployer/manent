@@ -37,7 +37,7 @@ func (g *Guard) checkFreeze(ctx context.Context, applications, environments []st
 	p := auth.FromContext(ctx)
 	for _, a := range applications {
 		for _, e := range environments {
-			if !g.permitted(ctx, p, FreezeWrite, a, e, nil) {
+			if !g.permitted(ctx, p, FreezeWrite, a, "", e, nil) {
 				err := fmt.Errorf("%w: %s cannot perform %s on %s/%s", engine.ErrForbidden, actor(p), FreezeWrite, a, e)
 				g.record(ctx, FreezeWrite, t, audit.OutcomeDenied, err)
 				return err
@@ -151,7 +151,7 @@ func (g *Guard) PolicyImpact(ctx context.Context, revision int64, since time.Dur
 	p := auth.FromContext(ctx)
 	changes := imp.Changes[:0]
 	for _, c := range imp.Changes {
-		if g.permitted(ctx, p, DeploymentRead, c.Application, c.Environment, nil) {
+		if g.permitted(ctx, p, DeploymentRead, c.Application, "", c.Environment, nil) {
 			changes = append(changes, c)
 		}
 	}

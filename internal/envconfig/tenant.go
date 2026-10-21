@@ -107,7 +107,7 @@ func applyTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (EnvCon
 		errs = append(errs, fmt.Errorf("no target for tenant %s: neither dedicated (tenant: %s) nor shared (tenant: \"*\")", name, name))
 	}
 	app := d.Application
-	given := t.Params[app]
+	given := t.ParamsFor(app, d.Artifact.Name)
 	for _, k := range slices.Sorted(maps.Keys(given)) {
 		if _, ok := c.TenantParams[k]; !ok {
 			errs = append(errs, fmt.Errorf("tenant %s: params.%s.%s is not declared in tenant_params of %s/%s", name, app, k, app, d.Environment))
@@ -147,7 +147,7 @@ func applyTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (EnvCon
 		}
 		c.Params[k] = v
 	}
-	for _, s := range t.Secrets[app] {
+	for _, s := range t.SecretsFor(app, d.Artifact.Name) {
 		i := slices.IndexFunc(c.Secrets, func(e descriptor.SecretRef) bool { return e.Name == s.Name })
 		switch {
 		case i < 0:
@@ -156,7 +156,7 @@ func applyTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (EnvCon
 			errs = append(errs, fmt.Errorf("tenant %s: secrets.%s differs from the environment configuration", name, s.Name))
 		}
 	}
-	for step, ps := range t.StepParams[app] {
+	for step, ps := range t.StepParamsFor(app, d.Artifact.Name) {
 		if c.StepParams[step] == nil {
 			c.StepParams[step] = map[string]string{}
 		}

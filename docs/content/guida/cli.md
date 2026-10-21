@@ -124,6 +124,19 @@ manent whoami                   # your identity on the server and your roles
 
 `promote` and `rollback` also accept `--id`, `--dry-run`, `--freeze-override <reason>`, `--no-wait` and `--timeout`, with the same meaning as for `deploy`.
 
+### Artifacts
+
+See [Applications with several artifacts](artefatti.md) (`deploy.identity: artifact`).
+
+```sh
+manent list|inventory|dora -A <artifact>
+manent promote -a <application> --from <env> --to <env> -A <artifact>
+manent rollback -a <application> -e <env> -A <artifact>      # required with more than one artifact in the environment
+manent env validate -a <application> -e <env> -A <artifact> -f <yaml>
+manent freeze add --name <name> -e <env> -A <artifact pattern> --for 4h
+manent-server -c manent.yml admin rename-artifact -a <application> --from <name> --to <name> [--dry-run]
+```
+
 ### Tenants
 
 See [Tenants](tenant.md).

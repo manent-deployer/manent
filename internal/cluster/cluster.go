@@ -92,7 +92,9 @@ type TargetsRecord struct {
 	Application string
 	Environment string
 	// Tenant is the tenant of the deploy read ("" for untenanted deploys).
-	Tenant    string
+	Tenant string
+	// Artifact is the artifact of the release read with the artifact identity ("" otherwise).
+	Artifact  string
 	Scope     string
 	CheckedAt time.Time
 	// Data is the state, in JSON (service.TargetsState).
@@ -470,8 +472,20 @@ func (r *SQL) Lease(ctx context.Context, name, holder string, ttl time.Duration)
 func (r *SQL) SaveTargets(ctx context.Context, t TargetsRecord) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO `+r.targets+` (application, environment, scope, checked_at, data) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (application, environment, scope) DO UPDATE SET checked_at = excluded.checked_at, data = excluded.data`,
-		t.Application, t.Environment, storedScope(t.Scope, t.Tenant), ms(t.CheckedAt), t.Data)
+		storedApplication(t.Application, t.Artifact), t.Environment, storedScope(t.Scope, t.Tenant), ms(t.CheckedAt), t.Data)
 	return err
+}
+
+// artifactSep separates application and artifact in the stored application, as in the queue
+// partition keys: '+' is not allowed in names, and the records of the application identity
+// stay valid.
+const artifactSep = "+"
+
+func storedApplication(application, artifact string) string {
+	if artifact == "" {
+		return application
+	}
+	return application + artifactSep + artifact
 }
 
 // tenantSep separates scope and tenant in the stored scope: the key of the table stays
@@ -500,6 +514,7 @@ func (r *SQL) ListTargets(ctx context.Context) ([]TargetsRecord, error) {
 			return nil, err
 		}
 		t.Scope, t.Tenant, _ = strings.Cut(t.Scope, tenantSep)
+		t.Application, t.Artifact, _ = strings.Cut(t.Application, artifactSep)
 		t.CheckedAt = time.UnixMilli(at).UTC()
 		out = append(out, t)
 	}

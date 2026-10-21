@@ -436,6 +436,7 @@ export const it: Record<MessageKey, string> = {
   "policies.access.denied": "Negato",
   "policies.access.grantedBy": "dal permesso {grant}",
   "inventory.tenant": "Tenant",
+  "inventory.artifact": "Artefatto",
   "detail.tenant": "Tenant",
   "detail.run": "Rilascio multi-tenant",
   "detail.tenantsRun": "Tenant",

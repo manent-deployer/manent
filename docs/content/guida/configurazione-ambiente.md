@@ -87,6 +87,8 @@ Configured in `manent.yml`, section `envconfig`:
 | `required` | `true`: the deploy fails if there is no configuration for the environment. `false`: only the descriptor is used. |
 | `max_retries` | Additional attempts if the provider does not respond (e.g. Consul unreachable). |
 
+Templates (`consul.key`, `file.path`) also accept `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application, with `consul.legacy_key`/`file.legacy_path` as a fallback during the transition. See [Applications with several artifacts](artefatti.md).
+
 ## When it is read
 
 The configuration is read at the start of every deploy, in the `config` step. Two consequences follow:

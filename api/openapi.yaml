@@ -60,6 +60,7 @@ paths:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
+        - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
         - {name: state, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, default: 50}}
         - name: cursor
@@ -276,6 +277,7 @@ paths:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
+        - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
       responses:
         '200':
           description: Inventario
@@ -468,6 +470,7 @@ paths:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
+        - {name: artifact, in: query, schema: {type: string}}
         - {name: by, in: query, description: "tenant: metriche anche per tenant", schema: {type: string, enum: [tenant]}}
         - name: since
           in: query
@@ -772,6 +775,7 @@ components:
           properties:
             application: {type: string}
             environment: {type: string, description: Default l'ambiente del deploy che importa}
+            artifact: {type: string, description: "Artefatto dell'applicazione (deploy.identity: artifact); obbligatorio se l'ambiente ne ha più di uno"}
     Export:
       type: object
       required: [from]
@@ -986,6 +990,7 @@ components:
               name: {type: string}
               deployment_id: {type: string}
               application: {type: string}
+              artifact: {type: string}
               environment: {type: string}
               version: {type: string}
               after: {type: array, items: {type: string}}
@@ -1130,6 +1135,7 @@ components:
       required: [application, environment, config]
       properties:
         application: {type: string}
+        artifact: {type: string, description: "Artefatto a cui si riferisce la configurazione (template con {artifact})"}
         environment: {type: string}
         config: {type: string, description: Configurazione di ambiente in YAML o JSON}
         descriptor: {$ref: '#/components/schemas/Descriptor'}
@@ -1138,6 +1144,7 @@ components:
       required: [application, environment]
       properties:
         application: {type: string}
+        artifact: {type: string, description: "Artefatto della voce con deploy.identity: artifact"}
         environment: {type: string}
         tenant: {type: string}
         current: {$ref: '#/components/schemas/Status'}
@@ -1182,6 +1189,7 @@ components:
         end: {type: string, format: date-time}
         recurring: {type: boolean}
         tenants: {type: string}
+        artifacts: {type: array, items: {type: string}}
         hard: {type: boolean, description: Non esentabile dalla policy né superabile con freezeOverride}
         dynamic: {type: boolean, description: Creata a runtime}
         created_by: {type: string}
@@ -1251,6 +1259,7 @@ components:
         environments: {type: array, items: {type: string}}
         regions: {type: array, items: {type: string}}
         tenants: {type: string, description: Selettore dei tenant}
+        artifacts: {type: array, items: {type: string}, description: Pattern sui nomi degli artefatti}
         from: {type: string, format: date-time, description: Default adesso}
         to: {type: string, format: date-time}
         hard: {type: boolean}
@@ -1378,6 +1387,7 @@ components:
       required: [deployments, failures, deployments_per_day, change_failure_rate]
       properties:
         application: {type: string}
+        artifact: {type: string}
         environment: {type: string}
         tenant: {type: string}
         deployments: {type: integer}
@@ -1409,6 +1419,7 @@ components:
             application: {type: string}
             from: {type: string}
             to: {type: string}
+            artifact: {type: string, description: "Artefatto da promuovere; con deploy.identity: artifact obbligatorio se from ne ha più di uno"}
             version: {type: string}
             tenant: {type: string, description: Promuove la release di questo tenant}
             tenants: {type: string, description: Selettore dei tenant da promuovere, ognuno dalla propria release}
@@ -1421,6 +1432,7 @@ components:
           properties:
             application: {type: string}
             environment: {type: string}
+            artifact: {type: string, description: "Artefatto da riportare indietro; con deploy.identity: artifact obbligatorio se l'ambiente ne ha più di uno"}
             version: {type: string}
             tenant: {type: string, description: Torna indietro sulla release di questo tenant}
             run: {type: string, description: Rilascio multi-tenant di cui riportare indietro i tenant riusciti}
@@ -1434,6 +1446,7 @@ components:
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
         tenants: {type: string, description: Selettore dei tenant a cui il permesso è limitato}
+        artifacts: {type: array, items: {type: string}, description: Pattern degli artefatti a cui il permesso è limitato}
         until: {type: string, format: date-time, description: Istante in cui il permesso smette di valere}
     PolicyAccessRequest:
       type: object
@@ -1452,6 +1465,7 @@ components:
         application: {type: string}
         environment: {type: string}
         tenant: {type: string}
+        artifact: {type: string}
         descriptor: {$ref: '#/components/schemas/Descriptor'}
     PolicyAccess:
       type: object

@@ -180,7 +180,7 @@ func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 // list lists the most recent deploys (query: schedule, application, environment, state, limit).
 func (s *Server) list(c *gin.Context) {
 	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"),
-		Tenant: c.Query("tenant"), State: c.Query("state"), Cursor: c.Query("cursor")}
+		Tenant: c.Query("tenant"), Artifact: c.Query("artifact"), State: c.Query("state"), Cursor: c.Query("cursor")}
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
@@ -313,7 +313,7 @@ func (s *Server) rollback(c *gin.Context) {
 
 // inventory returns the release in service per application and environment.
 func (s *Server) inventory(c *gin.Context) {
-	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant")})
+	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), Artifact: c.Query("artifact")})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -498,7 +498,7 @@ func (s *Server) logs(c *gin.Context) {
 
 // dora computes the DORA metrics; ?since= takes an RFC 3339 date or a duration (e.g. 720h).
 func (s *Server) dora(c *gin.Context) {
-	f := engine.DORAFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), ByTenant: c.Query("by") == "tenant"}
+	f := engine.DORAFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), Artifact: c.Query("artifact"), ByTenant: c.Query("by") == "tenant"}
 	if v := c.Query("since"); v != "" {
 		t, err := service.ParseSince(v, time.Now())
 		if err != nil {

@@ -153,17 +153,27 @@ func (e *Engine) readImport(_ context.Context, d descriptor.Descriptor, imp desc
 			return "", nil, fmt.Errorf("%w: deploy %s is %s", errImportPending, id, s.State)
 		}
 	}
-	app, env := imp.Current.Application, cmp.Or(imp.Current.Environment, d.Environment)
-	entries, err := e.inventory(InventoryFilter{Application: app, Environment: env})
+	app, env, artifact := imp.Current.Application, cmp.Or(imp.Current.Environment, d.Environment), imp.Current.Artifact
+	entries, err := e.inventory(InventoryFilter{Application: app, Environment: env, Artifact: artifact})
 	if err != nil {
 		return "", nil, err
 	}
+	var found []InventoryEntry
 	for _, ie := range entries {
 		if ie.Tenant == d.Tenant && ie.Current != nil {
-			return ie.Current.ID + "@" + ie.Current.Version, ie.Current.Exports, nil
+			found = append(found, ie)
 		}
 	}
+	switch {
+	case len(found) == 1 || (len(found) > 1 && !e.byArtifact):
+		return found[0].Current.ID + "@" + found[0].Current.Version, found[0].Current.Exports, nil
+	case len(found) > 1:
+		return "", nil, pipeline.Permanent(fmt.Errorf("%s/%s has %d artifacts in service: choose one with imports.<name>.current.artifact", app, env, len(found)))
+	}
 	where := app + "/" + env
+	if artifact != "" {
+		where += " (artifact " + artifact + ")"
+	}
 	if d.Tenant != "" {
 		where += " (tenant " + d.Tenant + ")"
 	}

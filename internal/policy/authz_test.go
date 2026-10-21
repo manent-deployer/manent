@@ -28,6 +28,7 @@ func testRBAC(t *testing.T) (rbac.Policy, *AuthzOptions) {
 		{Groups: []string{"support-acme"}, Role: "deployer", Applications: []string{"shop"}, Environments: []string{"prod"}, Tenants: "name=acme"},
 		{Groups: []string{"gold"}, Role: "approver", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "tier=gold"},
 		{Groups: []string{"platform"}, Role: "admin", Applications: []string{"*"}, Environments: []string{"*"}},
+		{Groups: []string{"web-team"}, Role: "deployer", Applications: []string{"shop"}, Environments: []string{"*"}, Artifacts: []string{"shop-web*"}},
 	}
 	pol, err := rbac.NewPolicy(roles, bindings)
 	if err != nil {
@@ -52,6 +53,7 @@ func TestPermessiPredefinitiEquivalentiAiBinding(t *testing.T) {
 		{Subject: "carol", Method: auth.MethodOIDC, Groups: []string{"support-acme", "gold"}},
 		{Subject: "root", Method: auth.MethodOIDC, Groups: []string{"platform"}},
 		{Subject: "nobody", Method: auth.MethodOIDC, Groups: []string{"elsewhere"}},
+		{Subject: "dan", Method: auth.MethodOIDC, Groups: []string{"web-team"}},
 	}
 	tenants := []*tenant.Ref{nil, {Name: "acme", Tags: map[string]string{"tier": "gold"}}, {Name: "globex", Tags: map[string]string{"tier": "silver"}}}
 	checked := 0
@@ -67,12 +69,14 @@ func TestPermessiPredefinitiEquivalentiAiBinding(t *testing.T) {
 			for _, app := range []string{"team-a-api", "team-b-api", "shop"} {
 				for _, env := range []string{"dev", "test", "prod"} {
 					for _, tn := range tenants {
-						want := pol.AllowedFor(p, a, app, env, tn)
-						got := rbac.GrantsAllow(res.Grants, a, app, env, tn, now)
-						if got != want {
-							t.Errorf("%s %s %s/%s %v: rego %v, binding %v", p, a, app, env, tn, got, want)
+						for _, art := range []string{"", "shop-web", "shop-api"} {
+							want := pol.AllowedFor(p, a, app, art, env, tn)
+							got := rbac.GrantsAllow(res.Grants, a, app, art, env, tn, now)
+							if got != want {
+								t.Errorf("%s %s %s/%s/%s %v: rego %v, binding %v", p, a, app, art, env, tn, got, want)
+							}
+							checked++
 						}
-						checked++
 					}
 				}
 			}
@@ -130,15 +134,15 @@ func TestPolicyDeiPermessiScritta(t *testing.T) {
 	}
 	acme := &tenant.Ref{Name: "acme", Tags: map[string]string{"owner": "team-shop"}}
 	res := grants(&auth.Principal{Subject: "alice", Method: auth.MethodOIDC, Groups: []string{"team-shop"}})
-	if !rbac.GrantsAllow(res.Grants, rbac.DeploymentSubmit, "shop", "prod", acme, now) {
+	if !rbac.GrantsAllow(res.Grants, rbac.DeploymentSubmit, "shop", "", "prod", acme, now) {
 		t.Errorf("il team proprietario non rilascia il proprio tenant: %+v", res.Grants)
 	}
-	if rbac.GrantsAllow(res.Grants, rbac.DeploymentSubmit, "shop", "prod", &tenant.Ref{Name: "globex", Tags: map[string]string{"owner": "team-other"}}, now) {
+	if rbac.GrantsAllow(res.Grants, rbac.DeploymentSubmit, "shop", "", "prod", &tenant.Ref{Name: "globex", Tags: map[string]string{"owner": "team-other"}}, now) {
 		t.Error("il team rilascia il tenant di un altro")
 	}
 	res = grants(&auth.Principal{Subject: "olga", Method: auth.MethodOIDC, Groups: []string{"oncall"}})
-	if !rbac.GrantsAllow(res.Grants, rbac.DeploymentCancel, "x", "prod", nil, now) ||
-		rbac.GrantsAllow(res.Grants, rbac.DeploymentCancel, "x", "prod", nil, now.Add(10*time.Hour)) {
+	if !rbac.GrantsAllow(res.Grants, rbac.DeploymentCancel, "x", "", "prod", nil, now) ||
+		rbac.GrantsAllow(res.Grants, rbac.DeploymentCancel, "x", "", "prod", nil, now.Add(10*time.Hour)) {
 		t.Error("il grant con until non scade")
 	}
 	// policy.* in a grant are removed with a warning; the rest of the grant stays.

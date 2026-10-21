@@ -196,7 +196,7 @@ func (c *Client) Status(ctx context.Context, id string) (*service.Status, error)
 // List implements service.Service. f.Match cannot be applied remotely and is ignored.
 func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Status, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "tenant": f.Tenant, "state": f.State, "cursor": f.Cursor} {
+	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "tenant": f.Tenant, "artifact": f.Artifact, "state": f.State, "cursor": f.Cursor} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -289,6 +289,9 @@ func (c *Client) Inventory(ctx context.Context, f service.InventoryFilter) ([]se
 	}
 	if f.Tenant != "" {
 		q.Set("tenant", f.Tenant)
+	}
+	if f.Artifact != "" {
+		q.Set("artifact", f.Artifact)
 	}
 	var out struct {
 		Inventory []service.InventoryEntry `json:"inventory"`
@@ -463,6 +466,9 @@ func (c *Client) DORA(ctx context.Context, f service.DORAFilter) (*service.DORAR
 	}
 	if f.Tenant != "" {
 		q.Set("tenant", f.Tenant)
+	}
+	if f.Artifact != "" {
+		q.Set("artifact", f.Artifact)
 	}
 	if f.ByTenant {
 		q.Set("by", "tenant")

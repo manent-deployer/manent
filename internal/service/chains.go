@@ -69,6 +69,7 @@ type ReleaseDeployState struct {
 	Name         string   `json:"name"`
 	DeploymentID string   `json:"deployment_id"`
 	Application  string   `json:"application"`
+	Artifact     string   `json:"artifact,omitempty"`
 	Environment  string   `json:"environment"`
 	Tenant       string   `json:"tenant,omitempty"`
 	Version      string   `json:"version,omitempty"`

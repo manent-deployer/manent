@@ -118,6 +118,7 @@ plugins:
             Scheduled deploys: Deploy pianificati
             Deploy chains: Catene di deploy
             Tenants: Tenant
+            Applications with several artifacts: Applicazioni con più artefatti
             Progressive delivery: Rilasci progressivi
             Wave rollouts: Rilasci a ondate
             Load balancer draining: Svuotamento dal load balancer
@@ -221,6 +222,7 @@ nav:
           - Rollback: guida/rollback.md
           - Deploy chains: guida/catene.md
           - Tenants: guida/tenant.md
+          - Applications with several artifacts: guida/artefatti.md
       - Progressive delivery:
           - Wave rollouts: guida/ondate.md
           - Load balancer draining: guida/svuotamento.md

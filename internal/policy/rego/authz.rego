@@ -23,10 +23,14 @@ bindings contains g if {
 	binding_matches(b, input.identity)
 	g := object.union(
 		{"name": sprintf("binding %d", [i]), "role": b.role, "applications": b.applications, "environments": b.environments},
-		_tenants(b),
+		object.union(_tenants(b), _artifacts(b)),
 	)
 }
 
 _tenants(b) := {"tenants": b.tenants} if {
 	object.get(b, "tenants", "") != ""
+} else := {}
+
+_artifacts(b) := {"artifacts": b.artifacts} if {
+	count(object.get(b, "artifacts", [])) > 0
 } else := {}

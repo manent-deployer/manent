@@ -42,6 +42,7 @@ type DORAFilter struct {
 	Application string `json:"application,omitempty"`
 	Environment string `json:"environment,omitempty"`
 	Tenant      string `json:"tenant,omitempty"`
+	Artifact    string `json:"artifact,omitempty"`
 	// ByTenant computes the metrics per tenant too.
 	ByTenant bool `json:"by_tenant,omitempty"`
 	// Since is the start of the period (default 30 days ago).
@@ -53,6 +54,8 @@ type DORAFilter struct {
 // DORAMetrics are the DORA metrics of an application in an environment (or of the total).
 type DORAMetrics struct {
 	Application string `json:"application,omitempty"`
+	// Artifact is set with the artifact identity: metrics per artifact.
+	Artifact    string `json:"artifact,omitempty"`
 	Environment string `json:"environment,omitempty"`
 	Tenant      string `json:"tenant,omitempty"`
 	// Deployments are the real deploys ended in the period (successful or failed; cancelled excluded).

@@ -162,6 +162,9 @@ type Validation struct {
 // repository or in Terraform) before it reaches the configuration system.
 type EnvironmentCheck struct {
 	Application string `json:"application"`
+	// Artifact is the artifact the configuration is for (templates with {artifact}); with the
+	// artifact identity it chooses the deploy in service used as example.
+	Artifact    string `json:"artifact,omitempty"`
 	Environment string `json:"environment"`
 	// Config is the configuration in YAML or JSON, as it would be stored in the provider.
 	Config string `json:"config"`
@@ -279,6 +282,8 @@ type ListFilter struct {
 	Environment string `json:"environment,omitempty"`
 	// Tenant filters by tenant.
 	Tenant string `json:"tenant,omitempty"`
+	// Artifact filters by artifact name.
+	Artifact string `json:"artifact,omitempty"`
 	// State filters by state (e.g. SUCCESS, ERROR, AWAITING_APPROVAL).
 	State string `json:"state,omitempty"`
 	Limit int    `json:"limit,omitempty"`
@@ -294,6 +299,7 @@ func (f ListFilter) Matches(s Status) bool {
 	return (f.Application == "" || s.Application == f.Application) &&
 		(f.Environment == "" || s.Environment == f.Environment) &&
 		(f.Tenant == "" || s.Tenant == f.Tenant) &&
+		(f.Artifact == "" || s.Artifact == f.Artifact) &&
 		(f.State == "" || s.State == f.State) &&
 		(f.Match == nil || f.Match(s))
 }

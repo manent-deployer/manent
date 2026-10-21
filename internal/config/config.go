@@ -51,7 +51,27 @@ type Config struct {
 	Retention        Retention                 `yaml:"retention"`
 	Reconcile        Reconcile                 `yaml:"reconcile"`
 	Integrations     Integrations              `yaml:"integrations"`
+	Deploy           Deploy                    `yaml:"deploy"`
 }
+
+// Identity of a deploy: what identifies a release in service (queue partition, inventory,
+// rollback, promotion, retention, reconciliation).
+const (
+	// IdentityApplication: application/environment[/tenant] (default).
+	IdentityApplication = "application"
+	// IdentityArtifact: application/artifact/environment[/tenant], with artifact = artifact.name.
+	IdentityArtifact = "artifact"
+)
+
+// Deploy configures how deploys are identified.
+type Deploy struct {
+	// Identity is application (default) or artifact. Change it with the workers drained: the
+	// deploys already enqueued keep the old queue partition.
+	Identity string `yaml:"identity"`
+}
+
+// ByArtifact reports whether every artifact of an application is a release of its own.
+func (d Deploy) ByArtifact() bool { return d.Identity == IdentityArtifact }
 
 // Observability configures metrics, tracing and probes of long-running processes.
 type Observability struct {
@@ -291,8 +311,11 @@ type ConsulConfig struct {
 	// Address of the agent (default CONSUL_HTTP_ADDR or http://127.0.0.1:8500).
 	Address    string `yaml:"address"`
 	Datacenter string `yaml:"datacenter"`
-	// Key is the key template, with {application} and {environment}.
-	Key       string `yaml:"key"`
+	// Key is the key template, with {application}, {artifact} and {environment}.
+	Key string `yaml:"key"`
+	// LegacyKey, if set, is read when the Key key is missing: the per-application template
+	// used before {artifact}, kept only during the transition.
+	LegacyKey string `yaml:"legacy_key"`
 	TokenFile string `yaml:"token_file"`
 	// TenantsKey is the key template of the tenant documents, with {tenant}.
 	TenantsKey string `yaml:"tenants_key"`
@@ -300,8 +323,11 @@ type ConsulConfig struct {
 
 // FileConfig configures reading from local files.
 type FileConfig struct {
-	// Path is the path template, with {application} and {environment}.
+	// Path is the path template, with {application}, {artifact} and {environment}.
 	Path string `yaml:"path"`
+	// LegacyPath, if set, is read when the Path file is missing: the per-application template
+	// used before {artifact}, kept only during the transition.
+	LegacyPath string `yaml:"legacy_path"`
 	// Tenants is the path template of the tenant documents, with {tenant}.
 	Tenants string `yaml:"tenants"`
 }
@@ -430,6 +456,9 @@ type RBACBinding struct {
 	Environments []string `yaml:"environments"`
 	// Tenants limits the binding to the deploys of the matching tenants (selector on tags and "name").
 	Tenants string `yaml:"tenants"`
+	// Artifacts limits the binding to some artifacts (patterns on artifact.name); without it
+	// the binding applies to every artifact and to the actions on the whole environment.
+	Artifacts []string `yaml:"artifacts"`
 }
 
 // Audit configures the recording of actions.
@@ -539,6 +568,8 @@ type GovernanceRule struct {
 	Change *ChangeRule `yaml:"change"`
 	// Tenants limits the rule to the deploys of the matching tenants (selector).
 	Tenants string `yaml:"tenants"`
+	// Artifacts limits the rule to some artifacts (patterns on artifact.name).
+	Artifacts []string `yaml:"artifacts"`
 }
 
 // ApprovalSettings configures the approvals required before the deploy.
@@ -575,6 +606,8 @@ type FreezeWindow struct {
 	Hard bool `yaml:"hard"`
 	// Tenants limits the window to the deploys of the matching tenants (selector).
 	Tenants string `yaml:"tenants"`
+	// Artifacts limits the window to some artifacts (patterns on artifact.name).
+	Artifacts []string `yaml:"artifacts"`
 }
 
 // DescriptorPolicy limits what a descriptor can add to the environment configuration.
@@ -583,7 +616,7 @@ type DescriptorPolicy struct {
 	// Params lists per plugin ("*" = all) the patterns of the parameters a descriptor can set.
 	Params map[string][]string `yaml:"params"`
 	// SecretRefs are the patterns of the secret references a descriptor can declare, with
-	// {application} and {environment}.
+	// {application}, {artifact} and {environment}.
 	SecretRefs []string `yaml:"secret_refs"`
 	// Targets allows targets given by the descriptor.
 	Targets *bool `yaml:"targets"`
@@ -817,6 +850,11 @@ func (c *Config) Validate() error {
 	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
 	default:
 		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file)", c.EnvConfig.Provider))
+	}
+	switch c.Deploy.Identity {
+	case "", IdentityApplication, IdentityArtifact:
+	default:
+		errs = append(errs, fmt.Errorf("deploy.identity %q not supported (application|artifact)", c.Deploy.Identity))
 	}
 	if c.Callbacks.Timeout <= 0 || c.Callbacks.MaxRetries < 0 {
 		errs = append(errs, errors.New("callbacks: timeout must be > 0 and max_retries >= 0"))

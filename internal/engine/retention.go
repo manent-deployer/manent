@@ -103,7 +103,7 @@ func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, er
 const ActionAdminPrune = "admin.prune"
 
 // releasesToKeep returns the IDs of the successful deploys to keep (the last keep per
-// application and environment, dry-runs excluded) and of their approvals. It scans the whole
+// application and environment, or per artifact with the artifact identity; dry-runs excluded) and of their approvals. It scans the whole
 // history of successful deploys, without the listing limit.
 func (a *Admin) releasesToKeep(keep int) (map[string]bool, error) {
 	ids := map[string]bool{}
@@ -125,6 +125,9 @@ func (a *Admin) releasesToKeep(keep int) (map[string]bool, error) {
 				continue
 			}
 			k := s.Application + "/" + s.Environment
+			if a.byArtifact {
+				k += "/" + s.Artifact
+			}
 			if perEnv[k] < keep {
 				perEnv[k]++
 				ids[w.ID], ids[w.ID+approvalSuffix], ids[w.ID+afterSuffix] = true, true, true

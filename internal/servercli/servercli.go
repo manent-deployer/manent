@@ -57,6 +57,7 @@ func Run(args []string) error {
 			{Name: "recover", Short: "Riprende i workflow di un worker perso o di una versione precedente", Cmd: &RecoverCmd{global: g}},
 			{Name: "prune", Short: "Elimina lo storico dei workflow più vecchio della retention", Cmd: &PruneCmd{global: g}},
 			{Name: "specs", Short: "Elenca deploy in attesa e schedule che contengono specifiche revocate degli step personalizzati", Cmd: &SpecsCmd{global: g}},
+			{Name: "rename-artifact", Short: "Rinomina un artefatto nello storico di un'applicazione (inventario, rollback e promozioni seguono il nuovo nome)", Cmd: &RenameArtifactCmd{global: g}},
 		}, adminPolicyCommands(g)...)); err != nil {
 		return err
 	}
@@ -389,6 +390,26 @@ func (c *RecoverCmd) Execute([]string) error {
 			Executor: c.Executor, FromVersion: c.FromVersion, ToVersion: c.ToVersion, FromStart: c.FromStart,
 			StaleAfter: a.Config.Recovery.StaleAfter, Force: c.Force, DryRun: c.DryRun, By: adminActor(),
 		})
+		if err != nil {
+			return err
+		}
+		return cliutil.PrintJSON(rep)
+	})
+}
+
+// RenameArtifactCmd renames an artifact in the history of an application.
+type RenameArtifactCmd struct {
+	global      *GlobalOptions
+	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
+	From        string `long:"from" required:"true" description:"nome attuale dell'artefatto (artifact.name)"`
+	To          string `long:"to" required:"true" description:"nuovo nome dell'artefatto"`
+	DryRun      bool   `long:"dry-run" description:"conta i workflow senza modificarli"`
+}
+
+// Execute implements flags.Commander.
+func (c *RenameArtifactCmd) Execute([]string) error {
+	return withAdmin(c.global, func(ctx context.Context, _ *app.App, adm *engine.Admin) error {
+		rep, err := adm.RenameArtifact(ctx, engine.RenameArtifactOptions{Application: c.Application, From: c.From, To: c.To, DryRun: c.DryRun, By: adminActor()})
 		if err != nil {
 			return err
 		}

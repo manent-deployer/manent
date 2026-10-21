@@ -220,12 +220,14 @@ function DryRunStatus({ dry }: { dry: DryRun }) {
 
 export function PromoteDialog({
   application,
+  artifact,
   from,
   tenant,
   environments,
   onClose,
 }: {
   application: string;
+  artifact?: string;
   from: string;
   tenant?: string;
   environments: string[];
@@ -246,7 +248,7 @@ export function PromoteDialog({
   const [override, setOverride] = useState("");
   const { dry, run, reset } = useDryRun();
   const canOverride = can(me.data, "deployment.freeze-override", application, to);
-  const body = (dryRun: boolean) => ({ application, from, to: target, tenant: tenant || undefined, dry_run: dryRun || undefined, freeze_override: override.trim() || undefined });
+  const body = (dryRun: boolean) => ({ application, artifact: artifact || undefined, from, to: target, tenant: tenant || undefined, dry_run: dryRun || undefined, freeze_override: override.trim() || undefined });
   const m = useMutation({
     mutationFn: async () => unwrap(await api.POST("/api/v1/promotions", { body: body(false) })),
     onSuccess: (sub) => {
@@ -327,7 +329,19 @@ export function PromoteDialog({
   );
 }
 
-export function RollbackDialog({ application, environment, tenant, onClose }: { application: string; environment: string; tenant?: string; onClose: () => void }) {
+export function RollbackDialog({
+  application,
+  artifact,
+  environment,
+  tenant,
+  onClose,
+}: {
+  application: string;
+  artifact?: string;
+  environment: string;
+  tenant?: string;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
   const api = useApi();
   const me = useMe();
@@ -340,6 +354,7 @@ export function RollbackDialog({ application, environment, tenant, onClose }: { 
   const canOverride = can(me.data, "deployment.freeze-override", application, environment);
   const body = (dryRun: boolean) => ({
     application,
+    artifact: artifact || undefined,
     environment,
     tenant: tenant || undefined,
     version: version.trim() || undefined,

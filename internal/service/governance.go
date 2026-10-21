@@ -59,11 +59,17 @@ type InventoryFilter struct {
 	Environment string `json:"environment,omitempty"`
 	// Tenant filters by tenant; without it the inventory has an entry per tenant.
 	Tenant string `json:"tenant,omitempty"`
+	// Artifact filters by artifact name.
+	Artifact string `json:"artifact,omitempty"`
 }
 
-// InventoryEntry is the state of an application in an environment.
+// InventoryEntry is the state of an application in an environment: of one of its artifacts
+// with the artifact identity (deploy.identity: artifact).
 type InventoryEntry struct {
 	Application string `json:"application"`
+	// Artifact is the artifact name of the entry; empty with the application identity, where
+	// the entry follows the last artifact released (Current.Artifact).
+	Artifact    string `json:"artifact,omitempty"`
 	Environment string `json:"environment"`
 	// Tenant is the tenant of the entry ("" for the untenanted deploys).
 	Tenant string `json:"tenant,omitempty"`
@@ -138,6 +144,9 @@ type PromoteRequest struct {
 	Application string `json:"application"`
 	From        string `json:"from"`
 	To          string `json:"to"`
+	// Artifact chooses the artifact to promote; with the artifact identity it is required when
+	// From has more than one.
+	Artifact string `json:"artifact,omitempty"`
 	// Version, if given, chooses the version to promote; default the one in service in From.
 	Version string `json:"version,omitempty"`
 	// Tenant promotes the release of one tenant; Tenants (a selector) promotes several, each
@@ -154,6 +163,9 @@ type PromoteRequest struct {
 type RollbackRequest struct {
 	Application string `json:"application"`
 	Environment string `json:"environment"`
+	// Artifact chooses the artifact to roll back; with the artifact identity it is required when
+	// the environment has more than one.
+	Artifact string `json:"artifact,omitempty"`
 	// Version, if given, is the version to go back to; default the one before the version in service.
 	Version string `json:"version,omitempty"`
 	// Tenant goes back on the release of one tenant.

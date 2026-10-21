@@ -43,9 +43,11 @@ type FreezeRequest struct {
 	Environments []string `json:"environments"`
 	Regions      []string `json:"regions,omitempty"`
 	// Tenants limits the window to the deploys of the matching tenants (selector).
-	Tenants string    `json:"tenants,omitempty"`
-	From    time.Time `json:"from,omitzero"`
-	To      time.Time `json:"to"`
+	Tenants string `json:"tenants,omitempty"`
+	// Artifacts limits the window to some artifacts (patterns on artifact.name).
+	Artifacts []string  `json:"artifacts,omitempty"`
+	From      time.Time `json:"from,omitzero"`
+	To        time.Time `json:"to"`
 	// Hard windows cannot be exempted by the policy nor overridden with freezeOverride.
 	Hard bool `json:"hard,omitempty"`
 }
@@ -152,6 +154,7 @@ type AccessCheck struct {
 	Application string                 `json:"application"`
 	Environment string                 `json:"environment"`
 	Tenant      string                 `json:"tenant,omitempty"`
+	Artifact    string                 `json:"artifact,omitempty"`
 	Descriptor  *descriptor.Descriptor `json:"descriptor,omitempty"`
 }
 

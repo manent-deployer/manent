@@ -41,6 +41,8 @@ type Grant struct {
 	Environments []string `json:"environments"`
 	// Tenants is the selector of the tenants the grant is limited to ("" for all).
 	Tenants string `json:"tenants,omitempty"`
+	// Artifacts are the artifact patterns the grant is limited to (none for all).
+	Artifacts []string `json:"artifacts,omitempty"`
 	// Until, if set, is when the grant stops applying.
 	Until *time.Time `json:"until,omitempty"`
 }

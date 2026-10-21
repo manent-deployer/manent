@@ -62,11 +62,15 @@ type Document struct {
 	Source string
 	// Revision is the configuration version (e.g. Consul ModifyIndex), if available.
 	Revision string
+	// Legacy says the document was read from the legacy template (per application, without
+	// {artifact}) because the artifact has no document yet: allowed only during the transition.
+	Legacy bool
 }
 
-// Provider reads the configuration of an application in an environment.
+// Provider reads the configuration of an artifact of an application in an environment.
+// Templates without {artifact} ignore the artifact: one document per application/environment.
 type Provider interface {
-	Get(ctx context.Context, application, environment string) (*Document, error)
+	Get(ctx context.Context, application, artifact, environment string) (*Document, error)
 }
 
 // Parse decodes a YAML or JSON configuration, rejecting unknown fields.
@@ -80,9 +84,30 @@ func Parse(data []byte) (EnvConfig, error) {
 	return c, nil
 }
 
-// expandKey replaces {application} and {environment} in the key or path template.
-func expandKey(tmpl, application, environment string) string {
-	return strings.NewReplacer("{application}", application, "{environment}", environment).Replace(tmpl)
+// expandKey replaces {application}, {artifact} and {environment} in the key or path template.
+func expandKey(tmpl, application, artifact, environment string) string {
+	return strings.NewReplacer("{application}", application, "{artifact}", artifact, "{environment}", environment).Replace(tmpl)
+}
+
+// withLegacy reads with get from the template and, if the document is missing and a legacy
+// template is set, from the legacy one. An artifact name that cannot be part of a key or
+// path is a permanent error when the template uses it.
+func withLegacy(tmpl, legacy, artifact string, get func(tmpl string) (*Document, error)) (*Document, error) {
+	if strings.Contains(tmpl, "{artifact}") && !descriptor.ValidArtifactName(artifact) {
+		return nil, pipeline.Permanent(fmt.Errorf("invalid artifact.name %q for the environment configuration key: %s", artifact, descriptor.ArtifactNameRule))
+	}
+	doc, err := get(tmpl)
+	if legacy == "" || !errors.Is(err, ErrNotFound) {
+		return doc, err
+	}
+	doc, lerr := get(legacy)
+	if errors.Is(lerr, ErrNotFound) {
+		return nil, err
+	}
+	if doc != nil {
+		doc.Legacy = true
+	}
+	return doc, lerr
 }
 
 // Merge applies the environment configuration to the descriptor and returns the effective
@@ -235,7 +260,7 @@ func mergeImports(d *descriptor.Descriptor, c EnvConfig) []error {
 		}
 	}
 	if len(c.Imports) > 0 || len(c.TargetsFrom) > 0 || len(c.ParamsFrom) > 0 {
-		if err := descriptor.ValidateImports(c.Imports, c.TargetsFrom, c.ParamsFrom, c.Params, nil, d.Application, d.Environment); err != nil {
+		if err := descriptor.ValidateImports(c.Imports, c.TargetsFrom, c.ParamsFrom, c.Params, nil, d.Application, d.Artifact.Name, d.Environment); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -362,7 +387,7 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 	meta := map[string]string{"source": "descriptor"}
 	cfg := EnvConfig{}
 	if r.Provider != nil {
-		doc, err := r.Provider.Get(ctx, d.Application, d.Environment)
+		doc, err := r.Provider.Get(ctx, d.Application, d.Artifact.Name, d.Environment)
 		switch {
 		case errors.Is(err, ErrNotFound) && !r.Required:
 			meta["source"] = "descriptor (configurazione di ambiente assente)"
@@ -373,6 +398,9 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			meta["source"] = doc.Source
 			if doc.Revision != "" {
 				meta["revision"] = doc.Revision
+			}
+			if doc.Legacy {
+				meta["legacy"] = "true"
 			}
 		}
 	}

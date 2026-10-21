@@ -20,8 +20,12 @@ type ConsulProvider struct {
 	Token string
 	// Datacenter is optional.
 	Datacenter string
-	// KeyTemplate is the key template, with {application} and {environment} placeholders.
+	// KeyTemplate is the key template, with {application}, {artifact} and {environment}
+	// placeholders.
 	KeyTemplate string
+	// LegacyKeyTemplate, if set, is read when the KeyTemplate key is missing: the
+	// per-application template used before {artifact}, kept only during the transition.
+	LegacyKeyTemplate string
 	// TenantKeyTemplate is the key template of the tenant documents, with {tenant} (empty: no
 	// tenant registry).
 	TenantKeyTemplate string
@@ -35,9 +39,16 @@ type consulKV struct {
 	ModifyIndex uint64
 }
 
-// Get reads and decodes the application/environment key; the revision is the ModifyIndex.
-func (p *ConsulProvider) Get(ctx context.Context, application, environment string) (*Document, error) {
-	key := expandKey(p.KeyTemplate, application, environment)
+// Get reads and decodes the key of the artifact in the application/environment; the revision
+// is the ModifyIndex.
+func (p *ConsulProvider) Get(ctx context.Context, application, artifact, environment string) (*Document, error) {
+	return withLegacy(p.KeyTemplate, p.LegacyKeyTemplate, artifact, func(tmpl string) (*Document, error) {
+		return p.read(ctx, expandKey(tmpl, application, artifact, environment))
+	})
+}
+
+// read reads and decodes a Consul key.
+func (p *ConsulProvider) read(ctx context.Context, key string) (*Document, error) {
 	u, err := url.Parse(strings.TrimRight(p.Address, "/") + "/v1/kv/" + strings.TrimLeft(key, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid Consul address: %w", err)

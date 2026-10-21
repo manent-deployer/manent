@@ -23,11 +23,13 @@ type inventoryDataSource struct {
 type inventoryModel struct {
 	Application types.String     `tfsdk:"application"`
 	Environment types.String     `tfsdk:"environment"`
+	Artifact    types.String     `tfsdk:"artifact"`
 	Entries     []inventoryEntry `tfsdk:"entries"`
 }
 
 type inventoryEntry struct {
 	Application  types.String `tfsdk:"application"`
+	Artifact     types.String `tfsdk:"artifact"`
 	Environment  types.String `tfsdk:"environment"`
 	Tenant       types.String `tfsdk:"tenant"`
 	Version      types.String `tfsdk:"version"`
@@ -48,10 +50,12 @@ func (d *inventoryDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 		Attributes: map[string]schema.Attribute{
 			"application": schema.StringAttribute{Optional: true, Description: "Solo questa applicazione."},
 			"environment": schema.StringAttribute{Optional: true, Description: "Solo questo ambiente."},
+			"artifact":    schema.StringAttribute{Optional: true, Description: "Solo questo artefatto (artifact.name)."},
 			"entries": schema.ListNestedAttribute{
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"application":   schema.StringAttribute{Computed: true},
+					"artifact":      schema.StringAttribute{Computed: true, Description: "Artefatto della voce con deploy.identity: artifact."},
 					"environment":   schema.StringAttribute{Computed: true},
 					"tenant":        schema.StringAttribute{Computed: true},
 					"version":       schema.StringAttribute{Computed: true},
@@ -81,7 +85,7 @@ func (d *inventoryDataSource) Read(ctx context.Context, req datasource.ReadReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	inv, err := d.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
+	inv, err := d.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString(), Artifact: m.Artifact.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
@@ -92,7 +96,7 @@ func (d *inventoryDataSource) Read(ctx context.Context, req datasource.ReadReque
 			continue
 		}
 		m.Entries = append(m.Entries, inventoryEntry{
-			Application: types.StringValue(e.Application), Environment: types.StringValue(e.Environment), Tenant: types.StringValue(e.Tenant),
+			Application: types.StringValue(e.Application), Artifact: types.StringValue(e.Artifact), Environment: types.StringValue(e.Environment), Tenant: types.StringValue(e.Tenant),
 			Version: types.StringValue(e.Current.Version), DeploymentID: types.StringValue(e.Current.ID),
 			SHA256: types.StringValue(e.Current.SHA256), OutOfSync: types.BoolValue(e.OutOfSync),
 		})

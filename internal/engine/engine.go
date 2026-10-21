@@ -115,7 +115,10 @@ type ServiceOptions struct {
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
-	Logger       *slog.Logger
+	// ByArtifact identifies releases by application/artifact/environment (deploy.identity:
+	// artifact) instead of application/environment.
+	ByArtifact bool
+	Logger     *slog.Logger
 	// Now returns the current time; replaceable in tests.
 	Now func() time.Time
 }
@@ -150,6 +153,7 @@ type Engine struct {
 	targets     TargetStateReader
 	staleAfter  time.Duration
 	queueLimits QueueOptions
+	byArtifact  bool
 	logger      *slog.Logger
 	now         func() time.Time
 	// inv is the process inventory, updated incrementally.
@@ -179,6 +183,7 @@ func NewService(opts ServiceOptions) *Engine {
 		targets:     opts.TargetStates,
 		staleAfter:  cmp.Or(opts.StaleAfter, time.Minute),
 		queueLimits: opts.QueueLimits,
+		byArtifact:  opts.ByArtifact,
 		logger:      opts.Logger.With("component", "engine"),
 		now:         opts.Now,
 	}
@@ -217,6 +222,10 @@ func (e *Engine) Submit(ctx context.Context, d *descriptor.Descriptor) (*Submiss
 func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta submitMeta) (*Submission, error) {
 	if sub, ok := e.alreadyScheduled(ctx, d); ok {
 		return sub, nil
+	}
+	if e.byArtifact && d.Schedule != nil && d.Schedule.Cron != "" && d.Schedule.Name == "" {
+		// The default name is recorded: the ticks read it from the stored descriptor.
+		d.Schedule.Name = d.ScheduleNameFor(true)
 	}
 	if d.Tenants != nil {
 		return e.submitTenants(ctx, d, meta)
@@ -321,7 +330,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 			"required", req.Approval.RequiredOrZero(), "change_approval", req.Change != nil && req.Change.Approval, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
-	opts := deployOptions(req, id)
+	opts := deployOptions(req, id, e.byArtifact)
 	if delay > 0 {
 		opts = append(opts, dbos.WithEnqueueDelay(delay))
 	}
@@ -343,7 +352,7 @@ func (e *Engine) alreadyScheduled(ctx context.Context, d *descriptor.Descriptor)
 		return nil, false
 	}
 	st, err := e.Status(ctx, workflowID(d))
-	if err != nil || st.Application != d.Application || st.Environment != d.Environment {
+	if err != nil || st.Application != d.Application || st.Environment != d.Environment || (e.byArtifact && st.Artifact != d.Artifact.Name) {
 		return nil, false
 	}
 	return &Submission{ID: st.ID, State: st.State, ScheduledAt: d.Schedule.At}, true
@@ -426,9 +435,16 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 		if d.Application != c.Application || d.Environment != c.Environment {
 			return nil, fmt.Errorf("%w: the example descriptor is for %s/%s, not for %s/%s", ErrInvalidRequest, d.Application, d.Environment, c.Application, c.Environment)
 		}
+		if c.Artifact != "" && d.Artifact.Name != c.Artifact {
+			return nil, fmt.Errorf("%w: the example descriptor is for artifact %s, not for %s", ErrInvalidRequest, d.Artifact.Name, c.Artifact)
+		}
 		return &d, nil
 	}
-	inv, err := e.Inventory(ctx, InventoryFilter{Application: c.Application, Environment: c.Environment})
+	artifact, err := e.resolveArtifact(c.Application, c.Environment, "", c.Artifact)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := e.Inventory(ctx, InventoryFilter{Application: c.Application, Environment: c.Environment, Artifact: artifact})
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +486,14 @@ func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 		}
 	}
 	v := &Validation{Valid: true}
+	if !descriptor.ValidArtifactName(d.Artifact.Name) {
+		// The artifact name identifies the release: with the artifact identity it becomes part
+		// of the queue partition and keys, so it must be valid.
+		if e.byArtifact {
+			return nil, nil, fmt.Errorf("%w: invalid artifact.name %q: %s", ErrInvalidRequest, d.Artifact.Name, descriptor.ArtifactNameRule)
+		}
+		v.Warnings = append(v.Warnings, fmt.Sprintf("artifact.name %q non sarà più ammesso con deploy.identity: artifact (%s): il percorso dell'immagine va in source", d.Artifact.Name, descriptor.ArtifactNameRule))
+	}
 	eff := *d
 	if resolve != nil {
 		r, meta, err := resolve(ctx, *d)
@@ -578,9 +602,9 @@ func sameArtifact(s Status, d *descriptor.Descriptor) bool {
 
 // deployOptions are the enqueue options of a deploy: queue partition, user, attributes for
 // listings and inventory and, if given, workflow ID.
-func deployOptions(req Request, id string) []dbos.EnqueueOption {
+func deployOptions(req Request, id string, byArtifact bool) []dbos.EnqueueOption {
 	opts := []dbos.EnqueueOption{
-		dbos.WithEnqueueQueuePartitionKey(partitionKey(&req.Descriptor)),
+		dbos.WithEnqueueQueuePartitionKey(partitionKey(&req.Descriptor, byArtifact)),
 		dbos.WithEnqueueAttributes(attributes(req)),
 	}
 	if req.RequestedBy != "" {
@@ -982,6 +1006,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 	if s.Application == "" {
 		// Deploys enqueued before attributes existed: the partition key is "<application>/<environment>".
 		s.Application, s.Environment, _ = strings.Cut(st.QueuePartitionKey, "/")
+		s.Application, _, _ = strings.Cut(s.Application, artifactSep)
 	}
 	s.Release = attr(st, attrRelease)
 	s.Tenant, s.Run = attr(st, attrTenant), attr(st, attrRun)
@@ -1035,10 +1060,16 @@ func workflowID(d *descriptor.Descriptor) string {
 }
 
 // partitionKey is the queue partition key: deploys of the same application/environment obey
-// the environment_concurrency limit across all workers.
-func partitionKey(d *descriptor.Descriptor) string {
-	if d.Tenant != "" {
-		return d.Application + "/" + d.Environment + "/" + d.Tenant
+// the environment_concurrency limit across all workers. With the artifact identity the first
+// segment is "<application>+<artifact>": '+' is not allowed in names, so the key stays
+// unambiguous and the keys of the application identity do not change.
+func partitionKey(d *descriptor.Descriptor, byArtifact bool) string {
+	app := d.Application
+	if byArtifact {
+		app += artifactSep + d.Artifact.Name
 	}
-	return d.Application + "/" + d.Environment
+	if d.Tenant != "" {
+		return app + "/" + d.Environment + "/" + d.Tenant
+	}
+	return app + "/" + d.Environment
 }

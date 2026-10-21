@@ -55,6 +55,9 @@ func RBACData(roles map[string][]rbac.Action, bindings []rbac.Binding) map[strin
 		if b.Tenants != "" {
 			m["tenants"] = b.Tenants
 		}
+		if len(b.Artifacts) > 0 {
+			m["artifacts"] = anySlice(b.Artifacts)
+		}
 		bs = append(bs, m)
 	}
 	return map[string]any{"roles": rs, "bindings": bs}
@@ -199,6 +202,7 @@ type rawGrant struct {
 	Applications []string `json:"applications"`
 	Environments []string `json:"environments"`
 	Tenants      string   `json:"tenants"`
+	Artifacts    []string `json:"artifacts"`
 	Until        string   `json:"until"`
 }
 
@@ -277,7 +281,7 @@ func decodeGrants(v any, roles map[string][]rbac.Action) (GrantsResult, error) {
 	}
 	var res GrantsResult
 	for i, r := range raws {
-		g := rbac.Grant{Name: r.Name, Role: r.Role, Applications: r.Applications, Environments: r.Environments, Tenants: r.Tenants}
+		g := rbac.Grant{Name: r.Name, Role: r.Role, Applications: r.Applications, Environments: r.Environments, Tenants: r.Tenants, Artifacts: r.Artifacts}
 		if g.Name == "" {
 			g.Name = fmt.Sprintf("grant %d", i)
 		}

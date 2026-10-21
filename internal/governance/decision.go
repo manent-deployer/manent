@@ -246,7 +246,7 @@ type EvalFunc func(context.Context, Input) (Decision, error)
 // freezeOverride, and hard windows always block.
 func Decide(ctx context.Context, in Input, windows []Window, eval EvalFunc) (Decision, error) {
 	in.Schema = InputSchema
-	in.Freezes.Active = ActiveWindowsFor(windows, in.Application, in.Environment, in.Region, in.Tenant.Labels(), in.Now)
+	in.Freezes.Active = ActiveWindowsFor(windows, in.Application, in.Artifact.Name, in.Environment, in.Region, in.Tenant.Labels(), in.Now)
 	if in.Freezes.Active == nil {
 		in.Freezes.Active = []WindowStatus{}
 	}
@@ -299,7 +299,7 @@ func (p *Policy) RuleDecision(application, environment string) Decision {
 
 // RuleDecisionFor is the decision of the first rule matching the input (tenant included).
 func (p *Policy) RuleDecisionFor(in Input) Decision {
-	r := p.RuleFor(in.Application, in.Environment, in.Tenant.Labels())
+	r := p.RuleFor(in.Application, in.Artifact.Name, in.Environment, in.Tenant.Labels())
 	dec := Decision{Revision: p.Revision(), Rule: r.Name, Requires: r.Requires}
 	if r.Approvals.Required > 0 {
 		a := r.Approvals

@@ -383,7 +383,7 @@ func (d *Descriptor) Validate() error {
 		errs = append(errs, d.Tenants.validate())
 	}
 	errs = append(errs, d.validateAfter())
-	errs = append(errs, ValidateImports(d.Imports, d.Deploy.TargetsFrom, d.Deploy.ParamsFrom, d.Deploy.Params, d.After, d.Application, d.Environment))
+	errs = append(errs, ValidateImports(d.Imports, d.Deploy.TargetsFrom, d.Deploy.ParamsFrom, d.Deploy.Params, d.After, d.Application, d.Artifact.Name, d.Environment))
 	errs = append(errs, ValidateExports(d.Exports))
 	if d.Schedule != nil {
 		if d.DryRun {
@@ -469,6 +469,13 @@ const nameRule = "ammessi lettere, cifre, '.', '_', ':', '-' (max 128, iniziale 
 
 func validName(s string) bool { return nameRe.MatchString(s) }
 
+// ValidArtifactName reports whether artifact.name can identify a release: it becomes part of
+// queue partitions, configuration keys and paths. Images keep their path in source.
+func ValidArtifactName(s string) bool { return validName(s) }
+
+// ArtifactNameRule describes the names ValidArtifactName accepts.
+const ArtifactNameRule = nameRule
+
 // validate checks that exactly one of At and Cron is set and that the cron is valid.
 func (s *Schedule) validate(id string) error {
 	switch {
@@ -506,9 +513,17 @@ func (s *Schedule) CronExpr() string {
 }
 
 // ScheduleName returns the name of the recurring schedule.
-func (d *Descriptor) ScheduleName() string {
-	if d.Schedule != nil && d.Schedule.Name != "" {
+func (d *Descriptor) ScheduleName() string { return d.ScheduleNameFor(false) }
+
+// ScheduleNameFor returns the name of the recurring schedule; the default is
+// "<application>-<environment>", "<application>-<artifact>-<environment>" with the artifact
+// identity (two artifacts of an application can have a schedule each).
+func (d *Descriptor) ScheduleNameFor(byArtifact bool) string {
+	switch {
+	case d.Schedule != nil && d.Schedule.Name != "":
 		return d.Schedule.Name
+	case byArtifact:
+		return d.Application + "-" + d.Artifact.Name + "-" + d.Environment
 	}
 	return d.Application + "-" + d.Environment
 }

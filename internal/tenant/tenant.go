@@ -44,7 +44,9 @@ type Tenant struct {
 	// Applications maps every application to the environments the tenant is connected to.
 	Applications map[string][]string `json:"applications,omitempty" yaml:"applications,omitempty"`
 	// Params, Secrets and StepParams are per application: the values of the tenant_params of
-	// the environment, secret references and custom step parameters.
+	// the environment, secret references and custom step parameters. A key
+	// "<application>/<artifact>" applies only to that artifact and takes priority over the
+	// application's values.
 	Params     map[string]map[string]string            `json:"params,omitempty" yaml:"params,omitempty"`
 	Secrets    map[string][]descriptor.SecretRef       `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	StepParams map[string]map[string]map[string]string `json:"step_params,omitempty" yaml:"step_params,omitempty"`
@@ -96,6 +98,50 @@ func (t *Tenant) Validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// ArtifactKey is the key of the per-artifact values in Params, Secrets and StepParams.
+func ArtifactKey(application, artifact string) string { return application + "/" + artifact }
+
+// ParamsFor returns the parameters of the tenant for an artifact of the application: the
+// application's, replaced by the artifact's where both set one.
+func (t *Tenant) ParamsFor(application, artifact string) map[string]string {
+	out := maps.Clone(t.Params[application])
+	for k, v := range t.Params[ArtifactKey(application, artifact)] {
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// SecretsFor returns the secret references of the tenant for an artifact of the application:
+// the artifact's replace the application's with the same name.
+func (t *Tenant) SecretsFor(application, artifact string) []descriptor.SecretRef {
+	own := t.Secrets[ArtifactKey(application, artifact)]
+	out := slices.Clone(own)
+	for _, s := range t.Secrets[application] {
+		if !slices.ContainsFunc(own, func(o descriptor.SecretRef) bool { return o.Name == s.Name }) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// StepParamsFor returns the custom step parameters of the tenant for an artifact of the
+// application: the artifact's replace the application's.
+func (t *Tenant) StepParamsFor(application, artifact string) map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for _, key := range []string{application, ArtifactKey(application, artifact)} {
+		for step, ps := range t.StepParams[key] {
+			if out[step] == nil {
+				out[step] = map[string]string{}
+			}
+			maps.Copy(out[step], ps)
+		}
+	}
+	return out
 }
 
 // Labels are the tags plus the name, matched by the tenant selectors.

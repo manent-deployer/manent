@@ -112,7 +112,7 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 		}
 		if s.UpdatedAt.Before(f.Since) || (f.Application != "" && s.Application != f.Application) ||
 			(f.Environment != "" && s.Environment != f.Environment) || (f.Tenant != "" && s.Tenant != f.Tenant) ||
-			(f.Match != nil && !f.Match(s)) {
+			(f.Artifact != "" && s.Artifact != f.Artifact) || (f.Match != nil && !f.Match(s)) {
 			return true
 		}
 		switch s.State {
@@ -122,6 +122,10 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 		}
 		k := s.Application + "/" + s.Environment
 		m := DORAMetrics{Application: s.Application, Environment: s.Environment}
+		if e.byArtifact {
+			k += "/" + s.Artifact
+			m.Artifact = s.Artifact
+		}
 		if f.ByTenant || f.Tenant != "" {
 			k += "/" + s.Tenant
 			m.Tenant = s.Tenant

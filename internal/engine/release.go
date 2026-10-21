@@ -97,7 +97,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		}
 		descs[i] = d
 		rs.Deploys = append(rs.Deploys, ReleaseDeployState{
-			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Environment: d.Environment, Tenant: d.Tenant,
+			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment, Tenant: d.Tenant,
 			Version: d.Artifact.Version, After: rd.After, State: StateEnqueued,
 		})
 		waitsFor = append(waitsFor, d.ID)
@@ -342,7 +342,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 			}
 			c = auth.WithPrincipal(c, &auth.Principal{Method: method, Subject: subject})
 			_, err := w.service.Rollback(c, RollbackRequest{
-				Application: d.Application, Environment: d.Environment, Redeploy: service.Redeploy{ID: d.RollbackID},
+				Application: d.Application, Artifact: w.reader.releaseArtifact(d.Artifact), Environment: d.Environment, Redeploy: service.Redeploy{ID: d.RollbackID},
 			})
 			return "", err
 		}, dbos.WithStepName("rollback:"+d.Name))

@@ -195,6 +195,7 @@ type ListCmd struct {
 	Application string `short:"a" long:"application" description:"solo i deploy di questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo i deploy in questo ambiente"`
 	Tenant      string `short:"t" long:"tenant" description:"solo i deploy di questo tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"solo i deploy di questo artefatto (artifact.name)"`
 	State       string `long:"state" description:"solo i deploy in questo stato (es. SUCCESS, ERROR, AWAITING_APPROVAL)"`
 	Limit       int    `short:"n" long:"limit" default:"20" description:"numero massimo di deploy"`
 }
@@ -202,7 +203,7 @@ type ListCmd struct {
 // Execute implements flags.Commander.
 func (c *ListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, State: c.State, Limit: c.Limit})
+		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, State: c.State, Limit: c.Limit})
 		if err != nil {
 			return err
 		}
@@ -327,6 +328,7 @@ type PromoteCmd struct {
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	From        string `long:"from" required:"true" description:"ambiente di origine"`
 	To          string `long:"to" required:"true" description:"ambiente di destinazione"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (deploy.identity: artifact; obbligatorio se l'ambiente di origine ne ha più di uno)"`
 	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
 	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
 	Tenant      string `long:"tenant" description:"promuove la release di questo tenant"`
@@ -336,7 +338,7 @@ type PromoteCmd struct {
 
 // Execute implements flags.Commander.
 func (c *PromoteCmd) Execute([]string) error {
-	r := service.PromoteRequest{Application: c.Application, From: c.From, To: c.To, Version: c.Version, Tenant: c.Tenant, Tenants: c.Tenants, Redeploy: c.redeploy()}
+	r := service.PromoteRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Version: c.Version, Tenant: c.Tenant, Tenants: c.Tenants, Redeploy: c.redeploy()}
 	if c.DeployFile != "" {
 		data, err := os.ReadFile(c.DeployFile)
 		if err != nil {
@@ -364,6 +366,7 @@ type RollbackCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto da riportare indietro (deploy.identity: artifact; obbligatorio se l'ambiente ne ha più di uno)"`
 	Version     string `long:"to" description:"versione a cui tornare (default: la precedente a quella in esercizio)"`
 	Tenant      string `long:"tenant" description:"torna indietro sulla release di questo tenant"`
 	Run         string `long:"run" description:"riporta indietro i tenant riusciti di questo rilascio multi-tenant, in ordine inverso"`
@@ -373,7 +376,7 @@ type RollbackCmd struct {
 // Execute implements flags.Commander.
 func (c *RollbackCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Environment: c.Environment, Version: c.Version,
+		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Artifact: c.Artifact, Environment: c.Environment, Version: c.Version,
 			Tenant: c.Tenant, Run: c.Run, Redeploy: c.redeploy()})
 		if err != nil {
 			return err
@@ -388,13 +391,14 @@ type InventoryCmd struct {
 	Application string `short:"a" long:"application" description:"solo questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
 	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"solo questo artefatto (artifact.name)"`
 	OutOfSync   bool   `long:"out-of-sync" description:"solo gli ambienti con target cambiati fuori da manent (riconciliazione)"`
 }
 
 // Execute implements flags.Commander.
 func (c *InventoryCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant})
+		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact})
 		if err != nil {
 			return err
 		}
@@ -533,6 +537,7 @@ type DORACmd struct {
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
 	Since       string `long:"since" default:"30d" description:"inizio del periodo: giorni (30d), durata (720h) o data RFC 3339"`
 	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"solo questo artefatto (artifact.name)"`
 	ByTenant    bool   `long:"by-tenant" description:"metriche anche per tenant"`
 }
 
@@ -543,7 +548,7 @@ func (c *DORACmd) Execute([]string) error {
 		return err
 	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		rep, err := svc.DORA(ctx, service.DORAFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, ByTenant: c.ByTenant, Since: since})
+		rep, err := svc.DORA(ctx, service.DORAFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, ByTenant: c.ByTenant, Since: since})
 		if err != nil {
 			return err
 		}

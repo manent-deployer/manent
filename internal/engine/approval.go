@@ -291,7 +291,7 @@ func (w *Worker) enqueueApproved(ctx dbos.Context, in approvalInput) error {
 	if err != nil {
 		return err
 	}
-	opts := deployOptions(in.Request, in.DeploymentID)
+	opts := deployOptions(in.Request, in.DeploymentID, w.byArtifact)
 	if delay > 0 {
 		opts = append(opts, dbos.WithEnqueueDelay(delay))
 	}

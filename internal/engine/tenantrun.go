@@ -387,7 +387,7 @@ func (e *Engine) rollbackRun(ctx context.Context, r RollbackRequest) (*Submissio
 		if t.State != StateSuccess {
 			continue
 		}
-		rr := RollbackRequest{Application: st.Application, Environment: st.Environment, Tenant: t.Tenant, Version: r.Version, Redeploy: r.Redeploy}
+		rr := RollbackRequest{Application: st.Application, Artifact: e.releaseArtifact(st.Artifact), Environment: st.Environment, Tenant: t.Tenant, Version: r.Version, Redeploy: r.Redeploy}
 		rr.ID = tenantDeployID(runID, t.Tenant)
 		d, _, err := e.rollbackDescriptor(ctx, rr)
 		if err != nil {
@@ -557,7 +557,7 @@ func (w *Worker) enqueueTenants(in tenantsInput, ids []string) ([]string, error)
 		if needsApproval(req) {
 			err = enqueueApproval(w.dbos, in.QueueName, req, id)
 		} else {
-			_, err = dbos.Enqueue[Result](w.dbos, in.QueueName, workflowName, req, deployOptions(req, id)...)
+			_, err = dbos.Enqueue[Result](w.dbos, in.QueueName, workflowName, req, deployOptions(req, id, w.byArtifact)...)
 		}
 		if err != nil {
 			return started, err

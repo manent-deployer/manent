@@ -115,6 +115,7 @@ type EnvValidateCmd struct {
 	global      *GlobalOptions
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto a cui si riferisce la configurazione (template con {artifact})"`
 	File        string `short:"f" long:"file" required:"true" description:"configurazione di ambiente YAML o JSON (com'è nel sistema di configurazione)"`
 	Descriptor  string `short:"d" long:"descriptor" description:"descrittore di esempio; default la richiesta del deploy in esercizio"`
 }
@@ -125,7 +126,7 @@ func (c *EnvValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	check := service.EnvironmentCheck{Application: c.Application, Environment: c.Environment, Config: string(raw)}
+	check := service.EnvironmentCheck{Application: c.Application, Artifact: c.Artifact, Environment: c.Environment, Config: string(raw)}
 	if c.Descriptor != "" {
 		if check.Descriptor, err = descriptor.LoadYAMLFile(c.Descriptor); err != nil {
 			return err

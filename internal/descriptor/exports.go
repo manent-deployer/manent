@@ -52,6 +52,9 @@ type ImportCurrent struct {
 	// Environment defaults to the importing deploy's: a promotion then reads the exports of
 	// the target environment.
 	Environment string `json:"environment,omitempty" yaml:"environment,omitempty"`
+	// Artifact chooses the artifact of the application (deploy.identity: artifact); required
+	// when the environment has more than one.
+	Artifact string `json:"artifact,omitempty" yaml:"artifact,omitempty"`
 }
 
 // ExportRef points to an export of an import.
@@ -218,7 +221,7 @@ func (d *Descriptor) DropDeploymentImports() {
 // parameters already set, which a parameter taken from an export cannot repeat. self are
 // application and environment of the deploy: a deploy cannot import its own release in service.
 func ValidateImports(imports map[string]Import, targetsFrom []ExportRef, paramsFrom map[string]ExportRef,
-	params map[string]string, after []string, application, environment string) error {
+	params map[string]string, after []string, application, artifact, environment string) error {
 	var errs []error
 	if len(imports) > maxImports {
 		errs = append(errs, fmt.Errorf("imports: at most %d", maxImports))
@@ -243,9 +246,9 @@ func ValidateImports(imports map[string]Import, targetsFrom []ExportRef, paramsF
 			if env == "" {
 				env = environment
 			}
-			if !validName(c.Application) || (c.Environment != "" && !validName(c.Environment)) {
-				errs = append(errs, fmt.Errorf("imports.%s.current: invalid application or environment", name))
-			} else if c.Application == application && env == environment {
+			if !validName(c.Application) || (c.Environment != "" && !validName(c.Environment)) || (c.Artifact != "" && !validName(c.Artifact)) {
+				errs = append(errs, fmt.Errorf("imports.%s.current: invalid application, environment or artifact", name))
+			} else if c.Application == application && env == environment && (c.Artifact == "" || c.Artifact == artifact) {
 				errs = append(errs, fmt.Errorf("imports.%s.current: a deploy cannot import its own release in service", name))
 			}
 		}

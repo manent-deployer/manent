@@ -435,6 +435,7 @@ export const en = {
   "policies.access.denied": "Denied",
   "policies.access.grantedBy": "by permission {grant}",
   "inventory.tenant": "Tenant",
+  "inventory.artifact": "Artifact",
   "detail.tenant": "Tenant",
   "detail.run": "Multi-tenant release",
   "detail.tenantsRun": "Tenants",

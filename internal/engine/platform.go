@@ -196,6 +196,8 @@ func toTask(w dbos.WorkflowStatus) WorkerTask {
 	parts := strings.Split(w.QueuePartitionKey, "/")
 	if t.Application == "" && len(parts) >= 2 {
 		t.Application, t.Environment = parts[0], parts[1]
+		// Artifact identity: "<application>+<artifact>".
+		t.Application, _, _ = strings.Cut(t.Application, artifactSep)
 	}
 	if len(parts) >= 3 {
 		t.Region = parts[2]

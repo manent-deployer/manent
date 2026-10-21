@@ -81,6 +81,9 @@ type Binding struct {
 	// Tenants, if set, is a selector on the tenant (tags and "name"): the binding applies only
 	// to the deploys of the matching tenants. Without it, to every deploy.
 	Tenants string `yaml:"tenants"`
+	// Artifacts, if set, are patterns on artifact.name: the binding applies only to the deploys
+	// of those artifacts, not to the actions on the whole environment.
+	Artifacts []string `yaml:"artifacts"`
 }
 
 // Policy decides whether an identity can perform an action on an application/environment.
@@ -125,12 +128,13 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 // Allowed reports whether p can perform a on the given application and environment.
 // Without an identity the answer is always no, unless the policy is disabled.
 func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment string) bool {
-	return pol.AllowedFor(p, a, application, environment, nil)
+	return pol.AllowedFor(p, a, application, "", environment, nil)
 }
 
-// AllowedFor is Allowed for a deploy of a tenant (nil: untenanted deploy). A binding with
-// tenants applies only to the matching tenants.
-func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, environment string, t *tenant.Ref) bool {
+// AllowedFor is Allowed for a deploy of an artifact ("" for the actions on the whole
+// environment) and of a tenant (nil: untenanted deploy). A binding with tenants applies only
+// to the matching tenants, one with artifacts only to those artifacts.
+func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, artifact, environment string, t *tenant.Ref) bool {
 	if pol.Disabled {
 		return true
 	}
@@ -141,7 +145,8 @@ func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, environme
 		if !pol.grants(b.Role, a) || !b.matches(p) {
 			continue
 		}
-		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) {
+		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) &&
+			ArtifactMatches(b.Artifacts, artifact) {
 			return true
 		}
 	}
@@ -163,6 +168,12 @@ func (pol Policy) AllowedAnywhere(p *auth.Principal, a Action) bool {
 		}
 	}
 	return false
+}
+
+// ArtifactMatches reports whether artifact patterns apply: none to every artifact and to the
+// actions on the whole environment (artifact ""), some only to the matching artifacts.
+func ArtifactMatches(patterns []string, artifact string) bool {
+	return len(patterns) == 0 || (artifact != "" && glob.Any(patterns, artifact))
 }
 
 func (pol Policy) grants(role string, a Action) bool {

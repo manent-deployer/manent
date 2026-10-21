@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
 func registry() []Tenant {
@@ -95,5 +97,38 @@ func TestCache(t *testing.T) {
 	}
 	if _, err := c.Tenant(context.Background(), "nessuno"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("tenant inesistente: %v", err)
+	}
+}
+
+// The values given for an artifact ("<application>/<artifact>") take priority over the
+// application's.
+func TestValoriPerArtefatto(t *testing.T) {
+	tn := &Tenant{
+		Name: "acme",
+		Params: map[string]map[string]string{
+			"shop":         {"db_host": "acme-db", "region": "eu"},
+			"shop/shop-db": {"db_host": "acme-db-admin"},
+		},
+		Secrets: map[string][]descriptor.SecretRef{
+			"shop":         {{Name: "db", Ref: "vault:shop#db"}, {Name: "license", Ref: "vault:shop#license"}},
+			"shop/shop-db": {{Name: "db", Ref: "vault:shop#db-admin"}},
+		},
+		StepParams: map[string]map[string]map[string]string{
+			"shop":         {"migrate": {"database": "acme", "schema": "public"}},
+			"shop/shop-db": {"migrate": {"schema": "admin"}},
+		},
+	}
+	if p := tn.ParamsFor("shop", "shop-db"); p["db_host"] != "acme-db-admin" || p["region"] != "eu" {
+		t.Errorf("parametri per artefatto inattesi: %v", p)
+	}
+	if p := tn.ParamsFor("shop", "shop-web"); p["db_host"] != "acme-db" {
+		t.Errorf("senza valori per l'artefatto valgono quelli dell'applicazione: %v", p)
+	}
+	ss := tn.SecretsFor("shop", "shop-db")
+	if len(ss) != 2 || ss[0].Ref != "vault:shop#db-admin" || ss[1].Name != "license" {
+		t.Errorf("segreti per artefatto inattesi: %+v", ss)
+	}
+	if sp := tn.StepParamsFor("shop", "shop-db"); sp["migrate"]["schema"] != "admin" || sp["migrate"]["database"] != "acme" {
+		t.Errorf("step params per artefatto inattesi: %v", sp)
 	}
 }

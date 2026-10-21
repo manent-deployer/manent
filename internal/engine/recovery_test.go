@@ -182,7 +182,7 @@ func TestMigrazioneDeiWorkflowAUnaNuovaVersione(t *testing.T) {
 	plan, _ := planner.Plan(d)
 	req := Request{Descriptor: *d, Plan: plan}
 	if _, err := dbos.Enqueue[Result](w2.Client(), "deployments", workflowName, req,
-		append(deployOptions(req, d.ID), dbos.WithEnqueueApplicationVersion("v1"))...); err != nil {
+		append(deployOptions(req, d.ID, false), dbos.WithEnqueueApplicationVersion("v1"))...); err != nil {
 		t.Fatal(err)
 	}
 

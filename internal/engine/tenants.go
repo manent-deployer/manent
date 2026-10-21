@@ -45,8 +45,11 @@ type Adoption struct {
 // in From (an environment per customer, before tenants).
 type AdoptRequest struct {
 	Application string
-	From, To    string
-	Tenant      string
+	// Artifact chooses the artifact with the artifact identity, required when From has more
+	// than one.
+	Artifact string
+	From, To string
+	Tenant   string
 }
 
 // Adopt records the adoption: a deploy of kind adoption that runs no step and leaves the
@@ -60,7 +63,11 @@ func (e *Engine) Adopt(ctx context.Context, r AdoptRequest) (*Submission, error)
 	if err := tenant.ValidName(r.Tenant); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	inv, err := e.Inventory(ctx, InventoryFilter{Application: r.Application, Environment: r.From})
+	artifact, err := e.resolveArtifact(r.Application, r.From, "", r.Artifact)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := e.Inventory(ctx, InventoryFilter{Application: r.Application, Environment: r.From, Artifact: artifact})
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +89,7 @@ func (e *Engine) Adopt(ctx context.Context, r AdoptRequest) (*Submission, error)
 	}
 	areq := Request{Descriptor: d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: KindAdoption, Source: src.ID,
 		Tenant: e.tenantRef(ctx, r.Tenant), Adopted: &Adoption{Source: src.ID, SHA256: src.SHA256}}
-	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, areq, deployOptions(areq, uuid.NewString())...)
+	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, areq, deployOptions(areq, uuid.NewString(), e.byArtifact)...)
 	if err != nil {
 		return nil, err
 	}

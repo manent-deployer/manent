@@ -50,7 +50,7 @@ func (s *provisionStep) deployOf(id string) descriptor.Deploy {
 // envProvider is an environment configuration provider with fixed documents per app/env.
 type envProvider map[string]envconfig.EnvConfig
 
-func (p envProvider) Get(_ context.Context, app, env string) (*envconfig.Document, error) {
+func (p envProvider) Get(_ context.Context, app, _, env string) (*envconfig.Document, error) {
 	c, ok := p[app+"/"+env]
 	if !ok {
 		return nil, envconfig.ErrNotFound

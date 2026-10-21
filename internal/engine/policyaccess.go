@@ -20,7 +20,7 @@ func ServiceGrant(gr rbac.Grant) Grant {
 	for i, a := range gr.Actions {
 		acts[i] = string(a)
 	}
-	return Grant{Name: gr.Name, Role: gr.Role, Actions: acts, Applications: gr.Applications, Environments: gr.Environments, Tenants: gr.Tenants, Until: gr.Until}
+	return Grant{Name: gr.Name, Role: gr.Role, Actions: acts, Applications: gr.Applications, Environments: gr.Environments, Tenants: gr.Tenants, Artifacts: gr.Artifacts, Until: gr.Until}
 }
 
 // PolicyAccess implements PolicyService: the grants of the identity given by hand with the
@@ -93,6 +93,7 @@ func (e *Engine) accessCheck(ctx context.Context, pa PolicyAdmin, revision int64
 	}
 	if d := c.Descriptor; d != nil {
 		c.Application, c.Environment, c.Tenant = cmp.Or(c.Application, d.Application), cmp.Or(c.Environment, d.Environment), cmp.Or(c.Tenant, d.Tenant)
+		c.Artifact = cmp.Or(c.Artifact, d.Artifact.Name)
 	}
 	if c.Application == "" || c.Environment == "" {
 		return nil, fmt.Errorf("%w: application and environment are required for the check", ErrInvalidRequest)
@@ -101,7 +102,7 @@ func (e *Engine) accessCheck(ctx context.Context, pa PolicyAdmin, revision int64
 	if c.Tenant != "" {
 		ref = e.tenantRef(ctx, c.Tenant)
 	}
-	gr, ok := rbac.GrantFor(grants, a, c.Application, c.Environment, ref, e.now())
+	gr, ok := rbac.GrantFor(grants, a, c.Application, c.Artifact, c.Environment, ref, e.now())
 	if !ok {
 		return &AccessOutcome{Reason: "no grant of the revision allows the action"}, nil
 	}

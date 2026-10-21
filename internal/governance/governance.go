@@ -86,6 +86,8 @@ type Rule struct {
 	// Tenants, if set, is a selector on the tenant (tags and "name"): the rule applies only to
 	// the deploys of the matching tenants.
 	Tenants string
+	// Artifacts, if set, are patterns on artifact.name: the rule applies only to those artifacts.
+	Artifacts []string
 }
 
 // Change is the change management rule of a deploy, fixed at submission.
@@ -106,8 +108,10 @@ type Window struct {
 	// those regions, not to the deploy submission.
 	Regions []string
 	// Tenants, if set, is a selector limiting the window to the deploys of matching tenants.
-	Tenants  string
-	From, To time.Time
+	Tenants string
+	// Artifacts, if set, are patterns on artifact.name limiting the window to those artifacts.
+	Artifacts []string
+	From, To  time.Time
 	// Cron is the start of every occurrence (5 fields), interpreted in Timezone.
 	Cron     string
 	Duration time.Duration
@@ -129,6 +133,7 @@ type WindowStatus struct {
 	Environments []string  `json:"environments"`
 	Regions      []string  `json:"regions,omitempty"`
 	Tenants      string    `json:"tenants,omitempty"`
+	Artifacts    []string  `json:"artifacts,omitempty"`
 	Active       bool      `json:"active"`
 	Start        time.Time `json:"start,omitzero"`
 	End          time.Time `json:"end,omitzero"`
@@ -220,17 +225,19 @@ func PrepareWindows(windows []Window, field string) []error {
 // Rule returns the first rule matching the application and environment, or an empty rule
 // (no constraint).
 func (p *Policy) Rule(application, environment string) Rule {
-	return p.RuleFor(application, environment, nil)
+	return p.RuleFor(application, "", environment, nil)
 }
 
-// RuleFor is Rule for a deploy of a tenant (labels: tags plus name; nil without tenant): a rule
-// with tenants applies only to the matching tenants.
-func (p *Policy) RuleFor(application, environment string, tenant map[string]string) Rule {
+// RuleFor is Rule for an artifact and a deploy of a tenant (labels: tags plus name; nil without
+// tenant): a rule with tenants applies only to the matching tenants, one with artifacts only
+// to those artifacts.
+func (p *Policy) RuleFor(application, artifact, environment string, tenant map[string]string) Rule {
 	if p == nil {
 		return Rule{}
 	}
 	for _, r := range p.Rules {
-		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) && matchesTenant(r.Tenants, tenant) {
+		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) && matchesTenant(r.Tenants, tenant) &&
+			(len(r.Artifacts) == 0 || glob.Any(r.Artifacts, artifact)) {
 			return r
 		}
 	}
@@ -280,15 +287,18 @@ func (p *Policy) Windows(application, environment string, t time.Time) []WindowS
 // ActiveWindows returns the windows of ws active at t for the application and environment in
 // a region, in order (see FrozenIn for the region semantics).
 func ActiveWindows(ws []Window, application, environment, region string, t time.Time) []WindowStatus {
-	return ActiveWindowsFor(ws, application, environment, region, nil, t)
+	return ActiveWindowsFor(ws, application, "", environment, region, nil, t)
 }
 
-// ActiveWindowsFor is ActiveWindows for a deploy of a tenant (labels: tags plus name; nil
-// without tenant): a window with tenants applies only to the matching tenants.
-func ActiveWindowsFor(ws []Window, application, environment, region string, tenant map[string]string, t time.Time) []WindowStatus {
+// ActiveWindowsFor is ActiveWindows for an artifact and a deploy of a tenant (labels: tags
+// plus name; nil without tenant): a window with tenants applies only to the matching tenants,
+// one with artifacts only to those artifacts (and when the artifact is unknown: a partial
+// freeze still freezes the environment for whoever does not say which artifact).
+func ActiveWindowsFor(ws []Window, application, artifact, environment, region string, tenant map[string]string, t time.Time) []WindowStatus {
 	var out []WindowStatus
 	for _, w := range ws {
-		if !w.applies(application, environment) || !matchesTenant(w.Tenants, tenant) {
+		if !w.applies(application, environment) || !matchesTenant(w.Tenants, tenant) ||
+			(artifact != "" && len(w.Artifacts) > 0 && !glob.Any(w.Artifacts, artifact)) {
 			continue
 		}
 		if len(w.Regions) > 0 && (region == "" || !glob.Any(w.Regions, region)) {
@@ -326,7 +336,7 @@ func (w Window) applies(application, environment string) bool {
 
 // status computes the occurrence active at instant t or, if none, the next one.
 func (w Window) status(t time.Time) WindowStatus {
-	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions, Tenants: w.Tenants,
+	st := WindowStatus{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments, Regions: w.Regions, Tenants: w.Tenants, Artifacts: w.Artifacts,
 		Hard: w.Hard, Dynamic: w.CreatedBy != "", CreatedBy: w.CreatedBy}
 	if w.schedule == nil {
 		st.Start, st.End = w.From, w.To

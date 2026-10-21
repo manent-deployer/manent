@@ -11,7 +11,7 @@ import { useI18n } from "@/i18n/i18n";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { can, canInApp } from "@/lib/permissions";
 
-type Open = { kind: "promote" | "rollback"; application: string; environment: string; tenant?: string } | null;
+type Open = { kind: "promote" | "rollback"; application: string; artifact?: string; environment: string; tenant?: string } | null;
 
 // Targets is the state read from the targets by the reconciliation: the hosts changed outside
 // manent are listed, the others only counted.
@@ -101,7 +101,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canPromote && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "promote", application: e.application, environment: e.environment, tenant: e.tenant })}
+              onClick={() => onAction({ kind: "promote", application: e.application, artifact: e.artifact, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-accent hover:text-accent"
             >
               <Rocket className="h-3.5 w-3.5" aria-hidden />
@@ -111,7 +111,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canRollback && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "rollback", application: e.application, environment: e.environment, tenant: e.tenant })}
+              onClick={() => onAction({ kind: "rollback", application: e.application, artifact: e.artifact, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-warn hover:text-warn"
             >
               <Undo2 className="h-3.5 w-3.5" aria-hidden />
@@ -134,20 +134,23 @@ export function InventoryPage() {
     queryFn: async () => unwrap(await api.GET("/api/v1/inventory")).inventory,
     refetchInterval: 30_000,
   });
-  // One row per application and tenant: the matrix tenant × environment of every application.
-  const { rows, envs, byKey, tenanted } = useMemo(() => {
+  // One row per application, artifact (deploy.identity: artifact) and tenant: the matrix
+  // environment × artifact and tenant of every application.
+  const { rows, envs, byKey, tenanted, byArtifact } = useMemo(() => {
     const entries = q.data ?? [];
     const envs = [...new Set(entries.map((e) => e.environment))].sort(envOrder);
-    const keys = [...new Set(entries.map((e) => `${e.application}\u0000${e.tenant ?? ""}`))].sort();
+    const keys = [...new Set(entries.map((e) => `${e.application}\u0000${e.artifact ?? ""}\u0000${e.tenant ?? ""}`))].sort();
     const rows = keys.map((k) => {
-      const [application = "", tenant = ""] = k.split("\u0000");
-      return { application, tenant };
+      const [application = "", artifact = "", tenant = ""] = k.split("\u0000");
+      return { application, artifact, tenant };
     });
-    const byKey = new Map(entries.map((e) => [`${e.application}/${e.environment}/${e.tenant ?? ""}`, e]));
-    return { rows, envs, byKey, tenanted: entries.some((e) => e.tenant) };
+    const byKey = new Map(entries.map((e) => [`${e.application}/${e.artifact ?? ""}/${e.environment}/${e.tenant ?? ""}`, e]));
+    return { rows, envs, byKey, tenanted: entries.some((e) => e.tenant), byArtifact: entries.some((e) => e.artifact) };
   }, [q.data]);
   const needle = filter.trim().toLowerCase();
-  const shown = rows.filter((r) => r.application.toLowerCase().includes(needle) || r.tenant.toLowerCase().includes(needle));
+  const shown = rows.filter(
+    (r) => r.application.toLowerCase().includes(needle) || r.artifact.toLowerCase().includes(needle) || r.tenant.toLowerCase().includes(needle),
+  );
 
   return (
     <>
@@ -172,6 +175,11 @@ export function InventoryPage() {
                 <th scope="col" className="px-4 py-3 font-medium">
                   {t("inventory.application")}
                 </th>
+                {byArtifact && (
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    {t("inventory.artifact")}
+                  </th>
+                )}
                 {tenanted && (
                   <th scope="col" className="px-4 py-3 font-medium">
                     {t("inventory.tenant")}
@@ -185,15 +193,16 @@ export function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {shown.map(({ application: app, tenant }) => (
-                <tr key={`${app}/${tenant}`} className="border-b border-border/40 align-top last:border-0">
+              {shown.map(({ application: app, artifact, tenant }) => (
+                <tr key={`${app}/${artifact}/${tenant}`} className="border-b border-border/40 align-top last:border-0">
                   <th scope="row" className="px-4 py-3 font-medium">
                     {app}
                   </th>
+                  {byArtifact && <td className="px-4 py-3 font-mono text-xs">{artifact || "—"}</td>}
                   {tenanted && <td className="px-4 py-3 font-mono text-xs">{tenant || "—"}</td>}
                   {envs.map((env) => (
                     <td key={env} className="px-4 py-3">
-                      <Cell e={byKey.get(`${app}/${env}/${tenant}`)} onAction={setOpen} />
+                      <Cell e={byKey.get(`${app}/${artifact}/${env}/${tenant}`)} onAction={setOpen} />
                     </td>
                   ))}
                 </tr>
@@ -203,10 +212,10 @@ export function InventoryPage() {
         </div>
       )}
       {open?.kind === "promote" && (
-        <PromoteDialog application={open.application} from={open.environment} tenant={open.tenant} environments={envs} onClose={() => setOpen(null)} />
+        <PromoteDialog application={open.application} artifact={open.artifact} from={open.environment} tenant={open.tenant} environments={envs} onClose={() => setOpen(null)} />
       )}
       {open?.kind === "rollback" && (
-        <RollbackDialog application={open.application} environment={open.environment} tenant={open.tenant} onClose={() => setOpen(null)} />
+        <RollbackDialog application={open.application} artifact={open.artifact} environment={open.environment} tenant={open.tenant} onClose={() => setOpen(null)} />
       )}
     </>
   );

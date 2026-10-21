@@ -218,3 +218,30 @@ func TestRegoleEFreezePerTenant(t *testing.T) {
 		t.Error("selettore non valido accettato")
 	}
 }
+
+func TestRegoleEFreezePerArtefatto(t *testing.T) {
+	now := time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC)
+	p, err := New([]Rule{
+		{Name: "migrazioni", Applications: []string{"*"}, Environments: []string{"prod"}, Artifacts: []string{"*-db"}, Approvals: Approvals{Required: 2}},
+		{Name: "prod", Applications: []string{"*"}, Environments: []string{"prod"}, Approvals: Approvals{Required: 1}},
+	}, []Window{{Name: "web-freeze", Applications: []string{"*"}, Environments: []string{"prod"}, Artifacts: []string{"*-web"}, From: now.Add(-time.Hour), To: now.Add(time.Hour)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := Input{Phase: PhaseSubmit, Now: now, Application: "shop", Environment: "prod", Artifact: InputArtifact{Name: "shop-db"}}
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "migrazioni" || d.Freeze != nil {
+		t.Errorf("artefatto delle migrazioni: %+v", d)
+	}
+	in.Artifact.Name = "shop-web"
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "prod" || d.Freeze == nil {
+		t.Errorf("artefatto web: atteso il freeze, %+v", d)
+	}
+	in.Artifact.Name = "shop-api"
+	if d, _ := p.Evaluate(context.Background(), in); d.Rule != "prod" || d.Freeze != nil {
+		t.Errorf("artefatto api: %+v", d)
+	}
+	// Without an artifact a partial freeze still applies.
+	if p.Frozen("shop", "prod", now) == nil {
+		t.Error("senza artefatto il freeze parziale vale")
+	}
+}

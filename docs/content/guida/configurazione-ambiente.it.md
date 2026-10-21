@@ -87,6 +87,8 @@ Si configura in `manent.yml`, sezione `envconfig`:
 | `required` | `true`: il deploy fallisce se per l'ambiente non esiste configurazione. `false`: si usa solo il descrittore. |
 | `max_retries` | Tentativi aggiuntivi se il provider non risponde (es. Consul non raggiungibile). |
 
+I template (`consul.key`, `file.path`) accettano anche `{artifact}`, l'`artifact.name` del descrittore: un documento per artefatto di un'applicazione, con `consul.legacy_key`/`file.legacy_path` come fallback durante la transizione. Vedi [Applicazioni con più artefatti](artefatti.md).
+
 ## Quando viene letta
 
 La configurazione viene letta all'inizio di ogni deploy, nello step `config`. Ne seguono due conseguenze:

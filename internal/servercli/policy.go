@@ -279,12 +279,13 @@ type AdminTenantsAdoptCmd struct {
 	From        string `long:"environment" required:"true" description:"ambiente per cliente di oggi, es. prod-acme"`
 	To          string `long:"as" required:"true" description:"ambiente con i tenant, es. prod"`
 	Tenant      string `long:"tenant" required:"true" description:"tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"artefatto (deploy.identity: artifact; obbligatorio se l'ambiente ne ha più di uno)"`
 }
 
 // Execute implements flags.Commander.
 func (c *AdminTenantsAdoptCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, a *app.App, _ *engine.Admin) error {
-		sub, err := a.Engine().Adopt(ctx, engine.AdoptRequest{Application: c.Application, From: c.From, To: c.To, Tenant: c.Tenant})
+		sub, err := a.Engine().Adopt(ctx, engine.AdoptRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Tenant: c.Tenant})
 		recordBreakGlass(ctx, a, "tenants.adopt", fmt.Sprintf("%s: %s -> %s/%s", c.Application, c.From, c.To, c.Tenant), err)
 		if err != nil {
 			return err
