@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/joeg-ita/manent/internal/cliutil"
@@ -63,6 +65,15 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 			if strings.ContainsAny(l, "\r\n") {
 				return fmt.Errorf("value cannot be written to %s: %q", r.outputs, l)
 			}
+		}
+		// The exports of the deploy, for the next jobs of the pipeline.
+		for _, name := range slices.Sorted(maps.Keys(st.Exports)) {
+			v := st.Exports[name]
+			if strings.ContainsAny(v, "\r\n") {
+				fmt.Fprintf(os.Stderr, "attenzione: export %s su più righe, non scritto in %s\n", name, r.outputs)
+				continue
+			}
+			lines = append(lines, "export_"+name+"="+v)
 		}
 		errs = append(errs, appendFile(r.outputs, strings.Join(lines, "\n")+"\n"))
 	}

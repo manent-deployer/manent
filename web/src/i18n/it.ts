@@ -129,6 +129,8 @@ export const it: Record<MessageKey, string> = {
   "detail.after.expires": "Attende fino a {time}",
   "detail.after.satisfied": "Tutte le dipendenze sono riuscite.",
   "detail.after.caption": "Deploy da cui dipende questo deploy",
+  "detail.exports": "Export",
+  "detail.exports.lead": "I deploy che importano questo leggono questi valori (imports).",
   "detail.approval.required": "{done} approvazioni su {required}",
   "detail.approval.expires": "Scade {time}",
   "detail.approval.change.pending": "Change {number} in attesa di approvazione nel sistema ITSM",

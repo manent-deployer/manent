@@ -175,8 +175,9 @@ func (w *Worker) reconcileEnv(ctx context.Context, ie InventoryEntry) (service.T
 	// The environment configuration valid now: targets may have been added or removed since the
 	// deploy.
 	d := req.Descriptor
-	if w.resolver != nil {
-		eff, _, err := w.resolver.Resolve(ctx, d)
+	if w.resolver != nil || d.HasImports() {
+		// Imports too are read again: the targets of a release in service may have changed.
+		eff, _, err := w.reader.importResolve(w.resolver)(ctx, d)
 		if err != nil {
 			st.CheckedAt, st.Error = time.Now().UTC(), "environment configuration: "+err.Error()
 			return st, true

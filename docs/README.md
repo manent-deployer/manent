@@ -14,7 +14,7 @@ docs/
 
 | Sezione | Directory | Contenuto |
 |---|---|---|
-| Inizia | `tutorial/`, `avvio-rapido` | Tutorial pratici in sequenza (1–7), ognuno riparte dal precedente e usa comandi verificati. |
+| Inizia | `tutorial/`, `avvio-rapido` | Tutorial pratici in sequenza (1–8), ognuno riparte dal precedente e usa comandi verificati. |
 | Concetti | `concetti/` | Panoramica, architettura, tipologie di deploy, ciclo di vita, modello di configurazione, pipeline, glossario. |
 | Guide | `guida/` | Una funzionalità per pagina, raggruppate in Rilasciare, Rilasci progressivi, Governance, Estendere. |
 | Integrazioni | `integrazioni/` | Una guida passo passo per strumento esterno (cosa preparare, cosa configurare, come verificare); i riferimenti delle chiavi restano in `guida/integrazioni` e `guida/ci-iac`. |

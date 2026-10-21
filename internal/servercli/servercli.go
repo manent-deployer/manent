@@ -153,7 +153,12 @@ func (c *ValidateCmd) Execute([]string) error {
 		out["deploy"] = eff.Deploy
 		out["secrets"] = names
 		out["rollback"] = eff.Rollback
-		if eff.Rollout != nil {
+		if eff.HasImports() {
+			// The exports of other deploys are read from the database when the deploy starts.
+			out["imports"] = map[string]any{"imports": eff.Imports, "targetsFrom": eff.Deploy.TargetsFrom, "paramsFrom": eff.Deploy.ParamsFrom,
+				"note": "risolti all'avvio del deploy: 'manent validate' verso il server li legge"}
+		}
+		if eff.Rollout != nil && len(eff.Deploy.Targets) > 0 {
 			p, err := rollout.Build(eff.Deploy.Targets, eff.Rollout)
 			if err != nil {
 				return fmt.Errorf("rollout: %w", err)

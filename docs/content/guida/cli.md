@@ -59,6 +59,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--timeout` | Maximum wait (e.g. `30m`). When it expires the command exits, but the deploy continues. |
 | `--dry-run` | Runs the deploy as a [simulation](dry-run.md). |
 | `--after <id>` | Starts the deploy only after the deploy `<id>` has succeeded (repeatable): see [Deploy chains](catene.md). |
+| `--import <name>=<id>` | Reads the exports of the deploy `<id>` as the import `<name>` of the descriptor and adds `<id>` to `after` (repeatable): see [Exports and imports](catene.md#export-import). |
 | `--id`, `--version`, `--source`, `--sha256` | Replace the ID and the artifact fields of the descriptor (the pipeline gives the version). |
 | `--outputs <file>`, `--summary <file>`, `--ci` | `key=value` outcome and Markdown summary for CI: see [CI and infrastructure as code](ci-iac.md). |
 

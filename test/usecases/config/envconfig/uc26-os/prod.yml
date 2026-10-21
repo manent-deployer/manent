@@ -1,0 +1,11 @@
+# UC26: configuration of the VMs created by uc26-infra. No targets and no dest_dir: they come
+# from the exports of the deploy given in the descriptor (imports with deployment).
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+params:
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}

@@ -763,6 +763,14 @@ export interface components {
             after?: string[];
             /** @description Attesa massima delle dipendenze (default 24h) */
             afterTimeout?: string;
+            /** @description Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom) */
+            imports?: {
+                [key: string]: components["schemas"]["Import"];
+            };
+            /** @description Output del deploy che altri deploy possono importare */
+            exports?: {
+                [key: string]: components["schemas"]["Export"];
+            };
             artifact: {
                 type: string;
                 name: string;
@@ -772,6 +780,23 @@ export interface components {
             };
         } & {
             [key: string]: unknown;
+        };
+        /** @description Un deploy dato (deployment, tra le dipendenze after) o la release in esercizio di un'applicazione (current) */
+        Import: {
+            deployment?: string;
+            current?: {
+                application: string;
+                /** @description Default l'ambiente del deploy che importa */
+                environment?: string;
+            };
+        };
+        Export: {
+            /** @description "<step>.<chiave>": output del plugin (step deploy) o di uno step personalizzato */
+            from: string;
+            /** @enum {string} */
+            format?: "string" | "targets";
+            /** @description Espressione regolare ancorata (obbligatoria con format string) */
+            pattern?: string;
         };
         /** @description Sezione deploy di un descrittore (plugin, target, parametri). */
         DeployTargets: {
@@ -889,6 +914,10 @@ export interface components {
             steps: components["schemas"]["StepResult"][];
             rollout?: components["schemas"]["RolloutState"];
             change?: components["schemas"]["ChangeTicket"];
+            /** @description Export del deploy riuscito */
+            exports?: {
+                [key: string]: string;
+            };
         };
         Status: {
             id: string;
@@ -936,6 +965,10 @@ export interface components {
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
+            /** @description Export del deploy riuscito */
+            exports?: {
+                [key: string]: string;
+            };
             result?: components["schemas"]["Result"];
             error?: string;
         };

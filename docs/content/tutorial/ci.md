@@ -191,4 +191,5 @@ Run it in the merge request pipeline of the configuration repository: a wave tha
 ## Next
 
 - Keep the release in service as code with [Terraform](../integrazioni/terraform.md).
-- [Tutorial 7](produzione.md): run manent itself as a production service.
+- [Tutorial 7](catene.md): chain an infrastructure deploy and a configuration deploy with exports and imports.
+- [Tutorial 8](produzione.md): run manent itself as a production service.

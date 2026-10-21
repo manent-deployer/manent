@@ -352,3 +352,57 @@ func TestMergeTraffic(t *testing.T) {
 		t.Errorf("parse: %v", err)
 	}
 }
+
+func TestMergeImportEExport(t *testing.T) {
+	current := map[string]descriptor.Import{"infra": {Current: &descriptor.ImportCurrent{Application: "infra"}}}
+	cfg := EnvConfig{
+		Plugin:      "ansible",
+		Imports:     current,
+		TargetsFrom: []descriptor.ExportRef{{Import: "infra", Export: "vms"}},
+		ParamsFrom:  map[string]descriptor.ExportRef{"db_host": {Import: "infra", Export: "db"}},
+		Exports:     map[string]descriptor.Export{"fqdn": {From: "deploy.fqdn", Pattern: `[a-z.]+`}},
+	}
+	eff, err := Merge(baseDescriptor(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Targets are taken from the exports when the deploy starts: the merge only carries the references.
+	if len(eff.Deploy.Targets) != 0 || len(eff.Deploy.TargetsFrom) != 1 || eff.Deploy.ParamsFrom["db_host"].Export != "db" ||
+		eff.Imports["infra"].Current == nil || eff.Exports["fqdn"].From != "deploy.fqdn" {
+		t.Errorf("descrittore effettivo: %+v", eff)
+	}
+
+	tests := map[string]struct {
+		edit func(*descriptor.Descriptor, *EnvConfig)
+		want string
+	}{
+		"target del descrittore":    {func(d *descriptor.Descriptor, _ *EnvConfig) { d.Deploy.Targets = []descriptor.Target{{Host: "h"}} }, "targets_from"},
+		"parametro del descrittore": {func(d *descriptor.Descriptor, _ *EnvConfig) { d.Deploy.Params = map[string]string{"db_host": "x"} }, "params_from"},
+		"import di un deploy": {func(_ *descriptor.Descriptor, c *EnvConfig) {
+			c.Imports = map[string]descriptor.Import{"infra": {Deployment: "infra-1"}}
+		}, "only import releases in service"},
+		"export in conflitto": {func(d *descriptor.Descriptor, _ *EnvConfig) {
+			d.Exports = map[string]descriptor.Export{"fqdn": {From: "deploy.altro", Pattern: "x"}}
+		}, "exports.fqdn: defined differently"},
+		"targetsFrom con target statici": {func(d *descriptor.Descriptor, c *EnvConfig) {
+			c.Imports, c.TargetsFrom, c.ParamsFrom = nil, nil, nil
+			c.Targets = []descriptor.Target{{Host: "h"}}
+			d.Imports = current
+			d.Deploy.TargetsFrom = []descriptor.ExportRef{{Import: "infra", Export: "vms"}}
+		}, "already defines the targets"},
+		"import non usato": {func(_ *descriptor.Descriptor, c *EnvConfig) { c.TargetsFrom, c.ParamsFrom = nil, nil }, "imports.infra is not used"},
+	}
+	for name, tc := range tests {
+		d, c := baseDescriptor(), cfg
+		tc.edit(&d, &c)
+		if _, err := Merge(d, c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+
+	// The YAML of the environment configuration uses snake_case keys.
+	parsed, err := Parse([]byte("plugin: ansible\nimports:\n  infra: {current: {application: infra}}\ntargets_from:\n  - {import: infra, export: vms}\nparams_from:\n  db_host: {import: infra, export: db}\nexports:\n  fqdn: {from: deploy.fqdn, pattern: '[a-z.]+'}\n"))
+	if err != nil || parsed.Imports["infra"].Current.Application != "infra" || parsed.TargetsFrom[0].Export != "vms" || parsed.Exports["fqdn"].Pattern != "[a-z.]+" {
+		t.Errorf("parsing: %+v %v", parsed, err)
+	}
+}

@@ -259,3 +259,18 @@ func TestActivationCompensate(t *testing.T) {
 		t.Fatalf("compensazione inattesa: %v %v", out, err)
 	}
 }
+
+func TestDeployOutputDelPlugin(t *testing.T) {
+	out, err := deployOutput("infra", &plugin.Result{Plugin: "infra", Outputs: map[string]string{"vms": `["10.0.0.1"]`, "db.host": "db1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["out.vms"] != `["10.0.0.1"]` || out["out.db.host"] != "db1" || strings.Contains(out["result"], "outputs") {
+		t.Errorf("output dello step: %+v", out)
+	}
+	for _, bad := range []map[string]string{{"": "x"}, {"a b": "x"}, {"k": strings.Repeat("x", plugin.MaxOutputBytes+1)}} {
+		if _, err := deployOutput("infra", &plugin.Result{Outputs: bad}); err == nil || !strings.Contains(err.Error(), "invalid output") {
+			t.Errorf("output non valido %v: %v", bad, err)
+		}
+	}
+}

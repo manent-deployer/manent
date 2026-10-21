@@ -72,6 +72,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 		}
 		external := d.After
 		d.After = append(after, d.After...)
+		d.Imports = releaseImports(d.Imports, ids)
 		if err := d.Validate(); err != nil {
 			return nil, fmt.Errorf("%w: deploy %s: %w", ErrInvalidRequest, rd.Name, err)
 		}

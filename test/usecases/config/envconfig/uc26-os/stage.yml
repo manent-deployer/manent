@@ -1,0 +1,17 @@
+# UC26: targets and release directory from the exports of the release in service of
+# uc26-infra in prod (imports with current), read again at every deploy.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+imports:
+  infra: {current: {application: uc26-infra, environment: prod}}
+targets_from:
+  - {import: infra, export: vms}
+params_from:
+  dest_dir: {import: infra, export: dest}
+params:
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}

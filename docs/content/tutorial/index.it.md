@@ -57,7 +57,15 @@ Tutorial brevi e pratici, uno dopo l'altro. Ognuno riparte da dove è finito il 
 
     *20 minuti · GitHub o GitLab*
 
--   :material-numeric-7-circle-outline:{ .lg .middle } **[manent in produzione](produzione.md)**
+-   :material-numeric-7-circle-outline:{ .lg .middle } **[Infrastruttura e configurazione in catena](catene.md)**
+
+    ---
+
+    Un deploy dell'infrastruttura crea le VM ed esporta i loro indirizzi, un deploy della configurazione li importa come target: in catena con `--import`, poi dalla release in esercizio, con un export sbagliato che ferma la catena.
+
+    *25 minuti · prosegue il tutorial 1*
+
+-   :material-numeric-8-circle-outline:{ .lg .middle } **[manent in produzione](produzione.md)**
 
     ---
 

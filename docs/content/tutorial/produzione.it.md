@@ -1,4 +1,4 @@
-# 7. manent in produzione
+# 8. manent in produzione
 
 !!! abstract "In questo tutorial"
     Porti manent da un singolo processo `serve` su SQLite a un servizio di piattaforma: Postgres, uno strato API e più worker su Kubernetes, accesso tramite il tuo identity provider, TLS, metriche e allarmi, log al SIEM, audit e backup. Ogni passo rimanda alla pagina di riferimento con tutte le opzioni.

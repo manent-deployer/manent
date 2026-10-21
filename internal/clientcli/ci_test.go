@@ -105,3 +105,45 @@ func TestDeployCIRiconosceLaPiattaforma(t *testing.T) {
 		t.Errorf("senza CI: %v", err)
 	}
 }
+
+func TestDeployConImportEdExport(t *testing.T) {
+	var got descriptor.Descriptor
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/deployments":
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(service.Submission{ID: got.ID, State: service.StateEnqueued})
+		case r.URL.Path == "/api/v1/deployments/"+got.ID:
+			_ = json.NewEncoder(w).Encode(service.Status{ID: got.ID, State: service.StateSuccess,
+				Exports: map[string]string{"fqdn": "web1.internal", "notes": "riga1\nriga2"}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	desc := filepath.Join(dir, "deploy.yml")
+	// targetsFrom uses an import that only --import declares: the descriptor is validated after the options.
+	body := "apiVersion: manent/v1\napplication: os\nenvironment: prod\nartifact: {type: ansible, name: os, version: \"1.0.0\", source: \"file:///srv/os.tgz\"}\n" +
+		"deploy:\n  targetsFrom: [{import: infra, export: vms}]\n"
+	if err := os.WriteFile(desc, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "outputs")
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("MANENT_TOKEN", "t")
+	if err := Run([]string{"--server", srv.URL, "deploy", "-f", desc, "--no-wait", "--id", "os-7", "--import", "infra=infra-42", "--outputs", out}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Imports["infra"].Deployment != "infra-42" || len(got.After) != 1 || got.After[0] != "infra-42" {
+		t.Errorf("descrittore inviato: %+v %+v", got.Imports, got.After)
+	}
+	raw, _ := os.ReadFile(out)
+	if !strings.Contains(string(raw), "export_fqdn=web1.internal\n") || strings.Contains(string(raw), "export_notes") {
+		t.Errorf("export negli esiti:\n%s", raw)
+	}
+	if err := Run([]string{"--server", srv.URL, "deploy", "-f", desc, "--no-wait", "--import", "senza-id"}); err == nil || !strings.Contains(err.Error(), "expected NAME=ID") {
+		t.Errorf("--import non valido: %v", err)
+	}
+}

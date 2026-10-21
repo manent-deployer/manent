@@ -57,7 +57,15 @@ Short, hands-on tutorials that build on each other. Each one starts from where t
 
     *20 minutes · GitHub or GitLab*
 
--   :material-numeric-7-circle-outline:{ .lg .middle } **[Run manent in production](produzione.md)**
+-   :material-numeric-7-circle-outline:{ .lg .middle } **[Infrastructure and configuration in a chain](catene.md)**
+
+    ---
+
+    An infrastructure deploy creates the VMs and exports their addresses, a configuration deploy imports them as targets: chained with `--import`, then from the release in service, with a broken export that stops the chain.
+
+    *25 minutes · continues tutorial 1*
+
+-   :material-numeric-8-circle-outline:{ .lg .middle } **[Run manent in production](produzione.md)**
 
     ---
 

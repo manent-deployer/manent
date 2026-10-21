@@ -47,10 +47,13 @@ type Request struct {
 type Result struct {
 	Plugin  string
 	Targets []TargetResult // Host, Status, Details
+	Outputs map[string]string
 }
 ```
 
 `Status` vale `plugin.StatusDeployed` o `plugin.StatusFailed` (in dry-run `plugin.StatusReady`, nel rollback `plugin.StatusRolledBack`). `Details` raccoglie informazioni utili per ogni target, ad esempio il percorso remoto. Il risultato viene serializzato in JSON e salvato nell'output dello step `deploy`.
+
+`Outputs` sono valori prodotti dal deploy che altri deploy possono importare, per esempio gli host delle VM create da un plugin di provisioning (una lista JSON) o l'indirizzo di un database. Sono salvati nell'output dello step `deploy` come `out.<chiave>` e diventano export solo se il descrittore o la configurazione di ambiente li dichiarano (`exports: {vms: {from: deploy.vms, format: targets}}`), verificati con un formato e un pattern: vedi [Export e import](../guida/catene.md#export-import). Chiavi: lettere, cifre, `_`, `-`, `.` (al più 64 chiavi, valori fino a 64 KiB). Come il resto del risultato sono persistiti: non metterci mai segreti. I plugin esterni li restituiscono nel campo `outputs` di `DeployResponse`.
 
 ## Regole
 

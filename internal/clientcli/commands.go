@@ -28,6 +28,7 @@ type DeployCmd struct {
 	Timeout     time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
 	DryRun      bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
 	After       []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
+	Import      []string      `long:"import" value-name:"NOME=ID" description:"legge gli export del deploy ID come import NOME del descrittore (ripetibile); aggiunge ID ad after"`
 	Tenant      string        `long:"tenant" description:"tenant del deploy, al posto di quello del descrittore"`
 	Tenants     string        `long:"tenants" description:"rilascio a più tenant scelti con un selettore sui tag (es. tier=gold) o sul nome (name in (acme, globex))"`
 	MaxParallel int           `long:"max-parallel" description:"deploy di tenant contemporanei in un rilascio multi-tenant (default 5)"`
@@ -68,11 +69,15 @@ func (o ArtifactOverrides) apply(d *descriptor.Descriptor) bool {
 
 // Execute implements flags.Commander.
 func (c *DeployCmd) Execute([]string) error {
-	d, err := descriptor.LoadYAMLFile(c.File)
+	data, err := os.ReadFile(c.File)
 	if err != nil {
 		return err
 	}
-	tenants := c.Tenant != "" || c.Tenants != "" || c.MaxParallel > 0
+	// Validated after the options: --import can declare the imports the descriptor uses.
+	d, err := descriptor.DecodeYAML(data)
+	if err != nil {
+		return err
+	}
 	if c.Tenant != "" {
 		d.Tenant, d.Tenants = c.Tenant, nil
 	}
@@ -85,12 +90,18 @@ func (c *DeployCmd) Execute([]string) error {
 		}
 		d.Tenants.MaxParallel = c.MaxParallel
 	}
-	if c.ArtifactOverrides.apply(d) || c.DryRun || len(c.After) > 0 || tenants {
-		d.DryRun = d.DryRun || c.DryRun
-		d.After = append(d.After, c.After...)
-		if err := d.Validate(); err != nil {
-			return err
+	if err := applyImports(d, c.Import); err != nil {
+		return err
+	}
+	c.ArtifactOverrides.apply(d)
+	d.DryRun = d.DryRun || c.DryRun
+	for _, id := range c.After {
+		if !slices.Contains(d.After, id) {
+			d.After = append(d.After, id)
 		}
+	}
+	if err := d.Validate(); err != nil {
+		return err
 	}
 	rep, err := c.report()
 	if err != nil {
@@ -105,6 +116,28 @@ func (c *DeployCmd) Execute([]string) error {
 		// Also on failure: the pipeline reads the state of the deploy it started.
 		return errors.Join(ferr, rep.write(ctx, svc, d, sub))
 	})
+}
+
+// applyImports binds the imports of the descriptor to given deploys ("name=id"): the import
+// becomes a deployment import and the deploy is added to the dependencies, so it has succeeded
+// when this one starts. The CI knows the ID of the producer only at run time.
+func applyImports(d *descriptor.Descriptor, specs []string) error {
+	for _, spec := range specs {
+		name, id, ok := strings.Cut(spec, "=")
+		if !ok || name == "" || id == "" {
+			return fmt.Errorf("--import %q: expected NAME=ID", spec)
+		}
+		imports := maps.Clone(d.Imports)
+		if imports == nil {
+			imports = map[string]descriptor.Import{}
+		}
+		imports[name] = descriptor.Import{Deployment: id}
+		d.Imports = imports
+		if !slices.Contains(d.After, id) {
+			d.After = append(d.After, id)
+		}
+	}
+	return nil
 }
 
 // ValidateCmd checks the descriptor on the server, as at submission but without starting the

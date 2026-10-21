@@ -403,9 +403,9 @@ func (e *Engine) ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	v, eff, err := e.inspectWith(ctx, d, func(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
+	v, eff, err := e.inspectWith(ctx, d, e.withImports(func(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
 		return cr.ResolveWith(ctx, d, []byte(c.Config))
-	})
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -441,6 +441,7 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 	}
 	d := req.Descriptor
 	d.ID, d.Schedule, d.After, d.AfterTimeout, d.DryRun = "", nil, nil, "", false
+	d.DropDeploymentImports()
 	return &d, nil
 }
 
@@ -448,9 +449,9 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 // makes the request invalid; an unreachable environment configuration only produces a
 // warning, and the returned effective descriptor is nil.
 func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Validation, *descriptor.Descriptor, error) {
-	var resolve func(context.Context, descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)
-	if e.resolver != nil {
-		resolve = e.resolver.Resolve
+	var resolve resolveFunc
+	if e.resolver != nil || d.HasImports() {
+		resolve = e.importResolve(e.resolver)
 	}
 	return e.inspectWith(ctx, d, resolve)
 }
@@ -976,6 +977,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256),
 		Kind: attr(st, attrKind), Source: attr(st, attrSource), DryRun: attr(st, attrDryRun) == "true",
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
+		Exports: exportsAttr(attr(st, attrExports)),
 	}
 	if s.Application == "" {
 		// Deploys enqueued before attributes existed: the partition key is "<application>/<environment>".

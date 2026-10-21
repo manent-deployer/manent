@@ -102,7 +102,8 @@ plugins:
             3. Promotion and approvals: 3. Promozione e approvazioni
             5. Progressive rollout: 5. Rilascio progressivo
             6. Deploy from CI: 6. Deploy dalla CI
-            7. manent in production: 7. manent in produzione
+            7. Infrastructure and configuration: 7. Infrastruttura e configurazione
+            8. manent in production: 8. manent in produzione
             Concepts: Concetti
             Overview: Panoramica
             Architecture: Architettura
@@ -202,7 +203,8 @@ nav:
       - 4. Kubernetes: tutorial/kubernetes.md
       - 5. Progressive rollout: tutorial/rilascio-progressivo.md
       - 6. Deploy from CI: tutorial/ci.md
-      - 7. manent in production: tutorial/produzione.md
+      - 7. Infrastructure and configuration: tutorial/catene.md
+      - 8. manent in production: tutorial/produzione.md
   - Concepts:
       - Overview: concetti/panoramica.md
       - Architecture: concetti/architettura.md

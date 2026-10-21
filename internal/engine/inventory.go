@@ -243,8 +243,10 @@ func (e *Engine) loadRequest(id string) (Request, error) {
 // applyRedeploy prepares the descriptor of the new deploy from the recorded one.
 func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 	d.ID, d.DryRun, d.FreezeOverride, d.Schedule = r.ID, r.DryRun, r.FreezeOverride, nil
-	// The dependencies applied to the source deploy, already ended.
+	// The dependencies applied to the source deploy, already ended; so do the imports of given
+	// deploys: the targets come from the environment of the new deploy.
 	d.After, d.AfterTimeout = nil, ""
+	d.DropDeploymentImports()
 	if src.SHA256 != "" {
 		// Exactly the artifact already released is released: the qa step verifies it.
 		d.Artifact.SHA256 = src.SHA256

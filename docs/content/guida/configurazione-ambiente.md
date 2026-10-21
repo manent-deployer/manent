@@ -96,7 +96,7 @@ The configuration is read at the start of every deploy, in the `config` step. Tw
 
 The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/test`) and the revision (`revision`, Consul's `ModifyIndex`), so every deploy can be traced back to the exact configuration it used.
 
-## Merge rules
+## Merge rules { #regole-di-fusione }
 
 The environment configuration is **authoritative**: the descriptor can only add what is not defined there.
 
@@ -110,9 +110,11 @@ The environment configuration is **authoritative**: the descriptor can only add 
 | `rollout` | The environment's [wave rollout](ondate.md) strategy is authoritative: the descriptor can omit it or repeat it identically. |
 | `traffic` | Load balancer and router of the environment ([draining](svuotamento.md), [percentage rollouts](traffico.md)): only in the environment configuration, a descriptor that defines it is rejected. |
 | `tenancy`, `tenant_params` | Whether the environment wants a [tenant](tenant.md) and which parameters every tenant provides: between environment and descriptor comes the tenant layer, with its parameters, secrets and targets (label `tenant`). |
+| `imports`, `targets_from`, `params_from` | Targets and plugin parameters taken from the exports of the release in service of another application (only `current` imports), resolved when every deploy starts: see [Exports and imports](catene.md#export-import). With `targets_from` the descriptor cannot add its own targets; a parameter in `params_from` cannot also be set by the descriptor. |
+| `exports` | Outputs of the environment's deploys that other deploys can import; the descriptor can add others, the same name must have the same definition. |
 | `rollback` | `enabled`, `on` and `locator` follow the same rule: if defined in both they must match. This way an environment can enforce [rollback](rollback.md) without the descriptor being able to disable it. The artifact type's `allowed` limit still applies. |
 
-A conflicting value makes the deploy fail: it is never silently overwritten. After the merge there must be at least one target.
+A conflicting value makes the deploy fail: it is never silently overwritten. After the merge (and the imports) there must be at least one target.
 
 On top of these rules, `descriptor_policy` in `manent.yml` limits what the descriptor can add: for example it can forbid commands (`post_command`), secret references outside the application's scope and targets not defined by the environment. See [Security](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore).
 

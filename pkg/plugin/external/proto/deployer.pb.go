@@ -800,9 +800,11 @@ func (x *TargetResult) GetDetails() map[string]string {
 }
 
 type DeployResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Plugin        string                 `protobuf:"bytes,1,opt,name=plugin,proto3" json:"plugin,omitempty"`
-	Targets       []*TargetResult        `protobuf:"bytes,2,rep,name=targets,proto3" json:"targets,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Plugin  string                 `protobuf:"bytes,1,opt,name=plugin,proto3" json:"plugin,omitempty"`
+	Targets []*TargetResult        `protobuf:"bytes,2,rep,name=targets,proto3" json:"targets,omitempty"`
+	// Values produced by the deploy that other deploys can import (plugin.Result.Outputs).
+	Outputs       map[string]string `protobuf:"bytes,3,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -847,6 +849,13 @@ func (x *DeployResponse) GetPlugin() string {
 func (x *DeployResponse) GetTargets() []*TargetResult {
 	if x != nil {
 		return x.Targets
+	}
+	return nil
+}
+
+func (x *DeployResponse) GetOutputs() map[string]string {
+	if x != nil {
+		return x.Outputs
 	}
 	return nil
 }
@@ -1159,10 +1168,14 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\adetails\x18\x03 \x03(\v2+.manent.plugin.v1.TargetResult.DetailsEntryR\adetails\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"b\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe7\x01\n" +
 	"\x0eDeployResponse\x12\x16\n" +
 	"\x06plugin\x18\x01 \x01(\tR\x06plugin\x128\n" +
-	"\atargets\x18\x02 \x03(\v2\x1e.manent.plugin.v1.TargetResultR\atargets\"#\n" +
+	"\atargets\x18\x02 \x03(\v2\x1e.manent.plugin.v1.TargetResultR\atargets\x12G\n" +
+	"\aoutputs\x18\x03 \x03(\v2-.manent.plugin.v1.DeployResponse.OutputsEntryR\aoutputs\x1a:\n" +
+	"\fOutputsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"#\n" +
 	"\rSecretRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
 	"\x0eSecretResponse\x12\x14\n" +
@@ -1211,7 +1224,7 @@ func file_pkg_plugin_external_proto_deployer_proto_rawDescGZIP() []byte {
 	return file_pkg_plugin_external_proto_deployer_proto_rawDescData
 }
 
-var file_pkg_plugin_external_proto_deployer_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_pkg_plugin_external_proto_deployer_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_pkg_plugin_external_proto_deployer_proto_goTypes = []any{
 	(*Empty)(nil),                  // 0: manent.plugin.v1.Empty
 	(*ConfigureRequest)(nil),       // 1: manent.plugin.v1.ConfigureRequest
@@ -1238,7 +1251,8 @@ var file_pkg_plugin_external_proto_deployer_proto_goTypes = []any{
 	nil,                            // 22: manent.plugin.v1.StateResponse.StateEntry
 	nil,                            // 23: manent.plugin.v1.DetailsResponse.DetailsEntry
 	nil,                            // 24: manent.plugin.v1.TargetResult.DetailsEntry
-	nil,                            // 25: manent.plugin.v1.Release.DetailsEntry
+	nil,                            // 25: manent.plugin.v1.DeployResponse.OutputsEntry
+	nil,                            // 26: manent.plugin.v1.Release.DetailsEntry
 }
 var file_pkg_plugin_external_proto_deployer_proto_depIdxs = []int32{
 	5,  // 0: manent.plugin.v1.DeployRequest.artifact:type_name -> manent.plugin.v1.Artifact
@@ -1251,49 +1265,50 @@ var file_pkg_plugin_external_proto_deployer_proto_depIdxs = []int32{
 	23, // 7: manent.plugin.v1.DetailsResponse.details:type_name -> manent.plugin.v1.DetailsResponse.DetailsEntry
 	24, // 8: manent.plugin.v1.TargetResult.details:type_name -> manent.plugin.v1.TargetResult.DetailsEntry
 	13, // 9: manent.plugin.v1.DeployResponse.targets:type_name -> manent.plugin.v1.TargetResult
-	25, // 10: manent.plugin.v1.Release.details:type_name -> manent.plugin.v1.Release.DetailsEntry
-	17, // 11: manent.plugin.v1.CurrentReleaseResponse.release:type_name -> manent.plugin.v1.Release
-	7,  // 12: manent.plugin.v1.RollbackRequest.request:type_name -> manent.plugin.v1.DeployRequest
-	17, // 13: manent.plugin.v1.RollbackRequest.previous:type_name -> manent.plugin.v1.Release
-	1,  // 14: manent.plugin.v1.Deployer.Configure:input_type -> manent.plugin.v1.ConfigureRequest
-	3,  // 15: manent.plugin.v1.Deployer.Supports:input_type -> manent.plugin.v1.SupportsRequest
-	7,  // 16: manent.plugin.v1.Deployer.Validate:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 17: manent.plugin.v1.Deployer.Deploy:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 18: manent.plugin.v1.Deployer.DryRun:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 19: manent.plugin.v1.Deployer.CurrentRelease:input_type -> manent.plugin.v1.DeployRequest
-	19, // 20: manent.plugin.v1.Deployer.Rollback:input_type -> manent.plugin.v1.RollbackRequest
-	7,  // 21: manent.plugin.v1.Deployer.PrepareSlots:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 22: manent.plugin.v1.Deployer.DeployCandidate:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 23: manent.plugin.v1.Deployer.PromoteCandidate:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 24: manent.plugin.v1.Deployer.RevertCandidate:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 25: manent.plugin.v1.Deployer.RetirePrevious:input_type -> manent.plugin.v1.DeployRequest
-	10, // 26: manent.plugin.v1.Deployer.SetCandidateWeight:input_type -> manent.plugin.v1.WeightRequest
-	7,  // 27: manent.plugin.v1.Deployer.CandidateWeight:input_type -> manent.plugin.v1.DeployRequest
-	7,  // 28: manent.plugin.v1.Deployer.RouteTesters:input_type -> manent.plugin.v1.DeployRequest
-	10, // 29: manent.plugin.v1.Deployer.ScaleCandidate:input_type -> manent.plugin.v1.WeightRequest
-	15, // 30: manent.plugin.v1.Secrets.Secret:input_type -> manent.plugin.v1.SecretRequest
-	2,  // 31: manent.plugin.v1.Deployer.Configure:output_type -> manent.plugin.v1.ConfigureResponse
-	4,  // 32: manent.plugin.v1.Deployer.Supports:output_type -> manent.plugin.v1.SupportsResponse
-	0,  // 33: manent.plugin.v1.Deployer.Validate:output_type -> manent.plugin.v1.Empty
-	14, // 34: manent.plugin.v1.Deployer.Deploy:output_type -> manent.plugin.v1.DeployResponse
-	14, // 35: manent.plugin.v1.Deployer.DryRun:output_type -> manent.plugin.v1.DeployResponse
-	18, // 36: manent.plugin.v1.Deployer.CurrentRelease:output_type -> manent.plugin.v1.CurrentReleaseResponse
-	14, // 37: manent.plugin.v1.Deployer.Rollback:output_type -> manent.plugin.v1.DeployResponse
-	9,  // 38: manent.plugin.v1.Deployer.PrepareSlots:output_type -> manent.plugin.v1.StateResponse
-	14, // 39: manent.plugin.v1.Deployer.DeployCandidate:output_type -> manent.plugin.v1.DeployResponse
-	0,  // 40: manent.plugin.v1.Deployer.PromoteCandidate:output_type -> manent.plugin.v1.Empty
-	0,  // 41: manent.plugin.v1.Deployer.RevertCandidate:output_type -> manent.plugin.v1.Empty
-	0,  // 42: manent.plugin.v1.Deployer.RetirePrevious:output_type -> manent.plugin.v1.Empty
-	0,  // 43: manent.plugin.v1.Deployer.SetCandidateWeight:output_type -> manent.plugin.v1.Empty
-	11, // 44: manent.plugin.v1.Deployer.CandidateWeight:output_type -> manent.plugin.v1.WeightResponse
-	12, // 45: manent.plugin.v1.Deployer.RouteTesters:output_type -> manent.plugin.v1.DetailsResponse
-	0,  // 46: manent.plugin.v1.Deployer.ScaleCandidate:output_type -> manent.plugin.v1.Empty
-	16, // 47: manent.plugin.v1.Secrets.Secret:output_type -> manent.plugin.v1.SecretResponse
-	31, // [31:48] is the sub-list for method output_type
-	14, // [14:31] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	25, // 10: manent.plugin.v1.DeployResponse.outputs:type_name -> manent.plugin.v1.DeployResponse.OutputsEntry
+	26, // 11: manent.plugin.v1.Release.details:type_name -> manent.plugin.v1.Release.DetailsEntry
+	17, // 12: manent.plugin.v1.CurrentReleaseResponse.release:type_name -> manent.plugin.v1.Release
+	7,  // 13: manent.plugin.v1.RollbackRequest.request:type_name -> manent.plugin.v1.DeployRequest
+	17, // 14: manent.plugin.v1.RollbackRequest.previous:type_name -> manent.plugin.v1.Release
+	1,  // 15: manent.plugin.v1.Deployer.Configure:input_type -> manent.plugin.v1.ConfigureRequest
+	3,  // 16: manent.plugin.v1.Deployer.Supports:input_type -> manent.plugin.v1.SupportsRequest
+	7,  // 17: manent.plugin.v1.Deployer.Validate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 18: manent.plugin.v1.Deployer.Deploy:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 19: manent.plugin.v1.Deployer.DryRun:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 20: manent.plugin.v1.Deployer.CurrentRelease:input_type -> manent.plugin.v1.DeployRequest
+	19, // 21: manent.plugin.v1.Deployer.Rollback:input_type -> manent.plugin.v1.RollbackRequest
+	7,  // 22: manent.plugin.v1.Deployer.PrepareSlots:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 23: manent.plugin.v1.Deployer.DeployCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 24: manent.plugin.v1.Deployer.PromoteCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 25: manent.plugin.v1.Deployer.RevertCandidate:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 26: manent.plugin.v1.Deployer.RetirePrevious:input_type -> manent.plugin.v1.DeployRequest
+	10, // 27: manent.plugin.v1.Deployer.SetCandidateWeight:input_type -> manent.plugin.v1.WeightRequest
+	7,  // 28: manent.plugin.v1.Deployer.CandidateWeight:input_type -> manent.plugin.v1.DeployRequest
+	7,  // 29: manent.plugin.v1.Deployer.RouteTesters:input_type -> manent.plugin.v1.DeployRequest
+	10, // 30: manent.plugin.v1.Deployer.ScaleCandidate:input_type -> manent.plugin.v1.WeightRequest
+	15, // 31: manent.plugin.v1.Secrets.Secret:input_type -> manent.plugin.v1.SecretRequest
+	2,  // 32: manent.plugin.v1.Deployer.Configure:output_type -> manent.plugin.v1.ConfigureResponse
+	4,  // 33: manent.plugin.v1.Deployer.Supports:output_type -> manent.plugin.v1.SupportsResponse
+	0,  // 34: manent.plugin.v1.Deployer.Validate:output_type -> manent.plugin.v1.Empty
+	14, // 35: manent.plugin.v1.Deployer.Deploy:output_type -> manent.plugin.v1.DeployResponse
+	14, // 36: manent.plugin.v1.Deployer.DryRun:output_type -> manent.plugin.v1.DeployResponse
+	18, // 37: manent.plugin.v1.Deployer.CurrentRelease:output_type -> manent.plugin.v1.CurrentReleaseResponse
+	14, // 38: manent.plugin.v1.Deployer.Rollback:output_type -> manent.plugin.v1.DeployResponse
+	9,  // 39: manent.plugin.v1.Deployer.PrepareSlots:output_type -> manent.plugin.v1.StateResponse
+	14, // 40: manent.plugin.v1.Deployer.DeployCandidate:output_type -> manent.plugin.v1.DeployResponse
+	0,  // 41: manent.plugin.v1.Deployer.PromoteCandidate:output_type -> manent.plugin.v1.Empty
+	0,  // 42: manent.plugin.v1.Deployer.RevertCandidate:output_type -> manent.plugin.v1.Empty
+	0,  // 43: manent.plugin.v1.Deployer.RetirePrevious:output_type -> manent.plugin.v1.Empty
+	0,  // 44: manent.plugin.v1.Deployer.SetCandidateWeight:output_type -> manent.plugin.v1.Empty
+	11, // 45: manent.plugin.v1.Deployer.CandidateWeight:output_type -> manent.plugin.v1.WeightResponse
+	12, // 46: manent.plugin.v1.Deployer.RouteTesters:output_type -> manent.plugin.v1.DetailsResponse
+	0,  // 47: manent.plugin.v1.Deployer.ScaleCandidate:output_type -> manent.plugin.v1.Empty
+	16, // 48: manent.plugin.v1.Secrets.Secret:output_type -> manent.plugin.v1.SecretResponse
+	32, // [32:49] is the sub-list for method output_type
+	15, // [15:32] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_pkg_plugin_external_proto_deployer_proto_init() }
@@ -1307,7 +1322,7 @@ func file_pkg_plugin_external_proto_deployer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_plugin_external_proto_deployer_proto_rawDesc), len(file_pkg_plugin_external_proto_deployer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

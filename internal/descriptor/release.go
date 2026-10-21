@@ -89,7 +89,13 @@ func LoadReleaseYAMLFile(path string) (*Release, error) {
 		if !filepath.IsAbs(f) {
 			f = filepath.Join(filepath.Dir(path), f)
 		}
-		d, err := LoadYAMLFile(f)
+		// Validated by r.Validate with the dependencies of the release: an import can name
+		// another deploy of the release.
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return nil, fmt.Errorf("deploys[%d] (%s): %w", i, rd.File, err)
+		}
+		d, err := DecodeYAML(data)
 		if err != nil {
 			return nil, fmt.Errorf("deploys[%d] (%s): %w", i, rd.File, err)
 		}
@@ -132,7 +138,11 @@ func (r *Release) Validate() error {
 			errs = append(errs, fmt.Errorf("deploys[%d]: descriptor is required", i))
 			continue
 		}
-		if err := d.Validate(); err != nil {
+		// The dependencies inside the release are names until submission: imports may refer
+		// to them.
+		dv := *d
+		dv.After = append(slices.Clone(d.After), rd.After...)
+		if err := dv.Validate(); err != nil {
 			errs = append(errs, fmt.Errorf("deploys[%d] (%s): %w", i, rd.Name, err))
 		}
 		if d.Schedule != nil || d.DryRun {

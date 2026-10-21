@@ -3,6 +3,7 @@ package engine
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -541,6 +542,12 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 	if res.Change != nil {
 		attrs[attrChange], attrs[attrChangeURL] = res.Change.Number, res.Change.URL
 	}
+	if len(res.Exports) > 0 && final.Status == callback.StatusSucceeded {
+		raw, err := json.Marshal(res.Exports)
+		if err == nil {
+			attrs[attrExports] = string(raw)
+		}
+	}
 	if err := dbos.SetWorkflowAttributes(ctx, id, attrs); err != nil {
 		w.logger.Error("aggiornamento degli attributi del deploy fallito", "deployment", id, "error", err)
 	}
@@ -640,7 +647,7 @@ func stepEvent(name string, out pipeline.Output, err error) callback.Event {
 func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Result, *descriptor.Descriptor, error) {
 	dryRun := req.Descriptor.DryRun
 	res := Result{DeploymentID: id, DryRun: dryRun}
-	if w.resolver != nil || w.rollback != nil || w.governance != nil {
+	if w.resolver != nil || w.rollback != nil || w.governance != nil || req.Descriptor.HasImports() {
 		rc, err := dbos.RunAsStep(ctx, func(c context.Context) (resolvedConfig, error) {
 			return instrument(w, c, ev, "config", func(c context.Context) (resolvedConfig, error) {
 				return w.resolveConfig(c, req)
@@ -662,7 +669,10 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 		res.Change = t
 	}
 	if d.Rollout != nil {
-		return res, d, w.runRollout(ctx, id, req, d, ev, &res)
+		if err := w.runRollout(ctx, id, req, d, ev, &res); err != nil {
+			return res, d, err
+		}
+		return res, d, setExports(d, &res)
 	}
 	outputs := map[string]pipeline.Output{}
 	var started []startedStep
@@ -678,7 +688,19 @@ func (w *Worker) run(ctx dbos.Context, id string, req Request, ev *events) (Resu
 			outputs[ps.Name] = out
 		}
 	}
-	return res, d, nil
+	return res, d, setExports(d, &res)
+}
+
+// setExports computes the exports of the successful deploy. An invalid export fails the deploy
+// (permanently: the outputs are already recorded): whoever imports it must not start with wrong
+// values. Like any failure after the deploy step, the targets may already be changed.
+func setExports(d *descriptor.Descriptor, res *Result) error {
+	ex, err := exportsOf(d, res.Steps)
+	if err != nil {
+		return pipeline.Permanent(fmt.Errorf("exports of the deploy not valid: %w", err))
+	}
+	res.Exports = ex
+	return nil
 }
 
 // execStep runs a plan step as a DBOS step and, if rollback is enabled and the step is
@@ -779,9 +801,9 @@ func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn
 func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig, error) {
 	d, approvals := req.Descriptor, req.Approval
 	meta := map[string]string{}
-	if w.resolver != nil {
+	if w.resolver != nil || d.HasImports() {
 		var err error
-		if d, meta, err = w.resolver.Resolve(ctx, d); err != nil {
+		if d, meta, err = w.reader.importResolve(w.resolver)(ctx, d); err != nil {
 			return resolvedConfig{}, err
 		}
 		if meta == nil {

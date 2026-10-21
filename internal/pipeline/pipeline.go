@@ -49,6 +49,10 @@ type Checkpointer interface {
 	Checkpoint(ctx context.Context, in Input) (Output, error)
 }
 
+// OutPluginPrefix prefixes, in the output of the deploy step, the values produced by the plugin
+// (plugin.Result.Outputs): the exports of the deploy read them (descriptor.Export).
+const OutPluginPrefix = "out."
+
 // Key and outcomes of a compensation.
 const (
 	OutRollback       = "rollback"

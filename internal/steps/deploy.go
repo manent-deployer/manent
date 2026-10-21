@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
@@ -83,12 +87,45 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		log.ErrorContext(ctx, "deploy fallito", "error", err)
 		return nil, unsupported(dep, err)
 	}
-	raw, err := json.Marshal(res)
+	out, err := deployOutput(dep.Name(), res)
+	if err != nil {
+		log.ErrorContext(ctx, "output del plugin non validi", "error", err)
+		return nil, err
+	}
+	log.InfoContext(ctx, "deploy completato", "outputs", len(res.Outputs))
+	return out, nil
+}
+
+// outputKeyRe limits the keys of the plugin outputs.
+var outputKeyRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`)
+
+// deployOutput is the output of the deploy step: plugin, result and the plugin outputs with
+// the out. prefix. Invalid outputs are a plugin bug: a retry would give the same ones.
+func deployOutput(name string, res *plugin.Result) (pipeline.Output, error) {
+	r := plugin.Result{}
+	if res != nil {
+		r = *res
+	}
+	outputs := r.Outputs
+	if len(outputs) > plugin.MaxOutputs {
+		return nil, pipeline.Permanent(fmt.Errorf("plugin %q: at most %d outputs", name, plugin.MaxOutputs))
+	}
+	out := pipeline.Output{"plugin": name}
+	for _, k := range slices.Sorted(maps.Keys(outputs)) {
+		v := outputs[k]
+		if !outputKeyRe.MatchString(k) || len(v) > plugin.MaxOutputBytes || strings.ContainsRune(v, 0) {
+			return nil, pipeline.Permanent(fmt.Errorf("plugin %q: invalid output %q (key: letters, digits, '_', '-', '.', max 64; value max %d bytes)", name, k, plugin.MaxOutputBytes))
+		}
+		out[pipeline.OutPluginPrefix+k] = v
+	}
+	// The outputs are already in the step output: the result does not repeat them.
+	r.Outputs = nil
+	raw, err := json.Marshal(r)
 	if err != nil {
 		return nil, err
 	}
-	log.InfoContext(ctx, "deploy completato")
-	return pipeline.Output{"plugin": dep.Name(), "result": string(raw)}, nil
+	out["result"] = string(raw)
+	return out, nil
 }
 
 // DryRun selects the plugin and validates its request as Run does, but calls the plugin's

@@ -128,6 +128,8 @@ export const en = {
   "detail.after.expires": "Waits until {time}",
   "detail.after.satisfied": "All dependencies succeeded.",
   "detail.after.caption": "Deploys this deploy depends on",
+  "detail.exports": "Exports",
+  "detail.exports.lead": "The deploys that import this one read these values (imports).",
   "detail.approval.required": "{done} of {required} approvals",
   "detail.approval.expires": "Expires {time}",
   "detail.approval.change.pending": "Change {number} waiting for approval in the ITSM system",

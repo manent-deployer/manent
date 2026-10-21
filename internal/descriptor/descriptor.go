@@ -69,6 +69,11 @@ type Descriptor struct {
 	// Traffic is the integration with the environment's load balancers and routers. It comes
 	// only from the environment configuration (envconfig.Merge rejects a descriptor defining it).
 	Traffic *TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
+	// Imports are the deploys whose exports this deploy reads (deploy.targetsFrom,
+	// deploy.paramsFrom), resolved when the deploy starts.
+	Imports map[string]Import `json:"imports,omitempty" yaml:"imports,omitempty"`
+	// Exports are the outputs of the deploy that other deploys can import.
+	Exports map[string]Export `json:"exports,omitempty" yaml:"exports,omitempty"`
 }
 
 // Rollback configures the automatic rollback. In the effective descriptor (after the config
@@ -224,6 +229,10 @@ type Deploy struct {
 	Plugin  string            `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Targets []Target          `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string `json:"params,omitempty" yaml:"params,omitempty"`
+	// TargetsFrom adds the targets of targets exports of the imports (descriptor.Imports).
+	TargetsFrom []ExportRef `json:"targetsFrom,omitempty" yaml:"targetsFrom,omitempty"`
+	// ParamsFrom sets plugin parameters to string exports of the imports.
+	ParamsFrom map[string]ExportRef `json:"paramsFrom,omitempty" yaml:"paramsFrom,omitempty"`
 }
 
 // Target is a deploy destination.
@@ -253,13 +262,23 @@ type HTTPCheck struct {
 
 // ParseYAML reads a YAML descriptor, rejecting unknown fields.
 func ParseYAML(data []byte) (*Descriptor, error) {
+	d, err := DecodeYAML(data)
+	if err != nil {
+		return nil, err
+	}
+	return d, d.Validate()
+}
+
+// DecodeYAML reads a YAML descriptor, rejecting unknown fields, without validating it: the
+// CLI completes it with the command line options (e.g. --import) before the validation.
+func DecodeYAML(data []byte) (*Descriptor, error) {
 	var d Descriptor
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&d); err != nil {
 		return nil, fmt.Errorf("invalid YAML descriptor: %w", err)
 	}
-	return &d, d.Validate()
+	return &d, nil
 }
 
 // ParseJSON reads a JSON descriptor, rejecting unknown fields.
@@ -364,6 +383,8 @@ func (d *Descriptor) Validate() error {
 		errs = append(errs, d.Tenants.validate())
 	}
 	errs = append(errs, d.validateAfter())
+	errs = append(errs, ValidateImports(d.Imports, d.Deploy.TargetsFrom, d.Deploy.ParamsFrom, d.Deploy.Params, d.After, d.Application, d.Environment))
+	errs = append(errs, ValidateExports(d.Exports))
 	if d.Schedule != nil {
 		if d.DryRun {
 			errs = append(errs, errors.New("dryRun not allowed with schedule: the dry-run runs immediately"))

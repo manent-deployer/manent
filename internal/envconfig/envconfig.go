@@ -45,6 +45,14 @@ type EnvConfig struct {
 	Tenancy string `json:"tenancy,omitempty" yaml:"tenancy,omitempty"`
 	// TenantParams declares the parameters every tenant provides (tenant registry).
 	TenantParams map[string]TenantParam `json:"tenant_params,omitempty" yaml:"tenant_params,omitempty"`
+	// Imports are the releases in service (only current) whose exports give targets
+	// (TargetsFrom) and plugin parameters (ParamsFrom) to the environment's deploys: e.g. the
+	// VMs created by the infrastructure deploy. They are resolved when every deploy starts.
+	Imports     map[string]descriptor.Import    `json:"imports,omitempty" yaml:"imports,omitempty"`
+	TargetsFrom []descriptor.ExportRef          `json:"targets_from,omitempty" yaml:"targets_from,omitempty"`
+	ParamsFrom  map[string]descriptor.ExportRef `json:"params_from,omitempty" yaml:"params_from,omitempty"`
+	// Exports are the outputs of the environment's deploys that other deploys can import.
+	Exports map[string]descriptor.Export `json:"exports,omitempty" yaml:"exports,omitempty"`
 }
 
 // Document is a configuration read from the provider, with the metadata for the audit.
@@ -112,8 +120,14 @@ func MergeTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (descri
 		if len(d.Deploy.Targets) > 0 && !slices.EqualFunc(c.Targets, d.Deploy.Targets, descriptor.Target.Equal) {
 			errs = append(errs, errors.New("deploy.targets defined both in the environment configuration and in the descriptor"))
 		}
+		if len(d.Deploy.TargetsFrom) > 0 {
+			errs = append(errs, errors.New("deploy.targetsFrom: the environment configuration already defines the targets"))
+		}
 		d.Deploy.Targets = slices.Clone(c.Targets)
+	} else if len(c.TargetsFrom) > 0 && len(d.Deploy.Targets) > 0 {
+		errs = append(errs, errors.New("deploy.targets: the environment configuration takes them from the exports of other deploys (targets_from)"))
 	}
+	errs = append(errs, mergeImports(&d, c)...)
 
 	params := maps.Clone(d.Deploy.Params)
 	if params == nil && len(c.Params) > 0 {
@@ -199,13 +213,84 @@ func MergeTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (descri
 		t := *c.Traffic
 		d.Traffic = &t
 	}
-	if len(d.Deploy.Targets) == 0 {
+	// Targets taken from exports are added when the deploy starts (engine): only then is the
+	// list checked.
+	if len(d.Deploy.Targets) == 0 && len(d.Deploy.TargetsFrom) == 0 {
 		errs = append(errs, errors.New("no deploy targets: neither in the environment configuration nor in the descriptor"))
 	}
 	if err := errors.Join(errs...); err != nil {
 		return d, fmt.Errorf("environment configuration incompatible with the descriptor: %w", err)
 	}
 	return d, nil
+}
+
+// mergeImports adds to the descriptor imports, references and exports of the environment
+// configuration. The environment can only import releases in service (current): it has no
+// dependencies of its own. The same name with different content is an error.
+func mergeImports(d *descriptor.Descriptor, c EnvConfig) []error {
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(c.Imports)) {
+		if c.Imports[name].Deployment != "" {
+			errs = append(errs, fmt.Errorf("imports.%s: the environment configuration can only import releases in service (current)", name))
+		}
+	}
+	if len(c.Imports) > 0 || len(c.TargetsFrom) > 0 || len(c.ParamsFrom) > 0 {
+		if err := descriptor.ValidateImports(c.Imports, c.TargetsFrom, c.ParamsFrom, c.Params, nil, d.Application, d.Environment); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(c.Imports) > 0 {
+		imports := maps.Clone(d.Imports)
+		if imports == nil {
+			imports = map[string]descriptor.Import{}
+		}
+		for _, name := range slices.Sorted(maps.Keys(c.Imports)) {
+			if v, ok := imports[name]; ok && !reflect.DeepEqual(v, c.Imports[name]) {
+				errs = append(errs, fmt.Errorf("imports.%s: defined differently in the environment configuration and in the descriptor", name))
+			}
+			imports[name] = c.Imports[name]
+		}
+		d.Imports = imports
+	}
+	if len(c.TargetsFrom) > 0 {
+		if len(d.Deploy.TargetsFrom) > 0 && !slices.Equal(d.Deploy.TargetsFrom, c.TargetsFrom) {
+			errs = append(errs, errors.New("deploy.targetsFrom defined both in the environment configuration and in the descriptor"))
+		}
+		d.Deploy.TargetsFrom = slices.Clone(c.TargetsFrom)
+	}
+	if len(c.ParamsFrom) > 0 {
+		pf := maps.Clone(d.Deploy.ParamsFrom)
+		if pf == nil {
+			pf = map[string]descriptor.ExportRef{}
+		}
+		for _, k := range slices.Sorted(maps.Keys(c.ParamsFrom)) {
+			if v, ok := pf[k]; ok && v != c.ParamsFrom[k] {
+				errs = append(errs, fmt.Errorf("deploy.paramsFrom.%s: defined differently in the environment configuration and in the descriptor", k))
+			}
+			if _, ok := d.Deploy.Params[k]; ok {
+				errs = append(errs, fmt.Errorf("deploy.params.%s: the environment configuration takes it from an export (params_from)", k))
+			}
+			pf[k] = c.ParamsFrom[k]
+		}
+		d.Deploy.ParamsFrom = pf
+	}
+	if len(c.Exports) > 0 {
+		if err := descriptor.ValidateExports(c.Exports); err != nil {
+			errs = append(errs, err)
+		}
+		exports := maps.Clone(d.Exports)
+		if exports == nil {
+			exports = map[string]descriptor.Export{}
+		}
+		for _, name := range slices.Sorted(maps.Keys(c.Exports)) {
+			if v, ok := exports[name]; ok && v != c.Exports[name] {
+				errs = append(errs, fmt.Errorf("exports.%s: defined differently in the environment configuration and in the descriptor", name))
+			}
+			exports[name] = c.Exports[name]
+		}
+		d.Exports = exports
+	}
+	return errs
 }
 
 // Resolver produces the effective descriptor using the configured provider.

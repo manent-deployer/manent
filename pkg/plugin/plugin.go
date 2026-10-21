@@ -81,7 +81,18 @@ type TargetResult struct {
 type Result struct {
 	Plugin  string         `json:"plugin"`
 	Targets []TargetResult `json:"targets"`
+	// Outputs are values produced by the deploy (e.g. the hosts of the VMs created) that other
+	// deploys can import, if the descriptor or the environment configuration declares them as
+	// exports. DBOS persists them: they must never contain secrets. Keys: letters, digits, '_',
+	// '-', '.' (max 64 characters, at most MaxOutputs).
+	Outputs map[string]string `json:"outputs,omitempty"`
 }
+
+// Limits of the deploy outputs (Result.Outputs).
+const (
+	MaxOutputs     = 64
+	MaxOutputBytes = 64 << 10
+)
 
 // Possible states of a TargetResult.
 const (

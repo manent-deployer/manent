@@ -223,6 +223,22 @@ pipeline:
       dry_run:
         run_once: true
         command: ["/home/deploy/bin/migrate", "plan", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
+    # UC26: simulated provisioning over SSH on the infrastructure host: it prints the hosts of
+    # the "created" VMs and the release directory, which the deploy exports to the deploys
+    # that import it.
+    - name: uc26-provision
+      mode: optional
+      enabled: false
+      type: command
+      max_retries: 0
+      timeout: 1m
+      ssh: {key_secret: deploy-key}
+      outputs:
+        vms: {pattern: '[\[\]{}":,a-z0-9. -]{2,400}'}
+        dest: {pattern: '/home/deploy/apps/[a-z0-9-]{1,40}'}
+      run:
+        run_once: true
+        command: ["/home/deploy/bin/provision", "{{ .Version }}"]
     - {name: deploy, mode: mandatory, max_retries: 1}
     - {name: post-test, mode: optional, enabled: false, max_retries: 1}
     - {name: activation, mode: optional, enabled: true}

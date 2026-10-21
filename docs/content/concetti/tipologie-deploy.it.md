@@ -52,6 +52,8 @@ after: [shop-db-2.4.0-prod]
 afterTimeout: 2h
 ```
 
+Un deploy può anche leggere ciò che ha prodotto il precedente: il deploy dell'infrastruttura esporta le VM create, quello della configurazione le importa come propri target (`imports`, `deploy.targetsFrom`). Vedi [Export e import](../guida/catene.md#export-import).
+
 ### Release composta
 
 Un documento `kind: Release` raggruppa più deploy con le dipendenze tra loro: quelli indipendenti girano in parallelo, gli altri in ordine. `onFailure` decide se fermarsi, continuare o annullare con un rollback i deploy già fatti.

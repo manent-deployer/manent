@@ -35,7 +35,7 @@ func (f fake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, er
 		return nil, err
 	}
 	f.log.Info("deploy finto eseguito", "deployment", r.DeploymentID)
-	return &plugin.Result{Plugin: "fake", Targets: []plugin.TargetResult{{
+	return &plugin.Result{Plugin: "fake", Outputs: map[string]string{"vms": `["10.0.0.1"]`}, Targets: []plugin.TargetResult{{
 		Host:   r.Targets[0].Host,
 		Status: plugin.StatusDeployed,
 		Details: map[string]string{

@@ -52,6 +52,8 @@ after: [shop-db-2.4.0-prod]
 afterTimeout: 2h
 ```
 
+A deploy can also read what the previous one produced: the infrastructure deploy exports the VMs it created, the configuration deploy imports them as its targets (`imports`, `deploy.targetsFrom`). See [Exports and imports](../guida/catene.md#export-import).
+
 ### Composite release
 
 A `kind: Release` document groups several deploys with the dependencies between them: independent ones run in parallel, the others in order. `onFailure` decides whether to stop, continue or roll back the deploys already done.

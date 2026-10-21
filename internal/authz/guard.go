@@ -1,10 +1,12 @@
 package authz
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -265,6 +267,9 @@ func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.S
 		return nil, err
 	}
 	if err := g.checkDependencies(ctx, d.After); err != nil {
+		return nil, err
+	}
+	if err := g.checkImports(ctx, d); err != nil {
 		return nil, err
 	}
 	if d.Schedule != nil && d.Schedule.Cron != "" {
@@ -600,6 +605,13 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 	if err := g.check(ctx, DeploymentRead, target{application: d.Application, environment: d.Environment, tenant: d.Tenant}); err != nil {
 		return nil, err
 	}
+	// The effective deploy shows the imported targets and parameters.
+	if err := g.checkDependencies(ctx, d.After); err != nil {
+		return nil, err
+	}
+	if err := g.checkImports(ctx, d); err != nil {
+		return nil, err
+	}
 	return g.Next.Validate(ctx, d)
 }
 
@@ -767,6 +779,23 @@ func (g *Guard) checkDependencies(ctx context.Context, ids []string) error {
 	return nil
 }
 
+// checkImports requires deployment.read on the releases in service the descriptor imports
+// (imports with current): their exports become targets and parameters of the deploy. The
+// imports of given deploys are among the dependencies, already checked by checkDependencies.
+func (g *Guard) checkImports(ctx context.Context, d *descriptor.Descriptor) error {
+	for _, name := range slices.Sorted(maps.Keys(d.Imports)) {
+		c := d.Imports[name].Current
+		if c == nil {
+			continue
+		}
+		env := cmp.Or(c.Environment, d.Environment)
+		if err := g.check(ctx, DeploymentRead, target{application: c.Application, environment: env, tenant: d.Tenant}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SubmitRelease requires, for every deploy of the release, the same permissions as a single
 // deploy (deployment.submit, freeze override, read of external dependencies) and, with
 // onFailure: rollback, deployment.rollback. Every enqueued deploy is recorded in the audit.
@@ -789,6 +818,9 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 			}
 		}
 		if err := g.checkDependencies(ctx, d.After); err != nil {
+			return nil, err
+		}
+		if err := g.checkImports(ctx, d); err != nil {
 			return nil, err
 		}
 	}

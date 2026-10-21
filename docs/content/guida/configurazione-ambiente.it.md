@@ -110,9 +110,11 @@ La configurazione di ambiente è **autorevole**: il descrittore può solo aggiun
 | `rollout` | La strategia di [rilascio a ondate](ondate.md) dell'ambiente è autorevole: il descrittore può ometterla o ripeterla identica. |
 | `traffic` | Load balancer e router dell'ambiente ([svuotamento](svuotamento.md), [rilasci per percentuale](traffico.md)): solo nella configurazione di ambiente, un descrittore che la definisce è rifiutato. |
 | `tenancy`, `tenant_params` | Se l'ambiente vuole un [tenant](tenant.md) e quali parametri fornisce ogni tenant: tra ambiente e descrittore si inserisce lo strato del tenant, con parametri, segreti e target propri (etichetta `tenant`). |
+| `imports`, `targets_from`, `params_from` | Target e parametri del plugin presi dagli export della release in esercizio di un'altra applicazione (solo import `current`), risolti all'avvio di ogni deploy: vedi [Export e import](catene.md#export-import). Con `targets_from` il descrittore non può aggiungere target propri; un parametro in `params_from` non può essere impostato anche dal descrittore. |
+| `exports` | Output dei deploy dell'ambiente che altri deploy possono importare; il descrittore può aggiungerne altri, lo stesso nome deve avere la stessa definizione. |
 | `rollback` | `enabled`, `on` e `locator` seguono la stessa regola: se definiti in entrambi devono coincidere. Così un ambiente può imporre il [rollback](rollback.md) senza che il descrittore possa disattivarlo. Resta valido il limite `allowed` del tipo di artefatto. |
 
-Un valore in conflitto fa fallire il deploy: non viene mai sovrascritto in silenzio. Dopo la fusione deve esserci almeno un target.
+Un valore in conflitto fa fallire il deploy: non viene mai sovrascritto in silenzio. Dopo la fusione (e gli import) deve esserci almeno un target.
 
 Oltre a queste regole, `descriptor_policy` in `manent.yml` limita ciò che il descrittore può aggiungere: ad esempio può vietare comandi (`post_command`), riferimenti a segreti fuori dal perimetro dell'applicazione e target non definiti dall'ambiente. Vedi [Sicurezza](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore).
 

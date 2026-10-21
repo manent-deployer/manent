@@ -191,4 +191,5 @@ Eseguilo nella pipeline delle merge request del repository della configurazione:
 ## Prossimo passo
 
 - Mantieni la release in esercizio come codice con [Terraform](../integrazioni/terraform.md).
-- [Tutorial 7](produzione.md): esegui manent stesso come servizio di produzione.
+- [Tutorial 7](catene.md): concatena un deploy dell'infrastruttura e uno della configurazione con export e import.
+- [Tutorial 8](produzione.md): esegui manent stesso come servizio di produzione.

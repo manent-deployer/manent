@@ -136,3 +136,83 @@ The outcome is recorded in the audit log (`release.finish`). The web interface s
 
 - Submitting a release requires, for every deploy, the same permissions as a single deploy (`deployment.submit`, `deployment.freeze-override` if the descriptor uses it, `deployment.read` on external dependencies) and, with `onFailure: rollback`, `deployment.rollback`.
 - Reading a release requires `deployment.read` on all its deploys; lists show only fully readable releases. Cancelling requires `deployment.cancel` on all its deploys.
+
+## Exports and imports { #export-import }
+
+A chain often needs to pass data along, not just order: the infrastructure deploy creates the VMs, the configuration deploy must know which ones they are. A deploy can **export** some of its outputs, and the deploys that follow it can **import** them as targets (`deploy.targetsFrom`) and plugin parameters (`deploy.paramsFrom`). The [tutorial](../tutorial/catene.md) walks through it step by step.
+
+```yaml title="infra.yml (producer)"
+apiVersion: manent/v1
+id: infra-42
+application: infra-web
+environment: prod
+artifact: {type: terraform, name: infra-web, version: 3.1.0, source: https://…}
+exports:
+  vms:     {from: deploy.vms, format: targets, pattern: '10\.20\.\d+\.\d+'}
+  db_host: {from: deploy.db_host, pattern: '[a-z0-9.-]{1,253}'}
+```
+
+```yaml title="os-config.yml (consumer)"
+apiVersion: manent/v1
+application: os-config
+environment: prod
+after: [infra-42]
+imports:
+  infra: {deployment: infra-42}       # must be among the dependencies
+artifact: {type: ansible, name: os-config, version: 1.8.0, source: https://…}
+deploy:
+  targetsFrom: [{import: infra, export: vms}]
+  paramsFrom:
+    db_host: {import: infra, export: db_host}
+```
+
+### Exports
+
+- `from` is `<step>.<key>`: an output of the plugin (`deploy` step, `Result.Outputs` of the [plugin contract](../plugins/index.md)) or a declared output of a [custom step](step-personalizzati.md). In a wave rollout the step runs once per pass and batch: `targets` exports join the lists, `string` exports must have the same value everywhere.
+- `format: string` (default) requires `pattern`, a regular expression matched against the **whole** value; `format: targets` is a JSON list of targets, objects `{host, port, user, labels}` or plain host strings, and the optional `pattern` applies to each host.
+- Only declared outputs become exports, checked when the deploy **succeeds**: a value that does not match its format or pattern fails the deploy (`exports of the deploy not valid`), so the deploys that depend on it end as `DEPENDENCY_FAILED` instead of starting with wrong values. The pattern is also the barrier against secrets: plugins must never put secrets in their outputs.
+- Exports are recorded with the outcome and shown in `manent status` (`exports`), in the API (`Status.exports`, `Result.exports`), in the web interface and in the CI outcome (`export_<name>=…`, see [CI and infrastructure as code](ci-iac.md)).
+- Dry-runs have no exports.
+
+### Imports
+
+An import is one of:
+
+| | Reads the exports of | Typical use |
+|---|---|---|
+| `deployment: <id>` | a given deploy, which **must be in `after`** (in a release: the name of another deploy of the release, which must be in its `after`) | the first deploy of a chain, pinned to the exact producer |
+| `current: {application, environment}` | the **release in service** of an application (inventory), for the tenant of the deploy; `environment` defaults to the deploy's | everything that comes later: promotions, rollbacks, reconciliation, recurring schedules |
+
+- Imports are resolved **when the deploy starts**, in the `config` step, before the merge with the environment configuration: imported targets and parameters are descriptor additions, so the [descriptor policy](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore) and the [merge rules](configurazione-ambiente.md#regole-di-fusione) apply to them (e.g. `deploy.targets` defined by the environment and `targetsFrom` in the descriptor is a conflict). The result is persisted with the step: a deploy resumed after a crash uses the same values. The step output records the source of each import (`import.infra: infra-42@3.1.0`).
+- At submit time the imports are already checked if possible: a missing export or an environment without a release in service refuses the request (`422`). If the producer has not succeeded yet, the check is left to the worker.
+- From the CLI, `--import <name>=<id>` binds an import to a deploy known only at run time and adds it to `after`; the descriptor can then use `targetsFrom`/`paramsFrom` without declaring the import:
+
+    ```sh
+    manent deploy -f os-config.yml --import infra=$INFRA_DEPLOYMENT_ID
+    ```
+
+- A [promotion](governance.md#promozione) or a [manual rollback](governance.md#rollback-manuale) drops the `deployment` imports together with `after`: the targets of another environment must not be reused. Its targets come from the environment configuration, typically with an import from `current`:
+
+    ```yaml title="environment configuration of os-config/prod"
+    plugin: ansible
+    imports:
+      infra: {current: {application: infra-web}}
+    targets_from: [{import: infra, export: vms}]
+    params_from:
+      db_host: {import: infra, export: db_host}
+    ```
+
+    The environment configuration can only import releases in service (`current`); with `targets_from` the descriptor cannot add its own targets.
+- In a composite release, `deployment` names another deploy of the release:
+
+    ```yaml
+    deploys:
+      - name: infra
+        file: release/infra.yml
+      - name: os
+        file: release/os-config.yml    # imports: {infra: {deployment: infra}}
+        after: [infra]
+    ```
+
+- Permissions: importing requires `deployment.read` on the producer (as for `after`) and, with `current`, on its application and environment.
+- Limits: at most 10 imports and 32 exports per deploy, export values up to 64 KiB (256 KiB in all), at most 500 targets per `targets` export, plugin outputs up to 64 keys. An import must be used by `targetsFrom` or `paramsFrom`, a parameter in `paramsFrom` cannot also be in `params`, and a deploy cannot import its own release in service.

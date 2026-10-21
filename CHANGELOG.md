@@ -14,6 +14,21 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Export e import tra deploy: un deploy dichiara come `exports` alcuni suoi output (`from:
+  <step>.<chiave>`, `format: string|targets`, `pattern` ancorato), verificati quando riesce
+  (un valore non valido fa fallire il deploy) e registrati con l'esito (`Status.exports`,
+  `Result.exports`, interfaccia web, `export_<nome>` negli esiti per la CI). Chi lo segue li
+  legge con `imports` (`deployment: <id>` tra gli `after`, anche il nome di un deploy della stessa
+  release, oppure `current: {application, environment}`, la release in esercizio) e li usa come
+  target (`deploy.targetsFrom`) e parametri del plugin (`deploy.paramsFrom`). Gli import sono
+  risolti nello step `config`, prima della fusione con la configurazione di ambiente: valgono la
+  policy sui descrittori e le regole di fusione. La configurazione di ambiente può dichiarare
+  `imports` (solo `current`), `targets_from`, `params_from` ed `exports`. Promozioni e rollback
+  manuali tolgono gli import `deployment`. `manent deploy --import <nome>=<id>`.
+- `plugin.Result.Outputs`: valori prodotti dal deploy (al più 64 chiavi, 64 KiB per valore),
+  salvati nell'output dello step `deploy` come `out.<chiave>`; nel protocollo dei plugin esterni
+  il campo `outputs` di `DeployResponse` (compatibile, `ProtocolVersion` invariata).
+
 - Permessi come policy (`rbac.engine: opa`, richiede `governance.engine: opa`): i permessi e i
   divieti sono decisi dalle stesse revisioni Rego della governance (bozza, test, approvazione a
   quattro occhi, attivazione senza riavvio). `data.manent.authz.grants` restituisce i permessi di

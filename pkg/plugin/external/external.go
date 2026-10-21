@@ -424,7 +424,7 @@ func toProtoResult(res *plugin.Result) *pb.DeployResponse {
 	if res == nil {
 		return &pb.DeployResponse{}
 	}
-	out := &pb.DeployResponse{Plugin: res.Plugin}
+	out := &pb.DeployResponse{Plugin: res.Plugin, Outputs: res.Outputs}
 	for _, t := range res.Targets {
 		out.Targets = append(out.Targets, &pb.TargetResult{Host: t.Host, Status: t.Status, Details: t.Details})
 	}
@@ -432,7 +432,7 @@ func toProtoResult(res *plugin.Result) *pb.DeployResponse {
 }
 
 func fromProtoResult(r *pb.DeployResponse) *plugin.Result {
-	res := &plugin.Result{Plugin: r.GetPlugin()}
+	res := &plugin.Result{Plugin: r.GetPlugin(), Outputs: r.GetOutputs()}
 	for _, t := range r.GetTargets() {
 		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.GetHost(), Status: t.GetStatus(), Details: t.GetDetails()})
 	}

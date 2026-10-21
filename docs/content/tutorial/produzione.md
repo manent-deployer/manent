@@ -1,4 +1,4 @@
-# 7. Run manent in production
+# 8. Run manent in production
 
 !!! abstract "In this tutorial"
     You take manent from a single `serve` process on SQLite to a platform service: Postgres, an API tier and several workers on Kubernetes, sign-in through your identity provider, TLS, metrics and alerts, logs to the SIEM, audit and backups. Each step links to the reference page with every option.

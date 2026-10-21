@@ -203,6 +203,8 @@ type Result struct {
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// Change is the deploy's change management ticket, if any.
 	Change *ChangeTicket `json:"change,omitempty"`
+	// Exports are the values the deploy offers to the deploys importing it (descriptor.Export).
+	Exports map[string]string `json:"exports,omitempty"`
 }
 
 // Submission describes the outcome of Submit.
@@ -263,9 +265,11 @@ type Status struct {
 	// Rollout is the state of the wave release, if the deploy has one.
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// RolloutProgress summarizes the rollout in listings: "stages passed/total stages".
-	RolloutProgress string  `json:"rollout_progress,omitempty"`
-	Result          *Result `json:"result,omitempty"`
-	Error           string  `json:"error,omitempty"`
+	RolloutProgress string `json:"rollout_progress,omitempty"`
+	// Exports are the values a successful deploy offers to the deploys importing it.
+	Exports map[string]string `json:"exports,omitempty"`
+	Result  *Result           `json:"result,omitempty"`
+	Error   string            `json:"error,omitempty"`
 }
 
 // ListFilter filters the deploy list.

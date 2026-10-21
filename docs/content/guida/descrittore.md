@@ -114,6 +114,8 @@ Supported schemes: `env:`, `file:` and, if configured, `vault:` (e.g. `vault:sec
 | `plugin` | Plugin to use. If absent, the policy picks the first active plugin that supports `artifact.type`. |
 | `targets` | Destinations: `host` (required), `port`, `user`, `labels` (labels; `region` and `az` are used by [wave rollouts](ondate.md)). |
 | `params` | Plugin-specific parameters, as a string map. |
+| `targetsFrom` | Targets taken from `targets` exports of the imports: `[{import: infra, export: vms}]`. See [Exports and imports](catene.md#export-import). |
+| `paramsFrom` | Parameters taken from exports of the imports: `{db_host: {import: infra, export: db_host}}`. |
 
 All these fields can come from the [environment configuration](configurazione-ambiente.md): the descriptor can only add what is not defined there. After the merge there must be at least one target.
 
@@ -170,6 +172,17 @@ IDs of deploys that must succeed before this one starts, and the maximum wait (d
 ```yaml
 after: [shop-db-42-prod]
 afterTimeout: 2h
+```
+
+### `imports` and `exports`
+
+`imports` are the deploys whose exports this deploy reads when it starts (`deployment: <id>`, among `after`, or `current: {application, environment}`, the release in service); `exports` are the outputs this deploy offers to the others (`from: <step>.<key>`, `format: string|targets`, `pattern`). See [Exports and imports](catene.md#export-import).
+
+```yaml
+imports:
+  infra: {deployment: infra-42}
+exports:
+  fqdn: {from: deploy.fqdn, pattern: '[a-z0-9.-]+'}
 ```
 
 ### `freezeOverride`

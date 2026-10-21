@@ -126,6 +126,8 @@ message TargetResult {
 message DeployResponse {
   string plugin = 1;
   repeated TargetResult targets = 2;
+  // Values produced by the deploy that other deploys can import (plugin.Result.Outputs).
+  map<string, string> outputs = 3;
 }
 
 message SecretRequest {

@@ -142,6 +142,29 @@ function DependenciesPanel({ d }: { d: Status }) {
   );
 }
 
+/** ExportsPanel shows the values the deploy offers to the deploys importing it. */
+function ExportsPanel({ exports }: { exports: Record<string, string> }) {
+  const { t } = useI18n();
+  const entries = Object.entries(exports).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) return null;
+  return (
+    <Section title={t("detail.exports")}>
+      <p className="text-sm text-muted">{t("detail.exports.lead")}</p>
+      <dl className="mt-3 flex flex-col gap-3">
+        {entries.map(([name, value]) => (
+          <div key={name} className="min-w-0">
+            <dt className="font-mono text-xs text-muted">{name}</dt>
+            <dd className="mt-0.5 flex items-start gap-2">
+              <code className="min-w-0 break-all font-mono text-sm">{value}</code>
+              <CopyButton value={value} label={name} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Section>
+  );
+}
+
 function TenantsRunPanel({ run }: { run: NonNullable<Status["tenants_run"]> }) {
   const { t } = useI18n();
   return (
@@ -334,6 +357,7 @@ export function DeploymentDetailPage() {
           )}
         </Section>
         <DependenciesPanel d={d} />
+        {d.exports && <ExportsPanel exports={d.exports} />}
         <ApprovalPanel d={d} />
         {d.tenants_run && <TenantsRunPanel run={d.tenants_run} />}
         {d.rollout && (

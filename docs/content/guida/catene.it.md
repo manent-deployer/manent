@@ -136,3 +136,83 @@ L'esito è registrato nell'audit (`release.finish`). L'interfaccia web mostra le
 
 - Inviare una release richiede, per ogni deploy, gli stessi permessi di un deploy singolo (`deployment.submit`, `deployment.freeze-override` se il descrittore la usa, `deployment.read` sulle dipendenze esterne) e, con `onFailure: rollback`, `deployment.rollback`.
 - Leggere una release richiede `deployment.read` su tutti i suoi deploy; gli elenchi mostrano solo le release interamente leggibili. Annullarla richiede `deployment.cancel` su tutti i suoi deploy.
+
+## Export e import { #export-import }
+
+Spesso una catena deve passare dati, non solo stabilire un ordine: il deploy dell'infrastruttura crea le VM, quello della configurazione deve sapere quali sono. Un deploy può **esportare** alcuni dei suoi output e i deploy che lo seguono possono **importarli** come target (`deploy.targetsFrom`) e parametri del plugin (`deploy.paramsFrom`). Il [tutorial](../tutorial/catene.md) lo mostra passo passo.
+
+```yaml title="infra.yml (produttore)"
+apiVersion: manent/v1
+id: infra-42
+application: infra-web
+environment: prod
+artifact: {type: terraform, name: infra-web, version: 3.1.0, source: https://…}
+exports:
+  vms:     {from: deploy.vms, format: targets, pattern: '10\.20\.\d+\.\d+'}
+  db_host: {from: deploy.db_host, pattern: '[a-z0-9.-]{1,253}'}
+```
+
+```yaml title="os-config.yml (consumatore)"
+apiVersion: manent/v1
+application: os-config
+environment: prod
+after: [infra-42]
+imports:
+  infra: {deployment: infra-42}       # deve essere tra le dipendenze
+artifact: {type: ansible, name: os-config, version: 1.8.0, source: https://…}
+deploy:
+  targetsFrom: [{import: infra, export: vms}]
+  paramsFrom:
+    db_host: {import: infra, export: db_host}
+```
+
+### Export
+
+- `from` è `<step>.<chiave>`: un output del plugin (step `deploy`, `Result.Outputs` del [contratto dei plugin](../plugins/index.md)) o un output dichiarato di uno [step personalizzato](step-personalizzati.md). In un rilascio a ondate lo step gira una volta per passo e lotto: gli export `targets` uniscono le liste, quelli `string` devono avere ovunque lo stesso valore.
+- `format: string` (default) richiede `pattern`, un'espressione regolare confrontata con il valore **intero**; `format: targets` è una lista JSON di target, oggetti `{host, port, user, labels}` o semplici stringhe con l'host, e il `pattern` facoltativo vale per ogni host.
+- Diventano export solo gli output dichiarati, verificati quando il deploy **riesce**: un valore che non rispetta formato o pattern fa fallire il deploy (`exports of the deploy not valid`), così i deploy che dipendono da lui finiscono in `DEPENDENCY_FAILED` invece di partire con valori sbagliati. Il pattern è anche la barriera contro i segreti: i plugin non devono mai metterli negli output.
+- Gli export sono registrati con l'esito e mostrati da `manent status` (`exports`), dall'API (`Status.exports`, `Result.exports`), dall'interfaccia web e negli esiti per la CI (`export_<nome>=…`, vedi [CI e infrastruttura come codice](ci-iac.md)).
+- I dry-run non hanno export.
+
+### Import
+
+Un import è uno tra:
+
+| | Legge gli export di | Uso tipico |
+|---|---|---|
+| `deployment: <id>` | un deploy dato, che **deve essere in `after`** (in una release: il nome di un altro deploy della release, che deve essere nel suo `after`) | il primo deploy di una catena, legato al produttore esatto |
+| `current: {application, environment}` | la **release in esercizio** di un'applicazione (inventario), per il tenant del deploy; `environment` per default è quello del deploy | tutto ciò che viene dopo: promozioni, rollback, riconciliazione, schedule ricorrenti |
+
+- Gli import sono risolti **all'avvio del deploy**, nello step `config`, prima della fusione con la configurazione di ambiente: target e parametri importati sono aggiunte del descrittore, quindi valgono la [policy sui descrittori](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore) e le [regole di fusione](configurazione-ambiente.md#regole-di-fusione) (es. `deploy.targets` definiti dall'ambiente e `targetsFrom` nel descrittore sono un conflitto). Il risultato è persistito con lo step: un deploy ripreso dopo un crash usa gli stessi valori. L'output dello step registra la provenienza di ogni import (`import.infra: infra-42@3.1.0`).
+- All'invio gli import sono già verificati se possibile: un export mancante o un ambiente senza release in esercizio rifiutano la richiesta (`422`). Se il produttore non è ancora riuscito, la verifica resta al worker.
+- Dal CLI, `--import <nome>=<id>` lega un import a un deploy noto solo al momento dell'esecuzione e lo aggiunge ad `after`; il descrittore può allora usare `targetsFrom`/`paramsFrom` senza dichiarare l'import:
+
+    ```sh
+    manent deploy -f os-config.yml --import infra=$INFRA_DEPLOYMENT_ID
+    ```
+
+- Una [promozione](governance.md#promozione) o un [rollback manuale](governance.md#rollback-manuale) tolgono gli import `deployment` insieme ad `after`: i target di un altro ambiente non vanno riusati. I suoi target arrivano dalla configurazione di ambiente, di solito con un import da `current`:
+
+    ```yaml title="configurazione di ambiente di os-config/prod"
+    plugin: ansible
+    imports:
+      infra: {current: {application: infra-web}}
+    targets_from: [{import: infra, export: vms}]
+    params_from:
+      db_host: {import: infra, export: db_host}
+    ```
+
+    La configurazione di ambiente può importare solo release in esercizio (`current`); con `targets_from` il descrittore non può aggiungere target propri.
+- In una release composta, `deployment` nomina un altro deploy della release:
+
+    ```yaml
+    deploys:
+      - name: infra
+        file: release/infra.yml
+      - name: os
+        file: release/os-config.yml    # imports: {infra: {deployment: infra}}
+        after: [infra]
+    ```
+
+- Permessi: importare richiede `deployment.read` sul produttore (come per `after`) e, con `current`, sulla sua applicazione e ambiente.
+- Limiti: al più 10 import e 32 export per deploy, valori degli export fino a 64 KiB (256 KiB in tutto), al più 500 target per export `targets`, output del plugin fino a 64 chiavi. Un import deve essere usato da `targetsFrom` o `paramsFrom`, un parametro in `paramsFrom` non può stare anche in `params` e un deploy non può importare la propria release in esercizio.

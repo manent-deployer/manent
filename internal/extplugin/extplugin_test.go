@@ -121,6 +121,10 @@ func TestDeploy(t *testing.T) {
 	if det["secret_len"] != "6" || det["leak"] != "" || det["foo"] != "bar" || res.Targets[0].Status != plugin.StatusDeployed {
 		t.Errorf("risultato inatteso: %+v", res.Targets[0])
 	}
+	// The outputs cross the protocol (exports of the deploy).
+	if res.Outputs["vms"] != `["10.0.0.1"]` {
+		t.Errorf("output del plugin: %+v", res.Outputs)
+	}
 	if _, err := p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "manca"})); err == nil {
 		t.Error("atteso errore per segreto mancante")
 	}

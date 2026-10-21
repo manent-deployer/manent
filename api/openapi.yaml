@@ -744,6 +744,14 @@ components:
         dryRun: {type: boolean}
         after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
         afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
+        imports:
+          type: object
+          description: Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom)
+          additionalProperties: {$ref: '#/components/schemas/Import'}
+        exports:
+          type: object
+          description: Output del deploy che altri deploy possono importare
+          additionalProperties: {$ref: '#/components/schemas/Export'}
         artifact:
           type: object
           required: [type, name, source]
@@ -753,6 +761,24 @@ components:
             version: {type: string}
             source: {type: string}
             sha256: {type: string}
+    Import:
+      type: object
+      description: Un deploy dato (deployment, tra le dipendenze after) o la release in esercizio di un'applicazione (current)
+      properties:
+        deployment: {type: string}
+        current:
+          type: object
+          required: [application]
+          properties:
+            application: {type: string}
+            environment: {type: string, description: Default l'ambiente del deploy che importa}
+    Export:
+      type: object
+      required: [from]
+      properties:
+        from: {type: string, description: '"<step>.<chiave>": output del plugin (step deploy) o di uno step personalizzato'}
+        format: {type: string, enum: [string, targets]}
+        pattern: {type: string, description: Espressione regolare ancorata (obbligatoria con format string)}
     DeployTargets:
       type: object
       description: Sezione deploy di un descrittore (plugin, target, parametri).
@@ -869,6 +895,7 @@ components:
         steps: {type: array, items: {$ref: '#/components/schemas/StepResult'}}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         change: {$ref: '#/components/schemas/ChangeTicket'}
+        exports: {type: object, additionalProperties: {type: string}, description: Export del deploy riuscito}
     Status:
       type: object
       required: [id, state, created_at, updated_at]
@@ -904,6 +931,7 @@ components:
         run: {type: string, description: Rilascio multi-tenant a cui appartiene il deploy}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
+        exports: {type: object, additionalProperties: {type: string}, description: Export del deploy riuscito, importabili da altri deploy}
         result: {$ref: '#/components/schemas/Result'}
         error: {type: string}
     AfterState:
