@@ -52,9 +52,6 @@ const (
 	KindDeploy    = "deploy"
 	KindPromotion = "promotion"
 	KindRollback  = "rollback"
-	// KindAdoption records as a deploy of a tenant the release already in service elsewhere
-	// (manent-server admin tenants-adopt): the targets are not touched.
-	KindAdoption = "adoption"
 )
 
 var (
@@ -208,6 +205,8 @@ type Result struct {
 	Change *ChangeTicket `json:"change,omitempty"`
 	// Exports are the values the deploy offers to the deploys importing it (descriptor.Export).
 	Exports map[string]string `json:"exports,omitempty"`
+	// PublicExports are the exports other tenants can import.
+	PublicExports []string `json:"public_exports,omitempty"`
 }
 
 // Submission describes the outcome of Submit.
@@ -219,9 +218,6 @@ type Submission struct {
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	Schedule    string     `json:"schedule,omitempty"`
 	DryRun      bool       `json:"dry_run,omitempty"`
-	// Tenants are the tenants of a multi-tenant release, Skipped those left out.
-	Tenants []string     `json:"tenants,omitempty"`
-	Skipped []TenantSkip `json:"skipped,omitempty"`
 }
 
 // Status describes the state of a deploy.
@@ -261,18 +257,16 @@ type Status struct {
 	Release string `json:"release,omitempty"`
 	// Policy is the governance decision recorded at submission (revision and rule).
 	Policy *governance.Snapshot `json:"policy,omitempty"`
-	// TenantsRun is the state of a multi-tenant release (Kind tenants); Run the release the
-	// deploy of a tenant belongs to.
-	TenantsRun *TenantsRunState `json:"tenants_run,omitempty"`
-	Run        string           `json:"run,omitempty"`
 	// Rollout is the state of the wave release, if the deploy has one.
 	Rollout *RolloutState `json:"rollout,omitempty"`
 	// RolloutProgress summarizes the rollout in listings: "stages passed/total stages".
 	RolloutProgress string `json:"rollout_progress,omitempty"`
-	// Exports are the values a successful deploy offers to the deploys importing it.
-	Exports map[string]string `json:"exports,omitempty"`
-	Result  *Result           `json:"result,omitempty"`
-	Error   string            `json:"error,omitempty"`
+	// Exports are the values a successful deploy offers to the deploys importing it;
+	// PublicExports those other tenants can import.
+	Exports       map[string]string `json:"exports,omitempty"`
+	PublicExports []string          `json:"public_exports,omitempty"`
+	Result        *Result           `json:"result,omitempty"`
+	Error         string            `json:"error,omitempty"`
 }
 
 // ListFilter filters the deploy list.
@@ -284,6 +278,9 @@ type ListFilter struct {
 	Tenant string `json:"tenant,omitempty"`
 	// Artifact filters by artifact name.
 	Artifact string `json:"artifact,omitempty"`
+	// Selector filters the applications by an application selector (tags, application,
+	// tenant, tenant.<tag>): applied by the server, which knows the tags.
+	Selector string `json:"selector,omitempty"`
 	// State filters by state (e.g. SUCCESS, ERROR, AWAITING_APPROVAL).
 	State string `json:"state,omitempty"`
 	Limit int    `json:"limit,omitempty"`

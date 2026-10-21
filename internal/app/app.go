@@ -326,7 +326,7 @@ func RBACConfig(cfg *config.Config) (map[string][]authz.Action, []authz.Binding)
 	}
 	bindings := make([]authz.Binding, len(cfg.RBAC.Bindings))
 	for i, b := range cfg.RBAC.Bindings {
-		bindings[i] = authz.Binding{Subjects: b.Subjects, Groups: b.Groups, Role: b.Role, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants, Artifacts: b.Artifacts}
+		bindings[i] = authz.Binding{Subjects: b.Subjects, Groups: b.Groups, Role: b.Role, Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants, Artifacts: b.Artifacts, Selector: b.Selector}
 	}
 	return roles, bindings
 }
@@ -439,27 +439,59 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 			return r, err
 		}
 		r.Provider = &envconfig.ConsulProvider{
-			Address:           addr,
-			Token:             token,
-			Datacenter:        ec.Consul.Datacenter,
-			KeyTemplate:       ec.Consul.Key,
-			TenantKeyTemplate: ec.Consul.TenantsKey,
-			Client:            &http.Client{Timeout: 10 * time.Second},
+			Address:     addr,
+			Token:       token,
+			Datacenter:  ec.Consul.Datacenter,
+			KeyTemplate: ec.Consul.Key,
+			Client:      &http.Client{Timeout: 10 * time.Second},
 		}
 	case config.EnvProviderFile:
-		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path, TenantTemplate: ec.File.Tenants}
+		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path}
 	}
-	r.Tenants = envconfig.TenantDirectory(r.Provider)
 	return r, nil
 }
 
-// NewTenantCache returns the tenant registry of the environment configuration provider, with
-// a cache for selectors and permissions; nil if the provider has no registry.
-func NewTenantCache(cfg *config.Config, r envconfig.Resolver) tenant.Directory {
-	if r.Tenants == nil {
+// NewTenantCache returns the tenant registry (tenants.file) with a cache for owners,
+// selectors and permissions; nil without a registry.
+func NewTenantCache(cfg *config.Config) tenant.Directory {
+	if cfg.Tenants.File == "" {
 		return nil
 	}
-	return &tenant.Cache{Next: r.Tenants, TTL: cfg.EnvConfig.TenantsCache}
+	return &tenant.Cache{Next: tenant.File{Path: cfg.Tenants.File}, TTL: cfg.Tenants.Cache}
+}
+
+// tenantQueues returns the deploy queues of the tenants and, with dbos.tenants, the queues the
+// worker listens to (the default one for the tenants without their own).
+func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (all []engine.QueueOptions, listen []string, err error) {
+	if reg == nil {
+		if len(cfg.DBOS.Tenants) > 0 {
+			return nil, nil, errors.New("dbos.tenants requires a tenant registry (tenants.file)")
+		}
+		return nil, nil, nil
+	}
+	ts, err := reg.Tenants(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading the tenant registry: %w", err)
+	}
+	for _, t := range ts {
+		if t.Queue != "" {
+			all = append(all, engine.QueueOptions{Name: t.Queue, GlobalConcurrency: t.Concurrency})
+		}
+	}
+	for _, name := range cfg.DBOS.Tenants {
+		i := slices.IndexFunc(ts, func(t tenant.Tenant) bool { return t.Name == name })
+		if i < 0 {
+			return nil, nil, fmt.Errorf("dbos.tenants: tenant %s is not in the registry", name)
+		}
+		q := cmp.Or(ts[i].Queue, cfg.DBOS.Queue)
+		if !slices.Contains(listen, q) {
+			listen = append(listen, q)
+		}
+	}
+	if len(listen) > 0 {
+		log.Info("worker dedicato ai tenant", "tenants", cfg.DBOS.Tenants, "queues", listen)
+	}
+	return all, listen, nil
 }
 
 // NewCallbackPolicy returns the limits on callback URLs set in the configuration.
@@ -495,6 +527,9 @@ type components struct {
 	traffic *steps.Traffic
 	metrics *telemetry.Metrics
 	closers []io.Closer
+	// tenantRoles and crossTenant configure the permissions of the tenants (rbac).
+	tenantRoles config.TenantRoles
+	crossTenant bool
 }
 
 // service builds the service exposed to CLI and API: the Engine wrapped by permissions.
@@ -544,7 +579,8 @@ func (c *components) chatNotifier() engine.ChatNotifier {
 
 // guard wraps the Engine with permissions.
 func (c *components) guard(eng *engine.Engine) engine.Service {
-	g := &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz")}
+	g := &authz.Guard{Next: eng, Policy: c.authz, Audit: c.audit, Registry: c.tenants, Logger: c.log.With("component", "authz"),
+		TenantRoles: authz.TenantRoles{Members: c.tenantRoles.Members, Admins: c.tenantRoles.Admins}, CrossTenantInventory: c.crossTenant}
 	if c.authzOPA {
 		g.Authorizer = c.governance
 	}
@@ -615,30 +651,32 @@ func newComponents(cfg *config.Config) (*components, error) {
 		}
 	}
 	return &components{
-		metrics:    metrics,
-		health:     health,
-		traffic:    trafficOps,
-		plugins:    plugins,
-		policy:     policy,
-		notifier:   notifier,
-		log:        log,
-		siem:       sender,
-		steps:      reg,
-		store:      store,
-		planner:    pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg, Keys: specKeys},
-		custom:     NewCustomSteps(cfg, sp, specKeys, auditRec, gov, log),
-		resolver:   resolver,
-		rollback:   NewRollbackPolicy(cfg, locators),
-		sources:    sources,
-		authz:      authzPolicy,
-		authzOPA:   cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
-		audit:      auditRec,
-		governance: gov,
-		tenants:    NewTenantCache(cfg, resolver),
-		secrets:    sp,
-		chat:       NewChatNotifier(cfg, sp, log),
-		change:     NewChangeProvider(cfg, sp),
-		closers:    []io.Closer{auditCloser},
+		metrics:     metrics,
+		health:      health,
+		traffic:     trafficOps,
+		plugins:     plugins,
+		policy:      policy,
+		notifier:    notifier,
+		log:         log,
+		siem:        sender,
+		steps:       reg,
+		store:       store,
+		planner:     pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg, Keys: specKeys},
+		custom:      NewCustomSteps(cfg, sp, specKeys, auditRec, gov, log),
+		resolver:    resolver,
+		rollback:    NewRollbackPolicy(cfg, locators),
+		sources:     sources,
+		authz:       authzPolicy,
+		authzOPA:    cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
+		audit:       auditRec,
+		governance:  gov,
+		tenants:     NewTenantCache(cfg),
+		tenantRoles: cfg.RBAC.TenantRoles,
+		crossTenant: cfg.RBAC.CrossTenant(),
+		secrets:     sp,
+		chat:        NewChatNotifier(cfg, sp, log),
+		change:      NewChangeProvider(cfg, sp),
+		closers:     []io.Closer{auditCloser},
 	}, nil
 }
 
@@ -661,6 +699,10 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	}
 	host, _ := os.Hostname()
 	rc := cfg.Recovery
+	tqueues, listen, err := tenantQueues(cfg, c.tenants, c.log)
+	if err != nil {
+		return nil, err
+	}
 	w, err := engine.NewWorker(engine.WorkerOptions{
 		AppName:     cfg.App.Name,
 		AppVersion:  cfg.App.Version,
@@ -698,6 +740,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Reconcile:            engine.ReconcileOptions{Interval: cfg.Reconcile.Interval, Timeout: cfg.Reconcile.Timeout, Concurrency: cfg.Reconcile.Concurrency},
 		Region:               cfg.DBOS.Region,
 		RegionRouting:        cfg.DBOS.RegionRouting,
+		TenantQueues:         tqueues,
+		Listen:               listen,
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
 		Hostname:             host,

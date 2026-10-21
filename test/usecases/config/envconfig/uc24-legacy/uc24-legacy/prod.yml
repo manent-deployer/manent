@@ -1,9 +1,9 @@
-# UC24: an environment per customer, before tenants (adopted into prod/umbrella).
+# UC24: uc24-legacy of the tenant registry, on eu1-c.
 plugin: remote-copy
 targets:
-  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1}}
 params:
-  dest_dir: /home/deploy/apps/uc24-shop-umbrella
+  dest_dir: /home/deploy/apps/uc24-legacy
   layout: releases
   keep_releases: "3"
   ssh_key_secret: deploy-key

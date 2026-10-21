@@ -376,7 +376,7 @@ type passOutput struct {
 // ID: after an orchestrator recovery the already started child is not duplicated.
 func (w *Worker) startPass(ctx dbos.Context, id string, req Request, d *descriptor.Descriptor, ev *events, steps pipeline.Plan,
 	p rollout.Pass, outputs map[string]pipeline.Output, undo []startedStep, cause string) (string, dbos.WorkflowHandle[passOutput], error) {
-	qname := regionQueue(w.queueName, p.Region)
+	qname := regionQueue(w.queueOf(id), p.Region)
 	q, err := dbos.RetrieveQueue(w.dbos, qname)
 	if err != nil {
 		return "", nil, fmt.Errorf("no worker registered for region %s (queue %s): %w", p.Region, qname, err)
@@ -584,7 +584,7 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 		}
 		if len(byRegion) > 0 {
 			for _, region := range slices.Sorted(maps.Keys(byRegion)) {
-				qname := regionQueue(w.queueName, region)
+				qname := regionQueue(w.queueOf(id), region)
 				q, err := dbos.RetrieveQueue(w.dbos, qname)
 				if err != nil {
 					return rollout.GateResult{}, fmt.Errorf("no worker registered for region %s (queue %s): %w", region, qname, err)

@@ -93,19 +93,9 @@ governance:
       to: 2027-01-07T00:00:00Z
 ```
 
-- **Bindings with `artifacts`** apply only to the deploys of those artifacts, never to the actions on the whole environment (freezes, schedules listing, tenants): those need a binding without `artifacts`. The same field is accepted in the grants of a [permission policy](permessi.md) (`data.manent.rbac.bindings`, `grants`).
+- **Bindings with `artifacts`** apply only to the deploys of those artifacts, never to the actions on the whole environment (freezes, schedules listing): those need a binding without `artifacts`. The same field is accepted in the grants of a [permission policy](permessi.md) (`data.manent.rbac.bindings`, `grants`).
 - **Rules with `artifacts`** apply only to those artifacts; in Rego the library reads `input.artifact.name`.
 - **Freezes with `artifacts`** block only those artifacts; where the artifact is unknown (e.g. custom steps checking the environment) a partial freeze still applies. `manent freeze add -A shop-web` creates one at runtime.
-
-## Tenants
-
-Parameters, secrets and custom step parameters of a [tenant](tenant.md) can be given for one artifact with the key `<application>/<artifact>`; they take priority over the application's:
-
-```yaml title="envconfig/tenants/acme.yml"
-params:
-  shop: {db_host: acme-db.internal}
-  shop/shop-db: {db_host: acme-db-admin.internal}
-```
 
 ## Renaming an artifact
 

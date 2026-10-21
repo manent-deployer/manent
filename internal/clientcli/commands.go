@@ -22,16 +22,13 @@ import (
 // DeployCmd enqueues a deploy and, by default, waits for it to end.
 // Scheduled deploys (schedule in the descriptor) are not waited for.
 type DeployCmd struct {
-	global      *GlobalOptions
-	File        string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
-	NoWait      bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
-	Timeout     time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
-	DryRun      bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
-	After       []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
-	Import      []string      `long:"import" value-name:"NOME=ID" description:"legge gli export del deploy ID come import NOME del descrittore (ripetibile); aggiunge ID ad after"`
-	Tenant      string        `long:"tenant" description:"tenant del deploy, al posto di quello del descrittore"`
-	Tenants     string        `long:"tenants" description:"rilascio a più tenant scelti con un selettore sui tag (es. tier=gold) o sul nome (name in (acme, globex))"`
-	MaxParallel int           `long:"max-parallel" description:"deploy di tenant contemporanei in un rilascio multi-tenant (default 5)"`
+	global  *GlobalOptions
+	File    string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	NoWait  bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
+	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
+	DryRun  bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
+	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
+	Import  []string      `long:"import" value-name:"NOME=ID" description:"legge gli export del deploy ID come import NOME del descrittore (ripetibile); aggiunge ID ad after"`
 	ArtifactOverrides
 	Outputs string `long:"outputs" description:"file a cui aggiungere gli esiti come righe chiave=valore (deployment_id, state, ...): $GITHUB_OUTPUT o un report dotenv di GitLab"`
 	Summary string `long:"summary" description:"file a cui aggiungere il riepilogo del deploy in Markdown ($GITHUB_STEP_SUMMARY)"`
@@ -77,18 +74,6 @@ func (c *DeployCmd) Execute([]string) error {
 	d, err := descriptor.DecodeYAML(data)
 	if err != nil {
 		return err
-	}
-	if c.Tenant != "" {
-		d.Tenant, d.Tenants = c.Tenant, nil
-	}
-	if c.Tenants != "" {
-		d.Tenant, d.Tenants = "", &descriptor.Tenants{Selector: c.Tenants}
-	}
-	if c.MaxParallel > 0 {
-		if d.Tenants == nil {
-			return errors.New("--max-parallel needs a multi-tenant release (--tenants or tenants in the descriptor)")
-		}
-		d.Tenants.MaxParallel = c.MaxParallel
 	}
 	if err := applyImports(d, c.Import); err != nil {
 		return err
@@ -194,8 +179,9 @@ type ListCmd struct {
 	Schedule    string `short:"s" long:"schedule" description:"solo i deploy generati da questa schedule"`
 	Application string `short:"a" long:"application" description:"solo i deploy di questa applicazione"`
 	Environment string `short:"e" long:"environment" description:"solo i deploy in questo ambiente"`
-	Tenant      string `short:"t" long:"tenant" description:"solo i deploy di questo tenant"`
+	Tenant      string `short:"t" long:"tenant" description:"solo i deploy delle applicazioni di questo tenant"`
 	Artifact    string `short:"A" long:"artifact" description:"solo i deploy di questo artefatto (artifact.name)"`
+	Selector    string `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. criticality=high, tenant=payments)"`
 	State       string `long:"state" description:"solo i deploy in questo stato (es. SUCCESS, ERROR, AWAITING_APPROVAL)"`
 	Limit       int    `short:"n" long:"limit" default:"20" description:"numero massimo di deploy"`
 }
@@ -203,7 +189,7 @@ type ListCmd struct {
 // Execute implements flags.Commander.
 func (c *ListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, State: c.State, Limit: c.Limit})
+		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, Selector: c.Selector, State: c.State, Limit: c.Limit})
 		if err != nil {
 			return err
 		}
@@ -331,14 +317,12 @@ type PromoteCmd struct {
 	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (obbligatorio se l'ambiente di origine ne ha più di uno)"`
 	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
 	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
-	Tenant      string `long:"tenant" description:"promuove la release di questo tenant"`
-	Tenants     string `long:"tenants" description:"promuove i tenant scelti dal selettore, ognuno dalla propria release nell'ambiente di origine"`
 	redeployOptions
 }
 
 // Execute implements flags.Commander.
 func (c *PromoteCmd) Execute([]string) error {
-	r := service.PromoteRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Version: c.Version, Tenant: c.Tenant, Tenants: c.Tenants, Redeploy: c.redeploy()}
+	r := service.PromoteRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Version: c.Version, Redeploy: c.redeploy()}
 	if c.DeployFile != "" {
 		data, err := os.ReadFile(c.DeployFile)
 		if err != nil {
@@ -368,8 +352,6 @@ type RollbackCmd struct {
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
 	Artifact    string `short:"A" long:"artifact" description:"artefatto da riportare indietro (obbligatorio se l'ambiente ne ha più di uno)"`
 	Version     string `long:"to" description:"versione a cui tornare (default: la precedente a quella in esercizio)"`
-	Tenant      string `long:"tenant" description:"torna indietro sulla release di questo tenant"`
-	Run         string `long:"run" description:"riporta indietro i tenant riusciti di questo rilascio multi-tenant, in ordine inverso"`
 	redeployOptions
 }
 
@@ -377,7 +359,7 @@ type RollbackCmd struct {
 func (c *RollbackCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
 		sub, err := svc.Rollback(ctx, service.RollbackRequest{Application: c.Application, Artifact: c.Artifact, Environment: c.Environment, Version: c.Version,
-			Tenant: c.Tenant, Run: c.Run, Redeploy: c.redeploy()})
+			Redeploy: c.redeploy()})
 		if err != nil {
 			return err
 		}
@@ -392,13 +374,14 @@ type InventoryCmd struct {
 	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
 	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
 	Artifact    string `short:"A" long:"artifact" description:"solo questo artefatto (artifact.name)"`
+	Selector    string `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. product=checkout)"`
 	OutOfSync   bool   `long:"out-of-sync" description:"solo gli ambienti con target cambiati fuori da manent (riconciliazione)"`
 }
 
 // Execute implements flags.Commander.
 func (c *InventoryCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact})
+		inv, err := svc.Inventory(ctx, service.InventoryFilter{Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, Selector: c.Selector})
 		if err != nil {
 			return err
 		}

@@ -47,13 +47,13 @@ flowchart LR
 | **Application** | Something you release, for example `shop-api`. | Descriptor (`application`). |
 | **Environment** | Where the application runs: `dev`, `test`, `preprod`, `prod`. Regions and AZs are *labels* of the targets, not separate environments. | Descriptor (`environment`). |
 | **Artifact** | The immutable file or image to release, with a `type` (`application`, `container`, `kubernetes`, `war`, `lambda`…) that picks the plugins able to handle it. | Descriptor (`artifact`). |
-| **Target** | A destination: a host, a cluster API, a cloud region, a management endpoint. It carries `labels` (`region`, `az`, `canary`, `tenant`…). | Environment configuration or descriptor. |
+| **Target** | A destination: a host, a cluster API, a cloud region, a management endpoint. It carries `labels` (`region`, `az`, `canary`…). | Environment configuration or descriptor. |
 | **Plugin** | The component that knows how to release an artifact type on a kind of target. | `manent.yml` (`plugins`). |
 | **Pipeline** | The ordered steps every deploy goes through: `secrets`, `artifacts`, `qa`, `deploy`, `post-test`, `activation`, plus custom steps. | `manent.yml` (`pipeline`). |
 | **Deploy** | One run of the pipeline for an application, environment and artifact: a durable workflow with an ID, a state and an outcome. | Created by a request. |
 | **Rollout strategy** | How the deploy reaches the targets: all at once, in [waves](../guida/ondate.md), or by [traffic percentage](../guida/traffico.md). | Environment configuration. |
 | **Governance** | Rules on who can release what, where and when. | `manent.yml` (`governance`) or Rego policies. |
-| **Tenant** | Optional third dimension: a customer or instance with its own parameters, secrets and targets. | [Tenant registry](../guida/tenant.md). |
+| **Tenant** | The team that owns an application; application tags group applications across teams. | [Tenant registry](../guida/tenant.md). |
 
 See the [Glossary](glossario.md) for every term used in this documentation.
 

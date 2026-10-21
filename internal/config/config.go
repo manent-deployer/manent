@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/joeg-ita/manent/internal/customspec"
+	"github.com/joeg-ita/manent/internal/labels"
 )
 
 // Modes of a pipeline step.
@@ -51,6 +52,7 @@ type Config struct {
 	Retention        Retention                 `yaml:"retention"`
 	Reconcile        Reconcile                 `yaml:"reconcile"`
 	Integrations     Integrations              `yaml:"integrations"`
+	Tenants          Tenants                   `yaml:"tenants"`
 }
 
 // Observability configures metrics, tracing and probes of long-running processes.
@@ -208,6 +210,10 @@ type DBOS struct {
 	// RegionRouting makes the workers of the targets' region run the rollout passes, as child
 	// workflows; without it, the orchestrator runs them inline.
 	RegionRouting bool `yaml:"region_routing"`
+	// Tenants, if set, makes the worker dequeue only the deploys of these tenants (their
+	// queues, or the default one for those without): a pool dedicated to some teams, with their
+	// credentials. Empty: every queue.
+	Tenants []string `yaml:"tenants"`
 	// DrainTimeout is how long a stopping worker waits for the running deploys after it stopped
 	// dequeuing (0 = no wait).
 	DrainTimeout time.Duration `yaml:"drain_timeout"`
@@ -281,8 +287,22 @@ type EnvConfig struct {
 	MaxRetries int          `yaml:"max_retries"`
 	Consul     ConsulConfig `yaml:"consul"`
 	File       FileConfig   `yaml:"file"`
-	// TenantsCache is how long the tenant listing is kept (selectors, permissions).
-	TenantsCache time.Duration `yaml:"tenants_cache"`
+}
+
+// Tenants configures the tenant registry: the teams and the applications they own.
+type Tenants struct {
+	// File is the registry (tenants.yml); empty: no registry, every application is accepted
+	// without owner.
+	File string `yaml:"file"`
+	// Cache is how long the registry is kept before reading it again (default 30s).
+	Cache time.Duration `yaml:"cache"`
+}
+
+// TenantRoles are the roles given implicitly to the members and admins of a tenant on its
+// applications; an empty role gives nothing.
+type TenantRoles struct {
+	Members string `yaml:"members"`
+	Admins  string `yaml:"admins"`
 }
 
 // ConsulConfig configures reading from the Consul KV store.
@@ -294,16 +314,12 @@ type ConsulConfig struct {
 	// Key is the key template, with {application}, {artifact} and {environment}.
 	Key       string `yaml:"key"`
 	TokenFile string `yaml:"token_file"`
-	// TenantsKey is the key template of the tenant documents, with {tenant}.
-	TenantsKey string `yaml:"tenants_key"`
 }
 
 // FileConfig configures reading from local files.
 type FileConfig struct {
 	// Path is the path template, with {application}, {artifact} and {environment}.
 	Path string `yaml:"path"`
-	// Tenants is the path template of the tenant documents, with {tenant}.
-	Tenants string `yaml:"tenants"`
 }
 
 // Callbacks configures sending events to the callbacks named in descriptors.
@@ -404,7 +420,19 @@ type RBAC struct {
 	// Roles defines roles in addition to the predefined ones (viewer, tester, deployer, operator, admin).
 	Roles    map[string][]string `yaml:"roles"`
 	Bindings []RBACBinding       `yaml:"bindings"`
+	// TenantRoles are the implicit roles of tenant members and admins (default deployer and
+	// admin, limited to the tenant's applications; policy.* excluded).
+	TenantRoles TenantRoles `yaml:"tenant_roles"`
+	// SelectorKeys are the keys the application selectors of the bindings and permission
+	// grants can read; empty: no selector in permissions.
+	SelectorKeys []string `yaml:"selector_keys"`
+	// CrossTenantInventory lets whoever belongs to a tenant read the inventory of the others
+	// (default true).
+	CrossTenantInventory *bool `yaml:"cross_tenant_inventory"`
 }
+
+// CrossTenant reports whether the inventory can be read across tenants (default true).
+func (r RBAC) CrossTenant() bool { return r.CrossTenantInventory == nil || *r.CrossTenantInventory }
 
 // Engines of the permissions.
 const (
@@ -433,6 +461,9 @@ type RBACBinding struct {
 	// Artifacts limits the binding to some artifacts (patterns on artifact.name); without it
 	// the binding applies to every artifact and to the actions on the whole environment.
 	Artifacts []string `yaml:"artifacts"`
+	// Selector limits the binding to the matching applications (application selector, keys
+	// limited by rbac.selector_keys).
+	Selector string `yaml:"selector"`
 }
 
 // Audit configures the recording of actions.
@@ -544,6 +575,8 @@ type GovernanceRule struct {
 	Tenants string `yaml:"tenants"`
 	// Artifacts limits the rule to some artifacts (patterns on artifact.name).
 	Artifacts []string `yaml:"artifacts"`
+	// Selector limits the rule to the matching applications (application selector).
+	Selector string `yaml:"selector"`
 }
 
 // ApprovalSettings configures the approvals required before the deploy.
@@ -582,6 +615,8 @@ type FreezeWindow struct {
 	Tenants string `yaml:"tenants"`
 	// Artifacts limits the window to some artifacts (patterns on artifact.name).
 	Artifacts []string `yaml:"artifacts"`
+	// Selector limits the window to the matching applications (application selector).
+	Selector string `yaml:"selector"`
 }
 
 // DescriptorPolicy limits what a descriptor can add to the environment configuration.
@@ -690,12 +725,13 @@ func Default() *Config {
 		SIEM:    SIEM{Network: "udp"},
 		WorkDir: "./work",
 		EnvConfig: EnvConfig{
-			Provider:     EnvProviderNone,
-			MaxRetries:   3,
-			Consul:       ConsulConfig{Key: "manent/{application}/{artifact}/{environment}", TenantsKey: "manent/tenants/{tenant}"},
-			File:         FileConfig{Path: "./envconfig/{application}/{artifact}/{environment}.yml", Tenants: "./envconfig/tenants/{tenant}.yml"},
-			TenantsCache: 30 * time.Second,
+			Provider:   EnvProviderNone,
+			MaxRetries: 3,
+			Consul:     ConsulConfig{Key: "manent/{application}/{artifact}/{environment}"},
+			File:       FileConfig{Path: "./envconfig/{application}/{artifact}/{environment}.yml"},
 		},
+		Tenants:   Tenants{Cache: 30 * time.Second},
+		RBAC:      RBAC{TenantRoles: TenantRoles{Members: "deployer", Admins: "admin"}},
 		Callbacks: Callbacks{Timeout: 10 * time.Second, MaxRetries: 3},
 		// Rollback is allowed but disabled for applications; never for migrations, which usually
 		// cannot be reversed.
@@ -1028,7 +1064,33 @@ func (c *Config) validateRBACEngine() []error {
 	if c.RBAC.OPA.Cache < 0 || c.RBAC.OPA.CacheSize < 0 {
 		errs = append(errs, errors.New("rbac.opa: cache and cache_size must be >= 0"))
 	}
+	for i, b := range c.RBAC.Bindings {
+		if err := checkSelectorKeys(b.Selector, c.RBAC.SelectorKeys); err != nil {
+			errs = append(errs, fmt.Errorf("rbac.bindings[%d].selector: %w", i, err))
+		}
+	}
+	if c.Tenants.Cache < 0 {
+		errs = append(errs, errors.New("tenants.cache must be >= 0"))
+	}
 	return errs
+}
+
+// checkSelectorKeys checks that a selector of the permissions reads only the keys of
+// rbac.selector_keys: a cosmetic tag must not give permissions.
+func checkSelectorKeys(selector string, allowed []string) error {
+	if strings.TrimSpace(selector) == "" {
+		return nil
+	}
+	s, err := labels.Parse(selector)
+	if err != nil {
+		return err
+	}
+	for _, k := range s.Keys() {
+		if !slices.Contains(allowed, k) {
+			return fmt.Errorf("key %q is not in rbac.selector_keys", k)
+		}
+	}
+	return nil
 }
 
 // validateGovernance checks engine, source and start checks of the governance policy.

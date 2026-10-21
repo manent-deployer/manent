@@ -196,7 +196,7 @@ func (c *Client) Status(ctx context.Context, id string) (*service.Status, error)
 // List implements service.Service. f.Match cannot be applied remotely and is ignored.
 func (c *Client) List(ctx context.Context, f service.ListFilter) ([]service.Status, error) {
 	q := url.Values{}
-	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "tenant": f.Tenant, "artifact": f.Artifact, "state": f.State, "cursor": f.Cursor} {
+	for k, v := range map[string]string{"schedule": f.Schedule, "application": f.Application, "environment": f.Environment, "tenant": f.Tenant, "artifact": f.Artifact, "selector": f.Selector, "state": f.State, "cursor": f.Cursor} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -292,6 +292,9 @@ func (c *Client) Inventory(ctx context.Context, f service.InventoryFilter) ([]se
 	}
 	if f.Artifact != "" {
 		q.Set("artifact", f.Artifact)
+	}
+	if f.Selector != "" {
+		q.Set("selector", f.Selector)
 	}
 	var out struct {
 		Inventory []service.InventoryEntry `json:"inventory"`

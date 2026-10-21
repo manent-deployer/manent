@@ -13,9 +13,6 @@ type FileProvider struct {
 	// PathTemplate is the path template, with {application}, {artifact} and {environment}
 	// placeholders.
 	PathTemplate string
-	// TenantTemplate is the path template of the tenant documents, with {tenant} (empty: no
-	// tenant registry).
-	TenantTemplate string
 }
 
 // Get reads the file of the artifact in the application/environment.

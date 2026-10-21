@@ -5,7 +5,7 @@ By default the permissions are the `rbac.bindings` of `manent.yml` ([Permissions
 A policy can express what bindings cannot:
 
 - **temporary access**: an on-call grant that stops applying at the end of the shift (`until`);
-- **ownership**: a team gets the deploys of the tenants tagged `owner=<team>`, without a binding per customer;
+- **ownership**: a team gets the applications of the tenants tagged `owner=<team>`, without a binding per application;
 - **conditions on the request**: contractors never change production, migrations in production only by the DBA group, a deploy cancelled only by whoever requested it.
 
 ```yaml title="manent.yml"
@@ -60,7 +60,9 @@ Output, one object per grant:
 | `name` | Label shown in `manent whoami`, in the web interface and in the audit. |
 | `role` or `actions` | A role (predefined or from `rbac.roles`/`data.manent.rbac.roles`) or a list of actions. `policy.*` actions are **discarded** with a warning: only `rbac.bindings` grants them. |
 | `applications`, `environments` | Patterns with `*`, required. |
-| `tenants` | Selector on the tags and the name of the [tenant](tenant.md#permessi); absent: every deploy. |
+| `tenants` | Selector on the tags and the name of the owner [tenant](tenant.md); absent: every application. |
+| `artifacts` | Patterns on `artifact.name`; absent: every artifact. |
+| `selector` | Application selector on the [tags](tenant.md), with the keys of `rbac.selector_keys`; absent: every application. |
 | `until` | Optional, RFC 3339: the grant stops applying at that instant, even while it is in the cache. The instant is compared with the clock of the API server. |
 
 An invalid grant (unknown role or action, missing patterns, invalid selector) is discarded on its own, with a warning in the log and in `manent_authz_invalid_grants_total`; at compilation, on the sample inputs, it is an error.
@@ -78,7 +80,7 @@ Input:
   "resource": {
     "application": "shop",
     "environment": "prod",
-    "tenant": {"name": "acme", "tags": {"tier": "gold", "owner": "team-shop"}},
+    "tenant": {"name": "payments", "tags": {"division": "commerce", "owner": "team-shop"}},
     "deployment": {
       "id": "shop-1.4.0-prod", "kind": "deploy", "dry_run": false,
       "artifact": {"type": "application", "name": "shop", "version": "1.4.0"},
@@ -108,7 +110,7 @@ import data.manent.lib.authz
 # The bindings of manent.yml (data.manent.rbac), plus the rules below.
 grants := authz.bindings | owners | oncall
 
-# A team owns the tenants tagged with its name.
+# A team owns the applications of the tenants tagged with its name.
 owners contains g if {
 	some group in input.identity.groups
 	startswith(group, "team-")

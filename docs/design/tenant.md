@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Stato | Implementato (vedi §16 per le differenze rispetto alla proposta) |
+| Stato | Superato: il tenant ora è il team proprietario delle applicazioni (vedi [Tenant](../content/guida/tenant.it.md)); il modello per cliente descritto qui è stato rimosso |
 | Data | 2026-10-18 |
 | Ambito | `internal/envconfig`, `internal/descriptor`, `internal/engine` (submit, coda, inventario, governance, release), `internal/authz`, `internal/policy`, `internal/cluster`, API/CLI/UI, provider Terraform |
 

@@ -23,7 +23,7 @@ func NewStaticGovernance(cfg *config.Config) (*governance.Policy, error) {
 	g := cfg.Governance
 	rules := make([]governance.Rule, len(g.Rules))
 	for i, r := range g.Rules {
-		rules[i] = governance.Rule{Name: r.Name, Applications: r.Applications, Environments: r.Environments, Requires: r.Requires, Tenants: r.Tenants, Artifacts: r.Artifacts}
+		rules[i] = governance.Rule{Name: r.Name, Applications: r.Applications, Environments: r.Environments, Requires: r.Requires, Tenants: r.Tenants, Artifacts: r.Artifacts, Selector: r.Selector}
 		if a := r.Approvals; a != nil {
 			rules[i].Approvals = governance.Approvals{Required: a.Required, AllowSelf: a.AllowSelf, Timeout: a.Timeout, When: a.When}
 			if ap := a.Approvers; ap != nil {
@@ -38,7 +38,7 @@ func NewStaticGovernance(cfg *config.Config) (*governance.Policy, error) {
 	for i, f := range g.Freezes {
 		windows[i] = governance.Window{
 			Name: f.Name, Reason: f.Reason, Applications: f.Applications, Environments: f.Environments, Regions: f.Regions,
-			From: f.From, To: f.To, Cron: f.Cron, Duration: f.Duration, Timezone: f.Timezone, Hard: f.Hard, Tenants: f.Tenants, Artifacts: f.Artifacts,
+			From: f.From, To: f.To, Cron: f.Cron, Duration: f.Duration, Timezone: f.Timezone, Hard: f.Hard, Tenants: f.Tenants, Artifacts: f.Artifacts, Selector: f.Selector,
 		}
 	}
 	return governance.New(rules, windows)

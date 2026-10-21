@@ -315,7 +315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Tenant del registro (filtrati dai permessi) */
+        /** Tenant del registro, i team proprietari delle applicazioni (filtrati dai permessi) */
         get: operations["listTenants"];
         put?: never;
         post?: never;
@@ -752,12 +752,6 @@ export interface components {
             id?: string;
             application: string;
             environment: string;
-            /** @description Tenant del deploy */
-            tenant?: string;
-            /** @description Rilascio a più tenant (names o selector, groups, maxParallel, onFailure, onDenied, approvalsBetween) */
-            tenants?: {
-                [key: string]: unknown;
-            };
             dryRun?: boolean;
             /** @description ID dei deploy che devono riuscire prima di questo */
             after?: string[];
@@ -821,9 +815,6 @@ export interface components {
             scheduled_at?: string;
             schedule?: string;
             dry_run?: boolean;
-            /** @description Tenant di un rilascio multi-tenant */
-            tenants?: string[];
-            skipped?: components["schemas"]["TenantSkip"][];
         };
         Decision: {
             approver: string;
@@ -932,7 +923,7 @@ export interface components {
             version?: string;
             sha256?: string;
             /** @enum {string} */
-            kind?: "deploy" | "promotion" | "rollback" | "tenants";
+            kind?: "deploy" | "promotion" | "rollback";
             /** @description Deploy di origine di una promozione o di un rollback */
             source?: string;
             dry_run?: boolean;
@@ -961,9 +952,6 @@ export interface components {
             /** @description Release composta a cui appartiene il deploy */
             release?: string;
             policy?: components["schemas"]["PolicySnapshot"];
-            tenants_run?: components["schemas"]["TenantsRunState"];
-            /** @description Rilascio multi-tenant a cui appartiene il deploy */
-            run?: string;
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
@@ -1260,71 +1248,34 @@ export interface components {
             recurring?: boolean;
             tenants?: string;
             artifacts?: string[];
+            selector?: string;
             /** @description Non esentabile dalla policy né superabile con freezeOverride */
             hard?: boolean;
             /** @description Creata a runtime */
             dynamic?: boolean;
             created_by?: string;
         };
-        TenantSkip: {
-            tenant: string;
-            reason: string;
-        };
+        /** @description Un tenant, il team proprietario delle applicazioni */
         TenantInfo: {
             name: string;
             description?: string;
             tags?: {
                 [key: string]: string;
             };
+            /** @description Applicazioni possedute, con i loro tag */
             applications?: {
-                [key: string]: string[];
-            };
-            params?: {
                 [key: string]: {
-                    [key: string]: string;
+                    tags?: {
+                        [key: string]: string;
+                    };
                 };
             };
-            /** @description Nomi dei segreti */
-            secrets?: {
-                [key: string]: string[];
-            };
+            /** @description Coda dei deploy del tenant; assente per la coda di default */
+            queue?: string;
+            concurrency?: number;
             disabled?: boolean;
             source?: string;
-        };
-        TenantRunEntry: {
-            tenant: string;
-            group: string;
-            deployment_id?: string;
-            /** @description Stato del deploy */
-            state: string;
-            error?: string;
-            reason?: string;
-        };
-        TenantGroupState: {
-            name: string;
-            bake?: string;
-            /** @enum {string} */
-            state: "pending" | "running" | "baking" | "done" | "skipped";
-        };
-        TenantsRunState: {
-            id: string;
-            application: string;
-            environment: string;
-            artifact?: string;
-            version?: string;
-            kind?: string;
-            /** @enum {string} */
-            status: "running" | "baking" | "paused-approval" | "succeeded" | "failed" | "stopped";
-            group?: string;
-            paused?: string;
-            max_parallel: number;
-            on_failure: string;
-            groups: components["schemas"]["TenantGroupState"][];
-            tenants: components["schemas"]["TenantRunEntry"][];
-            approval?: components["schemas"]["ApprovalState"];
-            error?: string;
-            /** Format: date-time */
-            updated_at?: string;
+            revision?: string;
         };
         FreezeRequest: {
             name: string;
@@ -1336,6 +1287,8 @@ export interface components {
             tenants?: string;
             /** @description Pattern sui nomi degli artefatti */
             artifacts?: string[];
+            /** @description Selettore sulle applicazioni (tag */
+            selector?: string;
             /**
              * Format: date-time
              * @description Default adesso
@@ -1492,10 +1445,6 @@ export interface components {
             /** @description Artefatto da promuovere; obbligatorio se from ne ha più di uno */
             artifact?: string;
             version?: string;
-            /** @description Promuove la release di questo tenant */
-            tenant?: string;
-            /** @description Selettore dei tenant da promuovere */
-            tenants?: string;
             deploy?: components["schemas"]["DeployTargets"];
         };
         RollbackRequest: components["schemas"]["Redeploy"] & {
@@ -1504,10 +1453,6 @@ export interface components {
             /** @description Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno */
             artifact?: string;
             version?: string;
-            /** @description Torna indietro sulla release di questo tenant */
-            tenant?: string;
-            /** @description Rilascio multi-tenant di cui riportare indietro i tenant riusciti */
-            run?: string;
         };
         Grant: {
             /** @description Etichetta del permesso (posizione del binding o nome dato dalla policy) */
@@ -1519,6 +1464,8 @@ export interface components {
             environments: string[];
             /** @description Selettore dei tenant a cui il permesso è limitato */
             tenants?: string;
+            /** @description Selettore sulle applicazioni a cui il permesso è limitato */
+            selector?: string;
             /** @description Pattern degli artefatti a cui il permesso è limitato */
             artifacts?: string[];
             /**
@@ -1542,7 +1489,6 @@ export interface components {
             action: string;
             application?: string;
             environment?: string;
-            tenant?: string;
             artifact?: string;
             descriptor?: components["schemas"]["Descriptor"];
         };
@@ -1629,6 +1575,8 @@ export interface operations {
                 tenant?: string;
                 /** @description Nome dell'artefatto (artifact.name) */
                 artifact?: string;
+                /** @description Selettore sulle applicazioni (tag */
+                selector?: string;
                 state?: string;
                 limit?: number;
                 /** @description next_cursor della pagina precedente */
@@ -2025,6 +1973,8 @@ export interface operations {
                 tenant?: string;
                 /** @description Nome dell'artefatto (artifact.name) */
                 artifact?: string;
+                /** @description Selettore sulle applicazioni (tag */
+                selector?: string;
             };
             header?: never;
             path?: never;
@@ -2121,9 +2071,9 @@ export interface operations {
     listTenants: {
         parameters: {
             query?: {
+                /** @description Solo il proprietario di questa applicazione */
                 application?: string;
-                environment?: string;
-                /** @description Selettore sui tag e sul nome */
+                /** @description Selettore sui tag del tenant e sul nome */
                 selector?: string;
             };
             header?: never;

@@ -180,7 +180,7 @@ func writeSubmission(c *gin.Context, sub *engine.Submission, err error) {
 // list lists the most recent deploys (query: schedule, application, environment, state, limit).
 func (s *Server) list(c *gin.Context) {
 	f := engine.ListFilter{Schedule: c.Query("schedule"), Application: c.Query("application"), Environment: c.Query("environment"),
-		Tenant: c.Query("tenant"), Artifact: c.Query("artifact"), State: c.Query("state"), Cursor: c.Query("cursor")}
+		Tenant: c.Query("tenant"), Artifact: c.Query("artifact"), Selector: c.Query("selector"), State: c.Query("state"), Cursor: c.Query("cursor")}
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {
@@ -313,7 +313,7 @@ func (s *Server) rollback(c *gin.Context) {
 
 // inventory returns the release in service per application and environment.
 func (s *Server) inventory(c *gin.Context) {
-	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), Artifact: c.Query("artifact")})
+	inv, err := s.svc.Inventory(c.Request.Context(), engine.InventoryFilter{Application: c.Query("application"), Environment: c.Query("environment"), Tenant: c.Query("tenant"), Artifact: c.Query("artifact"), Selector: c.Query("selector")})
 	if err != nil {
 		writeError(c, err)
 		return

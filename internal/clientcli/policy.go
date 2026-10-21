@@ -377,7 +377,6 @@ type PolicyAccessCmd struct {
 	Action      string            `long:"action" description:"azione di cui simulare l'esito (es. deployment.submit)"`
 	Application string            `short:"a" long:"application" description:"applicazione dell'azione"`
 	Environment string            `short:"e" long:"environment" description:"ambiente dell'azione"`
-	Tenant      string            `short:"t" long:"tenant" description:"tenant dell'azione"`
 	Artifact    string            `short:"A" long:"artifact" description:"artefatto dell'azione (binding con artifacts)"`
 	File        string            `short:"f" long:"file" description:"descrittore YAML del deploy (artefatto per i divieti)"`
 	JSON        bool              `long:"json" description:"output JSON"`
@@ -392,13 +391,13 @@ func (c *PolicyAccessCmd) Execute([]string) error {
 	}
 	r := service.PolicyAccessRequest{Subject: c.Subject, Groups: c.Groups, Claims: c.Claims, Compare: c.Compare}
 	if c.Action != "" {
-		r.Check = &service.AccessCheck{Action: c.Action, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact}
+		r.Check = &service.AccessCheck{Action: c.Action, Application: c.Application, Environment: c.Environment, Artifact: c.Artifact}
 		if c.File != "" {
 			if r.Check.Descriptor, err = descriptor.LoadYAMLFile(c.File); err != nil {
 				return err
 			}
 		}
-	} else if c.File != "" || c.Application != "" || c.Environment != "" || c.Tenant != "" {
+	} else if c.File != "" || c.Application != "" || c.Environment != "" {
 		return errors.New("--application, --environment, --tenant and --file need --action")
 	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
@@ -510,6 +509,7 @@ type FreezeAddCmd struct {
 	Regions      []string `long:"region" description:"solo queste region (ripetibile)"`
 	Tenants      string   `long:"tenants" description:"solo i deploy dei tenant scelti dal selettore (es. name=acme, tier=gold)"`
 	Artifacts    []string `short:"A" long:"artifact" description:"solo questi artefatti (pattern con *, ripetibile)"`
+	Selector     string   `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. criticality=high)"`
 	From         string   `long:"from" description:"inizio, RFC 3339 (default adesso)"`
 	Until        string   `long:"until" description:"fine, RFC 3339"`
 	For          string   `long:"for" description:"durata dall'inizio, in alternativa a --until (es. 4h)"`
@@ -518,7 +518,7 @@ type FreezeAddCmd struct {
 
 // Execute implements flags.Commander.
 func (c *FreezeAddCmd) Execute([]string) error {
-	r := service.FreezeRequest{Name: c.Name, Reason: c.Reason, Applications: c.Applications, Environments: c.Environments, Regions: c.Regions, Tenants: c.Tenants, Artifacts: c.Artifacts, Hard: c.Hard}
+	r := service.FreezeRequest{Name: c.Name, Reason: c.Reason, Applications: c.Applications, Environments: c.Environments, Regions: c.Regions, Tenants: c.Tenants, Artifacts: c.Artifacts, Selector: c.Selector, Hard: c.Hard}
 	if len(r.Applications) == 0 {
 		r.Applications = []string{"*"}
 	}

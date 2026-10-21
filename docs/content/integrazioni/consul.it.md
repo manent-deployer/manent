@@ -10,9 +10,8 @@ La [configurazione di ambiente](../guida/configurazione-ambiente.md) di ogni app
 | Chiave | Contenuto |
 |---|---|
 | `manent/<applicazione>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
-| `manent/tenants/<tenant>` | Un documento di [tenant](../guida/tenant.md), se usi i tenant. |
 
-Entrambi i modelli si possono cambiare (`envconfig.consul.key`, `envconfig.consul.tenants_key`).
+Il modello si può cambiare (`envconfig.consul.key`).
 
 !!! danger "Riferimenti, mai valori"
     La configurazione che manent legge viene salvata nello storico dei deploy. Deve contenere solo riferimenti ai segreti (`vault:…`, `file:…`), mai password o chiavi.

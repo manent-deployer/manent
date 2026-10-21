@@ -6,11 +6,11 @@ A deploy is the result of up to four layers of configuration, each owned by a di
 flowchart TB
     M["manent.yml<br/><small>platform team · read at startup</small>"]
     E["Environment configuration<br/><small>environment owners · read at every deploy</small>"]
-    T["Tenant registry<br/><small>optional · read at every deploy</small>"]
+    T["Tenant registry<br/><small>optional · owners and tags of the applications</small>"]
     D["Descriptor<br/><small>application team · one per release</small>"]
     M -->|plugins, pipeline, rules, limits| X(("Effective<br/>deploy"))
     E -->|targets, parameters, secret refs, strategy| X
-    T -->|tenant parameters, secrets, targets| X
+    T -->|owner, queue, restrictions, tags| X
     D -->|artifact, options| X
 ```
 
@@ -19,8 +19,8 @@ flowchart TB
 | Layer | Where | Owner | Contains | Read |
 |---|---|---|---|---|
 | **`manent.yml`** | A file on every server process (a ConfigMap with Helm). | Platform team | Plugins and their limits, pipeline steps, governance rules, authentication and RBAC, integrations, allowed artifact sources, `descriptor_policy`. | At startup. |
-| **Environment configuration** | Consul KV (`manent/<application>/<environment>`) or files. | Environment owners | Plugin, targets with labels, plugin parameters, secret references, rollout and traffic strategy, rollback, custom step parameters, tenancy. | At the start of every deploy, in the `config` step. |
-| **Tenant registry** | Consul or files (`tenants/<tenant>.yml`). | Customer operations | Per-tenant tags, parameters, secrets and step parameters, for each application. | At the start of every deploy for a tenant. |
+| **Environment configuration** | Consul KV (`manent/<application>/<environment>`) or files. | Environment owners | Plugin, targets with labels, plugin parameters, secret references, rollout and traffic strategy, rollback, custom step parameters. | At the start of every deploy, in the `config` step. |
+| **Tenant registry** | A file (`tenants.yml`). | Platform team | The teams, the applications each one owns with their tags, members, queue and restrictions. | At submission (owner, restrictions recorded in the request), cached. |
 | **Descriptor** | The application repository, sent with each request. | Application team | Application, environment, artifact, idempotency `id`, optional steps, schedule, callbacks, dependencies. | At submission, then saved with the deploy. |
 
 ## Merge rules
@@ -31,7 +31,7 @@ The layers are merged in the `config` step into the **effective deploy**, which 
 - **Conflicts are errors.** A parameter set to two different values fails the deploy; nothing is silently overwritten.
 - **Some sections belong only to the environment.** `traffic` (load balancers and routers) is refused in a descriptor; `rollout` can only be repeated identically.
 - **`descriptor_policy` limits additions.** In `manent.yml` the platform decides which plugin parameters, secret references, custom step parameters and targets a descriptor may add. A typical production policy allows no commands and no targets.
-- **Tenants add a layer in between.** The tenant provides only the parameters the environment declares in `tenant_params`, plus its own secrets and its targets (label `tenant`).
+- **The tenant restricts, it does not add.** The owner of the application can limit secret references, artifact sources and callback hosts of its deploys; it never adds parameters or targets.
 
 | Field | Environment | Descriptor |
 |---|---|---|
@@ -106,7 +106,7 @@ What a deploy uses is fixed at precise moments, so that a deploy resumed after a
 |---|---|---|
 | Plan (steps and their order) | At submission. | Changing `pipeline.steps` does not alter deploys already enqueued. |
 | Governance decision, notification destinations, change rule | At submission. | A stricter rule arrived later does not invalidate an approval already given (unless `governance.start: strict`). |
-| Environment configuration, tenant | In the `config` step, at the start of the run. | A scheduled deploy uses the configuration valid when it runs; a resumed deploy reuses the one it read. |
+| Environment configuration | In the `config` step, at the start of the run. | A scheduled deploy uses the configuration valid when it runs; a resumed deploy reuses the one it read. |
 | Secret values | At the moment of use, never stored. | Rotating a secret in Vault takes effect at the next use, even within a running deploy. |
 | `manent.yml` | At process startup. | Most changes need a restart. Exceptions: `auth.tokens_file`, Rego policies and runtime freezes, reloaded live. |
 

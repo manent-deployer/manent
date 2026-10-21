@@ -79,7 +79,6 @@ func adminPolicyCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
 		{Name: "policy-activate", Short: "Attiva una revisione della policy senza approvazione (break-glass, registrato nell'audit)", Cmd: &AdminPolicyActivateCmd{global: g}},
 		{Name: "freeze-delete", Short: "Elimina un freeze creato a runtime (break-glass, registrato nell'audit)", Cmd: &AdminFreezeDeleteCmd{global: g}},
-		{Name: "tenants-adopt", Short: "Registra come deploy di un tenant la release in esercizio in un ambiente per cliente, senza toccare i target", Cmd: &AdminTenantsAdoptCmd{global: g}},
 	}
 }
 
@@ -269,27 +268,4 @@ func recordBreakGlass(ctx context.Context, a *app.App, action, comment string, e
 	if rerr := rec.Record(ctx, e); rerr != nil {
 		a.Logger.Error("registrazione nell'audit fallita", "action", action, "error", rerr)
 	}
-}
-
-// AdminTenantsAdoptCmd records as a deploy of a tenant the release in service in an
-// environment per customer, without touching the targets.
-type AdminTenantsAdoptCmd struct {
-	global      *GlobalOptions
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	From        string `long:"environment" required:"true" description:"ambiente per cliente di oggi, es. prod-acme"`
-	To          string `long:"as" required:"true" description:"ambiente con i tenant, es. prod"`
-	Tenant      string `long:"tenant" required:"true" description:"tenant"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto (obbligatorio se l'ambiente ne ha più di uno)"`
-}
-
-// Execute implements flags.Commander.
-func (c *AdminTenantsAdoptCmd) Execute([]string) error {
-	return withAdmin(c.global, func(ctx context.Context, a *app.App, _ *engine.Admin) error {
-		sub, err := a.Engine().Adopt(ctx, engine.AdoptRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Tenant: c.Tenant})
-		recordBreakGlass(ctx, a, "tenants.adopt", fmt.Sprintf("%s: %s -> %s/%s", c.Application, c.From, c.To, c.Tenant), err)
-		if err != nil {
-			return err
-		}
-		return cliutil.PrintJSON(sub)
-	})
 }

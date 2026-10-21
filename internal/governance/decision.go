@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // Phases of a governance evaluation (Input.Phase).
@@ -26,9 +28,9 @@ const (
 	PhaseTick = "tick"
 )
 
-// InputSchema is the version of the Input document. Fields are only added, never renamed:
-// schema 2 added tenant and tenants_run.
-const InputSchema = 2
+// InputSchema is the version of the Input document: schema 2 added tenant, schema 3 made the
+// tenant the owner of the application, added application_tags and removed tenants_run.
+const InputSchema = 3
 
 // ErrUnavailable means no valid policy is loaded (or it is older than max_staleness): real
 // deploys are refused until it comes back.
@@ -53,10 +55,19 @@ type Input struct {
 	Targets     []InputTarget   `json:"targets,omitempty"`
 	Current     *InputRelease   `json:"current,omitempty"`
 	Freezes     InputFreezes    `json:"freezes"`
-	// Tenant is the tenant of the deploy (absent for untenanted deploys).
-	Tenant *InputTenant `json:"tenant,omitempty"`
-	// TenantsRun is the multi-tenant release the deploy belongs to.
-	TenantsRun *InputTenantsRun `json:"tenants_run,omitempty"`
+	// Tenant is the tenant that owns the application (absent without a tenant registry);
+	// ApplicationTags the tags of the application in the registry.
+	Tenant          *InputTenant      `json:"tenant,omitempty"`
+	ApplicationTags map[string]string `json:"application_tags,omitempty"`
+}
+
+// AppLabels are the labels the application selectors match: application tags, application,
+// tenant and tenant.<tag>.
+func (in Input) AppLabels() map[string]string {
+	if in.Tenant == nil {
+		return tenant.AppLabels(in.Application, in.ApplicationTags, "", nil)
+	}
+	return tenant.AppLabels(in.Application, in.ApplicationTags, in.Tenant.Name, in.Tenant.Tags)
 }
 
 // InputTenant is the tenant of the deploy with its tags.
@@ -75,13 +86,6 @@ func (t *InputTenant) Labels() map[string]string {
 		l[k] = v
 	}
 	return l
-}
-
-// InputTenantsRun is the multi-tenant release of the deploy.
-type InputTenantsRun struct {
-	ID    string `json:"id"`
-	Count int    `json:"count,omitempty"`
-	Group string `json:"group,omitempty"`
 }
 
 // InputDeployment describes the deploy request.
@@ -246,7 +250,7 @@ type EvalFunc func(context.Context, Input) (Decision, error)
 // freezeOverride, and hard windows always block.
 func Decide(ctx context.Context, in Input, windows []Window, eval EvalFunc) (Decision, error) {
 	in.Schema = InputSchema
-	in.Freezes.Active = ActiveWindowsFor(windows, in.Application, in.Artifact.Name, in.Environment, in.Region, in.Tenant.Labels(), in.Now)
+	in.Freezes.Active = ActiveWindowsFor(windows, in.Application, in.Artifact.Name, in.Environment, in.Region, in.Tenant.Labels(), in.AppLabels(), in.Now)
 	if in.Freezes.Active == nil {
 		in.Freezes.Active = []WindowStatus{}
 	}
@@ -299,7 +303,7 @@ func (p *Policy) RuleDecision(application, environment string) Decision {
 
 // RuleDecisionFor is the decision of the first rule matching the input (tenant included).
 func (p *Policy) RuleDecisionFor(in Input) Decision {
-	r := p.RuleFor(in.Application, in.Artifact.Name, in.Environment, in.Tenant.Labels())
+	r := p.RuleFor(in.Application, in.Artifact.Name, in.Environment, in.Tenant.Labels(), in.AppLabels())
 	dec := Decision{Revision: p.Revision(), Rule: r.Name, Requires: r.Requires}
 	if r.Approvals.Required > 0 {
 		a := r.Approvals

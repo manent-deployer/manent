@@ -1,6 +1,7 @@
 # UC25: permissions in Rego. The bindings of manent.yml stay (data.manent.rbac); the team owns
-# uc25 and the tenants tagged with its name, the on-call shifts (oncall/data.json, written by the
-# case) expire with until, and contractors never change production.
+# uc25 and the applications of the tenants tagged with its name, the on-call shifts
+# (oncall/data.json, written by the case) expire with until, and contractors never change
+# production.
 package manent.authz
 
 import rego.v1

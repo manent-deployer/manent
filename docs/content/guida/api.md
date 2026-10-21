@@ -48,8 +48,8 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/rollbacks` | Goes back to a previous version. |
 | `GET` | `/api/v1/inventory` | Live releases per application and environment. |
 | `GET` | `/api/v1/freezes` | Active and upcoming freeze windows. |
-| `GET` | `/api/v1/tenants?application=&environment=&selector=` | [Tenants](tenant.md) of the registry, filtered by permissions. |
-| `GET` | `/api/v1/tenants/{name}` | A tenant (parameters and secret names). |
+| `GET` | `/api/v1/tenants?application=&selector=` | [Tenants](tenant.md) of the registry (the teams owning the applications), filtered by permissions. |
+| `GET` | `/api/v1/tenants/{name}` | A tenant with its applications and their tags. |
 | `POST` | `/api/v1/freezes` | Creates a freeze window at runtime (`freeze.write`). |
 | `DELETE` | `/api/v1/freezes/{name}` | Deletes a freeze window created at runtime. |
 | `GET` | `/api/v1/policies` | Governance policy revisions and the one in force (`policy.read`). |

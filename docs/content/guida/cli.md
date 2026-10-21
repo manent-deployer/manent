@@ -142,13 +142,11 @@ manent-server -c manent.yml admin rename-artifact -a <application> --from <name>
 See [Tenants](tenant.md).
 
 ```sh
-manent tenants list [-a <application>] [-e <environment>] [--selector <selector>]
-manent tenants show <tenant>
-manent deploy -f <yaml> --tenant <tenant> | --tenants <selector> [--max-parallel <n>]
-manent promote -a <application> --from <env> --to <env> --tenant <tenant> | --tenants <selector>
-manent rollback -a <application> -e <env> --tenant <tenant> | --run <multi-tenant release>
+manent tenants list [-a <application>] [--selector <tenant selector>]
+manent tenants show <tenant>                             # applications with their tags, queue
 manent list|inventory|activity|dora -t <tenant>          # dora --by-tenant: metrics per tenant
-manent status <multi-tenant release> | cancel <multi-tenant release> | approve <multi-tenant release>
+manent list|inventory --selector <application selector>  # e.g. criticality=high, tenant=payments
+manent freeze add ... --selector <application selector>
 ```
 
 ### Freezes and policies
@@ -168,7 +166,7 @@ manent policy diff <revision> <revision>
 manent policy eval <revision|current> -f <yaml> [--phase submit|validate|start|stage|tick] [--kind deploy|promotion|rollback]
 manent policy impact <revision> [--since 7d]
 manent policy access <revision|current> --subject <method:name> [--group <g>]... [--claim k=v]... [--compare]
-                     [--action <action> -a <app> -e <env> [-t <tenant>] [-f <yaml>]] [--json]   # rbac.engine: opa
+                     [--action <action> -a <app> -e <env> [-A <artifact>] [-f <yaml>]] [--json]   # rbac.engine: opa
 manent policy approve <revision>         # activates a draft
 manent policy activate <revision>        # back to a revision already active in the past
 ```

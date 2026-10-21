@@ -162,7 +162,6 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 	} else {
 		// The deploy will not run: whoever waits for it can end at once.
 		w.notifyWaiters(ctx, in.DeploymentID)
-		w.notifyRun(ctx, in.Request.Run, in.DeploymentID)
 	}
 	log.Info("approvazione conclusa", "status", st.Status, "decisions", len(st.Decisions))
 	w.recordApproval(ctx, in, st)
@@ -295,7 +294,7 @@ func (w *Worker) enqueueApproved(ctx dbos.Context, in approvalInput) error {
 	if delay > 0 {
 		opts = append(opts, dbos.WithEnqueueDelay(delay))
 	}
-	_, err = dbos.Enqueue[Result](ctx, in.QueueName, workflowName, in.Request, opts...)
+	_, err = dbos.Enqueue[Result](ctx, deployQueue(in.Request, in.QueueName), workflowName, in.Request, opts...)
 	return err
 }
 
@@ -373,10 +372,7 @@ func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error
 	}
 	dec := Decision{Approver: approver, Approve: r.Approve, Comment: r.Comment, Time: e.now().UTC()}
 	target, topic := id+approvalSuffix, approvalTopic
-	if st.TenantsRun != nil {
-		// Approval between two groups of a multi-tenant release.
-		target, topic = id, tenantsApprovalTopic
-	} else if st.Rollout != nil && awaitsDecision(st.Rollout.Status) {
+	if st.Rollout != nil && awaitsDecision(st.Rollout.Status) {
 		// Approval between two waves or steps: the decision goes to the deploy workflow.
 		target, topic = id, rolloutApprovalTopic
 	}

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +118,12 @@ type WorkerOptions struct {
 	// ChainPollInterval is the first interval for reading the state of dependencies and of a
 	// release's deploys (default 5s); it doubles at every read up to 1 minute.
 	ChainPollInterval time.Duration
+	// TenantQueues are the deploy queues of the tenants (tenant registry), registered besides
+	// Queue with its limits; a GlobalConcurrency > 0 is the tenant's quota.
+	TenantQueues []QueueOptions
+	// Listen, if set, are the only deploy queues the worker dequeues from (default queue and
+	// tenant queues): a pool dedicated to some tenants. Empty: every registered queue.
+	Listen []string
 }
 
 // ConfigResolver fetches the environment configuration and merges it with the descriptor.
@@ -161,6 +169,12 @@ type Worker struct {
 	healthTimeout   time.Duration
 	region          string
 	regionRouting   bool
+	// deployQueues are the deploy queues the worker registered and listens to; listenOnly says
+	// they are a subset (WorkerOptions.Listen).
+	deployQueues []string
+	listenOnly   bool
+	// running maps the deploys running on this worker to their queue, for the region passes.
+	running         sync.Map
 	queueName       string
 	metrics         telemetry.Recorder
 	registry        cluster.Registry
@@ -251,7 +265,6 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	dbos.RegisterWorkflow(ctx, w.afterWorkflow, dbos.WithWorkflowName(afterWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.releaseWorkflow, dbos.WithWorkflowName(releaseWorkflowName))
 	dbos.RegisterWorkflow(ctx, w.retireWorkflow, dbos.WithWorkflowName(retireWorkflowName))
-	dbos.RegisterWorkflow(ctx, w.tenantsWorkflow, dbos.WithWorkflowName(tenantsWorkflowName))
 
 	q := opts.Queue
 	qopts := []dbos.QueueOption{
@@ -267,12 +280,35 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	if _, err = dbos.RegisterQueue(ctx, approvalQueue(q.Name)); err != nil {
 		return nil, fmt.Errorf("registering queue %q: %w", approvalQueue(q.Name), err)
 	}
+	w.deployQueues = []string{q.Name}
+	for _, tq := range opts.TenantQueues {
+		if tq.Name == q.Name || slices.Contains(w.deployQueues, tq.Name) {
+			continue
+		}
+		topts := []dbos.QueueOption{
+			dbos.WithWorkerConcurrency(q.WorkerConcurrency),
+			dbos.WithPartitionConcurrency(q.PartitionConcurrency),
+		}
+		if g := cmp.Or(tq.GlobalConcurrency, q.GlobalConcurrency); g > 0 {
+			topts = append(topts, dbos.WithGlobalConcurrency(g))
+		}
+		if _, err = dbos.RegisterQueue(ctx, tq.Name, topts...); err != nil {
+			return nil, fmt.Errorf("registering queue %q: %w", tq.Name, err)
+		}
+		w.deployQueues = append(w.deployQueues, tq.Name)
+	}
+	if len(opts.Listen) > 0 {
+		w.deployQueues = slices.DeleteFunc(w.deployQueues, func(n string) bool { return !slices.Contains(opts.Listen, n) })
+		w.listenOnly = true
+	}
 	if w.region != "" {
 		// The region's rollout passes: one at a time per application/environment/region.
-		rq := regionQueue(q.Name, w.region)
-		if _, err = dbos.RegisterQueue(ctx, rq, dbos.WithWorkerConcurrency(q.WorkerConcurrency),
-			dbos.WithPartitionConcurrency(1)); err != nil {
-			return nil, fmt.Errorf("registering queue %q: %w", rq, err)
+		for _, dq := range w.deployQueues {
+			rq := regionQueue(dq, w.region)
+			if _, err = dbos.RegisterQueue(ctx, rq, dbos.WithWorkerConcurrency(q.WorkerConcurrency),
+				dbos.WithPartitionConcurrency(1)); err != nil {
+				return nil, fmt.Errorf("registering queue %q: %w", rq, err)
+			}
 		}
 	}
 	return w, nil
@@ -338,7 +374,7 @@ func (w *Worker) Launch() error {
 	if err := dbos.Launch(w.dbos); err != nil {
 		return err
 	}
-	if w.region != "" || w.regionRouting {
+	if w.region != "" || w.regionRouting || w.listenOnly {
 		dbos.ListenQueues(w.dbos, w.listenedQueues()...)
 	}
 	if w.registry != nil {
@@ -353,14 +389,26 @@ func (w *Worker) Launch() error {
 	return nil
 }
 
-// listenedQueues are the queues the worker dequeues from: deploys and approvals and, for a
-// region worker, only its region's passes. Without region routing, a worker without a region
-// listens to every queue it registered (the same two).
+// listenedQueues are the queues the worker dequeues from: its deploy queues (default and
+// tenants, or those of Listen), approvals and, for a region worker, only its region's passes
+// of those queues.
 func (w *Worker) listenedQueues() []string {
+	out := append(slices.Clone(w.deployQueues), approvalQueue(w.queueName))
 	if w.region != "" {
-		return []string{w.queueName, approvalQueue(w.queueName), regionQueue(w.queueName, w.region)}
+		for _, dq := range w.deployQueues {
+			out = append(out, regionQueue(dq, w.region))
+		}
 	}
-	return []string{w.queueName, approvalQueue(w.queueName)}
+	return out
+}
+
+// queueOf returns the deploy queue of a deploy running on this worker: the region passes and
+// gate probes use its region queue.
+func (w *Worker) queueOf(id string) string {
+	if q, ok := w.running.Load(id); ok {
+		return q.(string)
+	}
+	return w.queueName
 }
 
 // register records the worker's startup, waiting for a running recovery of its workflows to
@@ -457,9 +505,8 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if req.Adopted != nil {
-		return w.adoptWorkflow(ctx, id, req)
-	}
+	w.running.Store(id, deployQueue(req, w.queueName))
+	defer w.running.Delete(id)
 	d0 := req.Descriptor
 	_, span := telemetry.Tracer().Start(telemetry.WithTraceParent(context.Background(), req.TraceParent), "deployment",
 		trace.WithAttributes(
@@ -468,7 +515,7 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 			attribute.String("manent.artifact.version", d0.Artifact.Version), attribute.Bool("manent.dry_run", d0.DryRun),
 		))
 	defer span.End()
-	ev := &events{w: w, ctx: ctx, id: id, requestedBy: req.RequestedBy, span: span.SpanContext()}
+	ev := &events{w: w, ctx: ctx, id: id, requestedBy: req.RequestedBy, tenant: tenantName(req.Tenant), span: span.SpanContext()}
 	ev.send(&req.Descriptor, callback.Event{Type: descriptor.CallbackEventDeployment, Status: callback.StatusStarted})
 	chatRefs := w.notifyChat(ctx, id, req.Notify, w.chatMessage(id, req, chat.EventStarted), nil)
 	res, d, runErr := w.run(ctx, id, req, ev)
@@ -500,7 +547,6 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 	w.recordAttributes(ctx, id, req, res, final)
 	if !req.Descriptor.DryRun {
 		w.notifyWaiters(ctx, id)
-		w.notifyRun(ctx, req.Run, id)
 	}
 	w.recordMetrics(id, req, final)
 	span.SetAttributes(attribute.String("manent.outcome", final.Status))
@@ -547,6 +593,9 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 		if err == nil {
 			attrs[attrExports] = string(raw)
 		}
+		if len(res.PublicExports) > 0 {
+			attrs[attrPublicExports] = strings.Join(res.PublicExports, " ")
+		}
 	}
 	if err := dbos.SetWorkflowAttributes(ctx, id, attrs); err != nil {
 		w.logger.Error("aggiornamento degli attributi del deploy fallito", "deployment", id, "error", err)
@@ -592,7 +641,9 @@ type events struct {
 	ctx         dbos.Context
 	id          string
 	requestedBy string
-	seq         int
+	// tenant is the owner of the application, in the events.
+	tenant string
+	seq    int
 	// span is the deploy span, parent of the step spans.
 	span trace.SpanContext
 	// silent disables sending: in pass workflows the orchestrator sends the events.
@@ -608,7 +659,7 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 	e.seq++
 	ev.Sequence = e.seq
 	ev.ID = fmt.Sprintf("%s:%d", e.id, e.seq)
-	ev.DeploymentID, ev.Application, ev.Environment, ev.Tenant, ev.DryRun = e.id, d.Application, d.Environment, d.Tenant, d.DryRun
+	ev.DeploymentID, ev.Application, ev.Environment, ev.Tenant, ev.DryRun = e.id, d.Application, d.Environment, e.tenant, d.DryRun
 	ev.RequestedBy = e.requestedBy
 	for i, cb := range d.Callbacks {
 		if !cb.Wants(ev.Type) {
@@ -700,6 +751,11 @@ func setExports(d *descriptor.Descriptor, res *Result) error {
 		return pipeline.Permanent(fmt.Errorf("exports of the deploy not valid: %w", err))
 	}
 	res.Exports = ex
+	for _, k := range slices.Sorted(maps.Keys(ex)) {
+		if d.Exports[k].Public {
+			res.PublicExports = append(res.PublicExports, k)
+		}
+	}
 	return nil
 }
 
@@ -819,6 +875,12 @@ func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig
 		if d.Rollback.IsEnabled() {
 			meta["rollback"] = "enabled"
 		}
+	}
+	if err := req.Limits.check(&d); err != nil {
+		return resolvedConfig{}, err
+	}
+	if req.Tenant != nil {
+		meta["tenant"] = req.Tenant.Name
 	}
 	if d.Traffic != nil && d.Traffic.Pool != nil && d.Rollout == nil {
 		return resolvedConfig{}, pipeline.Permanent(errors.New("traffic.pool requires a batched release (rollout.waves with maxUnavailable): without it, all targets would be drained together"))

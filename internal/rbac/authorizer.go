@@ -43,6 +43,8 @@ type Grant struct {
 	Tenants string
 	// Artifacts are patterns on artifact.name; empty applies to every artifact.
 	Artifacts []string
+	// Selector is an application selector; "" applies to every application.
+	Selector string
 	// Until, if set, is the instant the grant stops applying.
 	Until *time.Time
 }
@@ -56,7 +58,7 @@ func (g Grant) grants(a Action, application, artifact, environment string, t *te
 		return false
 	}
 	return glob.Any(g.Applications, application) && glob.Any(g.Environments, environment) && tenant.Matches(g.Tenants, t) &&
-		ArtifactMatches(g.Artifacts, artifact)
+		ArtifactMatches(g.Artifacts, artifact) && tenant.MatchesApp(g.Selector, t)
 }
 
 // Anywhere reports whether the grant allows a on some application, at now.
@@ -120,7 +122,7 @@ func (pol Policy) Grants(_ context.Context, p *auth.Principal) ([]Grant, error) 
 		}
 		out = append(out, Grant{
 			Name: fmt.Sprintf("binding %d", i), Role: b.Role, Actions: slices.Clone(pol.Roles[b.Role]),
-			Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants, Artifacts: b.Artifacts,
+			Applications: b.Applications, Environments: b.Environments, Tenants: b.Tenants, Artifacts: b.Artifacts, Selector: b.Selector,
 		})
 	}
 	return out, nil
@@ -170,6 +172,9 @@ func CheckGrant(g Grant, roles map[string][]Action) error {
 	}
 	if err := tenant.CheckSelector(g.Tenants); err != nil {
 		return fmt.Errorf("grant %q: tenants: %w", g.Name, err)
+	}
+	if err := tenant.CheckSelector(g.Selector); err != nil {
+		return fmt.Errorf("grant %q: selector: %w", g.Name, err)
 	}
 	return nil
 }

@@ -3,9 +3,6 @@
 **Activation**
 :   The last standard step (`activation`): it makes a release operational when copying it is not enough. Optional, and compensable when the activator supports it.
 
-**Adoption**
-:   A deploy of kind `adoption` that records in the inventory a release already running, without touching the targets. Used to move from an environment per customer to [tenants](../guida/tenant.md).
-
 **After (dependency)**
 :   A deploy with `after` waits in `WAITING_DEPENDENCY` until the listed deploys succeed. See [Deploy chains](../guida/catene.md).
 
@@ -67,7 +64,7 @@
 :   A deploy run as a simulation: same workflow, no changes to the targets. See [Dry-run](../guida/dry-run.md).
 
 **Effective deploy**
-:   The descriptor merged with the environment configuration (and the tenant): what plugins actually receive. `manent validate` shows it.
+:   The descriptor merged with the environment configuration: what plugins actually receive. `manent validate` shows it.
 
 **Environment**
 :   Where an application runs (`test`, `prod`). Regions and AZs are target labels inside one environment.
@@ -91,10 +88,10 @@
 :   The descriptor's `id`. A second request with the same `id` returns the existing deploy instead of running it again.
 
 **Inventory**
-:   The release in service per application, environment (and tenant), rebuilt from the deploy history. See [Release governance](../guida/governance.md#inventario).
+:   The release in service per application, artifact and environment, rebuilt from the deploy history. See [Release governance](../guida/governance.md#inventario).
 
 **Kind**
-:   How a deploy came about: `deploy`, `promotion`, `rollback` or `adoption`.
+:   How a deploy came about: `deploy`, `promotion` or `rollback`.
 
 **Locator**
 :   How the release to go back to is found during a rollback; `plugin` reads it from the targets.
@@ -145,7 +142,7 @@
 :   A destination of the deploy: a host, a cluster, a cloud region or service, a management endpoint. It carries labels.
 
 **Tenant**
-:   A customer or instance with its own parameters, secrets and targets inside a shared environment. See [Tenants](../guida/tenant.md).
+:   An internal team that owns a set of applications, listed in the registry with their tags: the scope of permissions, queues and restrictions. See [Tenants](../guida/tenant.md).
 
 **Wave**
 :   A group of targets selected by labels in a wave rollout, released after the previous wave's gate is green.

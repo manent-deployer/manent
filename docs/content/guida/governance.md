@@ -40,7 +40,7 @@ governance:
       timezone: Europe/Rome
 ```
 
-For each deploy **the first rule** (in order) whose `applications` and `environments` match applies (and `tenants`, a selector, for the deploys of [tenants](tenant.md#governance)). Without rules there are no constraints. [Dry-runs](dry-run.md) are not subject to the rules, because they do not change environments.
+For each deploy **the first rule** (in order) whose `applications` and `environments` match applies (and, if set, `tenants` on the owner tenant, `artifacts` and `selector` on the [application tags](tenant.md)). Without rules there are no constraints. [Dry-runs](dry-run.md) are not subject to the rules, because they do not change environments.
 
 ## Inventory { #inventario }
 
@@ -216,7 +216,9 @@ During a freeze window real deploys on the application and environment are block
 | `from`, `to` | Single window (RFC 3339). |
 | `cron`, `duration`, `timezone` | Recurring window: each occurrence starts at `cron` (5 fields) and lasts `duration`. |
 | `hard` | The window cannot be exempted by a Rego policy nor bypassed with `freezeOverride`. |
-| `tenants` | Optional selector: the window applies only to the deploys of the matching [tenants](tenant.md#governance). |
+| `tenants` | Optional selector: the window applies only to the applications of the matching [tenants](tenant.md). |
+| `artifacts` | Optional patterns on `artifact.name`. |
+| `selector` | Optional application selector on the [tags](tenant.md) (e.g. `criticality=high`). |
 
 The freeze is checked three times:
 

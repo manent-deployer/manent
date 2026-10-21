@@ -17,7 +17,6 @@ import (
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // ErrNotFound means the application/environment has no configuration.
@@ -41,10 +40,6 @@ type EnvConfig struct {
 	// Traffic is the integration with load balancers and routers: target draining and traffic
 	// shifting between slots.
 	Traffic *descriptor.TrafficConfig `json:"traffic,omitempty" yaml:"traffic,omitempty"`
-	// Tenancy says whether deploys have a tenant: untenanted (default), tenanted or both.
-	Tenancy string `json:"tenancy,omitempty" yaml:"tenancy,omitempty"`
-	// TenantParams declares the parameters every tenant provides (tenant registry).
-	TenantParams map[string]TenantParam `json:"tenant_params,omitempty" yaml:"tenant_params,omitempty"`
 	// Imports are the releases in service (only current) whose exports give targets
 	// (TargetsFrom) and plugin parameters (ParamsFrom) to the environment's deploys: e.g. the
 	// VMs created by the infrastructure deploy. They are resolved when every deploy starts.
@@ -100,20 +95,7 @@ func readKey(tmpl, application, artifact, environment string, read func(key stri
 // what is not defined there. A value defined in both with different content is an error,
 // never an override.
 func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) {
-	return MergeTenant(d, c, nil)
-}
-
-// MergeTenant is Merge with the tenant layer between environment and descriptor (t nil: the
-// deploy has no tenant): see applyTenant.
-func MergeTenant(d descriptor.Descriptor, c EnvConfig, t *tenant.Tenant) (descriptor.Descriptor, error) {
 	var errs []error
-	if err := checkTenancy(d, c); err != nil {
-		errs = append(errs, err)
-	}
-	c, err := applyTenant(d, c, t)
-	if err != nil {
-		errs = append(errs, err)
-	}
 	pick := func(field, env, desc string) string {
 		if env != "" && desc != "" && env != desc {
 			errs = append(errs, fmt.Errorf("%s: %q in the environment configuration, %q in the descriptor", field, env, desc))
@@ -311,37 +293,6 @@ type Resolver struct {
 	Required bool
 	// Policy, if set, limits what the descriptor can add.
 	Policy *DescriptorPolicy
-	// Tenants is the tenant registry, read at every resolution (nil: no tenants).
-	Tenants tenant.Directory
-}
-
-// resolveTenant reads the tenant of the deploy and checks it can receive it. A missing or
-// unusable tenant is permanent; an unreachable registry is temporary.
-func (r Resolver) resolveTenant(ctx context.Context, d descriptor.Descriptor, meta map[string]string) (*tenant.Tenant, error) {
-	if d.Tenant == "" {
-		return nil, nil
-	}
-	if r.Tenants == nil {
-		return nil, pipeline.Permanent(fmt.Errorf("tenant %s: no tenant registry configured (envconfig)", d.Tenant))
-	}
-	t, err := r.Tenants.Tenant(ctx, d.Tenant)
-	switch {
-	case errors.Is(err, tenant.ErrNotFound):
-		return nil, pipeline.Permanent(err)
-	case err != nil:
-		return nil, err
-	case t.Disabled:
-		return nil, pipeline.Permanent(fmt.Errorf("tenant %s is disabled", t.Name))
-	case !t.Connected(d.Application, d.Environment):
-		return nil, pipeline.Permanent(fmt.Errorf("tenant %s is not connected to %s/%s", t.Name, d.Application, d.Environment))
-	}
-	if meta != nil {
-		meta["tenant"], meta["tenant_source"] = t.Name, t.Source
-		if t.Revision != "" {
-			meta["tenant_revision"] = t.Revision
-		}
-	}
-	return t, nil
 }
 
 // ResolveWith merges the descriptor with the given configuration (YAML or JSON) instead of the
@@ -355,11 +306,7 @@ func (r Resolver) ResolveWith(_ context.Context, d descriptor.Descriptor, config
 	if err := r.Policy.Check(d, cfg); err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}
-	t, err := r.resolveTenant(context.Background(), d, nil)
-	if err != nil {
-		return d, nil, err
-	}
-	eff, err := MergeTenant(d, cfg, t)
+	eff, err := Merge(d, cfg)
 	if err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}
@@ -386,16 +333,12 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			}
 		}
 	}
-	t, err := r.resolveTenant(ctx, d, meta)
-	if err != nil {
-		return d, nil, err
-	}
-	// Policy and merge depend only on descriptor, configuration and tenant: a retry would give
-	// the same error.
+	// Policy and merge depend only on descriptor and configuration: a retry would give the
+	// same error.
 	if err := r.Policy.Check(d, cfg); err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}
-	eff, err := MergeTenant(d, cfg, t)
+	eff, err := Merge(d, cfg)
 	if err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}

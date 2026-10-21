@@ -47,13 +47,13 @@ flowchart LR
 | **Applicazione** | Ciò che si rilascia, per esempio `shop-api`. | Descrittore (`application`). |
 | **Ambiente** | Dove gira l'applicazione: `dev`, `test`, `preprod`, `prod`. Region e AZ sono *etichette* dei target, non ambienti separati. | Descrittore (`environment`). |
 | **Artefatto** | Il file o l'immagine immutabile da rilasciare, con un `type` (`application`, `container`, `kubernetes`, `war`, `lambda`…) che sceglie i plugin in grado di gestirlo. | Descrittore (`artifact`). |
-| **Target** | Una destinazione: un host, l'API di un cluster, una region cloud, un endpoint di management. Ha delle `labels` (`region`, `az`, `canary`, `tenant`…). | Configurazione di ambiente o descrittore. |
+| **Target** | Una destinazione: un host, l'API di un cluster, una region cloud, un endpoint di management. Ha delle `labels` (`region`, `az`, `canary`…). | Configurazione di ambiente o descrittore. |
 | **Plugin** | Il componente che sa rilasciare un tipo di artefatto su un tipo di target. | `manent.yml` (`plugins`). |
 | **Pipeline** | Gli step ordinati che ogni deploy attraversa: `secrets`, `artifacts`, `qa`, `deploy`, `post-test`, `activation`, più gli step personalizzati. | `manent.yml` (`pipeline`). |
 | **Deploy** | Un'esecuzione della pipeline per un'applicazione, un ambiente e un artefatto: un workflow durevole con un ID, uno stato e un esito. | Creato da una richiesta. |
 | **Strategia di rilascio** | Come il deploy raggiunge i target: tutti insieme, a [ondate](../guida/ondate.md) o per [percentuale di traffico](../guida/traffico.md). | Configurazione di ambiente. |
 | **Governance** | Le regole su chi può rilasciare cosa, dove e quando. | `manent.yml` (`governance`) o policy Rego. |
-| **Tenant** | Terza dimensione facoltativa: un cliente o un'istanza con parametri, segreti e target propri. | [Registro dei tenant](../guida/tenant.md). |
+| **Tenant** | Il team che possiede un'applicazione; i tag delle applicazioni le raggruppano attraverso i team. | [Registro dei tenant](../guida/tenant.md). |
 
 Il [Glossario](glossario.md) raccoglie tutti i termini usati in questa documentazione.
 

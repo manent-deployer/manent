@@ -142,7 +142,9 @@ func TestPolicyPredefinitaUgualeAlleRegoleYAML(t *testing.T) {
 	rules = append([]governance.Rule{{Name: "gold", Applications: []string{"*"}, Environments: []string{"prod", "staging"}, Tenants: "tier=gold",
 		Approvals: governance.Approvals{Required: 3, Timeout: time.Hour}},
 		{Name: "migrazioni", Applications: []string{"*"}, Environments: []string{"prod"}, Artifacts: []string{"*-db"},
-			Approvals: governance.Approvals{Required: 2, Timeout: time.Hour}}}, rules...)
+			Approvals: governance.Approvals{Required: 2, Timeout: time.Hour}},
+		{Name: "critiche", Applications: []string{"*"}, Environments: []string{"prod"}, Selector: "criticality=high, tenant.tier in (gold)",
+			Approvals: governance.Approvals{Required: 4, Timeout: time.Hour}}}, rules...)
 	builtin, err := governance.New(rules, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -158,6 +160,9 @@ func TestPolicyPredefinitaUgualeAlleRegoleYAML(t *testing.T) {
 				for _, art := range []string{"api", "shop-db"} {
 					in := input(env, "deploy", "1.0.0")
 					in.Application, in.Tenant, in.Artifact.Name = app, tn, art
+					if app == "shop" {
+						in.ApplicationTags = map[string]string{"criticality": "high"}
+					}
 					want, err := builtin.Evaluate(context.Background(), in)
 					if err != nil {
 						t.Fatal(err)

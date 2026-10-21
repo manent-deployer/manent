@@ -91,8 +91,8 @@ func Run(args []string) error {
 	}
 	if err := cliutil.AddGroup(p, "tenants", "Elenca i tenant del registro",
 		"Elenca i tenant (clienti o istanze) del registro, con tag e ambienti collegati", []cliutil.Command{
-			{Name: "list", Short: "Elenca i tenant, filtrati per applicazione, ambiente e selettore", Cmd: &TenantsListCmd{global: g}},
-			{Name: "show", Short: "Mostra un tenant (parametri e nomi dei segreti)", Cmd: &TenantShowCmd{global: g}},
+			{Name: "list", Short: "Elenca i tenant, filtrati per applicazione posseduta e selettore", Cmd: &TenantsListCmd{global: g}},
+			{Name: "show", Short: "Mostra un tenant con le applicazioni che possiede e i loro tag", Cmd: &TenantShowCmd{global: g}},
 		}); err != nil {
 		return err
 	}
@@ -223,16 +223,7 @@ func follow(ctx context.Context, svc service.Service, sub *service.Submission, n
 	if sub.DryRun {
 		kind = "dry-run"
 	}
-	if len(sub.Tenants) > 0 {
-		kind = "rilascio multi-tenant"
-		fmt.Fprintf(os.Stderr, "rilascio multi-tenant accodato: %s, %d tenant", sub.ID, len(sub.Tenants))
-		for _, s := range sub.Skipped {
-			fmt.Fprintf(os.Stderr, "\n  escluso %s: %s", s.Tenant, s.Reason)
-		}
-		fmt.Fprintln(os.Stderr, "\n  (manent status", sub.ID+" per lo stato di ogni tenant)")
-	} else {
-		fmt.Fprintln(os.Stderr, kind, "accodato:", sub.ID, "(manent logs -f", sub.ID+" per seguirlo)")
-	}
+	fmt.Fprintln(os.Stderr, kind, "accodato:", sub.ID, "(manent logs -f", sub.ID+" per seguirlo)")
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)

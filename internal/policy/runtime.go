@@ -415,6 +415,7 @@ type storedWindow struct {
 	Regions      []string  `json:"regions,omitempty"`
 	Tenants      string    `json:"tenants,omitempty"`
 	Artifacts    []string  `json:"artifacts,omitempty"`
+	Selector     string    `json:"selector,omitempty"`
 	From         time.Time `json:"from"`
 	To           time.Time `json:"to"`
 	Hard         bool      `json:"hard,omitempty"`
@@ -434,7 +435,7 @@ func (r *Runtime) readFreezes(ctx context.Context) ([]governance.Window, error) 
 			continue
 		}
 		w := governance.Window{Name: rec.Name, Reason: sw.Reason, Applications: sw.Applications, Environments: sw.Environments,
-			Regions: sw.Regions, Tenants: sw.Tenants, Artifacts: sw.Artifacts, From: sw.From, To: sw.To, Hard: sw.Hard, CreatedBy: rec.CreatedBy, CreatedAt: rec.CreatedAt}
+			Regions: sw.Regions, Tenants: sw.Tenants, Artifacts: sw.Artifacts, Selector: sw.Selector, From: sw.From, To: sw.To, Hard: sw.Hard, CreatedBy: rec.CreatedBy, CreatedAt: rec.CreatedAt}
 		ws = append(ws, w)
 	}
 	if errs := governance.PrepareWindows(ws, "freeze"); len(errs) > 0 {
@@ -463,7 +464,7 @@ func (r *Runtime) CreateFreeze(ctx context.Context, w governance.Window) error {
 		}
 	}
 	data, err := json.Marshal(storedWindow{Name: w.Name, Reason: w.Reason, Applications: w.Applications, Environments: w.Environments,
-		Regions: w.Regions, Tenants: w.Tenants, Artifacts: w.Artifacts, From: w.From, To: w.To, Hard: w.Hard})
+		Regions: w.Regions, Tenants: w.Tenants, Artifacts: w.Artifacts, Selector: w.Selector, From: w.From, To: w.To, Hard: w.Hard})
 	if err != nil {
 		return err
 	}

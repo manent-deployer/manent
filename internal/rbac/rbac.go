@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/joeg-ita/manent/internal/labels"
 	"github.com/joeg-ita/manent/internal/tenant"
 )
 
@@ -84,6 +86,9 @@ type Binding struct {
 	// Artifacts, if set, are patterns on artifact.name: the binding applies only to the deploys
 	// of those artifacts, not to the actions on the whole environment.
 	Artifacts []string `yaml:"artifacts"`
+	// Selector, if set, is an application selector (application tags, application, tenant,
+	// tenant.<tag>): the binding applies only to the matching applications.
+	Selector string `yaml:"selector"`
 }
 
 // Policy decides whether an identity can perform an action on an application/environment.
@@ -121,9 +126,33 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 		if err := tenant.CheckSelector(b.Tenants); err != nil {
 			return p, fmt.Errorf("rbac.bindings[%d].tenants: %w", i, err)
 		}
+		if err := tenant.CheckSelector(b.Selector); err != nil {
+			return p, fmt.Errorf("rbac.bindings[%d].selector: %w", i, err)
+		}
 	}
 	return p, nil
 }
+
+// CheckSelectorKeys checks that an application selector reads only the allowed keys
+// (rbac.selector_keys): a cosmetic tag must not give permissions.
+func CheckSelectorKeys(selector string, allowed []string) error {
+	if strings.TrimSpace(selector) == "" {
+		return nil
+	}
+	s, err := labels.Parse(selector)
+	if err != nil {
+		return err
+	}
+	for _, k := range s.Keys() {
+		if !slices.Contains(allowed, k) {
+			return fmt.Errorf("selector key %q is not allowed in permissions (rbac.selector_keys: %s)", k, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
+// Matches reports whether the binding concerns the identity.
+func (b Binding) Matches(p *auth.Principal) bool { return p != nil && b.matches(p) }
 
 // Allowed reports whether p can perform a on the given application and environment.
 // Without an identity the answer is always no, unless the policy is disabled.
@@ -146,7 +175,7 @@ func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, artifact,
 			continue
 		}
 		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) &&
-			ArtifactMatches(b.Artifacts, artifact) {
+			ArtifactMatches(b.Artifacts, artifact) && tenant.MatchesApp(b.Selector, t) {
 			return true
 		}
 	}

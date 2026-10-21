@@ -95,9 +95,14 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 				return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 			}
 		}
+		owner := tenantName(e.ownerRef(ctx, d.Application))
+		if i > 0 && owner != rs.Deploys[0].Tenant {
+			return nil, fmt.Errorf("%w: deploy %s belongs to tenant %q, deploy %s to %q: a release contains the applications of one tenant",
+				ErrInvalidRequest, rd.Name, owner, rs.Deploys[0].Name, rs.Deploys[0].Tenant)
+		}
 		descs[i] = d
 		rs.Deploys = append(rs.Deploys, ReleaseDeployState{
-			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment, Tenant: d.Tenant,
+			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment, Tenant: owner,
 			Version: d.Artifact.Version, After: rd.After, State: StateEnqueued,
 		})
 		waitsFor = append(waitsFor, d.ID)

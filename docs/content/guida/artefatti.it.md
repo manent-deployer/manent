@@ -93,19 +93,9 @@ governance:
       to: 2027-01-07T00:00:00Z
 ```
 
-- **I binding con `artifacts`** valgono solo per i deploy di quegli artefatti, mai per le azioni sull'intero ambiente (freeze, elenco delle schedule, tenant): per quelle serve un binding senza `artifacts`. Lo stesso campo è accettato nei grant di una [policy dei permessi](permessi.md) (`data.manent.rbac.bindings`, `grants`).
+- **I binding con `artifacts`** valgono solo per i deploy di quegli artefatti, mai per le azioni sull'intero ambiente (freeze, elenco delle schedule): per quelle serve un binding senza `artifacts`. Lo stesso campo è accettato nei grant di una [policy dei permessi](permessi.md) (`data.manent.rbac.bindings`, `grants`).
 - **Le regole con `artifacts`** valgono solo per quegli artefatti; in Rego la libreria legge `input.artifact.name`.
 - **I freeze con `artifacts`** bloccano solo quegli artefatti; dove l'artefatto non è noto (es. gli step personalizzati che controllano l'ambiente) un freeze parziale vale comunque. `manent freeze add -A shop-web` ne crea uno a runtime.
-
-## Tenant
-
-Parametri, segreti e parametri degli step personalizzati di un [tenant](tenant.md) si possono dare per un solo artefatto con la chiave `<applicazione>/<artefatto>`; hanno priorità su quelli dell'applicazione:
-
-```yaml title="envconfig/tenants/acme.yml"
-params:
-  shop: {db_host: acme-db.internal}
-  shop/shop-db: {db_host: acme-db-admin.internal}
-```
 
 ## Rinominare un artefatto
 

@@ -29,5 +29,10 @@ business_hours(t, tz) if {
 # matches the tenant of the input ({} without tenant: never).
 tenant_matches(selector, tenant) := manent.tenant_matches(selector, tenant)
 
+# app_matches reports whether an application selector ("criticality=high, tenant.division
+# in (commerce)") matches the application of the input: its tags, "application", "tenant" and
+# the tenant tags with the "tenant." prefix.
+app_matches(selector, doc) := manent.app_matches(selector, doc)
+
 # duration_ns converts a duration ("72h", "90m") to nanoseconds.
 duration_ns(d) := manent.duration_ns(d)

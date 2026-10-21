@@ -1,113 +1,131 @@
 package engine
 
 import (
-	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
-	"github.com/dbos-inc/dbos-transact-golang/dbos"
-	"github.com/google/uuid"
-
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/callback"
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/tenant"
 )
 
-// tenantRef returns the tenant with its tags from the registry; without the registry or if
-// it cannot be read, the name alone (the config step reads and checks the tenant anyway).
-func (e *Engine) tenantRef(ctx context.Context, name string) *tenant.Ref {
+// owner returns the tenant that owns the application. Without a registry it returns nil: every
+// application is accepted, without owner. With the registry an unregistered application, or
+// one of a disabled tenant, is a permanent error; an unreadable registry is temporary.
+func (e *Engine) owner(ctx context.Context, application string) (*tenant.Tenant, error) {
+	if e.tenants == nil {
+		return nil, nil
+	}
+	t, err := tenant.Owner(ctx, e.tenants, application)
+	switch {
+	case errors.Is(err, tenant.ErrNotFound):
+		return nil, pipeline.Permanent(err)
+	case err != nil:
+		return nil, fmt.Errorf("reading the tenant registry: %w", err)
+	case t.Disabled:
+		return nil, pipeline.Permanent(fmt.Errorf("tenant %s, owner of %s, is disabled", t.Name, application))
+	}
+	return t, nil
+}
+
+// ownerRef returns the owner of the application as recorded in requests and statuses; nil
+// without a registry or if the owner cannot be read.
+func (e *Engine) ownerRef(ctx context.Context, application string) *tenant.Ref {
+	t, err := e.owner(ctx, application)
+	if err != nil || t == nil {
+		return nil
+	}
+	return t.Ref(application)
+}
+
+// appSelector parses an application selector and returns the function that applies it to an
+// application, with the tags of the registry (none without registry: only "application" is
+// known).
+func (e *Engine) appSelector(ctx context.Context, selector string) (func(string) bool, error) {
+	s, err := labels.Parse(selector)
+	if err != nil {
+		return nil, fmt.Errorf("%w: selector: %w", ErrInvalidRequest, err)
+	}
+	var all []tenant.Tenant
 	if e.tenants != nil {
-		if t, err := e.tenants.Tenant(ctx, name); err == nil {
-			return t.Ref()
+		if all, err = e.tenants.Tenants(ctx); err != nil {
+			return nil, err
 		}
 	}
-	return &tenant.Ref{Name: name}
+	return func(app string) bool {
+		for i := range all {
+			if all[i].Owns(app) {
+				return s.Matches(all[i].Ref(app).AppLabels())
+			}
+		}
+		return s.Matches(tenant.AppLabels(app, nil, "", nil))
+	}, nil
 }
 
-// tenantSuffix describes the tenant in the error messages.
-func tenantSuffix(name string) string {
-	if name == "" {
+// tenantName is the name of the owner, "" without.
+func tenantName(r *tenant.Ref) string {
+	if r == nil {
 		return ""
 	}
-	return " for tenant " + name
+	return r.Name
 }
 
-// Adoption is the release adopted by a deploy of kind adoption.
-type Adoption struct {
-	// Source is the deploy whose release is adopted; SHA256 its artifact.
-	Source string `json:"source"`
-	SHA256 string `json:"sha256,omitempty"`
+// Tenants implements TenantService.
+func (e *Engine) Tenants(ctx context.Context, f TenantFilter) ([]TenantInfo, error) {
+	if e.tenants == nil {
+		return []TenantInfo{}, nil
+	}
+	all, err := e.tenants.Tenants(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var sel *labels.Selector
+	if f.Selector != "" {
+		s, err := labels.Parse(f.Selector)
+		if err != nil {
+			return nil, fmt.Errorf("%w: selector: %w", ErrInvalidRequest, err)
+		}
+		sel = &s
+	}
+	out := []TenantInfo{}
+	for _, t := range all {
+		if (f.Application != "" && !t.Owns(f.Application)) || (sel != nil && !sel.Matches(t.Labels())) {
+			continue
+		}
+		out = append(out, tenantInfo(t))
+	}
+	return out, nil
 }
 
-// AdoptRequest asks to record as a deploy of tenant in environment To the release in service
-// in From (an environment per customer, before tenants).
-type AdoptRequest struct {
-	Application string
-	// Artifact chooses the artifact, required when From has more
-	// than one.
-	Artifact string
-	From, To string
-	Tenant   string
+// Tenant implements TenantService.
+func (e *Engine) Tenant(ctx context.Context, name string) (*TenantInfo, error) {
+	if e.tenants == nil {
+		return nil, fmt.Errorf("%w: tenant %s (no tenant registry)", ErrNotFound, name)
+	}
+	t, err := tenant.Find(ctx, e.tenants, name)
+	if errors.Is(err, tenant.ErrNotFound) {
+		return nil, fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	ti := tenantInfo(*t)
+	return &ti, nil
 }
 
-// Adopt records the adoption: a deploy of kind adoption that runs no step and leaves the
-// targets as they are, so promotions and rollbacks of the tenant start from the release
-// really in service. It is a platform operation (manent-server admin), outside permissions
-// and governance.
-func (e *Engine) Adopt(ctx context.Context, r AdoptRequest) (*Submission, error) {
-	if r.Application == "" || r.From == "" || r.To == "" || r.Tenant == "" {
-		return nil, fmt.Errorf("%w: application, from, to and tenant are required", ErrInvalidRequest)
+// tenantInfo exposes a tenant: the identities of members and admins and the restrictions are
+// left out.
+func tenantInfo(t tenant.Tenant) TenantInfo {
+	ti := TenantInfo{Name: t.Name, Description: t.Description, Tags: t.Tags, Queue: t.Queue, Concurrency: t.Concurrency,
+		Disabled: t.Disabled, Source: t.Source, Revision: t.Revision}
+	for _, app := range slices.Sorted(maps.Keys(t.Applications)) {
+		if ti.Applications == nil {
+			ti.Applications = map[string]TenantApplication{}
+		}
+		ti.Applications[app] = TenantApplication{Tags: t.Applications[app].Tags}
 	}
-	if err := tenant.ValidName(r.Tenant); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
-	}
-	artifact, err := e.resolveArtifact(r.Application, r.From, "", r.Artifact)
-	if err != nil {
-		return nil, err
-	}
-	inv, err := e.Inventory(ctx, InventoryFilter{Application: r.Application, Environment: r.From, Artifact: artifact})
-	if err != nil {
-		return nil, err
-	}
-	i := slices.IndexFunc(inv, func(ie InventoryEntry) bool { return ie.Tenant == "" && ie.Current != nil })
-	if i < 0 {
-		return nil, fmt.Errorf("%w: no release in service of %s in %s", ErrInvalidRequest, r.Application, r.From)
-	}
-	src := inv[i].Current
-	req, err := e.loadRequest(src.ID)
-	if err != nil {
-		return nil, err
-	}
-	d := req.Descriptor
-	d.Environment, d.Tenant, d.Tenants, d.ID, d.Schedule, d.After, d.DryRun = r.To, r.Tenant, nil, "", nil, nil, false
-	d.Artifact.SHA256 = cmp.Or(src.SHA256, d.Artifact.SHA256)
-	plan, err := e.planner.Plan(&d)
-	if err != nil {
-		return nil, err
-	}
-	areq := Request{Descriptor: d, Plan: plan, RequestedBy: auth.FromContext(ctx).String(), Kind: KindAdoption, Source: src.ID,
-		Tenant: e.tenantRef(ctx, r.Tenant), Adopted: &Adoption{Source: src.ID, SHA256: src.SHA256}}
-	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, areq, deployOptions(areq, uuid.NewString())...)
-	if err != nil {
-		return nil, err
-	}
-	e.logger.Warn("release adottata come deploy del tenant", "deployment", h.GetWorkflowID(), "application", r.Application,
-		"from", r.From, "to", r.To, "tenant", r.Tenant, "version", d.Artifact.Version, "source", src.ID)
-	return &Submission{ID: h.GetWorkflowID(), State: string(dbos.WorkflowStatusEnqueued)}, nil
-}
-
-// adoptWorkflow records an adoption: no step, attributes of a successful deploy with the
-// sha256 of the adopted release, audit.
-func (w *Worker) adoptWorkflow(ctx dbos.Context, id string, req Request) (Result, error) {
-	res := Result{DeploymentID: id, Steps: []StepResult{
-		{Name: stepArtifacts, Output: map[string]string{outSHA256: req.Adopted.SHA256}},
-		{Name: "adopt", Output: map[string]string{"source": req.Adopted.Source}},
-	}}
-	final := callback.Event{Type: descriptor.CallbackEventDeployment, Status: callback.StatusSucceeded}
-	w.recordOutcome(ctx, id, req.RequestedBy, &req.Descriptor, final)
-	w.recordAttributes(ctx, id, req, res, final)
-	w.logger.Info("adozione registrata", "deployment", id, "tenant", req.Descriptor.Tenant, "source", req.Adopted.Source)
-	return res, nil
+	return ti
 }

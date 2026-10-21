@@ -52,6 +52,7 @@ function GrantsTable({ grants, caption, sign }: { grants: Grant[]; caption: stri
               <td className="py-2 pr-4 font-mono text-xs">
                 {g.applications.join(",")} / {g.environments.join(",")}
                 {g.tenants && <span className="text-muted"> · {g.tenants}</span>}
+                {g.selector && <span className="text-muted"> · {g.selector}</span>}
               </td>
               <td className="py-2 text-muted">{g.until ? <time dateTime={g.until}>{formatDateTime(g.until, locale)}</time> : "—"}</td>
             </tr>
@@ -74,7 +75,7 @@ export function PolicyAccess({ revisions }: { revisions: PolicyRevision[] }) {
   const [action, setAction] = useState("");
   const [application, setApplication] = useState("");
   const [environment, setEnvironment] = useState("");
-  const [tenant, setTenant] = useState("");
+  const [artifact, setArtifact] = useState("");
   const run = useMutation({
     mutationFn: async (body: AccessRequest) =>
       unwrap(await api.POST("/api/v1/policies/{revision}/access", { params: { path: { revision } }, body })),
@@ -82,7 +83,7 @@ export function PolicyAccess({ revisions }: { revisions: PolicyRevision[] }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const body: AccessRequest = { subject: subject.trim(), groups: splitList(groups), claims: parseClaims(claims), compare: compare && revision !== "current" };
-    if (action) body.check = { action, application: application.trim(), environment: environment.trim(), tenant: tenant.trim() || undefined };
+    if (action) body.check = { action, application: application.trim(), environment: environment.trim(), artifact: artifact.trim() || undefined };
     run.mutate(body);
   };
   const r = run.data;
@@ -121,8 +122,8 @@ export function PolicyAccess({ revisions }: { revisions: PolicyRevision[] }) {
           <Field label={t("policies.access.environment")}>
             {(p) => <input {...p} className={inputClass} value={environment} onChange={(e) => setEnvironment(e.target.value)} required={!!action} />}
           </Field>
-          <Field label={t("policies.access.tenant")}>
-            {(p) => <input {...p} className={inputClass} value={tenant} onChange={(e) => setTenant(e.target.value)} />}
+          <Field label={t("policies.access.artifact")}>
+            {(p) => <input {...p} className={inputClass} value={artifact} onChange={(e) => setArtifact(e.target.value)} />}
           </Field>
         </div>
         <label className="flex items-center gap-2 text-sm">

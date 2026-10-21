@@ -77,8 +77,6 @@ The descriptor declares **what** to release and **where**. The CLI reads it as Y
 | `id` | no | Deploy ID and idempotency key: the same `id` is never run twice. Not allowed with `schedule.cron`. |
 | `application` | yes | Application name. |
 | `environment` | yes | Target environment (e.g. `test`, `prod`). |
-| `tenant` | | [Tenant](tenant.md) of the deploy (customer or instance): parameters, secrets and targets of the tenant registry. |
-| `tenants` | | Release to several [tenants](tenant.md#rilasciare-a-piu-tenant): `names` or `selector`, `groups`, `maxParallel`, `onFailure`, `onDenied`, `approvalsBetween`. Alternative to `tenant`. |
 
 `id`, `application`, `environment` and the schedule name become directory names and keys: letters, digits, `.`, `_`, `:` and `-` are allowed, starting with an alphanumeric character, up to 128 characters.
 

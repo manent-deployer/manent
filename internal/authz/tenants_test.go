@@ -13,76 +13,108 @@ import (
 
 func (f *fakeService) Tenants(context.Context, engine.TenantFilter) ([]engine.TenantInfo, error) {
 	return []engine.TenantInfo{
-		{Name: "acme", Tags: map[string]string{"tier": "gold"}, Applications: map[string][]string{"shop": {"prod"}}},
-		{Name: "globex", Tags: map[string]string{"tier": "silver"}, Applications: map[string][]string{"shop": {"prod"}}},
+		{Name: "payments", Tags: map[string]string{"division": "commerce"}, Applications: map[string]engine.TenantApplication{"shop": {Tags: map[string]string{"criticality": "high"}}}},
+		{Name: "platform", Applications: map[string]engine.TenantApplication{"infra": {}}},
 	}, nil
 }
 func (f *fakeService) Tenant(_ context.Context, name string) (*engine.TenantInfo, error) {
-	return &engine.TenantInfo{Name: name, Tags: map[string]string{"tier": "silver"}, Applications: map[string][]string{"shop": {"prod"}}}, nil
+	return &engine.TenantInfo{Name: name, Applications: map[string]engine.TenantApplication{"infra": {}}}, nil
 }
 
 // staticDir is a tenant registry in memory.
 type staticDir []tenant.Tenant
 
 func (d staticDir) Tenants(context.Context) ([]tenant.Tenant, error) { return d, nil }
-func (d staticDir) Tenant(_ context.Context, name string) (*tenant.Tenant, error) {
-	for _, t := range d {
-		if t.Name == name {
-			return &t, nil
-		}
+
+// testRegistry: payments owns shop (critical) and billing, platform owns infra.
+func testRegistry() staticDir {
+	return staticDir{
+		{Name: "payments", Tags: map[string]string{"division": "commerce"},
+			Applications: map[string]tenant.Application{"shop": {Tags: map[string]string{"criticality": "high"}}, "billing": {}},
+			Members:      tenant.Members{Groups: []string{"payments-eng"}}, Admins: tenant.Members{Subjects: []string{"oidc:alice"}}},
+		{Name: "platform", Applications: map[string]tenant.Application{"infra": {}}, Members: tenant.Members{Groups: []string{"platform-eng"}}},
 	}
-	return nil, tenant.ErrNotFound
 }
 
-func TestPermessiPerTenant(t *testing.T) {
+func as(subject string, groups ...string) context.Context {
+	return auth.WithPrincipal(context.Background(), &auth.Principal{Subject: subject, Groups: groups, Method: auth.MethodOIDC})
+}
+
+func appDescriptor(app string) *descriptor.Descriptor {
+	return &descriptor.Descriptor{Application: app, Environment: "prod", Artifact: descriptor.Artifact{Name: app}}
+}
+
+func TestPermessiPerTenantESelettori(t *testing.T) {
 	pol, err := NewPolicy(nil, []Binding{
-		{Groups: []string{"support-acme"}, Role: "deployer", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "name=acme"},
-		{Groups: []string{"gold"}, Role: "deployer", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "tier=gold"},
-		{Groups: []string{"ops"}, Role: "deployer", Applications: []string{"*"}, Environments: []string{"*"}},
+		{Groups: []string{"commerce-support"}, Role: "deployer", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "division=commerce"},
+		{Groups: []string{"sre"}, Role: "approver", Applications: []string{"*"}, Environments: []string{"prod"}, Selector: "criticality=high"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewPolicy(nil, []Binding{{Groups: []string{"x"}, Role: "viewer", Applications: []string{"*"}, Environments: []string{"*"}, Tenants: "tier=="}}); err == nil {
-		t.Error("selettore non valido accettato")
+	g := &Guard{Next: &fakeService{statuses: map[string]engine.Status{}}, Policy: pol, Registry: testRegistry(), Logger: discardLogger()}
+	if _, err := g.Submit(as("u", "commerce-support"), appDescriptor("shop")); err != nil {
+		t.Errorf("binding per tag del tenant: %v", err)
 	}
-	dir := staticDir{
-		{Name: "acme", Tags: map[string]string{"tier": "silver"}, Applications: map[string][]string{"shop": {"prod"}}},
-		{Name: "initech", Tags: map[string]string{"tier": "gold"}, Applications: map[string][]string{"shop": {"prod"}}},
+	if _, err := g.Submit(as("u", "commerce-support"), appDescriptor("infra")); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("infra è di un altro tenant: %v", err)
 	}
-	g := &Guard{Next: &fakeService{statuses: map[string]engine.Status{}}, Policy: pol, Registry: dir, Logger: discardLogger()}
-	as := func(groups ...string) context.Context {
-		return auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "u", Groups: groups, Method: auth.MethodOIDC})
+	if !g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "shop", "shop", "prod") {
+		t.Error("selettore sui tag dell'applicazione: shop è critica")
 	}
-	d := func(tn string) *descriptor.Descriptor {
-		return &descriptor.Descriptor{Application: "shop", Environment: "prod", Tenant: tn}
+	if g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "billing", "billing", "prod") {
+		t.Error("billing non è critica")
 	}
-	if _, err := g.Submit(as("support-acme"), d("acme")); err != nil {
-		t.Errorf("supporto di acme su acme: %v", err)
+	// An unregistered application has no owner: the bindings with tenants or selector do not apply.
+	if _, err := g.Submit(as("u", "commerce-support"), appDescriptor("unknown")); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("applicazione non registrata: %v", err)
 	}
-	if _, err := g.Submit(as("support-acme"), d("initech")); !errors.Is(err, engine.ErrForbidden) {
-		t.Errorf("supporto di acme su initech: %v", err)
+}
+
+func TestRuoliImplicitiDeiTenant(t *testing.T) {
+	pol, err := NewPolicy(nil, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := g.Submit(as("support-acme"), d("")); !errors.Is(err, engine.ErrForbidden) {
-		t.Errorf("un binding con tenants non vale per i deploy senza tenant: %v", err)
+	g := &Guard{Next: &fakeService{statuses: map[string]engine.Status{}}, Policy: pol, Registry: testRegistry(), Logger: discardLogger(),
+		TenantRoles: TenantRoles{Members: "deployer", Admins: "admin"}}
+	if _, err := g.Submit(as("bob", "payments-eng"), appDescriptor("billing")); err != nil {
+		t.Errorf("un membro rilascia le applicazioni del suo tenant: %v", err)
 	}
-	// The tags come from the registry: initech is gold.
-	if _, err := g.Submit(as("gold"), d("initech")); err != nil {
-		t.Errorf("gruppo gold su initech: %v", err)
+	if _, err := g.Submit(as("bob", "payments-eng"), appDescriptor("infra")); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("un membro non rilascia quelle di altri tenant: %v", err)
 	}
-	if _, err := g.Submit(as("ops"), d("")); err != nil {
-		t.Errorf("binding senza tenants: %v", err)
+	if err := g.check(as("alice"), FreezeOverride, target{application: "shop", artifact: "shop", environment: "prod"}); err != nil {
+		t.Errorf("l'admin del tenant ha tutte le azioni sulle sue applicazioni: %v", err)
 	}
-	multi := d("")
-	multi.Tenants = &descriptor.Tenants{Selector: "tier in (gold, silver)"}
-	if _, err := g.Submit(as("gold"), multi); !errors.Is(err, engine.ErrForbidden) {
-		t.Errorf("multi-tenant con un tenant non permesso: %v", err)
+	if g.permittedAnywhere(as("alice"), &auth.Principal{Subject: "alice", Method: auth.MethodOIDC}, PolicyWrite) {
+		t.Error("i ruoli impliciti non danno mai le azioni policy.*")
 	}
-	if _, err := g.Submit(as("ops"), multi); err != nil {
-		t.Errorf("multi-tenant con permesso su tutti: %v", err)
+	ts, err := g.Tenants(as("bob", "payments-eng"), engine.TenantFilter{})
+	if err != nil || len(ts) != 1 || ts[0].Name != "payments" {
+		t.Errorf("tenant visibili a un membro: %+v %v", ts, err)
 	}
-	ts, err := g.Tenants(as("support-acme"), engine.TenantFilter{})
-	if err != nil || len(ts) != 1 || ts[0].Name != "acme" {
-		t.Errorf("tenant visibili: %+v %v", ts, err)
+	if _, err := g.Tenant(as("bob", "payments-eng"), "platform"); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("un tenant senza applicazioni leggibili: %v", err)
+	}
+}
+
+func TestInventarioTraTenant(t *testing.T) {
+	pol, _ := NewPolicy(nil, nil)
+	inv := []engine.InventoryEntry{{Application: "shop", Artifact: "shop", Environment: "prod"}, {Application: "infra", Artifact: "infra", Environment: "prod"}}
+	svc := &fakeService{statuses: map[string]engine.Status{}, inventory: inv}
+	g := &Guard{Next: svc, Policy: pol, Registry: testRegistry(), Logger: discardLogger(), TenantRoles: TenantRoles{Members: "viewer"}}
+	got, err := g.Inventory(as("bob", "payments-eng"), engine.InventoryFilter{})
+	if err != nil || len(got) != 1 || got[0].Application != "shop" {
+		t.Errorf("senza lettura tra tenant solo le proprie applicazioni: %+v %v", got, err)
+	}
+	g.CrossTenantInventory = true
+	svc.inventory = inv
+	if got, _ := g.Inventory(as("bob", "payments-eng"), engine.InventoryFilter{}); len(got) != 2 {
+		t.Errorf("con la lettura tra tenant tutto l'inventario: %+v", got)
+	}
+	svc.inventory = inv
+	if got, _ := g.Inventory(as("eve", "elsewhere"), engine.InventoryFilter{}); len(got) != 0 {
+		t.Errorf("chi non appartiene a un tenant non legge l'inventario degli altri: %+v", got)
 	}
 }

@@ -322,16 +322,15 @@ Dettagli nella [documentazione](docs/content/guida/governance.md).
 
 ### Tenant
 
-Lo stesso prodotto rilasciato a più clienti: ogni tenant ha nel registro (accanto alla configurazione di ambiente) tag, ambienti collegati, parametri e segreti; ogni deploy di un tenant ha stato, inventario, rollback e approvazioni propri.
+Un tenant è un team interno proprietario di applicazioni: il registro (`tenants.yml`) elenca per ogni tenant le sue applicazioni con i loro tag, membri e amministratori (ruoli impliciti), coda dei deploy e restrizioni su segreti, sorgenti degli artefatti e callback. Ogni applicazione ha un solo proprietario; ID, dipendenze e release non attraversano i tenant.
 
 ```sh
-manent deploy -f deploy.yml --tenant acme                         # un cliente
-manent deploy -f deploy.yml --tenants "tier=gold" --max-parallel 5 # più clienti, a gruppi (pilota, resto)
-manent inventory -a shop                                          # matrice tenant × ambiente
-manent rollback -a shop -e prod --run shop-1.4.0-prod              # i tenant di un rilascio, in ordine inverso
+manent tenants list [--selector division=commerce]
+manent inventory --selector "criticality=high"                     # tag delle applicazioni e del tenant (tenant.<tag>)
+manent freeze add --name incidente -e prod --for 2h --selector "tenant=payments"
 ```
 
-Regole, freeze, policy Rego e binding RBAC accettano un selettore `tenants`. Dettagli in [Tenant](docs/content/guida/tenant.md).
+Regole, freeze, policy Rego e binding RBAC accettano i selettori `tenants` (proprietario) e `selector` (applicazioni). Dettagli in [Tenant](docs/content/guida/tenant.md).
 
 ### Policy in Rego
 

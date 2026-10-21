@@ -4,7 +4,7 @@ Every deploy in manent runs the same pipeline. What changes is described along f
 
 | Axis | Question | Options |
 |---|---|---|
-| [**Trigger**](#trigger) | When does it start? | immediately, at a given time, recurring, after other deploys, as part of a composite release or of a multi-tenant release |
+| [**Trigger**](#trigger) | When does it start? | immediately, at a given time, recurring, after other deploys, as part of a composite release |
 | [**Kind**](#kind) | Where does the artifact come from? | new deploy, promotion, manual rollback, adoption, plus dry-run as a mode |
 | [**Strategy**](#strategy) | How does it reach the targets? | all at once, in waves, with load balancer draining, by traffic percentage, delegated to the cloud service |
 | [**Platform**](#platform) | What is changed on the target? | files on servers, containers, Kubernetes objects, managed cloud services, application servers, Windows |
@@ -71,18 +71,6 @@ deploys:
 
 See [Deploy chains](../guida/catene.md).
 
-### Multi-tenant release
-
-With `tenants` one request releases the same artifact to many [tenants](../guida/tenant.md), one deploy per tenant, in groups (a pilot first), with at most `maxParallel` at once.
-
-```yaml
-tenants:
-  selector: "tier in (gold, silver)"
-  groups:
-    - {name: pilot, select: "tier=gold", bake: 30m}
-    - {name: rest}
-  maxParallel: 5
-```
 
 ## Kind { #kind }
 
@@ -93,7 +81,6 @@ The kind is recorded with every deploy (`kind` in the status and in the [invento
 | `deploy` | `manent deploy`, API, CI, schedules | The one in the descriptor. | The usual case. |
 | `promotion` | `manent promote --from test --to prod` | The one released successfully in the source environment, with its `sha256` pinned. | Targets come from the destination environment, never from the source. Subject to the destination's rules. |
 | `rollback` | `manent rollback -e prod [--to 1.3.2]` | A previous release of the same environment, with its `sha256`. | A manual rollback is a new deploy. Allowed only for artifact types whose policy allows rollback. |
-| `adoption` | `manent-server admin tenants-adopt` | The release already running in an environment per customer. | Records the release in the inventory without touching the targets. |
 
 **Automatic rollback** is not a kind: it happens *inside* a failed deploy, which stays `ERROR` and reports the rollback outcome. See [Rollback](../guida/rollback.md).
 

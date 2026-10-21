@@ -8,10 +8,10 @@ import (
 	"github.com/joeg-ita/manent/internal/engine"
 )
 
-// tenants lists the tenants (query: application, environment, selector).
+// tenants lists the tenants (query: application, selector).
 func (s *Server) tenants(c *gin.Context) {
 	ts, err := s.svc.Tenants(c.Request.Context(), engine.TenantFilter{
-		Application: c.Query("application"), Environment: c.Query("environment"), Selector: c.Query("selector"),
+		Application: c.Query("application"), Selector: c.Query("selector"),
 	})
 	if err != nil {
 		writeError(c, err)

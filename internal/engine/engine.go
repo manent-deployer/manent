@@ -41,13 +41,14 @@ type Request struct {
 	RequestedBy string `json:"requested_by,omitempty"`
 	// RequestedGroups are the groups of RequestedBy at request time, for the governance policy.
 	RequestedGroups []string `json:"requested_groups,omitempty"`
-	// Tenant is the tenant of the deploy with its tags at request time (Descriptor.Tenant).
+	// Tenant is the owner of the application with the tags of tenant and application at
+	// request time (tenant registry); nil without a registry.
 	Tenant *tenant.Ref `json:"tenant,omitempty"`
-	// Run is the multi-tenant release the deploy belongs to.
-	Run string `json:"run,omitempty"`
-	// Adopted, if set, makes the deploy an adoption: no step runs, the release of Source is
-	// recorded as in service for the application/environment/tenant of the descriptor.
-	Adopted *Adoption `json:"adopted,omitempty"`
+	// Queue is the deploy queue of the owner (tenant queue); empty: the default queue.
+	Queue string `json:"queue,omitempty"`
+	// Limits are the restrictions of the owner at request time, checked again by the config
+	// step on the effective descriptor.
+	Limits *TenantLimits `json:"tenant_limits,omitempty"`
 	// Kind is deploy, promotion or rollback (empty = deploy).
 	Kind string `json:"kind,omitempty"`
 	// Source is the deploy a promotion or a manual rollback derives from.
@@ -195,8 +196,6 @@ func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Pla
 // submitMeta describes the origin of a deploy request.
 type submitMeta struct {
 	kind, source, release string
-	// run is the multi-tenant release enqueuing the deploy.
-	run string
 	// prechecked skips the policy and environment configuration check (check), already done by
 	// whoever accepted the request (deploy of a release).
 	prechecked bool
@@ -218,9 +217,6 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 	if sub, ok := e.alreadyScheduled(ctx, d); ok {
 		return sub, nil
 	}
-	if d.Tenants != nil {
-		return e.submitTenants(ctx, d, meta)
-	}
 	r, err := e.prepare(ctx, d, meta)
 	if err != nil {
 		return nil, err
@@ -231,6 +227,13 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 // prepare builds the request of a deploy: plan, checks (unless prechecked), governance
 // decision and notification destinations. Nothing is enqueued.
 func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta submitMeta) (*Request, error) {
+	owner, err := e.owner(ctx, d.Application)
+	if errors.Is(err, pipeline.ErrPermanent) {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	if err != nil {
+		return nil, err
+	}
 	plan, err := e.planner.Plan(d)
 	if err != nil {
 		return nil, err
@@ -244,13 +247,16 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	p := auth.FromContext(ctx)
 	req := Request{
 		Descriptor: *d, Plan: plan, RequestedBy: p.String(), Kind: meta.kind, Source: meta.source,
-		Release: meta.release, Run: meta.run, TraceParent: telemetry.TraceParent(ctx),
+		Release: meta.release, TraceParent: telemetry.TraceParent(ctx),
 	}
 	if p != nil {
 		req.RequestedGroups = p.Groups
 	}
-	if d.Tenant != "" {
-		req.Tenant = e.tenantRef(ctx, d.Tenant)
+	if owner != nil {
+		req.Tenant, req.Queue, req.Limits = owner.Ref(d.Application), owner.Queue, limitsOf(owner)
+	}
+	if err := e.checkOwnership(ctx, d, req.Tenant); err != nil {
+		return nil, err
 	}
 	if err := e.govern(ctx, &req, eff); err != nil {
 		return nil, err
@@ -325,7 +331,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 	if delay > 0 {
 		opts = append(opts, dbos.WithEnqueueDelay(delay))
 	}
-	h, err := dbos.Enqueue[Result](e.client, e.queueName, workflowName, req, opts...)
+	h, err := dbos.Enqueue[Result](e.client, deployQueue(req, e.queueName), workflowName, req, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +437,7 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 		}
 		return &d, nil
 	}
-	artifact, err := e.resolveArtifact(c.Application, c.Environment, "", c.Artifact)
+	artifact, err := e.resolveArtifact(c.Application, c.Environment, c.Artifact)
 	if err != nil {
 		return nil, err
 	}
@@ -495,6 +501,9 @@ func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		}
 		eff = r
+	}
+	if err := e.checkLimits(ctx, &eff); err != nil {
+		return nil, nil, err
 	}
 	if eff.Rollout != nil && v.Config != nil {
 		// With the environment configuration read, the wave plan is the final one.
@@ -621,9 +630,8 @@ const (
 	// attrPolicy and attrPolicyRule are revision and rule of the governance decision.
 	attrPolicy     = "policy"
 	attrPolicyRule = "policy_rule"
-	// attrTenant is the tenant of the deploy; attrRun the multi-tenant release it belongs to.
+	// attrTenant is the tenant that owns the application of the deploy.
 	attrTenant = "tenant"
-	attrRun    = "tenants_run"
 )
 
 // attributes returns the initial attributes of a workflow.
@@ -651,11 +659,8 @@ func attributes(req Request) map[string]any {
 	if req.Release != "" {
 		a[attrRelease] = req.Release
 	}
-	if d.Tenant != "" {
-		a[attrTenant] = d.Tenant
-	}
-	if req.Run != "" {
-		a[attrRun] = req.Run
+	if req.Tenant != nil {
+		a[attrTenant] = req.Tenant.Name
 	}
 	if req.Policy != nil {
 		a[attrPolicy], a[attrPolicyRule] = req.Policy.Revision, req.Policy.Rule
@@ -673,9 +678,6 @@ func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 		return nil, err
 	}
 	g := groupDeploy(id, ws)
-	if g.deploy == nil && g.run != nil {
-		return e.runStatusWithInput(*g.run)
-	}
 	if g.deploy == nil {
 		return e.pendingStatus(id, g)
 	}
@@ -702,8 +704,6 @@ func (e *Engine) Status(_ context.Context, id string) (*Status, error) {
 // and the dependency wait, each nil if missing.
 type deployWorkflows struct {
 	deploy, approval, after *dbos.WorkflowStatus
-	// run is a multi-tenant release with the same ID.
-	run *dbos.WorkflowStatus
 }
 
 // groupDeploy finds among the read workflows those of deploy id.
@@ -712,8 +712,6 @@ func groupDeploy(id string, ws []dbos.WorkflowStatus) deployWorkflows {
 	for i := range ws {
 		w := &ws[i]
 		switch {
-		case w.ID == id && w.Name == tenantsWorkflowName:
-			g.run = w
 		case w.ID == id:
 			g.deploy = w
 		case w.ID == id+approvalSuffix && w.Name == approvalWorkflowName:
@@ -757,9 +755,17 @@ const maxListScan = 10000
 // List lists the deploys from the most recent, including those awaiting approval or rejected.
 // With f.Schedule it returns only the runs of that schedule. Filters are applied page by page,
 // until the limit is reached.
-func (e *Engine) List(_ context.Context, f ListFilter) ([]Status, error) {
+func (e *Engine) List(ctx context.Context, f ListFilter) ([]Status, error) {
 	if f.Limit <= 0 {
 		f.Limit = 50
+	}
+	if f.Selector != "" {
+		sel, err := e.appSelector(ctx, f.Selector)
+		if err != nil {
+			return nil, err
+		}
+		match := f.Match
+		f.Match = func(s Status) bool { return sel(s.Application) && (match == nil || match(s)) }
 	}
 	var prefix []string
 	if f.Schedule != "" {
@@ -908,10 +914,6 @@ func (e *Engine) Wait(ctx context.Context, id string) (*Result, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		opts = append(opts, dbos.WithHandleTimeout(time.Until(deadline)))
 	}
-	if ws, err := dbos.ListWorkflows(e.client, dbos.WithFilterWorkflowIDs(id), dbos.WithFilterName(tenantsWorkflowName),
-		dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false)); err == nil && len(ws) == 1 {
-		return e.waitRun(id, opts...)
-	}
 	// Before execution the deploy may wait for dependencies, then for approval: each one, if
 	// successful, enqueues the next before ending.
 	for range 3 {
@@ -954,9 +956,6 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if st.TenantsRun != nil {
-		return e.cancelRun(ctx, st)
-	}
 	target := id
 	switch st.State {
 	case StateAwaitingApproval:
@@ -984,7 +983,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256),
 		Kind: attr(st, attrKind), Source: attr(st, attrSource), DryRun: attr(st, attrDryRun) == "true",
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
-		Exports: exportsAttr(attr(st, attrExports)),
+		Exports: exportsAttr(attr(st, attrExports)), PublicExports: strings.Fields(attr(st, attrPublicExports)),
 	}
 	if s.Application == "" {
 		// Deploys enqueued before attributes existed: the partition key is "<application>/<environment>".
@@ -992,7 +991,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		s.Application, _, _ = strings.Cut(s.Application, artifactSep)
 	}
 	s.Release = attr(st, attrRelease)
-	s.Tenant, s.Run = attr(st, attrTenant), attr(st, attrRun)
+	s.Tenant = attr(st, attrTenant)
 	if rev := attr(st, attrPolicy); rev != "" {
 		s.Policy = &governance.Snapshot{Revision: rev, Rule: attr(st, attrPolicyRule)}
 	}
@@ -1046,9 +1045,5 @@ func workflowID(d *descriptor.Descriptor) string {
 // environment obey the environment_concurrency limit across all workers. The first segment is
 // "<application>+<artifact>": '+' is not allowed in names, so the key stays unambiguous.
 func partitionKey(d *descriptor.Descriptor) string {
-	app := d.Application + artifactSep + d.Artifact.Name
-	if d.Tenant != "" {
-		return app + "/" + d.Environment + "/" + d.Tenant
-	}
-	return app + "/" + d.Environment
+	return d.Application + artifactSep + d.Artifact.Name + "/" + d.Environment
 }

@@ -3,9 +3,6 @@
 **Activation**
 :   L'ultimo step standard (`activation`): rende operativa una release quando copiarla non basta. Facoltativo, e compensabile se l'activator lo supporta.
 
-**Adozione**
-:   Un deploy di tipo `adoption` che registra nell'inventario una release già in esercizio senza toccare i target. Serve per passare da un ambiente per cliente ai [tenant](../guida/tenant.md).
-
 **After (dipendenza)**
 :   Un deploy con `after` attende in `WAITING_DEPENDENCY` che i deploy elencati riescano. Vedi [Catene di deploy](../guida/catene.md).
 
@@ -49,7 +46,7 @@
 :   Un'esecuzione della pipeline per un'applicazione, un ambiente e un artefatto. Ha un ID, uno stato, un tipo e un esito.
 
 **Deploy effettivo**
-:   Il descrittore fuso con la configurazione di ambiente (e con il tenant): ciò che i plugin ricevono davvero. Lo mostra `manent validate`.
+:   Il descrittore fuso con la configurazione di ambiente: ciò che i plugin ricevono davvero. Lo mostra `manent validate`.
 
 **Descrittore**
 :   Il documento YAML (CLI) o JSON (API) con cui si chiede un deploy. Vedi [Descrittore di deploy](../guida/descrittore.md).
@@ -73,7 +70,7 @@
 :   Le regole su cosa si può rilasciare, dove e quando: promozione obbligatoria, approvazioni, freeze, ticket di change. Scritte in YAML o in [Rego](../guida/policy.md).
 
 **Inventario**
-:   La release in esercizio per applicazione, ambiente (e tenant), ricostruita dallo storico dei deploy. Vedi [Governance dei rilasci](../guida/governance.md#inventario).
+:   La release in esercizio per applicazione, artefatto e ambiente, ricostruita dallo storico dei deploy. Vedi [Governance dei rilasci](../guida/governance.md#inventario).
 
 **Locator**
 :   Il modo in cui si trova la release a cui tornare in un rollback; `plugin` la legge dai target.
@@ -142,10 +139,10 @@
 :   Una destinazione del deploy: un host, un cluster, una region o un servizio cloud, un endpoint di management. Ha delle etichette.
 
 **Tenant**
-:   Un cliente o un'istanza con parametri, segreti e target propri dentro un ambiente condiviso. Vedi [Tenant](../guida/tenant.md).
+:   Un team interno che possiede un insieme di applicazioni, elencate nel registro con i loro tag: lo scope di permessi, code e restrizioni. Vedi [Tenant](../guida/tenant.md).
 
 **Tipo (kind)**
-:   Come è nato un deploy: `deploy`, `promotion`, `rollback` o `adoption`.
+:   Come è nato un deploy: `deploy`, `promotion` o `rollback`.
 
 **Tipo di artefatto**
 :   Il campo `artifact.type` (`application`, `container`, `kubernetes`, `war`, `migration`…). Sceglie i plugin in grado di gestire l'artefatto e la policy di rollback.

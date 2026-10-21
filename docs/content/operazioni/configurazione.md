@@ -24,6 +24,7 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 | `schedule_poll_interval` | `30s` | How often workers reload recurring schedules. |
 | `region` | | Worker region: with `region_routing` it runs the [wave rollout](../guida/ondate.md#esecuzione-nelle-region) passes for that region. |
 | `region_routing` | `false` | Runs rollout passes on the workers of the targets' region, as child workflows. In multi-region setups it must be enabled on all workers. |
+| `tenants` | `[]` | Restricts the worker to the deploy queues of these [tenants](../guida/tenant.md#queues-and-workers-per-tenant) (the default queue for those without one). Empty: every queue of the registry. |
 | `drain_timeout` | `2m` | On shutdown the worker stops picking up deploys and waits for those in progress up to this time (`0` = does not wait). See [drain](affidabilita.md#arresto-ordinato-drain). |
 
 ### `http`
@@ -50,6 +51,13 @@ See [Logs and SIEM](log-siem.md).
 
 Default `./work`. Local directory into which each deploy downloads the artifact (`workdir/<deployment-id>`). It does not need to be shared between workers.
 
+### `tenants`
+
+| Key | Default | Description |
+|---|---|---|
+| `file` | | The [tenant registry](../guida/tenant.md) (`tenants.yml`). Empty: no registry, every application accepted without owner. |
+| `cache` | `30s` | How long the registry is kept before reading it again. |
+
 ### `envconfig`
 
 | Key | Default | Description |
@@ -62,9 +70,6 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | `consul.key` | `manent/{application}/{artifact}/{environment}` | KV key template. |
 | `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
-| `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Path template of the [tenant](../guida/tenant.md) documents. |
-| `consul.tenants_key` | `manent/tenants/{tenant}` | KV key template of the tenant documents. |
-| `tenants_cache` | `30s` | How long the tenant listing is kept (selectors, permissions). |
 
 See [Environment configuration](../guida/configurazione-ambiente.md).
 
@@ -103,7 +108,10 @@ See [Rollback](../guida/rollback.md).
 | `rbac.opa.cache` | `30s` | How long the grants of an identity are reused with `opa`. |
 | `rbac.opa.cache_size` | `10000` | Identities in the grants cache. |
 | `rbac.roles` | `{}` | Additional roles: name → list of actions. |
-| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`), `tenants` (selector: the binding applies only to the deploys of those [tenants](../guida/tenant.md#permessi)). |
+| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`), `artifacts`, `tenants` (selector on the owner tenant) and `selector` (selector on the application tags). |
+| `rbac.tenant_roles` | `{members: deployer, admins: admin}` | Implicit roles of the `members` and `admins` of a [tenant](../guida/tenant.md) on its applications. Never `policy.*`. |
+| `rbac.selector_keys` | `[]` | Keys the `selector` of bindings and grants can read (empty: no selector in permissions). |
+| `rbac.cross_tenant_inventory` | `true` | Whoever belongs to a tenant reads the inventory of every tenant. |
 | `audit.file` | | JSON Lines file of audit entries, with a hash chain, in addition to the log and the SIEM. |
 | `audit.max_size_mb` | `0` | Size beyond which the file is rotated (`0` = no rotation). |
 | `audit.hmac_key_ref` | | Reference to the key (at least 16 bytes) that turns the chain into an HMAC. |

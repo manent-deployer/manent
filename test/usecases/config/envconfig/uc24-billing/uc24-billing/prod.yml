@@ -1,0 +1,13 @@
+# UC24: uc24-billing of the tenant registry, on eu1-b.
+plugin: remote-copy
+targets:
+  - {host: eu1-b, user: deploy, labels: {region: eu-1}}
+params:
+  dest_dir: /home/deploy/apps/uc24-billing
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

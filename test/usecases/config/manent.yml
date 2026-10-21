@@ -58,9 +58,11 @@ envconfig:
   required: false
   file:
     path: /etc/manent/envconfig/{application}/{artifact}/{environment}.yml
-    # UC24: tenant registry.
-    tenants: /etc/manent/envconfig/tenants/{tenant}.yml
-  tenants_cache: 2s
+
+# UC24: registry of the teams that own the applications; every deployed application is listed.
+tenants:
+  file: /etc/manent/envconfig/tenants.yml
+  cache: 2s
 
 # Only the lab sources: artifacts are in the shared volume /srv/artifacts, container images
 # in the plain-text registry (UC6, UC7).
@@ -122,7 +124,7 @@ auth:
     - {name: admin, sha256: ee6d41bedd050de5a3e01118d65033dd5b2a1d72c5c874c3b9b5d4257bb45301, groups: [admins]}
     - {name: viewer, sha256: b55ac51de6e0593e2f297b5c930d2ab09889ab8ddbe773841a36e281d7664c6e, groups: [viewers]}
     # UC24: the support of the customer acme.
-    - {name: supacme, sha256: 0d20862fba33bd12cdf38d4bf07b4bd00efbe53dc13dfac9d330448b070a5677, groups: [support-acme]}
+    - {name: supacme, sha256: 0d20862fba33bd12cdf38d4bf07b4bd00efbe53dc13dfac9d330448b070a5677, groups: [team-payments]}
     # UC23: whoever writes the governance policy (an admin approves it).
     - {name: pol, sha256: 572161b46d0d0dd2ebc3e39fbc5fcb9c0dc8745153e5103480a720977a68f825, groups: [policy-authors]}
 
@@ -131,13 +133,16 @@ rbac:
   # default policy applies the bindings below: every use case runs on it. policy.* always come
   # from these bindings.
   engine: opa
+  # UC24: the application tags the selectors of the permissions can read.
+  selector_keys: [criticality, product, tenant]
   roles:
     # UC23: pushes and measures policy revisions, without activating them.
     policy-author: [deployment.read, policy.read, policy.write]
   bindings:
     - {groups: [policy-authors], role: policy-author, applications: ["*"], environments: ["*"]}
-    # UC24: the support of acme releases only the deploys of the tenant acme.
-    - {groups: [support-acme], role: deployer, applications: [uc24-shop], environments: [prod], tenants: "name=acme"}
+    # UC24: the members of team-payments receive deployer on the applications of payments
+    # (tenant_roles); the SRE approve only the critical applications (selector on the tags).
+    - {groups: [sre], role: approver, applications: ["*"], environments: [prod], selector: "criticality=high"}
     - {groups: [ci], role: operator, applications: ["*"], environments: ["*"]}
     - {groups: [cab], role: approver, applications: ["*"], environments: ["*"]}
     - {groups: [admins], role: admin, applications: ["*"], environments: ["*"]}

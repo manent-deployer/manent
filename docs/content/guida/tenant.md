@@ -1,225 +1,120 @@
 # Tenants
 
-A **tenant** is a customer or an instance: the same application is released in several copies, one per tenant, in every environment. Every tenant has its parameters, secrets and targets, its own deploys, inventory, rollbacks and approvals, and can receive the same release as the others with a single multi-tenant release, a group at a time.
+A **tenant** is an internal team that owns a set of applications. Every application belongs to exactly one tenant, which lists it in the registry with its **tags** (product, criticality, …). The tenant is the scope of permissions, queues and restrictions; the tags group and select the applications across teams. There is no hierarchy: one owner per application, free tags on tenants and applications.
 
-The tenant is a third dimension next to application and environment, and it is optional: a deploy without a tenant behaves as before.
+## Registry
 
-## Tenant registry
+The registry is a single YAML file, `tenants.yml`:
 
-Every tenant is a document in the provider of the [environment configuration](configurazione-ambiente.md), next to the environments:
-
-```yaml title="envconfig/tenants/acme.yml"
-description: ACME S.p.A.
-tags: {tier: gold, region: eu, contract: "2026"}
-applications:
-  shop: [staging, prod]            # environments the tenant is connected to
-  billing: [prod]
-params:
-  shop:
-    db_host: acme-db.internal      # values of the environment's tenant_params
-secrets:
-  shop:
-    - {name: license, ref: "vault:secret/data/shop/acme#license"}
-step_params:
-  shop:
-    migrate: {database: acme_shop}
-disabled: false                    # a disabled tenant is never selected nor deployable
-```
-
-| Provider | Where | Configuration |
-|---|---|---|
-| `file` | `./envconfig/tenants/{tenant}.yml` | `envconfig.file.tenants` |
-| `consul` | key `manent/tenants/{tenant}` | `envconfig.consul.tenants_key` |
-
-- **Name:** lowercase letters, digits and `-`, at most 40 characters. It becomes part of IDs and directory names.
-- **Tags:** key-value pairs, selected with the same selectors as the [waves](ondate.md) (`tier=gold, region in (eu, us)`); `name` selects by name and is reserved.
-- **`applications`:** a tenant receives deploys only in the environments it is connected to.
-- **Parameters and secrets:** per application, only secret references.
-- **Reading:** the document is read again at the start of every deploy (step `config`, which records `tenant_source` and `tenant_revision`); the listing, used by selectors and permissions, is kept for `envconfig.tenants_cache` (default 30s).
-
-```sh
-manent tenants list [-a shop] [-e prod] [--selector "tier=gold"]
-manent tenants show acme              # parameters and secret names, never the references
-```
-
-## Environment configuration
-
-```yaml title="envconfig/shop/shop/prod.yml"
-plugin: kubernetes
-tenancy: tenanted              # untenanted (default) | tenanted | both
-tenant_params:
-  db_host: {pattern: '[a-z0-9.-]+', required: true}
-  feature_x: {pattern: 'true|false', default: "false"}
-targets:
-  - {host: k8s-eu-1, labels: {region: eu, tenant: "*"}}    # shared by every tenant
-  - {host: k8s-acme, labels: {region: eu, tenant: acme}}   # dedicated
-params:
-  namespace: "shop-{tenant}"
-secrets:
-  - {name: db, ref: "vault:secret/data/shop/{tenant}#db"}
-```
-
-- **`tenancy`:**
-    - `untenanted` refuses deploys with a tenant (the behaviour of every environment without the key);
-    - `tenanted` requires one;
-    - `both` accepts both, for example during a migration.
-- **`tenant_params`:** the parameters every tenant provides, with an anchored `pattern`, `required` and `default`. A tenant that does not provide a required parameter, provides one out of pattern or provides one not declared refuses the deploy, at submission already. The environment decides what a tenant can vary: a tenant cannot set `post_command`.
-- **Targets:**
-    - a deploy of a tenant receives the targets with `tenant: <name>` plus those with `tenant: "*"`;
-    - a deploy without tenant, those without the label plus the shared ones.
-- **`{tenant}`** is replaced in parameters, secret references, custom step parameters and in the `secret_refs` of the `descriptor_policy`. An environment using it accepts only deploys with a tenant.
-
-**Merge** happens in three layers and keeps the rule of the environment configuration: values in conflict are an error, never an override.
-
-1. The **environment** is authoritative.
-2. The **tenant** adds only the declared parameters, its secrets and custom step parameters.
-3. The **descriptor** adds what the [descriptor policy](../operazioni/configurazione.md#descriptor_policy) allows, never a tenant parameter.
-
-## A deploy for a tenant
-
-```yaml
-application: shop
-environment: prod
-tenant: acme
-artifact: {type: kubernetes, name: shop, version: 1.4.0, source: oci://registry/shop:1.4.0}
-```
-
-```sh
-manent deploy -f deploy.yml --tenant acme
-```
-
-The queue partition is `<application>/<environment>/<tenant>`: two deploys of acme never overlap, while acme and globex proceed in parallel (`dbos.environment_concurrency` applies per tenant). Status, inventory, DORA metrics, callback events and chat messages carry the tenant; `--tenant` (or `?tenant=`) filters `list`, `inventory`, `activity` and `dora` (`--by-tenant` for the metrics per tenant).
-
-**Promotion and rollback** are per tenant:
-
-```sh
-manent promote -a shop --from staging --to prod --tenant acme
-manent rollback -a shop -e prod --tenant acme [--to 1.3.2]
-```
-
-The mandatory promotion (`requires`) is checked per tenant: acme in prod requires acme in staging, not any tenant.
-
-## Releasing to several tenants { #rilasciare-a-piu-tenant }
-
-```yaml
-application: shop
-environment: prod
-id: shop-1.4.0-prod
+```yaml title="tenants.yml"
 tenants:
-  selector: "tier in (gold, silver), region=eu"   # or names: [acme, globex]
-  groups:                                         # optional: tenant canary
-    - {name: pilot, select: "tier=gold", bake: 30m}
-    - {name: rest}
-  maxParallel: 5
-  onFailure: stop                                 # stop | continue
-  onDenied: skip                                  # skip | reject
-  approvalsBetween: [pilot]
-artifact: {...}
+  payments:
+    description: Payments team
+    tags: {division: commerce, cost_center: "4410"}
+    applications:
+      shop: {tags: {product: checkout, criticality: high}}
+      billing: {tags: {product: invoicing}}
+    members: {groups: [payments-eng]}       # implicit role rbac.tenant_roles.members
+    admins: {subjects: ["oidc:alice"]}       # implicit role rbac.tenant_roles.admins
+    queue: deployments.payments              # own deploy queue (optional)
+    concurrency: 2                           # quota of the queue (optional)
+    secret_refs: ["vault:secret/payments/*"] # allowed secret references (optional)
+    artifact_sources: ["oci://registry.example.com/payments/"]   # allowed sources (optional)
+    callback_hosts: [hooks.payments.example.com]                 # allowed callback hosts (optional)
+  platform:
+    applications:
+      infra: {}
+    disabled: false                          # a disabled tenant cannot deploy
 ```
+
+```yaml title="manent.yml"
+tenants:
+  file: /etc/manent/tenants.yml
+  cache: 30s           # how long the registry is kept before reading it again
+```
+
+- **Ownership:** an application listed by two tenants makes the whole registry invalid.
+- **Registered applications only:** with a registry configured, the deploy of an application that no tenant lists is refused. Without a registry every application is accepted, without owner.
+- **Tags in the registry only:** the descriptor cannot set tenant or tags, otherwise a deploy could put itself in another team's scope.
+- **Names:** tenants use lowercase letters, digits and `-` (at most 40); applications follow the rule of `artifact.name`. `application`, `tenant` and the `tenant.` prefix are reserved in application tags, `name` in tenant tags.
+- **Revision:** the `config` step records the tenant of the deploy; the registry source and its revision (a prefix of the file's sha256) are in `manent tenants show`.
 
 ```sh
-manent deploy -f deploy.yml --tenants "tier=gold" [--max-parallel 5]
-manent status shop-1.4.0-prod                     # state of every tenant
-manent cancel shop-1.4.0-prod                     # tenants not yet ended
+manent tenants list [-a <application>] [--selector "division=commerce"]
+manent tenants show payments        # tags, applications with their tags, queue
 ```
 
-- **Selection:** `names` or `selector`; disabled tenants and those not connected to the application and environment are left out. The list is fixed at submission: a recovery never selects again.
-- **One deploy per tenant**, with ID `<id>.<tenant>`, its approvals and its automatic rollback. The release is the `manent.tenants` workflow, on the approval queue: it takes no slot.
-- **Groups:**
-    - a group starts when the previous one has ended and its `bake` has passed;
-    - a group without `select` takes the remaining tenants;
-    - with `approvalsBetween` the release waits for an approval after the group (`manent approve <id>`), with the strictest rule among the tenants.
-- **`maxParallel`** is the number of tenant deploys running at the same time (default 5).
-- **`onFailure`:**
-    - `stop` starts no other tenant after a failure (those running finish);
-    - `continue` goes on with the others.
-- **`onDenied`:**
-    - with `skip` a tenant denied by the [governance policy](policy.md) is left out with the reason and the others proceed;
-    - with `reject` everything is refused.
-- **States** of a tenant: the deploy state, or `PENDING_START`, `SKIPPED`, `DENIED`. The release ends `succeeded`, `failed` or `stopped`.
+## The tenant of a deploy
 
-**Recurring schedules** with `tenants` select the tenants again at every run: a tenant added after the schedule's creation enters the next runs. `schedule.at` delays the whole release.
-
-**Group promotion and rollback:**
+The tenant is not chosen: it comes from the application. At submission the engine reads the owner from the registry and records it in the request (`tenant` attribute, `Status.tenant`, field `tenant` of callbacks and chat messages, `tenant` in the result of the `config` step). The deploy identity stays application/artifact/environment.
 
 ```sh
-manent promote -a shop --from staging --to prod --tenants "tier=gold"   # each from its own release; the others are left out
-manent rollback -a shop -e prod --run shop-1.4.0-prod                   # the successful tenants, in reverse order
+manent list -t payments              # deploys of the applications of payments
+manent inventory -t payments
+manent dora -t payments --by-tenant
 ```
 
-The rollback of a release is a new multi-tenant release `<run>.rollback` with `onFailure: continue`: tenants with no previous release (first release) are left out.
+## Selectors on tags
 
-## Governance
+Application selectors read the application tags, `application`, `tenant` and the tenant tags with the `tenant.` prefix: `criticality=high`, `tenant=payments`, `tenant.division in (commerce)`. Tenant selectors (`tenants`) read the tenant tags and `name`.
 
-The tenant enters every governance decision:
+| Where | Field |
+|---|---|
+| RBAC bindings and permission grants | `tenants` (owner) and `selector` (applications) |
+| Governance rules and freezes | `tenants` and `selector`; in Rego `input.tenant` and `input.application_tags` |
+| Listings | `manent inventory --selector …`, `manent list --selector …`, query `selector` of the API |
+| Runtime freezes | `manent freeze add … --selector criticality=high` |
 
-- **YAML rules and freezes** take `tenants`, a selector:
-
-  ```yaml
-  governance:
-    rules:
-      - {name: gold-prod, applications: ["*"], environments: [prod], tenants: "tier=gold", approvals: {required: 2}}
-    freezes:
-      - {name: acme-close, applications: ["*"], environments: [prod], tenants: "name=acme", from: ..., to: ...}
-  ```
-
-  A rule or window without `tenants` applies to every deploy, one with `tenants` only to the matching tenants. `manent freeze add --tenants "tier=gold"` creates one at runtime.
-- **Rego policies** receive `input.tenant` (`name`, `tags`) and `input.tenants_run` (input schema 2); `lib.tenant_matches(selector, input.tenant)` applies a selector. See [Policies in Rego](policy.md).
-
-```rego
-deny contains {"code": "contract", "message": "the 2025 contracts stay on 1.0.x"} if {
-	input.tenant.tags.contract == "2025"
-	not startswith(input.artifact.version, "1.0.")
-}
-```
-
-## Permissions { #permessi }
-
-RBAC bindings take `tenants`, a selector:
-
-```yaml
+```yaml title="manent.yml"
 rbac:
+  selector_keys: [criticality, product, tenant]   # keys the selectors of permissions can read
   bindings:
-    - {groups: [support-acme], role: deployer, applications: ["*"], environments: [prod], tenants: "name=acme"}
-    - {groups: [account-gold], role: approver, applications: ["*"], environments: [prod], tenants: "tier=gold"}
+    - {groups: [sre], role: approver, applications: ["*"], environments: [prod], selector: "criticality=high"}
+governance:
+  rules:
+    - {name: critical, applications: ["*"], environments: [prod], selector: "criticality=high", approvals: {required: 2}}
 ```
 
-- A binding without `tenants` applies to every deploy, with or without tenant: existing configurations do not change.
-- A binding with `tenants` applies only to the deploys of the matching tenants, with the tags read from the registry.
-- A multi-tenant release requires the permission on **every** selected tenant; approving or cancelling one, on every tenant of the release.
-- Lists (`list`, `inventory`, `activity`, `dora`, `tenants`) show only what can be read.
+The selectors of permissions can read only the keys of `rbac.selector_keys` (empty: no selector in permissions): a cosmetic tag must not give access.
 
-## From an environment per customer
+## Members, admins and visibility
 
-Before tenants, a customer was often an environment (`prod-acme`). The adoption records the release in service there as a deploy of the tenant, with kind `adoption` and without touching the targets, so promotions and rollbacks of the tenant start from the right release:
-
-```sh
-manent-server -c manent.yml admin tenants-adopt -a shop --environment prod-acme --as prod --tenant acme
+```yaml title="manent.yml"
+rbac:
+  tenant_roles: {members: deployer, admins: admin}   # default; an empty role gives nothing
+  cross_tenant_inventory: true                       # default
 ```
 
-## Terraform
+- **Members and admins** of a tenant receive the role of `tenant_roles` on the tenant's applications, in every environment. The implicit roles never give `policy.*`, decided only by `rbac.bindings`.
+- **Collaborators** of other teams get explicit bindings (`tenants: "name=payments"`).
+- **Across tenants** whoever belongs to a tenant can read the inventory of the others (`cross_tenant_inventory`); everything else needs a permission.
+- **Platform roles** (`platform.read`, `policy.*`, break-glass) stay across tenants.
 
-`manent_deployment` takes `tenant`, and the data source `manent_tenants` lists the tenants for a `for_each`:
+## Isolation between tenants
 
-```hcl
-data "manent_tenants" "gold" {
-  application = "shop"
-  environment = "prod"
-  selector    = "tier=gold"
-}
+- **Deploy IDs:** an ID already used by another tenant is refused (`deployment id … is already in use`), without saying whose it is.
+- **Dependencies:** `after` towards a deploy of another tenant is refused, unless the deploy is the producer of an import; across tenants imports read only the exports with `public: true`.
+- **Releases:** a composed release contains the applications of one tenant.
+- **Restrictions:** `secret_refs`, `artifact_sources` and `callback_hosts` of the tenant are checked at submission and again by the `config` step on the effective descriptor (the restrictions are recorded in the request).
 
-resource "manent_deployment" "shop" {
-  for_each    = toset(data.manent_tenants.gold.names)
-  application = "shop"
-  environment = "prod"
-  tenant      = each.key
-  descriptor  = file("deploy/prod.yml")
-  version     = var.version
-}
+```yaml title="exports of a deploy"
+exports:
+  vpc_id: {from: deploy.vpc_id, pattern: 'vpc-[0-9a-f]+', public: true}   # readable by other tenants
+  admin_host: {from: deploy.admin, pattern: '[a-z0-9.-]+'}                # only the owner's deploys
 ```
 
-## Not covered
+## Queues and workers per tenant
 
-- An API to write the registry: the tenants live in the provider, managed with Git, Terraform or Consul.
-- A single approval for a whole release (one per tenant deploy, plus those between groups).
-- The `tenant` label on the Prometheus metrics, whose cardinality would grow with the tenants.
+A tenant with `queue` runs its deploys on that queue; the others use the default queue (`dbos.queue`). Every worker registers the queues of the registry at startup and, by default, serves every tenant. A pool dedicated to some teams, with their credentials in its own `manent.yml`, listens only to their queues:
+
+```yaml title="manent.yml of the payments workers"
+dbos:
+  tenants: [payments]      # only deployments.payments (the default queue for tenants without one)
+plugins:
+  ecs: {role_arn: "arn:aws:iam::111111111111:role/payments-deployer"}
+```
+
+- `concurrency` of the tenant is the global limit of its queue (quota); `environment_concurrency` still applies per application artifact and environment.
+- With region routing the passes of a tenant's deploy run on `<queue>.<region>`.
+- A queue added to the registry is registered by the workers at their next start: until then its deploys stay queued.
+- Approvals, dependency waits and releases stay on the shared approvals queue: they run no plugin code.

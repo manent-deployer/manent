@@ -5,7 +5,7 @@ Di default i permessi sono i `rbac.bindings` di `manent.yml` ([Permessi](../oper
 Una policy può esprimere ciò che i binding non sanno dire:
 
 - **accessi temporanei**: un permesso di reperibilità che smette di valere a fine turno (`until`);
-- **proprietà**: un team riceve i deploy dei tenant con il tag `owner=<team>`, senza un binding per cliente;
+- **proprietà**: un team riceve le applicazioni dei tenant con il tag `owner=<team>`, senza un binding per applicazione;
 - **condizioni sulla richiesta**: i contractor non cambiano mai la produzione, le migrazioni in produzione solo dal gruppo DBA, un deploy annullato solo da chi l'ha chiesto.
 
 ```yaml title="manent.yml"
@@ -60,7 +60,9 @@ Output, un oggetto per permesso:
 | `name` | Etichetta mostrata da `manent whoami`, nell'interfaccia web e nell'audit. |
 | `role` o `actions` | Un ruolo (predefinito o di `rbac.roles`/`data.manent.rbac.roles`) oppure un elenco di azioni. Le azioni `policy.*` sono **scartate** con un avviso: le concede solo `rbac.bindings`. |
 | `applications`, `environments` | Pattern con `*`, obbligatori. |
-| `tenants` | Selettore sui tag e sul nome del [tenant](tenant.md#permessi); assente: tutti i deploy. |
+| `tenants` | Selettore sui tag e sul nome del [tenant](tenant.md) proprietario; assente: tutte le applicazioni. |
+| `artifacts` | Pattern su `artifact.name`; assente: tutti gli artefatti. |
+| `selector` | Selettore sui [tag delle applicazioni](tenant.md), con le chiavi di `rbac.selector_keys`; assente: tutte le applicazioni. |
 | `until` | Facoltativo, RFC 3339: il permesso smette di valere a quell'istante, anche se è in cache. L'istante si confronta con l'orologio del server API. |
 
 Un permesso non valido (ruolo o azione sconosciuti, pattern mancanti, selettore non valido) viene scartato da solo, con un avviso nel log e in `manent_authz_invalid_grants_total`; alla compilazione, sugli input di esempio, è un errore.
@@ -78,7 +80,7 @@ Input:
   "resource": {
     "application": "shop",
     "environment": "prod",
-    "tenant": {"name": "acme", "tags": {"tier": "gold", "owner": "team-shop"}},
+    "tenant": {"name": "payments", "tags": {"division": "commerce", "owner": "team-shop"}},
     "deployment": {
       "id": "shop-1.4.0-prod", "kind": "deploy", "dry_run": false,
       "artifact": {"type": "application", "name": "shop", "version": "1.4.0"},
@@ -108,7 +110,7 @@ import data.manent.lib.authz
 # I binding di manent.yml (data.manent.rbac), più le regole sotto.
 grants := authz.bindings | owners | oncall
 
-# Un team possiede i tenant con il suo nome nel tag owner.
+# Un team possiede le applicazioni dei tenant con il suo nome nel tag owner.
 owners contains g if {
 	some group in input.identity.groups
 	startswith(group, "team-")

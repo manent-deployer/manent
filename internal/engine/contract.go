@@ -19,7 +19,6 @@ const (
 	KindDeploy    = service.KindDeploy
 	KindPromotion = service.KindPromotion
 	KindRollback  = service.KindRollback
-	KindAdoption  = service.KindAdoption
 
 	ApprovalPending  = service.ApprovalPending
 	ApprovalApproved = service.ApprovalApproved
@@ -93,4 +92,8 @@ type (
 	DORAFilter           = service.DORAFilter
 	DORAMetrics          = service.DORAMetrics
 	DORAReport           = service.DORAReport
+	TenantService        = service.TenantService
+	TenantFilter         = service.TenantFilter
+	TenantInfo           = service.TenantInfo
+	TenantApplication    = service.TenantApplication
 )

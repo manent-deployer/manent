@@ -61,9 +61,20 @@ func (e *Engine) checkAfter(ctx context.Context, d *descriptor.Descriptor) (bool
 		return false, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	done := true
+	mine := ""
+	if r := e.ownerRef(ctx, d.Application); r != nil {
+		mine = r.Name
+	}
+	imported := map[string]bool{}
+	for _, imp := range d.Imports {
+		imported[imp.Deployment] = true
+	}
 	for _, id := range d.After {
 		st, err := e.Status(ctx, id)
 		switch {
+		case err == nil && e.tenants != nil && st.Tenant != mine && !imported[id]:
+			// Across tenants a deploy can only wait for the producer of the public exports it imports.
+			return false, fmt.Errorf("%w: after: deploy %s belongs to another tenant: across tenants only the producers of imported public exports are allowed", ErrInvalidRequest, id)
 		case errors.Is(err, ErrNotFound):
 			return false, fmt.Errorf("%w: after: deploy %s does not exist", ErrInvalidRequest, id)
 		case err != nil:

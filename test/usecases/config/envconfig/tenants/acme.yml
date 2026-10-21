@@ -1,5 +1,0 @@
-# UC24: tenant registry of the use cases.
-description: ACME S.p.A.
-tags: {tier: gold, contract: "2026", owner: team-uc25}   # owner: UC25
-applications: {uc24-shop: [prod]}
-params: {uc24-shop: {banner: ACME}}

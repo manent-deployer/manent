@@ -74,6 +74,9 @@ type Export struct {
 	// Pattern is the regular expression (anchored) the value must match: required for string,
 	// applied to each host for targets. It keeps secrets and unexpected values out of exports.
 	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	// Public makes the export readable by the deploys of other tenants (imports and after
+	// across tenants); without it only the owner's deploys can import it.
+	Public bool `json:"public,omitempty" yaml:"public,omitempty"`
 }
 
 // exportNameRe limits the names of imports, exports and parameters taken from an export.

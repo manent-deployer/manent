@@ -15,7 +15,16 @@ matching contains i if {
 	lib.match_any(r.environments, input.environment)
 	tenant_ok(r)
 	artifact_ok(r)
+	selector_ok(r)
 }
+
+# A rule without selector applies to every application, one with a selector only to the
+# matching applications.
+selector_ok(r) if not r.selector
+
+selector_ok(r) if r.selector == ""
+
+selector_ok(r) if lib.app_matches(r.selector, input)
 
 # A rule without artifacts applies to every artifact, one with artifacts only to those.
 artifact_ok(r) if not r.artifacts

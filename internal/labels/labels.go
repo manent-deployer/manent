@@ -41,6 +41,17 @@ type Selector struct {
 // String returns the selector as written.
 func (s Selector) String() string { return s.text }
 
+// Keys returns the label keys the selector reads, in order of appearance.
+func (s Selector) Keys() []string {
+	var out []string
+	for _, r := range s.reqs {
+		if !slices.Contains(out, r.key) {
+			out = append(out, r.key)
+		}
+	}
+	return out
+}
+
 var (
 	keyRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,62}$`)
 	valueRe = regexp.MustCompile(`^[A-Za-z0-9._-]{0,63}$`)

@@ -61,6 +61,7 @@ paths:
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
         - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
+        - {name: selector, in: query, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>), schema: {type: string}}
         - {name: state, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, default: 50}}
         - name: cursor
@@ -278,6 +279,7 @@ paths:
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
         - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
+        - {name: selector, in: query, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>), schema: {type: string}}
       responses:
         '200':
           description: Inventario
@@ -332,12 +334,11 @@ paths:
   /api/v1/tenants:
     get:
       tags: [tenants]
-      summary: Tenant del registro (filtrati dai permessi)
+      summary: Tenant del registro, i team proprietari delle applicazioni (filtrati dai permessi)
       operationId: listTenants
       parameters:
-        - {name: application, in: query, schema: {type: string}}
-        - {name: environment, in: query, schema: {type: string}}
-        - {name: selector, in: query, description: Selettore sui tag e sul nome, schema: {type: string}}
+        - {name: application, in: query, description: Solo il proprietario di questa applicazione, schema: {type: string}}
+        - {name: selector, in: query, description: Selettore sui tag del tenant e sul nome, schema: {type: string}}
       responses:
         '200':
           description: Tenant
@@ -739,11 +740,6 @@ components:
         id: {type: string}
         application: {type: string}
         environment: {type: string}
-        tenant: {type: string, description: Tenant del deploy}
-        tenants:
-          type: object
-          description: Rilascio a più tenant (names o selector, groups, maxParallel, onFailure, onDenied, approvalsBetween)
-          additionalProperties: true
         dryRun: {type: boolean}
         after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
         afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
@@ -808,8 +804,6 @@ components:
         scheduled_at: {type: string, format: date-time}
         schedule: {type: string}
         dry_run: {type: boolean}
-        tenants: {type: array, items: {type: string}, description: Tenant di un rilascio multi-tenant}
-        skipped: {type: array, items: {$ref: '#/components/schemas/TenantSkip'}}
     Decision:
       type: object
       required: [approver, approve, time]
@@ -914,7 +908,7 @@ components:
         artifact: {type: string}
         version: {type: string}
         sha256: {type: string}
-        kind: {type: string, enum: [deploy, promotion, rollback, tenants]}
+        kind: {type: string, enum: [deploy, promotion, rollback]}
         source: {type: string, description: Deploy di origine di una promozione o di un rollback}
         dry_run: {type: boolean}
         rollback: {type: string, description: Esito del rollback automatico}
@@ -931,8 +925,6 @@ components:
         after: {$ref: '#/components/schemas/AfterState'}
         release: {type: string, description: Release composta a cui appartiene il deploy}
         policy: {$ref: '#/components/schemas/PolicySnapshot'}
-        tenants_run: {$ref: '#/components/schemas/TenantsRunState'}
-        run: {type: string, description: Rilascio multi-tenant a cui appartiene il deploy}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
         exports: {type: object, additionalProperties: {type: string}, description: Export del deploy riuscito, importabili da altri deploy}
@@ -1190,64 +1182,30 @@ components:
         recurring: {type: boolean}
         tenants: {type: string}
         artifacts: {type: array, items: {type: string}}
+        selector: {type: string}
         hard: {type: boolean, description: Non esentabile dalla policy né superabile con freezeOverride}
         dynamic: {type: boolean, description: Creata a runtime}
         created_by: {type: string}
-    TenantSkip:
-      type: object
-      required: [tenant, reason]
-      properties:
-        tenant: {type: string}
-        reason: {type: string}
     TenantInfo:
       type: object
       required: [name]
+      description: Un tenant, il team proprietario delle applicazioni
       properties:
         name: {type: string}
         description: {type: string}
         tags: {type: object, additionalProperties: {type: string}}
-        applications: {type: object, additionalProperties: {type: array, items: {type: string}}}
-        params: {type: object, additionalProperties: {type: object, additionalProperties: {type: string}}}
-        secrets: {type: object, additionalProperties: {type: array, items: {type: string}}, description: Nomi dei segreti, mai i riferimenti}
+        applications:
+          type: object
+          description: Applicazioni possedute, con i loro tag
+          additionalProperties:
+            type: object
+            properties:
+              tags: {type: object, additionalProperties: {type: string}}
+        queue: {type: string, description: Coda dei deploy del tenant; assente per la coda di default}
+        concurrency: {type: integer}
         disabled: {type: boolean}
         source: {type: string}
-    TenantRunEntry:
-      type: object
-      required: [tenant, group, state]
-      properties:
-        tenant: {type: string}
-        group: {type: string}
-        deployment_id: {type: string}
-        state: {type: string, description: Stato del deploy, oppure PENDING_START, SKIPPED, DENIED}
-        error: {type: string}
-        reason: {type: string}
-    TenantGroupState:
-      type: object
-      required: [name, state]
-      properties:
-        name: {type: string}
-        bake: {type: string}
-        state: {type: string, enum: [pending, running, baking, done, skipped]}
-    TenantsRunState:
-      type: object
-      required: [id, application, environment, status, max_parallel, on_failure, groups, tenants]
-      properties:
-        id: {type: string}
-        application: {type: string}
-        environment: {type: string}
-        artifact: {type: string}
-        version: {type: string}
-        kind: {type: string}
-        status: {type: string, enum: [running, baking, paused-approval, succeeded, failed, stopped]}
-        group: {type: string}
-        paused: {type: string}
-        max_parallel: {type: integer}
-        on_failure: {type: string}
-        groups: {type: array, items: {$ref: '#/components/schemas/TenantGroupState'}}
-        tenants: {type: array, items: {$ref: '#/components/schemas/TenantRunEntry'}}
-        approval: {$ref: '#/components/schemas/ApprovalState'}
-        error: {type: string}
-        updated_at: {type: string, format: date-time}
+        revision: {type: string}
     FreezeRequest:
       type: object
       additionalProperties: false
@@ -1260,6 +1218,7 @@ components:
         regions: {type: array, items: {type: string}}
         tenants: {type: string, description: Selettore dei tenant}
         artifacts: {type: array, items: {type: string}, description: Pattern sui nomi degli artefatti}
+        selector: {type: string, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>)}
         from: {type: string, format: date-time, description: Default adesso}
         to: {type: string, format: date-time}
         hard: {type: boolean}
@@ -1421,8 +1380,6 @@ components:
             to: {type: string}
             artifact: {type: string, description: "Artefatto da promuovere; obbligatorio se from ne ha più di uno"}
             version: {type: string}
-            tenant: {type: string, description: Promuove la release di questo tenant}
-            tenants: {type: string, description: Selettore dei tenant da promuovere, ognuno dalla propria release}
             deploy: {$ref: '#/components/schemas/DeployTargets'}
     RollbackRequest:
       allOf:
@@ -1434,8 +1391,6 @@ components:
             environment: {type: string}
             artifact: {type: string, description: "Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno"}
             version: {type: string}
-            tenant: {type: string, description: Torna indietro sulla release di questo tenant}
-            run: {type: string, description: Rilascio multi-tenant di cui riportare indietro i tenant riusciti}
     Grant:
       type: object
       required: [actions, applications, environments]
@@ -1446,6 +1401,7 @@ components:
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
         tenants: {type: string, description: Selettore dei tenant a cui il permesso è limitato}
+        selector: {type: string, description: Selettore sulle applicazioni a cui il permesso è limitato}
         artifacts: {type: array, items: {type: string}, description: Pattern degli artefatti a cui il permesso è limitato}
         until: {type: string, format: date-time, description: Istante in cui il permesso smette di valere}
     PolicyAccessRequest:
@@ -1464,7 +1420,6 @@ components:
         action: {type: string}
         application: {type: string}
         environment: {type: string}
-        tenant: {type: string}
         artifact: {type: string}
         descriptor: {$ref: '#/components/schemas/Descriptor'}
     PolicyAccess:

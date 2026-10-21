@@ -151,12 +151,12 @@ Computed attributes: `valid`, `plugin`, `targets` (hosts of the effective deploy
 
 ```hcl
 data "manent_inventory" "prod" { environment = "prod" }
-# data.manent_inventory.prod.entries[*]: application, environment, tenant, version, deployment_id, sha256, out_of_sync
+# data.manent_inventory.prod.entries[*]: application, artifact, environment, tenant, version, deployment_id, sha256, out_of_sync
 ```
 
-### `manent_tenants` and tenants
+### `manent_tenants`
 
-`manent_deployment` takes `tenant`; `manent_tenants` (`application`, `environment`, `selector`) returns `names` and `tenants` (name, tags) for a `for_each` with a resource per tenant: see [Tenants](tenant.md#terraform). Import with `<application>/<environment>/<tenant>`.
+`manent_tenants` (`application`, `selector`) returns `names` and `tenants` (name, tags, owned applications): the teams of the [tenant registry](tenant.md).
 
 !!! note "What stays out"
     Permissions are in the manent configuration (`manent.yml`), read at startup, and so are the YAML [governance](governance.md) rules; the Rego policies and the runtime freezes are managed with `manent policy` and `manent freeze`, or come from a bundle or a directory versioned elsewhere ([Policies in Rego](policy.md)). The environment configuration stays in its system (Consul, files in the repository): the provider checks it, `consul_keys` or the repository write it.

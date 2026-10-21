@@ -94,6 +94,8 @@ type fakeService struct {
 	decided   []string
 	// statusReads counts the status reads.
 	statusReads int
+	// inventory, if set, replaces the default inventory (it is filtered in place).
+	inventory []engine.InventoryEntry
 }
 
 func (f *fakeService) Plan(context.Context, *descriptor.Descriptor) (pipeline.Plan, error) {
@@ -141,6 +143,9 @@ func (f *fakeService) PauseSchedule(context.Context, string) error  { return nil
 func (f *fakeService) ResumeSchedule(context.Context, string) error { return nil }
 func (f *fakeService) DeleteSchedule(context.Context, string) error { return nil }
 func (f *fakeService) Inventory(context.Context, engine.InventoryFilter) ([]engine.InventoryEntry, error) {
+	if f.inventory != nil {
+		return append([]engine.InventoryEntry(nil), f.inventory...), nil
+	}
 	return []engine.InventoryEntry{{Application: "team-a-api", Environment: "test"}, {Application: "team-b-api", Environment: "test"}}, nil
 }
 func (f *fakeService) Promote(context.Context, engine.PromoteRequest) (*engine.Submission, error) {

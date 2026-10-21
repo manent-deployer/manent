@@ -100,8 +100,9 @@ describe("approvazioni", () => {
 
 describe("inventario", () => {
   const inventory = [
-    { application: "shop", environment: "test", current: dep({ id: "t1", environment: "test", version: "1.5.0" }) },
-    { application: "shop", environment: "prod", current: dep({ id: "p1" }), drift: true },
+    // The owner tenant is shown but never sent back: promotions and rollbacks have no tenant.
+    { application: "shop", environment: "test", tenant: "payments", current: dep({ id: "t1", environment: "test", version: "1.5.0" }) },
+    { application: "shop", environment: "prod", tenant: "payments", current: dep({ id: "p1" }), drift: true },
   ];
 
   it("mostra la matrice, il drift e solo le azioni permesse", async () => {
@@ -456,7 +457,7 @@ describe("governance", () => {
 });
 
 describe("tenant", () => {
-  it("mostra la matrice tenant × ambiente", async () => {
+  it("mostra la matrice applicazione × ambiente con il tenant proprietario", async () => {
     const { api } = fakeApi(({ path }) => {
       if (path === "/api/v1/me") return { json: identity() };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
@@ -464,45 +465,17 @@ describe("tenant", () => {
         return {
           json: {
             inventory: [
-              { application: "shop", environment: "prod", tenant: "acme", current: dep({ id: "a1", version: "1.4.0", tenant: "acme" }) },
-              { application: "shop", environment: "prod", tenant: "globex", current: dep({ id: "g1", version: "1.3.0", tenant: "globex" }) },
+              { application: "shop", artifact: "shop-api", environment: "prod", tenant: "payments", current: dep({ id: "a1", version: "1.4.0", tenant: "payments" }) },
+              { application: "shop", artifact: "shop-web", environment: "prod", tenant: "payments", current: dep({ id: "g1", version: "1.3.0", tenant: "payments" }) },
             ],
           },
         };
     });
     renderApp(api, "/inventory");
     const table = await screen.findByRole("table", { name: /Live release per application/ });
-    expect(within(table).getByRole("columnheader", { name: "Tenant" })).toBeInTheDocument();
-    expect(within(table).getByText("acme")).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Artifact" })).toBeInTheDocument();
+    expect(within(table).getByText("shop-web")).toBeInTheDocument();
     expect(within(table).getByRole("link", { name: "1.3.0" })).toHaveAttribute("href", "/deployments/g1");
-  });
-
-  it("mostra lo stato di un rilascio multi-tenant", async () => {
-    const run = dep({
-      id: "shop-100",
-      state: "PENDING",
-      kind: "tenants",
-      tenants_run: {
-        id: "shop-100", application: "shop", environment: "prod", status: "running", group: "pilota", max_parallel: 2, on_failure: "stop",
-        groups: [{ name: "pilota", state: "running" }, { name: "resto", state: "pending" }],
-        tenants: [
-          { tenant: "acme", group: "pilota", deployment_id: "shop-100.acme", state: "SUCCESS" },
-          { tenant: "initech", group: "resto", state: "DENIED", reason: "contract 2025" },
-        ],
-      },
-    });
-    const { api } = fakeApi(({ path }) => {
-      if (path === "/api/v1/me") return { json: identity() };
-      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
-      if (path === "/api/v1/deployments/shop-100") return { json: run };
-      if (path === "/api/v1/deployments/shop-100/steps") return { json: { steps: [] } };
-      if (path === "/api/v1/deployments/shop-100/logs") return { json: { lines: [], next_offset: 0, done: false } };
-    });
-    renderApp(api, "/deployments/shop-100");
-    const table = await screen.findByRole("table", { name: "Deploys of the tenants of the release" });
-    expect(within(table).getByRole("link", { name: "acme" })).toHaveAttribute("href", "/deployments/shop-100.acme");
-    expect(within(table).getByText("Denied by the policy")).toBeInTheDocument();
-    expect(within(table).getByText("contract 2025")).toBeInTheDocument();
   });
 });
 
@@ -582,46 +555,51 @@ describe("piattaforma", () => {
 describe("tenant", () => {
   const tenants = {
     tenants: [
-      { name: "acme", description: "ACME Corp", tags: { tier: "gold" }, applications: { shop: ["prod", "staging"] }, params: { shop: { db: "acme_db" } }, secrets: { shop: ["db-password"] }, source: "file:envconfig/tenants/acme.yml" },
-      { name: "initech", tags: { tier: "silver" }, applications: { shop: ["prod"] }, disabled: true },
+      {
+        name: "payments", description: "Team pagamenti", tags: { division: "commerce" }, queue: "deployments.payments",
+        applications: { shop: { tags: { criticality: "high" } }, billing: {} }, source: "file:tenants.yml", revision: "a1b2c3",
+      },
+      { name: "archive", applications: { old: {} }, disabled: true },
     ],
   };
 
-  it("elenca i tenant con tag e ambienti e filtra per selettore", async () => {
+  it("elenca i tenant con tag e applicazioni e filtra per selettore", async () => {
     const { api, calls } = fakeApi(({ path, query }) => {
       if (path === "/api/v1/me") return { json: identity() };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
-      if (path === "/api/v1/tenants") return { json: query.get("selector") === "tier=gold" ? { tenants: [tenants.tenants[0]] } : tenants };
+      if (path === "/api/v1/tenants") return { json: query.get("selector") === "division=commerce" ? { tenants: [tenants.tenants[0]] } : tenants };
     });
     renderApp(api, "/tenants");
     expect(await screen.findByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/tenants");
     const table = await screen.findByRole("table", { name: "Tenants" });
-    expect(within(table).getByRole("link", { name: "acme" })).toHaveAttribute("href", "/tenants/acme");
-    expect(within(table).getByText("tier=gold")).toBeInTheDocument();
+    expect(within(table).getByRole("link", { name: "payments" })).toHaveAttribute("href", "/tenants/payments");
+    expect(within(table).getByText("division=commerce")).toBeInTheDocument();
+    expect(within(table).getByText("criticality=high")).toBeInTheDocument();
+    expect(within(table).getByText("deployments.payments")).toBeInTheDocument();
     expect(within(table).getByText("Disabled")).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/Selector/), "tier=gold");
+    await userEvent.type(screen.getByLabelText(/Selector/), "division=commerce");
     await userEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(within(screen.getByRole("table", { name: "Tenants" })).queryByText("initech")).not.toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table", { name: "Tenants" })).queryByText("archive")).not.toBeInTheDocument());
     expect(calls.some((c) => c.path === "/api/v1/tenants")).toBe(true);
   });
 
-  it("mostra il dettaglio con le release in esercizio, i parametri e solo i nomi dei segreti", async () => {
+  it("mostra il dettaglio con le applicazioni e le release in esercizio", async () => {
     const { api } = fakeApi(({ path, query }) => {
       if (path === "/api/v1/me") return { json: identity() };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
       if (path === "/api/v1/tenants") return { json: tenants };
-      if (path === "/api/v1/tenants/acme") return { json: tenants.tenants[0] };
-      if (path === "/api/v1/inventory" && query.get("tenant") === "acme")
-        return { json: { inventory: [{ application: "shop", environment: "prod", tenant: "acme", current: dep({ id: "shop-1.4.0-prod.acme", tenant: "acme" }) }] } };
+      if (path === "/api/v1/tenants/payments") return { json: tenants.tenants[0] };
+      if (path === "/api/v1/inventory" && query.get("tenant") === "payments")
+        return { json: { inventory: [{ application: "shop", artifact: "shop-api", environment: "prod", tenant: "payments", current: dep({ id: "shop-1.4.0", tenant: "payments" }) }] } };
     });
-    renderApp(api, "/tenants/acme");
-    expect(await screen.findByRole("heading", { name: "acme" })).toBeInTheDocument();
+    renderApp(api, "/tenants/payments");
+    expect(await screen.findByRole("heading", { name: "payments" })).toBeInTheDocument();
     const releases = await screen.findByRole("table", { name: "Releases in service" });
     const rows = within(releases).getAllByRole("row");
     await waitFor(() => expect(rows[1]).toHaveTextContent("1.4.0"));
-    expect(rows[2]).toHaveTextContent("never released");
-    expect(screen.getByText("acme_db")).toBeInTheDocument();
-    expect(screen.getByText("db-password")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Deployment history →" })).toHaveAttribute("href", "/deployments?application=shop&tenant=acme");
+    expect(rows[1]).toHaveTextContent("shop-api");
+    expect(screen.getByText("criticality=high")).toBeInTheDocument();
+    expect(screen.getByText(/file:tenants.yml @ a1b2c3/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "history →" })[0]).toHaveAttribute("href", "/deployments?application=billing");
   });
 });

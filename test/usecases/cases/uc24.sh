@@ -1,93 +1,89 @@
-# UC24: tenants. Four customers of uc24-shop in prod: a deploy per tenant with its parameters,
-# targets dedicated (eu1-b for acme) and shared (eu1-a, one installation per tenant); a
-# multi-tenant release with a pilot group and a tenant denied by its contract (Rego policy);
-# the support of a customer limited to its tenant; a freeze by tag; the rollback of the
-# release; the adoption of an environment per customer.
-APP=uc24-shop
-log "UC24 · tenant: deploy per cliente, rilascio multi-tenant con pilota, policy per contratto, permessi e freeze per tenant"
+# UC24: tenants as the teams that own the applications. payments owns uc24-shop (critical) and
+# uc24-billing, legacy owns uc24-legacy (2025 contract): the owner comes from the registry, with
+# the team's queue and restrictions; deploy IDs, dependencies and releases do not cross
+# tenants; the members of a team get its implicit role; permissions, freezes and listings by
+# application tags; a Rego policy by tenant tag.
+log "UC24 · tenant proprietari: registro, coda e limiti del team, ruoli impliciti, selettori sui tag, policy per contratto"
 
-for v in 1.0.0 1.1.0; do artifact $APP $v >/dev/null; done
+for a in uc24-shop uc24-billing uc24-legacy; do
+  for v in 1.0.0 1.1.0; do artifact $a $v >/dev/null; done
+done
 
 info "-- registro dei tenant"
-expect_eq "quattro tenant collegati a uc24-shop/prod" "$(manent tenants list -a $APP -e prod | jq -r '[.[].name] | join(",")')" "acme,globex,initech,umbrella"
-expect_eq "i segreti non sono esposti, i parametri sì" "$(manent tenants show globex | jq -r '.params."uc24-shop".replicas')" 2
+expect_eq "il proprietario di uc24-shop" "$(manent tenants list -a uc24-shop | jq -r '[.[].name] | join(",")')" payments
+expect_eq "applicazioni di payments con i loro tag" \
+  "$(manent tenants show payments | jq -r '[.applications | to_entries[] | .key + "=" + .value.tags.criticality] | join(",")')" "uc24-billing=medium,uc24-shop=high"
+expect_eq "coda del team" "$(manent tenants show payments | jq -r .queue)" deployments.payments
 
-info "-- un deploy per tenant"
-d=$(descriptor uc24-a uc24-100-acme $APP prod 1.0.0 "tenant: acme")
-id=$(submit "$d")
-expect_eq "deploy di acme riuscito" "$(wait_state "$id" terminal 60)" SUCCESS
-expect_eq "acme sul target condiviso (installazione propria)" "$(current eu1-a $APP-acme)" 1.0.0
-expect_eq "acme sul target dedicato" "$(current eu1-b $APP-acme)" 1.0.0
-d=$(descriptor uc24-b uc24-100-globex $APP prod 1.0.0 "tenant: globex")
-id=$(submit "$d")
-expect_eq "deploy di globex riuscito" "$(wait_state "$id" terminal 60)" SUCCESS
-expect_eq "globex solo sul target condiviso" "$(current eu1-a $APP-globex) $(current eu1-b $APP-globex)" "1.0.0 none"
-expect_match "lo step config riporta il tenant e il suo documento" \
-  "$(manent status "$id" | jq -r '.result.steps[] | select(.name=="config") | .output.tenant_source')" "tenants/globex.yml"
-d=$(descriptor uc24-c uc24-100-none $APP prod 1.0.0)
-expect_match "senza tenant prod è rifiutato" "$(manent_err deploy --no-wait -f "$d")" "requires a tenant"
-d=$(descriptor uc24-d uc24-100-x $APP prod 1.0.0 "tenant: nessuno")
-expect_match "un tenant inesistente è rifiutato" "$(manent_err deploy --no-wait -f "$d")" "tenant not found"
+info "-- il tenant viene dall'applicazione"
+id=$(submit "$(descriptor uc24-a uc24-100-shop uc24-shop prod 1.0.0)")
+expect_eq "deploy di uc24-shop riuscito" "$(wait_state "$id" terminal 60)" SUCCESS
+st=$(manent status "$id")
+expect_eq "il deploy è del tenant payments, sulla sua coda" "$(printf '%s' "$st" | jq -r '.tenant + " " + .queue')" "payments deployments.payments"
+expect_eq "lo step config riporta il tenant" "$(printf '%s' "$st" | jq -r '.result.steps[] | select(.name=="config") | .output.tenant')" payments
+expect_eq "uc24-shop sul target" "$(current eu1-a uc24-shop)" 1.0.0
+id=$(submit "$(descriptor uc24-b uc24-100-legacy uc24-legacy prod 1.0.0)")
+expect_eq "deploy di uc24-legacy riuscito" "$(wait_state "$id" terminal 60)" SUCCESS
+expect_eq "tenant legacy, coda di default" "$(manent status "$id" | jq -r '.tenant + " " + .queue')" "legacy deployments"
+expect_match "un'applicazione non registrata è rifiutata" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-c uc24-100-ghost uc24-ghost prod 1.0.0)")" "not registered in any tenant"
 
-info "-- policy per contratto"
+info "-- limiti del tenant"
+expect_match "un segreto fuori dai pattern è rifiutato" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-d uc24-101 uc24-shop prod 1.0.0 'secrets: [{name: extra, ref: "env:HOME"}]')")" "not allowed"
+expect_match "una sorgente fuori dai prefissi del team è rifiutata" \
+  "$(manent_err deploy --no-wait -f "$(art_descriptor uc24-e uc24-102 uc24-shop prod 1.0.0 application file:///srv/artifacts/uc1-shop-1.0.0.tar.gz)")" "artifact_sources"
+
+info "-- ID, dipendenze e release non attraversano i tenant"
+expect_match "un ID usato da un altro tenant è rifiutato" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-f uc24-100-legacy uc24-shop prod 1.1.0)")" "already in use"
+expect_match "after verso il deploy di un altro tenant è rifiutato" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-g uc24-103 uc24-shop prod 1.1.0 "after: [uc24-100-legacy]")")" "another tenant"
+for n in shop legacy; do descriptor "uc24-r-$n" "uc24-r-$n" "uc24-$n" prod 1.1.0 >/dev/null; done
+cat >"$WORK/uc/uc24-r.yml" <<'EOF'
+apiVersion: manent/v1
+kind: Release
+id: uc24-r
+deploys:
+  - {name: shop, file: uc24-r-shop.yml}
+  - {name: legacy, file: uc24-r-legacy.yml}
+EOF
+expect_match "una release con applicazioni di due tenant è rifiutata" "$(manent_err release submit -f /uc/uc24-r.yml)" "one tenant"
+
+info "-- ruolo implicito dei membri del team"
+id=$(as supacme submit "$(descriptor uc24-h uc24-100-billing uc24-billing prod 1.0.0)")
+expect_eq "un membro di team-payments rilascia uc24-billing" "$(wait_state "$id" terminal 60)" SUCCESS
+expect_match "ma non uc24-legacy" \
+  "$(as supacme manent_err deploy --no-wait -f "$(descriptor uc24-i uc24-104 uc24-legacy prod 1.1.0)")" "cannot perform deployment.submit.*tenant legacy"
+expect_eq "il membro vede solo il suo tenant" "$(as supacme manent tenants list | jq -r '[.[].name] | join(",")')" payments
+expect_eq "e legge l'inventario degli altri team (cross_tenant_inventory)" \
+  "$(as supacme manent inventory -a uc24-legacy | jq -r '.[0].current.version')" 1.0.0
+
+info "-- selettori sui tag delle applicazioni"
+expect_eq "inventario per selettore" "$(manent inventory --selector tenant=payments | jq -r '[.[].application] | sort | join(",")')" "uc24-billing,uc24-shop"
+expect_eq "elenco dei deploy per selettore" "$(manent list --selector criticality=high | jq -r '[.[].application] | unique | join(",")')" uc24-shop
+sim=$(as pol manent policy access current --subject oidc:sam --group sre --action deployment.approve -a uc24-shop -e prod --json)
+expect_eq "gli SRE approvano le applicazioni critiche (binding con selettore)" "$(printf '%s' "$sim" | jq -r .check.allowed)" true
+sim=$(as pol manent policy access current --subject oidc:sam --group sre --action deployment.approve -a uc24-billing -e prod --json)
+expect_eq "ma non le altre" "$(printf '%s' "$sim" | jq -r .check.allowed)" false
+as admin manent freeze add --name uc24-critical --reason "chiusura delle applicazioni critiche" -a 'uc24-*' -e prod --selector criticality=high --for 1h >/dev/null
+expect_match "il freeze per selettore ferma uc24-shop (critica)" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-j uc24-105 uc24-shop prod 1.1.0)")" 'freeze "uc24-critical"'
+id=$(submit "$(descriptor uc24-k uc24-110-billing uc24-billing prod 1.1.0)")
+expect_eq "uc24-billing non è toccata dal freeze" "$(wait_state "$id" terminal 60)" SUCCESS
+as admin manent freeze delete uc24-critical >/dev/null 2>&1
+
+info "-- policy per contratto (tag del tenant)"
 rm -rf "$WORK/uc/uc24-policy" && cp -R cases/uc24-policy "$WORK/uc/uc24-policy"
 rev=$(as pol manent policy push -d /uc/uc24-policy -m "uc24: contratti 2025 fermi alla 1.0" | jq -r .revision)
 as admin manent policy approve "$rev" >/dev/null 2>&1
 sleep 3
 expect_match "la revisione per contratto è in vigore" "$(as admin manent policy list | jq -r .current)" "^$rev:"
-
-info "-- rilascio multi-tenant con pilota"
-d=$(descriptor uc24-e uc24-110 $APP prod 1.1.0 "tenants:
-  selector: \"tier in (gold, silver)\"
-  groups:
-    - {name: pilota, select: \"tier=gold\", bake: 2s}
-    - {name: resto}
-  maxParallel: 2
-  onFailure: stop")
-out=$(manent deploy --no-wait -f "$d")
-run=$(printf '%s' "$out" | jq -r .id)
-expect_eq "tre tenant nel rilascio" "$(printf '%s' "$out" | jq -r '.tenants | join(",")')" "acme,globex,umbrella"
-expect_match "initech escluso dalla policy per il contratto" "$(printf '%s' "$out" | jq -r '.skipped[0].tenant + ": " + .skipped[0].reason')" "^initech: .*2025 contract"
-expect_eq "il rilascio riesce" "$(wait_state "$run" terminal 120)" SUCCESS
-st=$(manent status "$run")
-expect_eq "stato per tenant" "$(printf '%s' "$st" | jq -r '[.tenants_run.tenants[] | .tenant + "=" + .state] | join(",")')" "acme=SUCCESS,globex=SUCCESS,initech=DENIED,umbrella=SUCCESS"
-expect_eq "acme e globex sulla 1.1.0, initech mai rilasciato" "$(current eu1-a $APP-acme) $(current eu1-a $APP-globex) $(current eu1-a $APP-initech)" "1.1.0 1.1.0 none"
-expect_eq "il deploy del tenant appartiene al rilascio" "$(manent status "$run.globex" | jq -r '.run + " " + .tenant')" "$run globex"
-expect_eq "inventario per tenant" "$(manent inventory -a $APP -e prod | jq -r '[.[] | .tenant + "=" + .current.version] | join(",")')" "acme=1.1.0,globex=1.1.0,umbrella=1.1.0"
-
-info "-- permessi per tenant"
-d=$(descriptor uc24-g uc24-110-acme-sup $APP prod 1.1.0 "tenant: acme")
-id=$(as supacme submit "$d")
-expect_eq "il supporto di acme rilascia acme" "$(wait_state "$id" terminal 60)" SUCCESS
-d=$(descriptor uc24-h uc24-110-globex-sup $APP prod 1.1.0 "tenant: globex")
-expect_match "il supporto di acme non tocca globex" "$(as supacme manent_err deploy --no-wait -f "$d")" "permission denied.*tenant globex"
-
-info "-- freeze per tag"
-as admin manent freeze add --name uc24-gold --reason "chiusura trimestrale dei clienti gold" -a $APP -e prod --tenants "tier=gold" --for 1h >/dev/null
-d=$(descriptor uc24-i uc24-110-acme-frz $APP prod 1.1.0 "tenant: acme")
-expect_match "il freeze ferma acme (gold)" "$(manent_err deploy --no-wait -f "$d")" 'freeze "uc24-gold"'
-d=$(descriptor uc24-j uc24-110-globex-frz $APP prod 1.1.0 "tenant: globex")
-id=$(submit "$d")
-expect_eq "globex (silver) non è toccato dal freeze" "$(wait_state "$id" terminal 60)" SUCCESS
-as admin manent freeze delete uc24-gold >/dev/null 2>&1
-
-info "-- rollback del rilascio"
-out=$(manent rollback -a $APP -e prod --run "$run" --no-wait)
-rb=$(printf '%s' "$out" | jq -r .id)
-expect_eq "il rollback del rilascio riesce" "$(wait_state "$rb" terminal 120)" SUCCESS
-expect_eq "rollback in ordine inverso dei tenant riusciti" "$(printf '%s' "$out" | jq -r '.tenants | join(",")')" "globex,acme"
-expect_match "umbrella, al primo rilascio, resta fuori dal rollback" "$(printf '%s' "$out" | jq -r '.skipped[0].tenant')" "^umbrella$"
-expect_eq "acme e globex di nuovo sulla 1.0.0" "$(current eu1-a $APP-acme) $(current eu1-b $APP-acme) $(current eu1-a $APP-globex)" "1.0.0 1.0.0 1.0.0"
-
-info "-- adozione di un ambiente per cliente"
-d=$(descriptor uc24-k uc24-100-legacy $APP legacy-umbrella 1.0.0)
-id=$(submit "$d")
-expect_eq "deploy nell'ambiente per cliente di oggi" "$(wait_state "$id" terminal 60)" SUCCESS
-out=$(dc exec -T api manent-server admin tenants-adopt -a $APP --environment legacy-umbrella --as prod --tenant umbrella 2>/dev/null)
-aid=$(printf '%s' "$out" | jq -r .id)
-expect_eq "adozione registrata senza toccare i target" "$(wait_state "$aid" terminal 30)" SUCCESS
-expect_eq "l'inventario di prod/umbrella riporta l'adozione" \
-  "$(manent inventory -a $APP -e prod -t umbrella | jq -r '.[0].current.kind + " " + .[0].current.version')" "adoption 1.0.0"
+expect_match "uc24-legacy (contratto 2025) resta sulla 1.0" \
+  "$(manent_err deploy --no-wait -f "$(descriptor uc24-l uc24-110-legacy uc24-legacy prod 1.1.0)")" "2025 contract"
+id=$(submit "$(descriptor uc24-m uc24-110-shop uc24-shop prod 1.1.0)")
+expect_eq "uc24-shop (contratto 2026) passa alla 1.1" "$(wait_state "$id" terminal 60)" SUCCESS
+expect_eq "uc24-shop sulla 1.1.0" "$(current eu1-a uc24-shop)" 1.1.0
 
 info "-- ritorno alla policy predefinita"
 rm -rf "$WORK/uc/uc24-default" && mkdir -p "$WORK/uc/uc24-default" && printf '{}\n' >"$WORK/uc/uc24-default/data.json"

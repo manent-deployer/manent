@@ -10,15 +10,14 @@ import (
 // TenantsListCmd lists the tenants.
 type TenantsListCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" description:"solo i tenant collegati a questa applicazione"`
-	Environment string `short:"e" long:"environment" description:"solo i tenant collegati a questo ambiente (con -a)"`
-	Selector    string `long:"selector" description:"selettore sui tag e sul nome, es. tier=gold"`
+	Application string `short:"a" long:"application" description:"solo il tenant proprietario di questa applicazione"`
+	Selector    string `long:"selector" description:"selettore sui tag del tenant e sul nome, es. division=commerce"`
 }
 
 // Execute implements flags.Commander.
 func (c *TenantsListCmd) Execute([]string) error {
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		ts, err := svc.Tenants(ctx, service.TenantFilter{Application: c.Application, Environment: c.Environment, Selector: c.Selector})
+		ts, err := svc.Tenants(ctx, service.TenantFilter{Application: c.Application, Selector: c.Selector})
 		if err != nil {
 			return err
 		}

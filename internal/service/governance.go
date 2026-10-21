@@ -61,6 +61,9 @@ type InventoryFilter struct {
 	Tenant string `json:"tenant,omitempty"`
 	// Artifact filters by artifact name.
 	Artifact string `json:"artifact,omitempty"`
+	// Selector filters the applications by an application selector (tags, application,
+	// tenant, tenant.<tag>).
+	Selector string `json:"selector,omitempty"`
 }
 
 // InventoryEntry is the state of an artifact of an application in an environment.
@@ -146,10 +149,6 @@ type PromoteRequest struct {
 	Artifact string `json:"artifact,omitempty"`
 	// Version, if given, chooses the version to promote; default the one in service in From.
 	Version string `json:"version,omitempty"`
-	// Tenant promotes the release of one tenant; Tenants (a selector) promotes several, each
-	// from its own release in From.
-	Tenant  string `json:"tenant,omitempty"`
-	Tenants string `json:"tenants,omitempty"`
 	// Deploy replaces the deploy section of the source descriptor; without it, the source
 	// targets are not copied and come from To's environment configuration.
 	Deploy *descriptor.Deploy `json:"deploy,omitempty"`
@@ -164,10 +163,5 @@ type RollbackRequest struct {
 	Artifact string `json:"artifact,omitempty"`
 	// Version, if given, is the version to go back to; default the one before the version in service.
 	Version string `json:"version,omitempty"`
-	// Tenant goes back on the release of one tenant.
-	Tenant string `json:"tenant,omitempty"`
-	// Run, if set, rolls back the tenants that succeeded in that multi-tenant release, in
-	// reverse order, each to the release before it.
-	Run string `json:"run,omitempty"`
 	Redeploy
 }

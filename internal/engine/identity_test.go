@@ -96,10 +96,6 @@ func TestPartizionePerArtefatto(t *testing.T) {
 	if k := partitionKey(d); k != "app+api/prod" {
 		t.Errorf("chiave inattesa: %s", k)
 	}
-	d.Tenant = "acme"
-	if k := partitionKey(d); k != "app+api/prod/acme" {
-		t.Errorf("chiave con tenant: %s", k)
-	}
 	if d.ScheduleName() != "app-api-prod" {
 		t.Errorf("nome di default della schedule: %s", d.ScheduleName())
 	}

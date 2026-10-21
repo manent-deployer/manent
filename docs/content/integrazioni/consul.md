@@ -10,9 +10,8 @@ The [environment configuration](../guida/configurazione-ambiente.md) of each app
 | Key | Content |
 |---|---|
 | `manent/<application>/<environment>` | Environment configuration, YAML or JSON. |
-| `manent/tenants/<tenant>` | A [tenant](../guida/tenant.md) document, if you use tenants. |
 
-Both templates can be changed (`envconfig.consul.key`, `envconfig.consul.tenants_key`).
+The template can be changed (`envconfig.consul.key`).
 
 !!! danger "References, never values"
     The configuration manent reads is saved in the deploy history. It must contain only secret references (`vault:…`, `file:…`), never passwords or keys.

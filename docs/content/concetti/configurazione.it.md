@@ -6,11 +6,11 @@ Un deploy è il risultato di fino a quattro livelli di configurazione, ciascuno 
 flowchart TB
     M["manent.yml<br/><small>team di piattaforma · letto all'avvio</small>"]
     E["Configurazione di ambiente<br/><small>responsabili degli ambienti · letta a ogni deploy</small>"]
-    T["Registro dei tenant<br/><small>facoltativo · letto a ogni deploy</small>"]
+    T["Registro dei tenant<br/><small>facoltativo · proprietari e tag delle applicazioni</small>"]
     D["Descrittore<br/><small>team applicativo · uno per rilascio</small>"]
     M -->|plugin, pipeline, regole, limiti| X(("Deploy<br/>effettivo"))
     E -->|target, parametri, riferimenti ai segreti, strategia| X
-    T -->|parametri, segreti e target del tenant| X
+    T -->|proprietario, coda, restrizioni, tag| X
     D -->|artefatto, opzioni| X
 ```
 
@@ -19,8 +19,8 @@ flowchart TB
 | Livello | Dove | Responsabile | Contiene | Letto |
 |---|---|---|---|---|
 | **`manent.yml`** | Un file su ogni processo server (una ConfigMap con Helm). | Team di piattaforma | Plugin e i loro limiti, step della pipeline, regole di governance, autenticazione e RBAC, integrazioni, sorgenti degli artefatti ammesse, `descriptor_policy`. | All'avvio. |
-| **Configurazione di ambiente** | KV di Consul (`manent/<application>/<environment>`) o file. | Responsabili degli ambienti | Plugin, target con etichette, parametri del plugin, riferimenti ai segreti, strategia di rollout e di traffico, rollback, parametri degli step personalizzati, tenancy. | All'avvio di ogni deploy, nello step `config`. |
-| **Registro dei tenant** | Consul o file (`tenants/<tenant>.yml`). | Gestione clienti | Tag, parametri, segreti e parametri degli step di ogni tenant, per applicazione. | All'avvio di ogni deploy per un tenant. |
+| **Configurazione di ambiente** | KV di Consul (`manent/<application>/<environment>`) o file. | Responsabili degli ambienti | Plugin, target con etichette, parametri del plugin, riferimenti ai segreti, strategia di rollout e di traffico, rollback, parametri degli step personalizzati. | All'avvio di ogni deploy, nello step `config`. |
+| **Registro dei tenant** | Un file (`tenants.yml`). | Team di piattaforma | I team, le applicazioni che ciascuno possiede con i loro tag, membri, coda e restrizioni. | All'invio (proprietario e restrizioni registrati nella richiesta), con cache. |
 | **Descrittore** | Il repository dell'applicazione, inviato con ogni richiesta. | Team applicativo | Applicazione, ambiente, artefatto, `id` di idempotenza, step facoltativi, pianificazione, callback, dipendenze. | All'invio, poi salvato con il deploy. |
 
 ## Regole di fusione
@@ -31,7 +31,7 @@ Nello step `config` i livelli vengono fusi nel **deploy effettivo**, che è ciò
 - **I conflitti sono errori.** Un parametro con due valori diversi fa fallire il deploy; nulla viene sovrascritto in silenzio.
 - **Alcune sezioni appartengono solo all'ambiente.** `traffic` (load balancer e router) viene rifiutato in un descrittore; `rollout` si può solo ripetere identico.
 - **`descriptor_policy` limita le aggiunte.** In `manent.yml` la piattaforma decide quali parametri dei plugin, riferimenti ai segreti, parametri degli step personalizzati e target può aggiungere un descrittore. Una policy tipica di produzione non ammette comandi né target.
-- **I tenant aggiungono un livello intermedio.** Il tenant fornisce solo i parametri che l'ambiente dichiara in `tenant_params`, più i propri segreti e i propri target (etichetta `tenant`).
+- **Il tenant restringe, non aggiunge.** Il proprietario dell'applicazione può limitare riferimenti ai segreti, sorgenti degli artefatti e host dei callback dei suoi deploy; non aggiunge mai parametri né target.
 
 | Campo | Ambiente | Descrittore |
 |---|---|---|
@@ -106,7 +106,7 @@ Ciò che un deploy usa viene fissato in momenti precisi, così un deploy ripreso
 |---|---|---|
 | Piano (step e loro ordine) | All'invio. | Cambiare `pipeline.steps` non altera i deploy già accodati. |
 | Decisione di governance, destinazioni delle notifiche, regola di change | All'invio. | Una regola più severa arrivata dopo non invalida un'approvazione già data (salvo `governance.start: strict`). |
-| Configurazione di ambiente, tenant | Nello step `config`, all'avvio dell'esecuzione. | Un deploy pianificato usa la configurazione valida quando gira; un deploy ripreso riusa quella già letta. |
+| Configurazione di ambiente | Nello step `config`, all'avvio dell'esecuzione. | Un deploy pianificato usa la configurazione valida quando gira; un deploy ripreso riusa quella già letta. |
 | Valori dei segreti | Al momento dell'uso, mai salvati. | Ruotare un segreto in Vault ha effetto al successivo utilizzo, anche dentro un deploy in corso. |
 | `manent.yml` | All'avvio del processo. | La maggior parte delle modifiche richiede un riavvio. Eccezioni: `auth.tokens_file`, le policy Rego e i freeze a runtime, ricaricati a caldo. |
 

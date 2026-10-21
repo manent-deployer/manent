@@ -4,7 +4,7 @@ Ogni deploy di manent esegue la stessa pipeline. Ciò che cambia si descrive lun
 
 | Asse | Domanda | Possibilità |
 |---|---|---|
-| [**Avvio**](#trigger) | Quando parte? | subito, a un orario, in modo ricorrente, dopo altri deploy, dentro una release composta o un rilascio multi-tenant |
+| [**Avvio**](#trigger) | Quando parte? | subito, a un orario, in modo ricorrente, dopo altri deploy, dentro una release composta |
 | [**Tipo**](#kind) | Da dove viene l'artefatto? | nuovo deploy, promozione, rollback manuale, adozione, più il dry-run come modalità |
 | [**Strategia**](#strategy) | Come raggiunge i target? | tutti insieme, a ondate, con svuotamento dal load balancer, per percentuale di traffico, delegata al servizio cloud |
 | [**Piattaforma**](#platform) | Cosa cambia sul target? | file sui server, container, oggetti Kubernetes, servizi cloud gestiti, application server, Windows |
@@ -71,18 +71,6 @@ deploys:
 
 Vedi [Catene di deploy](../guida/catene.md).
 
-### Rilascio multi-tenant
-
-Con `tenants` una sola richiesta rilascia lo stesso artefatto a molti [tenant](../guida/tenant.md), un deploy per tenant, a gruppi (prima un pilota) e al più `maxParallel` alla volta.
-
-```yaml
-tenants:
-  selector: "tier in (gold, silver)"
-  groups:
-    - {name: pilot, select: "tier=gold", bake: 30m}
-    - {name: rest}
-  maxParallel: 5
-```
 
 ## Tipo { #kind }
 
@@ -93,7 +81,6 @@ Il tipo viene registrato con ogni deploy (`kind` nello stato e nell'[inventario]
 | `deploy` | `manent deploy`, API, CI, schedule | Quello del descrittore. | Il caso abituale. |
 | `promotion` | `manent promote --from test --to prod` | Quello rilasciato con successo nell'ambiente di origine, con lo `sha256` fissato. | I target vengono dall'ambiente di destinazione, mai dall'origine. Valgono le regole della destinazione. |
 | `rollback` | `manent rollback -e prod [--to 1.3.2]` | Una release precedente dello stesso ambiente, con il suo `sha256`. | Un rollback manuale è un nuovo deploy. Ammesso solo per i tipi di artefatto la cui policy lo consente. |
-| `adoption` | `manent-server admin tenants-adopt` | La release già in esercizio in un ambiente per cliente. | Registra la release nell'inventario senza toccare i target. |
 
 Il **rollback automatico** non è un tipo: avviene *dentro* un deploy fallito, che resta `ERROR` e riporta l'esito del rollback. Vedi [Rollback](../guida/rollback.md).
 

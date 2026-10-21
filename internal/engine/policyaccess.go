@@ -11,7 +11,6 @@ import (
 
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/rbac"
-	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // ServiceGrant converts a grant of the permission model to the service contract.
@@ -20,7 +19,7 @@ func ServiceGrant(gr rbac.Grant) Grant {
 	for i, a := range gr.Actions {
 		acts[i] = string(a)
 	}
-	return Grant{Name: gr.Name, Role: gr.Role, Actions: acts, Applications: gr.Applications, Environments: gr.Environments, Tenants: gr.Tenants, Artifacts: gr.Artifacts, Until: gr.Until}
+	return Grant{Name: gr.Name, Role: gr.Role, Actions: acts, Applications: gr.Applications, Environments: gr.Environments, Tenants: gr.Tenants, Artifacts: gr.Artifacts, Selector: gr.Selector, Until: gr.Until}
 }
 
 // PolicyAccess implements PolicyService: the grants of the identity given by hand with the
@@ -92,16 +91,13 @@ func (e *Engine) accessCheck(ctx context.Context, pa PolicyAdmin, revision int64
 		return &AccessOutcome{Reason: "policy.* actions are decided only by rbac.bindings in the configuration, not by the policy"}, nil
 	}
 	if d := c.Descriptor; d != nil {
-		c.Application, c.Environment, c.Tenant = cmp.Or(c.Application, d.Application), cmp.Or(c.Environment, d.Environment), cmp.Or(c.Tenant, d.Tenant)
+		c.Application, c.Environment = cmp.Or(c.Application, d.Application), cmp.Or(c.Environment, d.Environment)
 		c.Artifact = cmp.Or(c.Artifact, d.Artifact.Name)
 	}
 	if c.Application == "" || c.Environment == "" {
 		return nil, fmt.Errorf("%w: application and environment are required for the check", ErrInvalidRequest)
 	}
-	var ref *tenant.Ref
-	if c.Tenant != "" {
-		ref = e.tenantRef(ctx, c.Tenant)
-	}
+	ref := e.ownerRef(ctx, c.Application)
 	gr, ok := rbac.GrantFor(grants, a, c.Application, c.Artifact, c.Environment, ref, e.now())
 	if !ok {
 		return &AccessOutcome{Reason: "no grant of the revision allows the action"}, nil

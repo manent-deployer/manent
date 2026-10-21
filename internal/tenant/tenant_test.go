@@ -3,132 +3,151 @@ package tenant
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/joeg-ita/manent/internal/descriptor"
 )
 
-func registry() []Tenant {
-	return []Tenant{
-		{Name: "acme", Tags: map[string]string{"tier": "gold", "region": "eu"}, Applications: map[string][]string{"shop": {"prod"}}},
-		{Name: "globex", Tags: map[string]string{"tier": "silver", "region": "eu"}, Applications: map[string][]string{"shop": {"prod", "test"}}},
-		{Name: "initech", Tags: map[string]string{"tier": "gold", "region": "us"}, Applications: map[string][]string{"shop": {"prod"}}, Disabled: true},
-		{Name: "umbrella", Tags: map[string]string{"tier": "gold"}, Applications: map[string][]string{"billing": {"prod"}}},
+const registryYAML = `
+tenants:
+  payments:
+    description: Team pagamenti
+    tags: {division: commerce}
+    applications:
+      shop: {tags: {product: checkout, criticality: high}}
+      billing: {tags: {product: invoicing}}
+    members: {groups: [payments-eng]}
+    admins: {subjects: ["oidc:alice"]}
+    queue: deployments.payments
+    concurrency: 2
+  platform:
+    applications:
+      infra: {}
+`
+
+func TestRegistro(t *testing.T) {
+	ts, err := ParseRegistry([]byte(registryYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts) != 2 || ts[0].Name != "payments" || ts[1].Name != "platform" {
+		t.Fatalf("registro inatteso: %+v", ts)
+	}
+	p := ts[0]
+	if !p.Owns("shop") || p.Owns("infra") || p.Queue != "deployments.payments" || p.Members.Groups[0] != "payments-eng" {
+		t.Errorf("tenant payments inatteso: %+v", p)
+	}
+	if ts, err := ParseRegistry(nil); err != nil || len(ts) != 0 {
+		t.Errorf("un registro vuoto è valido: %v %v", ts, err)
 	}
 }
 
-func TestSelezione(t *testing.T) {
-	got, err := Select(registry(), "shop", "prod", nil, "tier in (gold, silver), region=eu")
-	if err != nil || len(got) != 2 || got[0].Name != "acme" || got[1].Name != "globex" {
-		t.Fatalf("selettore: %+v %v", got, err)
+func TestRegistroNonValido(t *testing.T) {
+	cases := map[string]string{
+		"proprietario doppio": "tenants:\n  a: {applications: {shop: {}}}\n  b: {applications: {shop: {}}}\n",
+		"tag riservato":       "tenants:\n  a: {applications: {shop: {tags: {tenant: x}}}}\n",
+		"prefisso riservato":  "tenants:\n  a: {applications: {shop: {tags: {tenant.tier: x}}}}\n",
+		"nome del tenant":     "tenants:\n  A_B: {}\n",
+		"nome applicazione":   "tenants:\n  a: {applications: {\"team/api\": {}}}\n",
+		"campo sconosciuto":   "tenants:\n  a: {params: {}}\n",
+		"concorrenza":         "tenants:\n  a: {concurrency: -1}\n",
 	}
-	if got, _ := Select(registry(), "shop", "prod", nil, "tier=gold"); len(got) != 1 {
-		t.Errorf("disabilitati e non collegati esclusi: %+v", got)
-	}
-	if got, _ := Select(registry(), "shop", "prod", nil, "name=globex"); len(got) != 1 || got[0].Name != "globex" {
-		t.Errorf("selettore sul nome: %+v", got)
-	}
-	for name, tc := range map[string]struct {
-		names []string
-		sel   string
-		want  string
-	}{
-		"entrambi":         {[]string{"acme"}, "tier=gold", "either names or selector"},
-		"nessuno":          {nil, "", "either names or selector"},
-		"inesistente":      {[]string{"nessuno"}, "", "not found"},
-		"disabilitato":     {[]string{"initech"}, "", "disabled"},
-		"non collegato":    {[]string{"umbrella"}, "", "not connected"},
-		"nessun risultato": {nil, "tier=bronze", "matches"},
-	} {
-		if _, err := Select(registry(), "shop", "prod", tc.names, tc.sel); err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("%s: errore atteso con %q, ottenuto %v", name, tc.want, err)
+	for name, doc := range cases {
+		if _, err := ParseRegistry([]byte(doc)); err == nil {
+			t.Errorf("%s: registro accettato", name)
 		}
 	}
-}
-
-func TestCorrispondenzaESelettori(t *testing.T) {
-	r := &Ref{Name: "acme", Tags: map[string]string{"tier": "gold"}}
-	if !Matches("", nil) || !Matches("", r) {
-		t.Error("il selettore vuoto vale per tutti")
-	}
-	if Matches("tier=gold", nil) {
-		t.Error("un selettore non vuoto non vale per i deploy senza tenant")
-	}
-	if !Matches("tier=gold", r) || Matches("tier=silver", r) || !Matches("name=acme", r) {
-		t.Error("corrispondenza dei tag")
-	}
-	if CheckSelector("tier==") == nil {
-		t.Error("selettore non valido accettato")
-	}
-	if _, err := Parse([]byte("tags: {name: x}\n"), "acme"); err == nil {
-		t.Error("tag riservato accettato")
-	}
-	if _, err := Parse([]byte("name: other\n"), "acme"); err == nil {
-		t.Error("nome diverso dal documento accettato")
+	_, err := ParseRegistry([]byte(cases["proprietario doppio"]))
+	if err == nil || !strings.Contains(err.Error(), "belongs to two tenants") {
+		t.Errorf("errore della proprietà doppia: %v", err)
 	}
 }
 
-type countDir struct{ n int }
+func TestSelettori(t *testing.T) {
+	ts, _ := ParseRegistry([]byte(registryYAML))
+	r := ts[0].Ref("shop")
+	for sel, want := range map[string]bool{
+		"":                    true,
+		"name=payments":       true,
+		"division=commerce":   true,
+		"name=platform":       false,
+		"criticality=high":    false, // an application tag: not a tenant label
+		"tier in (gold)":      false,
+		"invalid selector ==": false,
+	} {
+		if got := Matches(sel, r); got != want {
+			t.Errorf("Matches(%q) = %v", sel, got)
+		}
+	}
+	for sel, want := range map[string]bool{
+		"criticality=high":                      true,
+		"application=shop":                      true,
+		"tenant=payments":                       true,
+		"tenant.division=commerce":              true,
+		"product in (checkout, invoicing)":      true,
+		"product=invoicing":                     false,
+		"criticality=high, tenant.division=ops": false,
+	} {
+		if got := MatchesApp(sel, r); got != want {
+			t.Errorf("MatchesApp(%q) = %v", sel, got)
+		}
+	}
+	if Matches("name=payments", nil) || !Matches("", nil) || MatchesApp("application=shop", nil) {
+		t.Error("senza tenant vale solo il selettore vuoto")
+	}
+}
 
-func (c *countDir) Tenant(context.Context, string) (*Tenant, error) { return nil, ErrNotFound }
-func (c *countDir) Tenants(context.Context) ([]Tenant, error) {
+// countingDir counts the listings.
+type countingDir struct {
+	n   int
+	err error
+}
+
+func (c *countingDir) Tenants(context.Context) ([]Tenant, error) {
 	c.n++
-	if c.n > 1 {
-		return nil, errors.New("irraggiungibile")
+	if c.err != nil {
+		return nil, c.err
 	}
-	return registry(), nil
+	return ParseRegistry([]byte(registryYAML))
 }
 
-func TestCache(t *testing.T) {
-	next := &countDir{}
+func TestCacheEProprietario(t *testing.T) {
+	ctx := context.Background()
+	next := &countingDir{}
 	c := &Cache{Next: next, TTL: time.Hour}
-	if tn, err := c.Tenant(context.Background(), "globex"); err != nil || tn.Tags["tier"] != "silver" {
-		t.Fatal(tn, err)
+	owner, err := Owner(ctx, c, "billing")
+	if err != nil || owner.Name != "payments" {
+		t.Fatalf("proprietario di billing: %+v %v", owner, err)
 	}
-	_, _ = c.Tenants(context.Background())
+	if _, err := Owner(ctx, c, "unknown"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("applicazione non registrata: %v", err)
+	}
+	if tn, err := Find(ctx, c, "platform"); err != nil || !tn.Owns("infra") {
+		t.Errorf("Find: %+v %v", tn, err)
+	}
 	if next.n != 1 {
-		t.Errorf("letture del registro: %d", next.n)
+		t.Errorf("letture del registro: %d, attesa 1", next.n)
 	}
+	// An unreadable registry keeps the last listing.
 	c.TTL = 0
-	if l, err := c.Tenants(context.Background()); err != nil || len(l) != 4 {
-		t.Errorf("con il registro irraggiungibile resta l'ultimo elenco: %v %v", l, err)
-	}
-	if _, err := c.Tenant(context.Background(), "nessuno"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("tenant inesistente: %v", err)
+	next.err = errors.New("giù")
+	if _, err := Owner(ctx, c, "shop"); err != nil {
+		t.Errorf("con il registro illeggibile vale l'ultimo elenco: %v", err)
 	}
 }
 
-// The values given for an artifact ("<application>/<artifact>") take priority over the
-// application's.
-func TestValoriPerArtefatto(t *testing.T) {
-	tn := &Tenant{
-		Name: "acme",
-		Params: map[string]map[string]string{
-			"shop":         {"db_host": "acme-db", "region": "eu"},
-			"shop/shop-db": {"db_host": "acme-db-admin"},
-		},
-		Secrets: map[string][]descriptor.SecretRef{
-			"shop":         {{Name: "db", Ref: "vault:shop#db"}, {Name: "license", Ref: "vault:shop#license"}},
-			"shop/shop-db": {{Name: "db", Ref: "vault:shop#db-admin"}},
-		},
-		StepParams: map[string]map[string]map[string]string{
-			"shop":         {"migrate": {"database": "acme", "schema": "public"}},
-			"shop/shop-db": {"migrate": {"schema": "admin"}},
-		},
+func TestFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tenants.yml")
+	if err := os.WriteFile(path, []byte(registryYAML), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if p := tn.ParamsFor("shop", "shop-db"); p["db_host"] != "acme-db-admin" || p["region"] != "eu" {
-		t.Errorf("parametri per artefatto inattesi: %v", p)
+	ts, err := File{Path: path}.Tenants(context.Background())
+	if err != nil || len(ts) != 2 || ts[0].Source != "file:"+path || ts[0].Revision == "" {
+		t.Fatalf("lettura del file: %+v %v", ts, err)
 	}
-	if p := tn.ParamsFor("shop", "shop-web"); p["db_host"] != "acme-db" {
-		t.Errorf("senza valori per l'artefatto valgono quelli dell'applicazione: %v", p)
-	}
-	ss := tn.SecretsFor("shop", "shop-db")
-	if len(ss) != 2 || ss[0].Ref != "vault:shop#db-admin" || ss[1].Name != "license" {
-		t.Errorf("segreti per artefatto inattesi: %+v", ss)
-	}
-	if sp := tn.StepParamsFor("shop", "shop-db"); sp["migrate"]["schema"] != "admin" || sp["migrate"]["database"] != "acme" {
-		t.Errorf("step params per artefatto inattesi: %v", sp)
+	if _, err := (File{Path: path + ".missing"}).Tenants(context.Background()); err == nil {
+		t.Error("file mancante accettato")
 	}
 }

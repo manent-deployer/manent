@@ -24,6 +24,7 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 | `schedule_poll_interval` | `30s` | Ogni quanto i worker rileggono le schedule ricorrenti. |
 | `region` | | Region del worker: con `region_routing` esegue i passi dei [rilasci a ondate](../guida/ondate.md#esecuzione-nelle-region) su quella region. |
 | `region_routing` | `false` | Esegue i passi dei rollout sui worker della region dei target, come workflow figli. In multi-region va attivato su tutti i worker. |
+| `tenants` | `[]` | Limita il worker alle code dei deploy di questi [tenant](../guida/tenant.md#code-e-worker-per-tenant) (la coda di default per quelli che non ne hanno). Vuoto: tutte le code del registro. |
 | `drain_timeout` | `2m` | All'arresto il worker smette di prelevare deploy e attende quelli in corso fino a questo tempo (`0` = non attende). Vedi [drain](affidabilita.md#arresto-ordinato-drain). |
 
 ### `http`
@@ -50,6 +51,13 @@ Vedi [Log e SIEM](log-siem.md).
 
 Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`workdir/<deployment-id>`). Non serve che sia condivisa tra i worker.
 
+### `tenants`
+
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `file` | | Il [registro dei tenant](../guida/tenant.md) (`tenants.yml`). Vuoto: nessun registro, ogni applicazione ammessa senza proprietario. |
+| `cache` | `30s` | Per quanto si tiene il registro prima di rileggerlo. |
+
 ### `envconfig`
 
 | Chiave | Default | Descrizione |
@@ -62,9 +70,6 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `consul.key` | `manent/{application}/{artifact}/{environment}` | Modello della chiave KV. |
 | `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
-| `file.tenants` | `./envconfig/tenants/{tenant}.yml` | Modello del percorso dei documenti dei [tenant](../guida/tenant.md). |
-| `consul.tenants_key` | `manent/tenants/{tenant}` | Modello della chiave KV dei documenti dei tenant. |
-| `tenants_cache` | `30s` | Per quanto resta in cache l'elenco dei tenant (selettori, permessi). |
 
 Vedi [Configurazione di ambiente](../guida/configurazione-ambiente.md).
 
@@ -103,7 +108,10 @@ Vedi [Rollback](../guida/rollback.md).
 | `rbac.opa.cache` | `30s` | Per quanto si riusano i permessi di un'identità con `opa`. |
 | `rbac.opa.cache_size` | `10000` | Identità nella cache dei permessi. |
 | `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. |
-| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`), `tenants` (selettore: il binding vale solo per i deploy di quei [tenant](../guida/tenant.md#permessi)). |
+| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`), `artifacts`, `tenants` (selettore sul tenant proprietario) e `selector` (selettore sui tag dell'applicazione). |
+| `rbac.tenant_roles` | `{members: deployer, admins: admin}` | Ruoli impliciti di `members` e `admins` di un [tenant](../guida/tenant.md) sulle sue applicazioni. Mai `policy.*`. |
+| `rbac.selector_keys` | `[]` | Chiavi che il `selector` di binding e grant può leggere (vuoto: nessun selettore nei permessi). |
+| `rbac.cross_tenant_inventory` | `true` | Chi appartiene a un tenant legge l'inventario di tutti i tenant. |
 | `audit.file` | | File JSON Lines delle voci di audit, con catena di hash, oltre al log e al SIEM. |
 | `audit.max_size_mb` | `0` | Dimensione oltre cui il file viene ruotato (`0` = nessuna rotazione). |
 | `audit.hmac_key_ref` | | Riferimento alla chiave (almeno 16 byte) con cui la catena diventa un HMAC. |

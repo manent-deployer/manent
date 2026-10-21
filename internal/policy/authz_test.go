@@ -29,6 +29,7 @@ func testRBAC(t *testing.T) (rbac.Policy, *AuthzOptions) {
 		{Groups: []string{"gold"}, Role: "approver", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "tier=gold"},
 		{Groups: []string{"platform"}, Role: "admin", Applications: []string{"*"}, Environments: []string{"*"}},
 		{Groups: []string{"web-team"}, Role: "deployer", Applications: []string{"shop"}, Environments: []string{"*"}, Artifacts: []string{"shop-web*"}},
+		{Groups: []string{"sre"}, Role: "approver", Applications: []string{"*"}, Environments: []string{"prod"}, Selector: "criticality=high"},
 	}
 	pol, err := rbac.NewPolicy(roles, bindings)
 	if err != nil {
@@ -54,8 +55,10 @@ func TestPermessiPredefinitiEquivalentiAiBinding(t *testing.T) {
 		{Subject: "root", Method: auth.MethodOIDC, Groups: []string{"platform"}},
 		{Subject: "nobody", Method: auth.MethodOIDC, Groups: []string{"elsewhere"}},
 		{Subject: "dan", Method: auth.MethodOIDC, Groups: []string{"web-team"}},
+		{Subject: "sam", Method: auth.MethodOIDC, Groups: []string{"sre"}},
 	}
-	tenants := []*tenant.Ref{nil, {Name: "acme", Tags: map[string]string{"tier": "gold"}}, {Name: "globex", Tags: map[string]string{"tier": "silver"}}}
+	tenants := []*tenant.Ref{nil, {Name: "acme", Tags: map[string]string{"tier": "gold"}}, {Name: "globex", Tags: map[string]string{"tier": "silver"}},
+		{Name: "acme", Tags: map[string]string{"tier": "gold"}, Application: "shop", AppTags: map[string]string{"criticality": "high"}}}
 	checked := 0
 	for _, p := range principals {
 		res, err := c.Grants(context.Background(), GrantsInput{Schema: AuthzInputSchema, Now: now, Identity: IdentityOf(p)})

@@ -20,6 +20,9 @@ import (
 // as soon as it is settled.
 const attrExports = "exports"
 
+// attrPublicExports lists the exports other tenants can import, space separated.
+const attrPublicExports = "exports_public"
+
 // errImportPending means that the imported deploy has not succeeded yet, or does not exist yet
 // (deploy of a release not yet enqueued). It is temporary: at submission the check is left to
 // the worker, where the dependency (after) has already succeeded.
@@ -133,7 +136,41 @@ func (e *Engine) applyImports(ctx context.Context, d descriptor.Descriptor, impo
 // ("<id>@<version>"). A deploy that does not exist yet or is still running is temporary
 // (errImportPending); one ended without success, a dry-run or an environment without release
 // in service are permanent.
-func (e *Engine) readImport(_ context.Context, d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
+func (e *Engine) readImport(ctx context.Context, d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
+	from, exports, err := e.readImportRaw(d, imp)
+	if err != nil || e.tenants == nil {
+		return from, exports, err
+	}
+	return from, e.visibleExports(ctx, d, from, exports), nil
+}
+
+// visibleExports keeps, when the producer belongs to another tenant, only its public exports:
+// the others are visible only to the owner's deploys.
+func (e *Engine) visibleExports(ctx context.Context, d descriptor.Descriptor, from string, exports map[string]string) map[string]string {
+	id, _, _ := strings.Cut(from, "@")
+	states, err := e.states([]string{id})
+	if err != nil {
+		return nil
+	}
+	producer := states[id]
+	mine := ""
+	if r := e.ownerRef(ctx, d.Application); r != nil {
+		mine = r.Name
+	}
+	if producer.Tenant == mine {
+		return exports
+	}
+	out := map[string]string{}
+	for _, k := range producer.PublicExports {
+		if v, ok := exports[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// readImportRaw reads all the exports of an import, whatever the tenant.
+func (e *Engine) readImportRaw(d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
 	if id := imp.Deployment; id != "" {
 		states, err := e.states([]string{id})
 		if err != nil {
@@ -160,7 +197,7 @@ func (e *Engine) readImport(_ context.Context, d descriptor.Descriptor, imp desc
 	}
 	var found []InventoryEntry
 	for _, ie := range entries {
-		if ie.Tenant == d.Tenant && ie.Current != nil {
+		if ie.Current != nil {
 			found = append(found, ie)
 		}
 	}
@@ -173,9 +210,6 @@ func (e *Engine) readImport(_ context.Context, d descriptor.Descriptor, imp desc
 	where := app + "/" + env
 	if artifact != "" {
 		where += " (artifact " + artifact + ")"
-	}
-	if d.Tenant != "" {
-		where += " (tenant " + d.Tenant + ")"
 	}
 	return "", nil, pipeline.Permanent(fmt.Errorf("no release in service of %s", where))
 }
