@@ -26,6 +26,7 @@ import (
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // GlobalOptions are the options shared by all commands.
@@ -58,6 +59,7 @@ func Run(args []string) error {
 			{Name: "prune", Short: "Elimina lo storico dei workflow più vecchio della retention", Cmd: &PruneCmd{global: g}},
 			{Name: "specs", Short: "Elenca deploy in attesa e schedule che contengono specifiche revocate degli step personalizzati", Cmd: &SpecsCmd{global: g}},
 			{Name: "rename-artifact", Short: "Rinomina un artefatto nello storico di un'applicazione (inventario, rollback e promozioni seguono il nuovo nome)", Cmd: &RenameArtifactCmd{global: g}},
+			{Name: "move-application", Short: "Sposta lo storico di un'applicazione da un tenant a un altro (anche da untenanted)", Cmd: &MoveApplicationCmd{global: g}},
 		}, adminPolicyCommands(g)...)); err != nil {
 		return err
 	}
@@ -135,6 +137,12 @@ func (c *ValidateCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
+		// The tenant is part of the configuration key: resolved as the engine does.
+		owner, err := tenant.Resolve(context.Background(), app.NewTenantCache(cfg, log), d.Application, d.Tenant, cfg.Tenants.Untenanted != config.UntenantedReject)
+		if err != nil {
+			return err
+		}
+		d.Tenant = owner.Name
 		eff, meta, err := resolver.Resolve(context.Background(), *d)
 		if err != nil {
 			return err
@@ -400,6 +408,7 @@ func (c *RecoverCmd) Execute([]string) error {
 // RenameArtifactCmd renames an artifact in the history of an application.
 type RenameArtifactCmd struct {
 	global      *GlobalOptions
+	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione (default untenanted)"`
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	From        string `long:"from" required:"true" description:"nome attuale dell'artefatto (artifact.name)"`
 	To          string `long:"to" required:"true" description:"nuovo nome dell'artefatto"`
@@ -409,7 +418,27 @@ type RenameArtifactCmd struct {
 // Execute implements flags.Commander.
 func (c *RenameArtifactCmd) Execute([]string) error {
 	return withAdmin(c.global, func(ctx context.Context, _ *app.App, adm *engine.Admin) error {
-		rep, err := adm.RenameArtifact(ctx, engine.RenameArtifactOptions{Application: c.Application, From: c.From, To: c.To, DryRun: c.DryRun, By: adminActor()})
+		rep, err := adm.RenameArtifact(ctx, engine.RenameArtifactOptions{Tenant: c.Tenant, Application: c.Application, From: c.From, To: c.To, DryRun: c.DryRun, By: adminActor()})
+		if err != nil {
+			return err
+		}
+		return cliutil.PrintJSON(rep)
+	})
+}
+
+// MoveApplicationCmd moves the history of an application from one tenant to another.
+type MoveApplicationCmd struct {
+	global      *GlobalOptions
+	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
+	From        string `long:"from" required:"true" description:"tenant attuale (untenanted per le applicazioni senza tenant)"`
+	To          string `long:"to" required:"true" description:"nuovo tenant"`
+	DryRun      bool   `long:"dry-run" description:"conta i workflow senza modificarli"`
+}
+
+// Execute implements flags.Commander.
+func (c *MoveApplicationCmd) Execute([]string) error {
+	return withAdmin(c.global, func(ctx context.Context, _ *app.App, adm *engine.Admin) error {
+		rep, err := adm.MoveApplication(ctx, engine.MoveApplicationOptions{Application: c.Application, From: c.From, To: c.To, DryRun: c.DryRun, By: adminActor()})
 		if err != nil {
 			return err
 		}

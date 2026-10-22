@@ -9,7 +9,7 @@ La [configurazione di ambiente](../guida/configurazione-ambiente.md) può stare 
 
 | Percorso | Contenuto |
 |---|---|
-| `<applicazione>/<artefatto>/<ambiente>.yml` | Configurazione di ambiente, stesso formato degli altri provider. |
+| `<tenant>/<applicazione>/<artefatto>/<ambiente>.yml` | Configurazione di ambiente, stesso formato degli altri provider. |
 
 Il modello si può cambiare (`envconfig.git.path`). Non arriva mai dalla richiesta: un descrittore non può puntare al file di un'altra applicazione.
 
@@ -25,7 +25,7 @@ envconfig:
   git:
     repository: https://git.example.com/platform/envconfig.git
     ref: refs/heads/main                      # ref di default
-    path: "{application}/{artifact}/{environment}.yml"
+    path: "{tenant}/{application}/{artifact}/{environment}.yml"
     username: x-access-token                  # HTTPS
     password_ref: vault:secret/manent/git#token
     # ssh_key_ref: file:/run/secrets/git-key  # ssh:// al posto di HTTPS

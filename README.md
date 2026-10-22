@@ -322,15 +322,16 @@ Dettagli nella [documentazione](docs/content/guida/governance.md).
 
 ### Tenant
 
-Un tenant è un team interno proprietario di applicazioni: il registro (`tenants.yml`) elenca per ogni tenant le sue applicazioni con i loro tag, membri e amministratori (ruoli impliciti), coda dei deploy e restrizioni su segreti, sorgenti degli artefatti e callback. Ogni applicazione ha un solo proprietario; ID, dipendenze e release non attraversano i tenant.
+Un tenant è un team interno proprietario di applicazioni: il registro (`tenants.yml`) elenca per ogni tenant le sue applicazioni con i loro tag, membri e amministratori (ruoli impliciti), coda dei deploy e restrizioni su segreti, sorgenti degli artefatti e callback. L'identità di una release è tenant/applicazione/artefatto/ambiente: due team possono avere un'applicazione con lo stesso nome, e quelle che nessun tenant elenca sono del tenant `untenanted`. ID, dipendenze e release non attraversano i tenant.
 
 ```sh
+manent deploy -f deploy.yml --tenant retail                         # solo se più tenant hanno l'applicazione
 manent tenants list [--selector division=commerce]
 manent inventory --selector "criticality=high"                     # tag delle applicazioni e del tenant (tenant.<tag>)
-manent freeze add --name incidente -e prod --for 2h --selector "tenant=payments"
+manent freeze add --name incidente -a 'payments/*' -e prod --for 2h
 ```
 
-Regole, freeze, policy Rego e binding RBAC accettano i selettori `tenants` (proprietario) e `selector` (applicazioni). Dettagli in [Tenant](docs/content/guida/tenant.md).
+I pattern delle applicazioni sono qualificati (`shop` solo untenanted, `payments/*`, `*/*`); regole, freeze, policy Rego e binding RBAC accettano anche i selettori `tenants` (proprietario) e `selector` (applicazioni). Dettagli in [Tenant](docs/content/guida/tenant.md).
 
 ### Policy in Rego
 

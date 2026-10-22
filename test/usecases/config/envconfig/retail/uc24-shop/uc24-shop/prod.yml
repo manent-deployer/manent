@@ -1,0 +1,14 @@
+# UC24: uc24-shop of the tenant retail, an application with the same name as the one of
+# payments: another release, on eu1-c and in its own directory.
+plugin: remote-copy
+targets:
+  - {host: eu1-c, user: deploy, labels: {region: eu-1}}
+params:
+  dest_dir: /home/deploy/apps/retail-uc24-shop
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

@@ -1,43 +1,8 @@
-# Tenant registry of the use cases: the teams that own the applications. Every application
-# deployed by a case must be registered (tenants.file): lab owns the generic ones, UC24 and UC25
-# use payments, legacy and their tags.
+# Tenant registry of the use cases: the teams that own the applications. The generic cases use
+# applications no tenant lists (tenant "untenanted", configuration under untenanted/); UC24 and
+# UC25 use payments, retail, legacy and their tags. payments and retail both have uc24-shop:
+# two releases, chosen with --tenant.
 tenants:
-  lab:
-    description: Applicazioni dei casi d'uso generici
-    tags: {division: platform}
-    applications:
-      uc1-shop: {}
-      uc2-api: {}
-      uc3-batch: {}
-      uc4-web: {}
-      uc5-global: {}
-      uc6-web: {}
-      uc7-api: {}
-      uc8-web: {}
-      uc9-shop: {}
-      uc10-blue: {}
-      uc10-shop: {}
-      uc11-web: {}
-      uc12-db: {}
-      uc13-api: {}
-      uc14-shop: {}
-      uc15-web: {}
-      uc16-web: {}
-      uc17-shop: {}
-      uc18-shop: {}
-      uc19-shop: {}
-      uc20-shop: {}
-      uc20-worker: {}
-      uc21-agent: {}
-      uc21-job: {}
-      uc21-web: {}
-      uc22-api: {}
-      uc22-ramp: {}
-      uc22-site: {}
-      uc22-web: {}
-      uc23-api: {}
-      uc26-infra: {}
-      uc26-os: {}
   # UC24: the payments team, with its queue, its restrictions and the members of team-payments.
   # The owner tag gives the UC25 team its applications.
   payments:
@@ -50,6 +15,13 @@ tenants:
     queue: deployments.payments
     secret_refs: ["file:/keys/*"]
     artifact_sources: ["file:///srv/artifacts/uc24-"]
+  # UC24: the retail team, with an application of the same name as one of payments.
+  retail:
+    description: Team negozi
+    tags: {division: retail, contract: "2026"}
+    applications:
+      uc24-shop: {tags: {product: storefront}}
+    members: {groups: [team-retail]}
   # UC24: a team with the 2025 contract, stopped at the 1.0 series by the Rego policy.
   legacy:
     description: Applicazioni con il contratto 2025

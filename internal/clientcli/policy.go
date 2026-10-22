@@ -375,6 +375,7 @@ type PolicyAccessCmd struct {
 	Claims      map[string]string `long:"claim" key-value-delimiter:"=" description:"claim dell'identità chiave=valore (ripetibile)"`
 	Compare     bool              `long:"compare" description:"mostra i permessi guadagnati e persi rispetto alla revisione attiva"`
 	Action      string            `long:"action" description:"azione di cui simulare l'esito (es. deployment.submit)"`
+	Tenant      string            `short:"t" long:"tenant" description:"tenant dell'applicazione dell'azione"`
 	Application string            `short:"a" long:"application" description:"applicazione dell'azione"`
 	Environment string            `short:"e" long:"environment" description:"ambiente dell'azione"`
 	Artifact    string            `short:"A" long:"artifact" description:"artefatto dell'azione (binding con artifacts)"`
@@ -391,7 +392,7 @@ func (c *PolicyAccessCmd) Execute([]string) error {
 	}
 	r := service.PolicyAccessRequest{Subject: c.Subject, Groups: c.Groups, Claims: c.Claims, Compare: c.Compare}
 	if c.Action != "" {
-		r.Check = &service.AccessCheck{Action: c.Action, Application: c.Application, Environment: c.Environment, Artifact: c.Artifact}
+		r.Check = &service.AccessCheck{Action: c.Action, Tenant: c.Tenant, Application: c.Application, Environment: c.Environment, Artifact: c.Artifact}
 		if c.File != "" {
 			if r.Check.Descriptor, err = descriptor.LoadYAMLFile(c.File); err != nil {
 				return err

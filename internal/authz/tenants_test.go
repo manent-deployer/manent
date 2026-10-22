@@ -46,8 +46,8 @@ func appDescriptor(app string) *descriptor.Descriptor {
 
 func TestPermessiPerTenantESelettori(t *testing.T) {
 	pol, err := NewPolicy(nil, []Binding{
-		{Groups: []string{"commerce-support"}, Role: "deployer", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "division=commerce"},
-		{Groups: []string{"sre"}, Role: "approver", Applications: []string{"*"}, Environments: []string{"prod"}, Selector: "criticality=high"},
+		{Groups: []string{"commerce-support"}, Role: "deployer", Applications: []string{"*/*"}, Environments: []string{"prod"}, Tenants: "division=commerce"},
+		{Groups: []string{"sre"}, Role: "approver", Applications: []string{"*/*"}, Environments: []string{"prod"}, Selector: "criticality=high"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -59,13 +59,13 @@ func TestPermessiPerTenantESelettori(t *testing.T) {
 	if _, err := g.Submit(as("u", "commerce-support"), appDescriptor("infra")); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("infra è di un altro tenant: %v", err)
 	}
-	if !g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "shop", "shop", "prod") {
+	if !g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "payments", "shop", "shop", "prod") {
 		t.Error("selettore sui tag dell'applicazione: shop è critica")
 	}
-	if g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "billing", "billing", "prod") {
+	if g.allowed(as("u", "sre"), &auth.Principal{Subject: "u", Groups: []string{"sre"}, Method: auth.MethodOIDC}, DeploymentApprove, "payments", "billing", "billing", "prod") {
 		t.Error("billing non è critica")
 	}
-	// An unregistered application has no owner: the bindings with tenants or selector do not apply.
+	// An unregistered application is untenanted: the bindings with tenants or selector do not apply.
 	if _, err := g.Submit(as("u", "commerce-support"), appDescriptor("unknown")); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("applicazione non registrata: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRuoliImplicitiDeiTenant(t *testing.T) {
 	if _, err := g.Submit(as("bob", "payments-eng"), appDescriptor("infra")); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("un membro non rilascia quelle di altri tenant: %v", err)
 	}
-	if err := g.check(as("alice"), FreezeOverride, target{application: "shop", artifact: "shop", environment: "prod"}); err != nil {
+	if err := g.check(as("alice"), FreezeOverride, target{tenant: "payments", application: "shop", artifact: "shop", environment: "prod"}); err != nil {
 		t.Errorf("l'admin del tenant ha tutte le azioni sulle sue applicazioni: %v", err)
 	}
 	if g.permittedAnywhere(as("alice"), &auth.Principal{Subject: "alice", Method: auth.MethodOIDC}, PolicyWrite) {
@@ -101,7 +101,7 @@ func TestRuoliImplicitiDeiTenant(t *testing.T) {
 
 func TestInventarioTraTenant(t *testing.T) {
 	pol, _ := NewPolicy(nil, nil)
-	inv := []engine.InventoryEntry{{Application: "shop", Artifact: "shop", Environment: "prod"}, {Application: "infra", Artifact: "infra", Environment: "prod"}}
+	inv := []engine.InventoryEntry{{Tenant: "payments", Application: "shop", Artifact: "shop", Environment: "prod"}, {Tenant: "platform", Application: "infra", Artifact: "infra", Environment: "prod"}}
 	svc := &fakeService{statuses: map[string]engine.Status{}, inventory: inv}
 	g := &Guard{Next: svc, Policy: pol, Registry: testRegistry(), Logger: discardLogger(), TenantRoles: TenantRoles{Members: "viewer"}}
 	got, err := g.Inventory(as("bob", "payments-eng"), engine.InventoryFilter{})
@@ -116,5 +116,39 @@ func TestInventarioTraTenant(t *testing.T) {
 	svc.inventory = inv
 	if got, _ := g.Inventory(as("eve", "elsewhere"), engine.InventoryFilter{}); len(got) != 0 {
 		t.Errorf("chi non appartiene a un tenant non legge l'inventario degli altri: %+v", got)
+	}
+}
+
+func TestApplicazioniOmonimeTraTenant(t *testing.T) {
+	reg := append(testRegistry(), tenant.Tenant{Name: "retail", Applications: map[string]tenant.Application{"shop": {}}, Members: tenant.Members{Groups: []string{"retail-eng"}}})
+	pol, err := NewPolicy(nil, []Binding{
+		// Written for the untenanted applications: it never reaches a tenant's shop.
+		{Groups: []string{"legacy-ci"}, Role: "deployer", Applications: []string{"shop", "*"}, Environments: []string{"*"}},
+		{Groups: []string{"retail-ci"}, Role: "deployer", Applications: []string{"retail/*"}, Environments: []string{"*"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &Guard{Next: &fakeService{statuses: map[string]engine.Status{}}, Policy: pol, Registry: reg, Logger: discardLogger(),
+		TenantRoles: TenantRoles{Members: "deployer"}}
+	shop := func(tn string) *descriptor.Descriptor { d := appDescriptor("shop"); d.Tenant = tn; return d }
+	// A member of payments who names retail by mistake: the implicit role covers only payments/shop.
+	if _, err := g.Submit(as("bob", "payments-eng"), shop("retail")); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("tenant sbagliato con il solo ruolo implicito: %v", err)
+	}
+	if _, err := g.Submit(as("bob", "payments-eng"), shop("payments")); err != nil {
+		t.Errorf("il proprio shop: %v", err)
+	}
+	if _, err := g.Submit(as("ci", "legacy-ci"), shop("retail")); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("un pattern senza prefisso non copre un tenant: %v", err)
+	}
+	if _, err := g.Submit(as("ci", "legacy-ci"), appDescriptor("legacy")); err != nil {
+		t.Errorf("un pattern senza prefisso copre le applicazioni untenanted: %v", err)
+	}
+	if _, err := g.Submit(as("ci", "retail-ci"), shop("retail")); err != nil {
+		t.Errorf("pattern qualificato: %v", err)
+	}
+	if _, err := NewPolicy(nil, []Binding{{Groups: []string{"x"}, Role: "viewer", Applications: []string{"a/b/c"}, Environments: []string{"*"}}}); err == nil {
+		t.Error("pattern non valido accettato")
 	}
 }

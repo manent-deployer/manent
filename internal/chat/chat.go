@@ -19,6 +19,7 @@ import (
 	"github.com/joeg-ita/manent/internal/glob"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // Notified events.
@@ -140,8 +141,9 @@ type Notifier struct {
 	Logger  *slog.Logger
 }
 
-// Match returns, in configuration order, the names of a deploy's destinations.
-func (n *Notifier) Match(application, environment string, dryRun bool) []string {
+// Match returns, in configuration order, the names of the destinations of a deploy of the
+// tenant's application; application patterns are qualified (tenant.AppMatches).
+func (n *Notifier) Match(tenantName, application, environment string, dryRun bool) []string {
 	if n == nil {
 		return nil
 	}
@@ -150,7 +152,7 @@ func (n *Notifier) Match(application, environment string, dryRun bool) []string 
 		if dryRun && !r.DryRun {
 			continue
 		}
-		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) {
+		if tenant.AnyApp(r.Applications, tenantName, application) && glob.Any(r.Environments, environment) {
 			out = append(out, r.Name)
 		}
 	}

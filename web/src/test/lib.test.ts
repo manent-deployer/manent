@@ -1,11 +1,24 @@
 import { formatDuration, formatRelative } from "@/lib/format";
-import { can, glob } from "@/lib/permissions";
+import { appMatches, can, glob } from "@/lib/permissions";
 import { parseSSE } from "@/lib/sse";
 import { format } from "@/i18n/i18n";
 
 import { identity } from "./fakeApi";
 
 describe("permessi", () => {
+  it("applica i pattern qualificati delle applicazioni come il server", () => {
+    expect(appMatches("shop", "shop", "untenanted")).toBe(true);
+    expect(appMatches("shop", "shop", "payments")).toBe(false);
+    expect(appMatches("*", "shop", "payments")).toBe(false);
+    expect(appMatches("payments/*", "shop", "payments")).toBe(true);
+    expect(appMatches("payments/*", "shop", "retail")).toBe(false);
+    expect(appMatches("*/*", "shop", "untenanted")).toBe(true);
+    expect(appMatches("payments/*", "payments/shop")).toBe(true);
+    const ops = identity({ grants: [{ role: "operator", actions: ["deployment.submit"], applications: ["retail/*"], environments: ["*"] }] });
+    expect(can(ops, "deployment.submit", "shop", "prod", "retail")).toBe(true);
+    expect(can(ops, "deployment.submit", "shop", "prod", "payments")).toBe(false);
+  });
+
   it("applica i pattern come il server", () => {
     expect(glob("team-a-*", "team-a-api")).toBe(true);
     expect(glob("team-a-*", "team-b-api")).toBe(false);

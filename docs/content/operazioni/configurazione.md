@@ -55,8 +55,9 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 
 | Key | Default | Description |
 |---|---|---|
-| `file` | | The [tenant registry](../guida/tenant.md) (`tenants.yml`). Empty: no registry, every application accepted without owner. With a registry, the deploys of unregistered applications are refused ([details](../guida/tenant.md#is-a-tenant-required-to-deploy)). |
+| `file` | | The [tenant registry](../guida/tenant.md) (`tenants.yml`). Empty: no registry, every application is `untenanted`. |
 | `cache` | `30s` | How long the registry is kept before reading it again. |
+| `untenanted` | `allow` | The applications no tenant lists: `allow` deploys them as the tenant `untenanted`, `reject` refuses them ([details](../guida/tenant.md#is-a-tenant-required-to-deploy)). |
 
 ### `envconfig`
 
@@ -67,12 +68,12 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | `max_retries` | `3` | Additional read attempts. |
 | `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
 | `consul.datacenter` | | Consul datacenter. |
-| `consul.key` | `manent/{application}/{artifact}/{environment}` | KV key template. |
+| `consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | KV key template. |
 | `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
+| `file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
 | `git.repository` | | Git repository of the configurations (`https://`, `ssh://`, `git://`, `file://` or a path). See [Git repository](../integrazioni/git.md). |
 | `git.ref` | `refs/heads/main` | Default ref. |
-| `git.path` | `{application}/{artifact}/{environment}.yml` | File template in the repository. |
+| `git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | File template in the repository. |
 | `git.allowed_refs` | `[]` | Other refs (patterns with `*`) `config.ref` may name; a SHA must be reachable from them or from `git.ref`. |
 | `git.username`, `git.password_ref` | | HTTPS credentials (the password is a secret reference). |
 | `git.ssh_key_ref`, `git.known_hosts` | | SSH key (secret reference) and known hosts file, required together. |
@@ -119,7 +120,7 @@ See [Rollback](../guida/rollback.md).
 | `rbac.opa.cache` | `30s` | How long the grants of an identity are reused with `opa`. |
 | `rbac.opa.cache_size` | `10000` | Identities in the grants cache. |
 | `rbac.roles` | `{}` | Additional roles: name → list of actions. |
-| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications`, `environments` (patterns with `*`), `artifacts`, `tenants` (selector on the owner tenant) and `selector` (selector on the application tags). |
+| `rbac.bindings` | `[]` | `subjects` or `groups`, `role`, `applications` (qualified patterns: `shop` only untenanted, `payments/*`, `*/*` every [tenant](../guida/tenant.md#qualified-application-patterns)), `environments` (patterns with `*`), `artifacts`, `tenants` (selector on the owner tenant) and `selector` (selector on the application tags). |
 | `rbac.tenant_roles` | `{members: deployer, admins: admin}` | Implicit roles of the `members` and `admins` of a [tenant](../guida/tenant.md) on its applications. Never `policy.*`. |
 | `rbac.selector_keys` | `[]` | Keys the `selector` of bindings and grants can read (empty: no selector in permissions). |
 | `rbac.cross_tenant_inventory` | `true` | Whoever belongs to a tenant reads the inventory of every tenant. |

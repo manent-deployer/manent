@@ -22,7 +22,7 @@ type DescriptorPolicy struct {
 	// key applies to all plugins.
 	Params map[string][]string
 	// SecretRefs are the patterns of the secret references the descriptor can declare.
-	// They accept {application}, {artifact} and {environment}.
+	// They accept {tenant}, {application}, {artifact} and {environment}.
 	SecretRefs []string
 	// Targets allows targets given by the descriptor when the environment does not define them.
 	Targets bool
@@ -82,7 +82,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 	}
 	patterns := make([]string, len(p.SecretRefs))
 	for i, s := range p.SecretRefs {
-		patterns[i] = expandKey(s, d.Application, d.Artifact.Name, d.Environment)
+		patterns[i] = expandKey(s, KeyOf(d))
 	}
 	for _, s := range d.Secrets {
 		if slices.ContainsFunc(c.Secrets, func(e descriptor.SecretRef) bool { return e.Name == s.Name }) {

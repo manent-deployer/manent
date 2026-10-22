@@ -100,7 +100,7 @@ describe("approvazioni", () => {
 
 describe("inventario", () => {
   const inventory = [
-    // The owner tenant is shown but never sent back: promotions and rollbacks have no tenant.
+    // The tenant is part of the release identity: promotions and rollbacks send it back.
     { application: "shop", environment: "test", tenant: "payments", current: dep({ id: "t1", environment: "test", version: "1.5.0" }) },
     { application: "shop", environment: "prod", tenant: "payments", current: dep({ id: "p1" }), drift: true },
   ];
@@ -162,7 +162,7 @@ describe("inventario", () => {
 
   it("promuove solo dopo un dry-run riuscito", async () => {
     const user = userEvent.setup();
-    const ops = identity({ grants: [{ role: "operator", actions: ["deployment.read", "deployment.submit", "deployment.dry-run", "deployment.rollback"], applications: ["*"], environments: ["*"] }] });
+    const ops = identity({ grants: [{ role: "operator", actions: ["deployment.read", "deployment.submit", "deployment.dry-run", "deployment.rollback"], applications: ["*/*"], environments: ["*"] }] });
     const { api, calls } = fakeApi(({ method, path, body }) => {
       if (path === "/api/v1/me") return { json: ops };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
@@ -184,8 +184,8 @@ describe("inventario", () => {
     await user.click(confirm);
     await waitFor(() => expect(calls.filter((c) => c.path === "/api/v1/promotions")).toHaveLength(2));
     expect(calls.filter((c) => c.path === "/api/v1/promotions").map((c) => c.body)).toEqual([
-      { application: "shop", from: "test", to: "prod", dry_run: true },
-      { application: "shop", from: "test", to: "prod" },
+      { application: "shop", from: "test", to: "prod", tenant: "payments", dry_run: true },
+      { application: "shop", from: "test", to: "prod", tenant: "payments" },
     ]);
   });
 });

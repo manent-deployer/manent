@@ -54,7 +54,7 @@ var _ engine.Service = (*Guard)(nil)
 
 // target identifies the object of an action, for permissions and audit.
 type target struct {
-	application, environment, deployment, schedule string
+	tenant, application, environment, deployment, schedule string
 	// artifact is the artifact of the deploy ("" for the actions on the whole environment).
 	artifact string
 	dryRun   bool
@@ -68,13 +68,13 @@ type target struct {
 // it records the audit entry and returns the error.
 func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	p := auth.FromContext(ctx)
-	ref := g.scope(ctx, t.application)
+	ref := g.scope(ctx, t.tenant, t.application)
 	where := t.application + "/" + t.environment
+	if ref.Name != tenant.Untenanted {
+		where = ref.Name + "/" + where
+	}
 	if t.artifact != "" {
 		where += " (artifact " + t.artifact + ")"
-	}
-	if ref != nil {
-		where += " (tenant " + ref.Name + ")"
 	}
 	if err := g.authzUnavailable(ctx, p, a); err != nil {
 		return err
@@ -111,7 +111,7 @@ func (g *Guard) grantName(ctx context.Context, a Action, t target) string {
 	if p == nil {
 		return ""
 	}
-	gr, _ := GrantFor(g.allGrants(ctx, p), a, t.application, t.artifact, t.environment, g.scope(ctx, t.application), g.now())
+	gr, _ := GrantFor(g.allGrants(ctx, p), a, t.application, t.artifact, t.environment, g.scope(ctx, t.tenant, t.application), g.now())
 	return gr.Name
 }
 
@@ -127,10 +127,10 @@ func (g *Guard) authzUnavailable(ctx context.Context, p *auth.Principal, a Actio
 	return nil
 }
 
-// allowed checks a permission on a deploy of the artifact, with the owner and the tags read
-// from the tenant registry. It looks only at the grants: it is for reads and lists.
-func (g *Guard) allowed(ctx context.Context, p *auth.Principal, a Action, application, artifact, environment string) bool {
-	return g.permitted(ctx, p, a, application, artifact, environment, g.scope(ctx, application))
+// allowed checks a permission on a deploy of the tenant's artifact, with the tags read from the
+// tenant registry. It looks only at the grants: it is for reads and lists.
+func (g *Guard) allowed(ctx context.Context, p *auth.Principal, a Action, tenantName, application, artifact, environment string) bool {
+	return g.permitted(ctx, p, a, application, artifact, environment, g.scope(ctx, tenantName, application))
 }
 
 // permitted reports whether the grants of the identity allow the action. policy.* are decided
@@ -189,17 +189,22 @@ func (g *Guard) now() time.Time {
 	return time.Now()
 }
 
-// scope returns the owner of the application with the tags of tenant and application; nil
-// without a registry, or if the application is not registered.
-func (g *Guard) scope(ctx context.Context, application string) *tenant.Ref {
-	if g.Registry == nil || application == "" {
-		return nil
+// scope returns the tenant of the target with the tags of tenant and application: the named one
+// (resolved deploys, inventory) or, for a request that names none, the one the engine resolves
+// (tenant.Resolve). What cannot be resolved is Untenanted: the engine refuses those requests.
+func (g *Guard) scope(ctx context.Context, tenantName, application string) *tenant.Ref {
+	if tenantName == "" {
+		if t, err := tenant.Resolve(ctx, g.Registry, application, "", true); err == nil {
+			return t.Ref(application)
+		}
+		return tenant.UntenantedOf(application).Ref(application)
 	}
-	t, err := tenant.Owner(ctx, g.Registry, application)
-	if err != nil {
-		return nil
+	if tenantName != tenant.Untenanted && g.Registry != nil {
+		if t, err := tenant.Find(ctx, g.Registry, tenantName); err == nil {
+			return t.Ref(application)
+		}
 	}
-	return t.Ref(application)
+	return &tenant.Ref{Name: tenantName, Application: application}
 }
 
 // record records an audit entry; a recording error is only logged.
@@ -244,7 +249,7 @@ func actor(p *auth.Principal) string {
 
 // Plan requires deployment.read: it reveals the pipeline configured for the application/environment.
 func (g *Guard) Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}); err != nil {
 		return nil, err
 	}
 	return g.Next.Plan(ctx, d)
@@ -271,7 +276,7 @@ func (g *Guard) checkOverride(ctx context.Context, override string, t target) er
 // application or environment also requires schedule.write on that one, since it would be
 // overwritten. A freeze override requires deployment.freeze-override.
 func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.Submission, error) {
-	t := target{application: d.Application, artifact: d.Artifact.Name, environment: d.Environment, dryRun: d.DryRun, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
+	t := target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment, dryRun: d.DryRun, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
 	act := submitAction(DeploymentSubmit, d.DryRun)
 	if err := g.check(ctx, act, t); err != nil {
 		return nil, err
@@ -290,7 +295,7 @@ func (g *Guard) Submit(ctx context.Context, d *descriptor.Descriptor) (*engine.S
 			return nil, err
 		}
 		if cur, err := g.Next.GetSchedule(ctx, t.schedule); err == nil && (cur.Application != d.Application || cur.Environment != d.Environment) {
-			if err := g.check(ctx, ScheduleWrite, target{application: cur.Application, environment: cur.Environment, schedule: cur.Name}); err != nil {
+			if err := g.check(ctx, ScheduleWrite, target{tenant: cur.Tenant, application: cur.Application, environment: cur.Environment, schedule: cur.Name}); err != nil {
 				return nil, err
 			}
 		}
@@ -309,7 +314,7 @@ func (g *Guard) Status(ctx context.Context, id string) (*engine.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := g.check(ctx, DeploymentRead, target{application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{tenant: st.Tenant, application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id}); err != nil {
 		return nil, err
 	}
 	remember(ctx, id, st.Application, st.Artifact, st.Environment)
@@ -322,7 +327,7 @@ func (g *Guard) List(ctx context.Context, f engine.ListFilter) ([]engine.Status,
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Tenant, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
 	}
 	all, err := g.Next.List(ctx, f)
 	if err != nil {
@@ -352,7 +357,7 @@ func (g *Guard) Cancel(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	t := target{application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id, dep: statusInfo(st)}
+	t := target{tenant: st.Tenant, application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id, dep: statusInfo(st)}
 	if err := g.check(ctx, DeploymentCancel, t); err != nil {
 		return err
 	}
@@ -370,7 +375,7 @@ func (g *Guard) ListSchedules(ctx context.Context) ([]engine.ScheduleInfo, error
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, s := range all {
-		if g.permitted(ctx, p, ScheduleRead, s.Application, "", s.Environment, nil) {
+		if g.allowed(ctx, p, ScheduleRead, s.Tenant, s.Application, "", s.Environment) {
 			out = append(out, s)
 		}
 	}
@@ -383,7 +388,7 @@ func (g *Guard) GetSchedule(ctx context.Context, name string) (*engine.ScheduleI
 	if err != nil {
 		return nil, err
 	}
-	if err := g.check(ctx, ScheduleRead, target{application: s.Application, environment: s.Environment, schedule: name}); err != nil {
+	if err := g.check(ctx, ScheduleRead, target{tenant: s.Tenant, application: s.Application, environment: s.Environment, schedule: name}); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -411,7 +416,7 @@ func (g *Guard) scheduleOp(ctx context.Context, name string, auditAction Action,
 	if err != nil {
 		return err
 	}
-	t := target{application: s.Application, environment: s.Environment, schedule: name}
+	t := target{tenant: s.Tenant, application: s.Application, environment: s.Environment, schedule: name}
 	if err := g.check(ctx, ScheduleWrite, t); err != nil {
 		return err
 	}
@@ -431,7 +436,7 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 	cross := g.CrossTenantInventory && g.memberOfAny(ctx, p)
 	out := all[:0]
 	for _, ie := range all {
-		if cross || g.allowed(ctx, p, DeploymentRead, ie.Application, ie.Artifact, ie.Environment) {
+		if cross || g.allowed(ctx, p, DeploymentRead, ie.Tenant, ie.Application, ie.Artifact, ie.Environment) {
 			out = append(out, ie)
 		}
 	}
@@ -441,10 +446,10 @@ func (g *Guard) Inventory(ctx context.Context, f engine.InventoryFilter) ([]engi
 // Promote requires deployment.read on the source environment and deployment.submit (or
 // deployment.dry-run) on the destination one.
 func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.Submission, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: r.Application, artifact: r.Artifact, environment: r.From}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{tenant: r.Tenant, application: r.Application, artifact: r.Artifact, environment: r.From}); err != nil {
 		return nil, err
 	}
-	t := target{application: r.Application, artifact: r.Artifact, environment: r.To, dryRun: r.DryRun, comment: r.FreezeOverride,
+	t := target{tenant: r.Tenant, application: r.Application, artifact: r.Artifact, environment: r.To, dryRun: r.DryRun, comment: r.FreezeOverride,
 		dep: &DeploymentInfo{Kind: engine.KindPromotion, DryRun: r.DryRun, Version: r.Version, RequestedBy: actor(auth.FromContext(ctx))}}
 	if err := g.check(ctx, submitAction(DeploymentSubmit, r.DryRun), t); err != nil {
 		return nil, err
@@ -462,7 +467,7 @@ func (g *Guard) Promote(ctx context.Context, r engine.PromoteRequest) (*engine.S
 
 // Rollback requires deployment.rollback (or deployment.dry-run).
 func (g *Guard) Rollback(ctx context.Context, r engine.RollbackRequest) (*engine.Submission, error) {
-	t := target{application: r.Application, artifact: r.Artifact, environment: r.Environment, dryRun: r.DryRun, comment: r.FreezeOverride,
+	t := target{tenant: r.Tenant, application: r.Application, artifact: r.Artifact, environment: r.Environment, dryRun: r.DryRun, comment: r.FreezeOverride,
 		dep: &DeploymentInfo{Kind: engine.KindRollback, DryRun: r.DryRun, Version: r.Version, RequestedBy: actor(auth.FromContext(ctx))}}
 	if err := g.check(ctx, submitAction(DeploymentRollback, r.DryRun), t); err != nil {
 		return nil, err
@@ -489,7 +494,7 @@ func (g *Guard) Decide(ctx context.Context, id string, r engine.DecisionRequest)
 	if !r.Approve {
 		act = ActionReject
 	}
-	t := target{application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id, comment: r.Comment, dep: statusInfo(st)}
+	t := target{tenant: st.Tenant, application: st.Application, artifact: st.Artifact, environment: st.Environment, deployment: id, comment: r.Comment, dep: statusInfo(st)}
 	if err := g.check(ctx, DeploymentApprove, t); err != nil {
 		return err
 	}
@@ -578,7 +583,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Tenant, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
 	}
 	rep, err := g.Next.DORA(ctx, f)
 	if err != nil {
@@ -587,7 +592,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 	// A remote service ignores Match: unreadable environments are removed.
 	envs := rep.Environments[:0]
 	for _, m := range rep.Environments {
-		if g.allowed(ctx, p, DeploymentRead, m.Application, m.Artifact, m.Environment) {
+		if g.allowed(ctx, p, DeploymentRead, m.Tenant, m.Application, m.Artifact, m.Environment) {
 			envs = append(envs, m)
 		}
 	}
@@ -598,7 +603,7 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 // Validate requires read on the application and environment: it shows the effective
 // configuration, which may include the environment's targets and parameters.
 func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}); err != nil {
 		return nil, err
 	}
 	// The effective deploy shows the imported targets and parameters.
@@ -614,7 +619,7 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 // ValidateEnvironment requires reading the deploys of the environment: the check reveals its
 // effective configuration, as Validate does.
 func (g *Guard) ValidateEnvironment(ctx context.Context, c engine.EnvironmentCheck) (*engine.Validation, error) {
-	if err := g.check(ctx, DeploymentRead, target{application: c.Application, artifact: c.Artifact, environment: c.Environment}); err != nil {
+	if err := g.check(ctx, DeploymentRead, target{tenant: c.Tenant, application: c.Application, artifact: c.Artifact, environment: c.Environment}); err != nil {
 		return nil, err
 	}
 	return g.Next.ValidateEnvironment(ctx, c)
@@ -687,7 +692,7 @@ func (g *Guard) Approvals(ctx context.Context) ([]engine.Status, error) {
 	p := auth.FromContext(ctx)
 	out := all[:0]
 	for _, st := range all {
-		if !g.allowed(ctx, p, DeploymentApprove, st.Application, st.Artifact, st.Environment) {
+		if !g.allowed(ctx, p, DeploymentApprove, st.Tenant, st.Application, st.Artifact, st.Environment) {
 			continue
 		}
 		if !g.Policy.Disabled && st.RequestedBy == p.String() && (st.Approval == nil || !st.Approval.AllowSelf) {
@@ -717,7 +722,7 @@ func (g *Guard) Workers(ctx context.Context) ([]engine.WorkerInfo, error) {
 	for i := range ws {
 		tasks := ws[i].Tasks[:0]
 		for _, t := range ws[i].Tasks {
-			if g.permitted(ctx, p, DeploymentRead, t.Application, "", t.Environment, nil) {
+			if g.allowed(ctx, p, DeploymentRead, t.Tenant, t.Application, "", t.Environment) {
 				tasks = append(tasks, t)
 			} else {
 				ws[i].HiddenTasks++
@@ -744,7 +749,7 @@ func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.
 	p := auth.FromContext(ctx)
 	match := f.Match
 	f.Match = func(st engine.Status) bool {
-		return g.allowed(ctx, p, DeploymentRead, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
+		return g.allowed(ctx, p, DeploymentRead, st.Tenant, st.Application, st.Artifact, st.Environment) && (match == nil || match(st))
 	}
 	a, err := g.Next.Activity(ctx, f)
 	if err != nil {
@@ -785,7 +790,14 @@ func (g *Guard) checkImports(ctx context.Context, d *descriptor.Descriptor) erro
 			continue
 		}
 		env := cmp.Or(c.Environment, d.Environment)
-		if err := g.check(ctx, DeploymentRead, target{application: c.Application, artifact: c.Artifact, environment: env}); err != nil {
+		// As the engine: the importing deploy's tenant if it lists the application.
+		chosen := c.Tenant
+		if chosen == "" && d.Tenant != "" && g.Registry != nil {
+			if t, err := tenant.Find(ctx, g.Registry, d.Tenant); err == nil && t.Owns(c.Application) {
+				chosen = d.Tenant
+			}
+		}
+		if err := g.check(ctx, DeploymentRead, target{tenant: chosen, application: c.Application, artifact: c.Artifact, environment: env}); err != nil {
 			return err
 		}
 	}
@@ -801,7 +813,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 		if d == nil {
 			continue // rejected by the engine validation
 		}
-		t := target{application: d.Application, artifact: d.Artifact.Name, environment: d.Environment, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
+		t := target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment, comment: d.FreezeOverride, dep: requestInfo(ctx, d, engine.KindDeploy)}
 		if err := g.check(ctx, DeploymentSubmit, t); err != nil {
 			return nil, err
 		}
@@ -826,7 +838,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 		return nil, err
 	}
 	for _, d := range rs.Deploys {
-		g.done(ctx, DeploymentSubmit, target{application: d.Application, artifact: d.Artifact, environment: d.Environment, deployment: d.DeploymentID, comment: "release " + rs.ID}, nil)
+		g.done(ctx, DeploymentSubmit, target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact, environment: d.Environment, deployment: d.DeploymentID, comment: "release " + rs.ID}, nil)
 	}
 	return rs, nil
 }
@@ -834,7 +846,7 @@ func (g *Guard) SubmitRelease(ctx context.Context, r *descriptor.Release) (*engi
 // readableRelease reports whether the identity can read all the deploys of the release.
 func (g *Guard) readableRelease(ctx context.Context, rs *engine.ReleaseStatus, a Action) error {
 	for _, d := range rs.Deploys {
-		if err := g.check(ctx, a, target{application: d.Application, artifact: d.Artifact, environment: d.Environment, deployment: d.DeploymentID}); err != nil {
+		if err := g.check(ctx, a, target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact, environment: d.Environment, deployment: d.DeploymentID}); err != nil {
 			return err
 		}
 	}
@@ -863,7 +875,7 @@ func (g *Guard) ListReleases(ctx context.Context, limit int) ([]engine.ReleaseSt
 	out := []engine.ReleaseStatus{}
 	for _, rs := range all {
 		if !slices.ContainsFunc(rs.Deploys, func(d engine.ReleaseDeployState) bool {
-			return !g.allowed(ctx, p, DeploymentRead, d.Application, d.Artifact, d.Environment)
+			return !g.allowed(ctx, p, DeploymentRead, d.Tenant, d.Application, d.Artifact, d.Environment)
 		}) {
 			out = append(out, rs)
 		}

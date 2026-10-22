@@ -199,7 +199,7 @@ func (e *Engine) govern(ctx context.Context, req *Request, eff *descriptor.Descr
 		return fmt.Errorf("%w: %s", ErrInvalidRequest, freezeMessage(dec.Freeze))
 	}
 	for _, env := range dec.Requires {
-		rel, err := e.findRelease(ctx, d.Application, "", env, func(s Status) bool { return sameArtifact(s, d) })
+		rel, err := e.findRelease(ctx, tenantOf(d), d.Application, "", env, func(s Status) bool { return sameArtifact(s, d) })
 		if err != nil {
 			return err
 		}
@@ -662,7 +662,7 @@ func (e *Engine) PolicyImpact(ctx context.Context, revision int64, since time.Du
 		after := obligations(dec.Deny, dec.Approvals, dec.Change)
 		if before != after {
 			out.Changes = append(out.Changes, PolicyChange{
-				Deployment: s.ID, Application: s.Application, Environment: s.Environment, Version: s.Version,
+				Deployment: s.ID, Tenant: s.Tenant, Application: s.Application, Environment: s.Environment, Version: s.Version,
 				CreatedAt: s.CreatedAt, Before: before, After: after,
 			})
 		}

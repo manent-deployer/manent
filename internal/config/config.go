@@ -299,7 +299,7 @@ type GitConfig struct {
 	Repository string `yaml:"repository"`
 	// Ref is the default ref (default refs/heads/main).
 	Ref string `yaml:"ref"`
-	// Path is the file template in the repository, with {application}, {artifact} and
+	// Path is the file template in the repository, with {tenant}, {application}, {artifact} and
 	// {environment}.
 	Path string `yaml:"path"`
 	// AllowedRefs are other refs (patterns with *) that config.ref can name and from which a SHA
@@ -339,7 +339,16 @@ type Tenants struct {
 	File string `yaml:"file"`
 	// Cache is how long the registry is kept before reading it again (default 30s).
 	Cache time.Duration `yaml:"cache"`
+	// Untenanted says whether the applications no tenant lists are deployed as the reserved
+	// tenant "untenanted" (allow, default) or refused (reject).
+	Untenanted string `yaml:"untenanted"`
 }
+
+// Values of tenants.untenanted.
+const (
+	UntenantedAllow  = "allow"
+	UntenantedReject = "reject"
+)
 
 // TenantRoles are the roles given implicitly to the members and admins of a tenant on its
 // applications; an empty role gives nothing.
@@ -354,14 +363,14 @@ type ConsulConfig struct {
 	// Address of the agent (default CONSUL_HTTP_ADDR or http://127.0.0.1:8500).
 	Address    string `yaml:"address"`
 	Datacenter string `yaml:"datacenter"`
-	// Key is the key template, with {application}, {artifact} and {environment}.
+	// Key is the key template, with {tenant}, {application}, {artifact} and {environment}.
 	Key       string `yaml:"key"`
 	TokenFile string `yaml:"token_file"`
 }
 
 // FileConfig configures reading from local files.
 type FileConfig struct {
-	// Path is the path template, with {application}, {artifact} and {environment}.
+	// Path is the path template, with {tenant}, {application}, {artifact} and {environment}.
 	Path string `yaml:"path"`
 }
 
@@ -668,7 +677,7 @@ type DescriptorPolicy struct {
 	// Params lists per plugin ("*" = all) the patterns of the parameters a descriptor can set.
 	Params map[string][]string `yaml:"params"`
 	// SecretRefs are the patterns of the secret references a descriptor can declare, with
-	// {application}, {artifact} and {environment}.
+	// {tenant}, {application}, {artifact} and {environment}.
 	SecretRefs []string `yaml:"secret_refs"`
 	// Targets allows targets given by the descriptor.
 	Targets *bool `yaml:"targets"`
@@ -773,9 +782,9 @@ func Default() *Config {
 		EnvConfig: EnvConfig{
 			Provider:   EnvProviderNone,
 			MaxRetries: 3,
-			Consul:     ConsulConfig{Key: "manent/{application}/{artifact}/{environment}"},
-			File:       FileConfig{Path: "./envconfig/{application}/{artifact}/{environment}.yml"},
-			Git:        GitConfig{Ref: "refs/heads/main", Path: "{application}/{artifact}/{environment}.yml", RefTTL: 30 * time.Second},
+			Consul:     ConsulConfig{Key: "manent/{tenant}/{application}/{artifact}/{environment}"},
+			File:       FileConfig{Path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"},
+			Git:        GitConfig{Ref: "refs/heads/main", Path: "{tenant}/{application}/{artifact}/{environment}.yml", RefTTL: 30 * time.Second},
 		},
 		Tenants:   Tenants{Cache: 30 * time.Second},
 		RBAC:      RBAC{TenantRoles: TenantRoles{Members: "deployer", Admins: "admin"}},
@@ -911,6 +920,11 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file|git)", c.EnvConfig.Provider))
+	}
+	switch c.Tenants.Untenanted {
+	case "", UntenantedAllow, UntenantedReject:
+	default:
+		errs = append(errs, fmt.Errorf("tenants.untenanted %q not supported (allow|reject)", c.Tenants.Untenanted))
 	}
 	switch c.DescriptorPolicy.ConfigRef {
 	case "", "none", "ref", "sha":

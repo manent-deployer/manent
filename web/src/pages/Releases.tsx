@@ -106,7 +106,7 @@ function CancelRelease({ r }: { r: ReleaseStatus }) {
     },
     onError: (e) => toast("error", t("actions.failed", { message: e instanceof Error ? e.message : String(e) })),
   });
-  if (TERMINAL.has(r.state) || !r.deploys.every((d) => can(me.data, "deployment.cancel", d.application, d.environment))) return null;
+  if (TERMINAL.has(r.state) || !r.deploys.every((d) => can(me.data, "deployment.cancel", d.application, d.environment, d.tenant))) return null;
   return (
     <>
       <Button variant="danger" icon={CircleSlash} onClick={() => setOpen(true)}>

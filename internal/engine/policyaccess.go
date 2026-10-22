@@ -92,12 +92,12 @@ func (e *Engine) accessCheck(ctx context.Context, pa PolicyAdmin, revision int64
 	}
 	if d := c.Descriptor; d != nil {
 		c.Application, c.Environment = cmp.Or(c.Application, d.Application), cmp.Or(c.Environment, d.Environment)
-		c.Artifact = cmp.Or(c.Artifact, d.Artifact.Name)
+		c.Artifact, c.Tenant = cmp.Or(c.Artifact, d.Artifact.Name), cmp.Or(c.Tenant, d.Tenant)
 	}
 	if c.Application == "" || c.Environment == "" {
 		return nil, fmt.Errorf("%w: application and environment are required for the check", ErrInvalidRequest)
 	}
-	ref := e.ownerRef(ctx, c.Application)
+	ref := e.ownerRef(ctx, c.Application, c.Tenant)
 	gr, ok := rbac.GrantFor(grants, a, c.Application, c.Artifact, c.Environment, ref, e.now())
 	if !ok {
 		return &AccessOutcome{Reason: "no grant of the revision allows the action"}, nil

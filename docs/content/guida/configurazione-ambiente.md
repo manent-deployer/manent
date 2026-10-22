@@ -52,14 +52,14 @@ Configured in `manent.yml`, section `envconfig`:
       consul:
         address: http://consul:8500            # default: CONSUL_HTTP_ADDR or http://127.0.0.1:8500
         datacenter: ""
-        key: "manent/{application}/{artifact}/{environment}"
+        key: "manent/{tenant}/{application}/{artifact}/{environment}"
         # token_file: /run/secrets/consul-token
     ```
 
     The configuration is the value of the KV key. The ACL token is read from `CONSUL_HTTP_TOKEN` or from `token_file`, never from the configuration file.
 
     ```sh
-    consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
+    consul kv put manent/untenanted/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
     ```
 
 === "Git"
@@ -70,7 +70,7 @@ Configured in `manent.yml`, section `envconfig`:
       git:
         repository: https://git.example.com/platform/envconfig.git
         ref: refs/heads/main
-        path: "{application}/{artifact}/{environment}.yml"
+        path: "{tenant}/{application}/{artifact}/{environment}.yml"
         password_ref: vault:secret/manent/git#token
     ```
 
@@ -82,7 +82,7 @@ Configured in `manent.yml`, section `envconfig`:
     envconfig:
       provider: file
       file:
-        path: "./envconfig/{application}/{artifact}/{environment}.yml"
+        path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
     ```
 
     Useful for development and testing.
@@ -101,7 +101,7 @@ Configured in `manent.yml`, section `envconfig`:
 | `required` | `true`: the deploy fails if there is no configuration for the environment. `false`: only the descriptor is used. |
 | `max_retries` | Additional attempts if the provider does not respond (e.g. Consul unreachable). |
 
-Templates (`consul.key`, `file.path`, `git.path`) contain `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application. See [Applications with several artifacts](artefatti.md).
+Templates (`consul.key`, `file.path`, `git.path`) contain `{tenant}` (the [tenant](tenant.md) of the release, `untenanted` for the applications no tenant lists) and `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application of a tenant. See [Applications with several artifacts](artefatti.md).
 
 ## When it is read
 
@@ -110,7 +110,7 @@ The configuration is read at the start of every deploy, in the `config` step. Tw
 - a scheduled deploy uses the configuration valid at run time, not the one at the time it was scheduled;
 - once read, it is saved by DBOS. If the deploy is resumed after a crash, it reuses the same configuration even if it has changed in the meantime.
 
-The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/myapp/test`) and the revision (`revision`: Consul's `ModifyIndex`, or the commit SHA with Git), so every deploy can be traced back to the exact configuration it used.
+The output of the `config` step reports the source (`source`, e.g. `consul:manent/untenanted/myapp/myapp/test`) and the revision (`revision`: Consul's `ModifyIndex`, or the commit SHA with Git), so every deploy can be traced back to the exact configuration it used.
 
 ## Merge rules { #regole-di-fusione }
 

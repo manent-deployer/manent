@@ -11,7 +11,7 @@ import { useI18n } from "@/i18n/i18n";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { can, canInApp } from "@/lib/permissions";
 
-type Open = { kind: "promote" | "rollback"; application: string; artifact?: string; environment: string } | null;
+type Open = { kind: "promote" | "rollback"; application: string; artifact?: string; environment: string; tenant?: string } | null;
 
 // Targets is the state read from the targets by the reconciliation: the hosts changed outside
 // manent are listed, the others only counted.
@@ -63,8 +63,8 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
   if (!e) return <span className="text-sm text-muted">{t("inventory.notDeployed")}</span>;
   const cur = e.current;
   // The destination is chosen in the dialog: being able to release the application somewhere is enough.
-  const canPromote = cur && canInApp(me.data, "deployment.submit", e.application);
-  const canRollback = cur && can(me.data, "deployment.rollback", e.application, e.environment);
+  const canPromote = cur && canInApp(me.data, "deployment.submit", e.application, e.tenant);
+  const canRollback = cur && can(me.data, "deployment.rollback", e.application, e.environment, e.tenant);
   return (
     <div className="flex flex-col gap-1.5">
       {cur ? (
@@ -101,7 +101,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canPromote && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "promote", application: e.application, artifact: e.artifact, environment: e.environment })}
+              onClick={() => onAction({ kind: "promote", application: e.application, artifact: e.artifact, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-accent hover:text-accent"
             >
               <Rocket className="h-3.5 w-3.5" aria-hidden />
@@ -111,7 +111,7 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
           {canRollback && (
             <button
               type="button"
-              onClick={() => onAction({ kind: "rollback", application: e.application, artifact: e.artifact, environment: e.environment })}
+              onClick={() => onAction({ kind: "rollback", application: e.application, artifact: e.artifact, environment: e.environment, tenant: e.tenant })}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-warn hover:text-warn"
             >
               <Undo2 className="h-3.5 w-3.5" aria-hidden />
@@ -212,10 +212,10 @@ export function InventoryPage() {
         </div>
       )}
       {open?.kind === "promote" && (
-        <PromoteDialog application={open.application} artifact={open.artifact} from={open.environment} environments={envs} onClose={() => setOpen(null)} />
+        <PromoteDialog application={open.application} artifact={open.artifact} from={open.environment} tenant={open.tenant} environments={envs} onClose={() => setOpen(null)} />
       )}
       {open?.kind === "rollback" && (
-        <RollbackDialog application={open.application} artifact={open.artifact} environment={open.environment} onClose={() => setOpen(null)} />
+        <RollbackDialog application={open.application} artifact={open.artifact} environment={open.environment} tenant={open.tenant} onClose={() => setOpen(null)} />
       )}
     </>
   );

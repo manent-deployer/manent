@@ -108,7 +108,7 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 		}
 		if s.State == string(dbos.WorkflowStatusSuccess) {
 			// The scan goes from the most recent: the last value seen is the first release.
-			firstSuccess[s.Application+"\x00"+s.Artifact+"\x00"+s.Version] = s.UpdatedAt
+			firstSuccess[s.Tenant+"\x00"+s.Application+"\x00"+s.Artifact+"\x00"+s.Version] = s.UpdatedAt
 		}
 		if s.UpdatedAt.Before(f.Since) || (f.Application != "" && s.Application != f.Application) ||
 			(f.Environment != "" && s.Environment != f.Environment) || (f.Tenant != "" && s.Tenant != f.Tenant) ||
@@ -120,12 +120,8 @@ func (e *Engine) DORA(_ context.Context, f DORAFilter) (*DORAReport, error) {
 		default:
 			return true
 		}
-		k := s.Application + "/" + s.Artifact + "/" + s.Environment
-		m := DORAMetrics{Application: s.Application, Artifact: s.Artifact, Environment: s.Environment}
-		if f.ByTenant || f.Tenant != "" {
-			k += "/" + s.Tenant
-			m.Tenant = s.Tenant
-		}
+		k := releaseKey(s.Tenant, s.Application, s.Artifact, s.Environment)
+		m := DORAMetrics{Tenant: s.Tenant, Application: s.Application, Artifact: s.Artifact, Environment: s.Environment}
 		a := byEnv[k]
 		if a == nil {
 			a = &doraAcc{m: m}
@@ -182,7 +178,7 @@ func (a *doraAcc) compute(firstSuccess map[string]time.Time) {
 			a.restores = append(a.restores, s.UpdatedAt.Sub(failedAt))
 			failedAt = time.Time{}
 		}
-		if first, ok := firstSuccess[s.Application+"\x00"+s.Artifact+"\x00"+s.Version]; ok && s.Kind != KindRollback && first.Before(s.UpdatedAt) {
+		if first, ok := firstSuccess[s.Tenant+"\x00"+s.Application+"\x00"+s.Artifact+"\x00"+s.Version]; ok && s.Kind != KindRollback && first.Before(s.UpdatedAt) {
 			a.leads = append(a.leads, s.UpdatedAt.Sub(first))
 		}
 	}

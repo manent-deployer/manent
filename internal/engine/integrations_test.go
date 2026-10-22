@@ -117,7 +117,7 @@ func (f *fakeChange) log() []string {
 // staticRoutes chooses the destinations per environment.
 type staticRoutes map[string][]string
 
-func (s staticRoutes) Match(_, environment string, dryRun bool) []string {
+func (s staticRoutes) Match(_, _, environment string, dryRun bool) []string {
 	if dryRun {
 		return nil
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // Audit actions of the policy administration, besides those subject to permissions.
@@ -37,7 +38,12 @@ func (g *Guard) checkFreeze(ctx context.Context, applications, environments []st
 	p := auth.FromContext(ctx)
 	for _, a := range applications {
 		for _, e := range environments {
-			if !g.permitted(ctx, p, FreezeWrite, a, "", e, nil) {
+			// A qualified pattern is checked as the application of its tenant part.
+			tn, app, ok := strings.Cut(a, "/")
+			if !ok {
+				tn, app = tenant.Untenanted, a
+			}
+			if !g.permitted(ctx, p, FreezeWrite, app, "", e, &tenant.Ref{Name: tn, Application: app}) {
 				err := fmt.Errorf("%w: %s cannot perform %s on %s/%s", engine.ErrForbidden, actor(p), FreezeWrite, a, e)
 				g.record(ctx, FreezeWrite, t, audit.OutcomeDenied, err)
 				return err
@@ -132,7 +138,7 @@ func (g *Guard) EvaluatePolicy(ctx context.Context, revision int64, r engine.Pol
 		return nil, err
 	}
 	if r.Descriptor != nil {
-		if err := g.check(ctx, DeploymentRead, target{application: r.Descriptor.Application, environment: r.Descriptor.Environment}); err != nil {
+		if err := g.check(ctx, DeploymentRead, target{tenant: r.Descriptor.Tenant, application: r.Descriptor.Application, environment: r.Descriptor.Environment}); err != nil {
 			return nil, err
 		}
 	}
@@ -151,7 +157,7 @@ func (g *Guard) PolicyImpact(ctx context.Context, revision int64, since time.Dur
 	p := auth.FromContext(ctx)
 	changes := imp.Changes[:0]
 	for _, c := range imp.Changes {
-		if g.permitted(ctx, p, DeploymentRead, c.Application, "", c.Environment, nil) {
+		if g.allowed(ctx, p, DeploymentRead, c.Tenant, c.Application, "", c.Environment) {
 			changes = append(changes, c)
 		}
 	}

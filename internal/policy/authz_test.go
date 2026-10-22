@@ -97,10 +97,10 @@ import rego.v1
 grants contains g if {
 	some group in input.identity.groups
 	startswith(group, "team-")
-	g := {"name": sprintf("owner %s", [group]), "role": "deployer", "applications": ["*"], "environments": ["*"], "tenants": sprintf("owner=%s", [group])}
+	g := {"name": sprintf("owner %s", [group]), "role": "deployer", "applications": ["*/*"], "environments": ["*"], "tenants": sprintf("owner=%s", [group])}
 }
 
-grants contains {"name": "oncall", "role": "operator", "applications": ["*"], "environments": ["prod"], "until": "2026-10-20T18:00:00Z"} if {
+grants contains {"name": "oncall", "role": "operator", "applications": ["*/*"], "environments": ["prod"], "until": "2026-10-20T18:00:00Z"} if {
 	"oncall" in input.identity.groups
 }
 

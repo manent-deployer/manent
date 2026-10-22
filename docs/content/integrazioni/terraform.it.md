@@ -69,7 +69,7 @@ terraform plan -var shop_version=1.4.0
 
 - Un deploy fallito fa fallire l'apply. Con il rollback automatico l'ambiente è tornato alla versione precedente, e il plan successivo ci riprova.
 - `terraform destroy` non tocca i target: manent non disinstalla le release, la risorsa esce solo dallo state.
-- Un ambiente esistente si importa con `terraform import manent_deployment.shop_prod shop/prod`.
+- Un ambiente esistente si importa con `terraform import manent_deployment.shop_prod shop/prod` (`payments/shop/prod` per l'applicazione di un [tenant](../guida/tenant.md)). L'attributo `tenant` sceglie tra i tenant che elencano l'applicazione, obbligatorio solo se più di uno la elenca.
 - Il data source `manent_tenants` elenca i [tenant](../guida/tenant.md) con le loro applicazioni, per esempio per un `for_each` sulle applicazioni di un team.
 
 ## 4. Verifica le modifiche alla configurazione nel plan

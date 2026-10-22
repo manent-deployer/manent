@@ -61,6 +61,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--after <id>` | Starts the deploy only after the deploy `<id>` has succeeded (repeatable): see [Deploy chains](catene.md). |
 | `--import <name>=<id>` | Reads the exports of the deploy `<id>` as the import `<name>` of the descriptor and adds `<id>` to `after` (repeatable): see [Exports and imports](catene.md#export-import). |
 | `--id`, `--version`, `--source`, `--sha256` | Replace the ID and the artifact fields of the descriptor (the pipeline gives the version). |
+| `--tenant <tenant>` (`-t`) | Sets `tenant`: chooses among the [tenants](tenant.md) that list the application. Also on `rollback`, `promote`, `env validate` and `policy access`. |
 | `--config-ref <ref>` | Sets `config.ref`: the revision of the environment configuration ([git provider](../integrazioni/git.md)), within `descriptor_policy.config_ref`. |
 | `--outputs <file>`, `--summary <file>`, `--ci` | `key=value` outcome and Markdown summary for CI: see [CI and infrastructure as code](ci-iac.md). |
 

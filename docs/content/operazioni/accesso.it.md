@@ -149,7 +149,7 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 
 `deployer` e `operator` non possono approvare: chi rilascia non deve potersi approvare con un secondo ruolo. Le approvazioni si assegnano a un gruppo dedicato (es. il change advisory board) con il ruolo `approver`.
 
-Un binding con `tenants` (un selettore sui tag del [tenant](../guida/tenant.md) proprietario e su `name`) vale solo per i deploy delle sue applicazioni; `selector` legge i tag dell'applicazione (solo le chiavi di `rbac.selector_keys`). Membri e amministratori di un tenant ricevono anche i ruoli impliciti di `rbac.tenant_roles`.
+I pattern delle applicazioni sono qualificati: `shop` copre solo lo `shop` untenanted, `payments/shop` quello del [tenant](../guida/tenant.md#pattern-delle-applicazioni-qualificati) payments, `*/*` ogni applicazione. Un binding con `tenants` (un selettore sui tag del tenant proprietario e su `name`) vale solo per i deploy delle sue applicazioni; `selector` legge i tag dell'applicazione (solo le chiavi di `rbac.selector_keys`). Membri e amministratori di un tenant ricevono anche i ruoli impliciti di `rbac.tenant_roles`.
 
 Altri ruoli si definiscono in `rbac.roles`:
 

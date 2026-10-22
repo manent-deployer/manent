@@ -1,6 +1,6 @@
 # Tenant
 
-Un **tenant** è un team interno che possiede un insieme di applicazioni. Ogni applicazione appartiene a un solo tenant, che la elenca nel registro con i suoi **tag** (prodotto, criticità, …). Il tenant è lo scope di permessi, code e restrizioni; i tag raggruppano e selezionano le applicazioni attraverso i team. Non c'è gerarchia: un proprietario per applicazione, tag liberi su tenant e applicazioni.
+Un **tenant** è un team interno che possiede un insieme di applicazioni. Il tenant elenca nel registro le sue applicazioni con i loro **tag** (prodotto, criticità, …) ed è lo scope di permessi, code e restrizioni. L'identità di una release è **tenant/applicazione/artefatto/ambiente**: due team possono avere ciascuno un'applicazione chiamata `shop`, e le applicazioni che nessun tenant elenca appartengono al tenant riservato `untenanted`.
 
 ## Registro
 
@@ -21,9 +21,9 @@ tenants:
     secret_refs: ["vault:secret/payments/*"] # riferimenti ai segreti ammessi (facoltativo)
     artifact_sources: ["oci://registry.example.com/payments/"]   # sorgenti ammesse (facoltativo)
     callback_hosts: [hooks.payments.example.com]                 # host dei callback ammessi (facoltativo)
-  platform:
+  retail:
     applications:
-      infra: {}
+      shop: {tags: {product: storefront}}   # un altro shop: la release retail/shop
     disabled: false                          # un tenant disabilitato non può rilasciare
 ```
 
@@ -31,50 +31,102 @@ tenants:
 tenants:
   file: /etc/manent/tenants.yml
   cache: 30s           # per quanto si tiene il registro prima di rileggerlo
+  untenanted: allow    # allow (default) | reject: le applicazioni che nessun tenant elenca
 ```
 
-- **Proprietà:** un'applicazione elencata da due tenant rende non valido l'intero registro.
-- **Solo applicazioni registrate:** con un registro configurato, il deploy di un'applicazione che nessun tenant elenca è rifiutato. Senza registro ogni applicazione è ammessa, senza proprietario.
-- **Tag solo nel registro:** il descrittore non può indicare tenant né tag, altrimenti un deploy potrebbe mettersi nel perimetro di un altro team.
-- **Nomi:** i tenant usano lettere minuscole, cifre e `-` (al più 40); le applicazioni seguono la regola di `artifact.name`. Nei tag delle applicazioni sono riservati `application`, `tenant` e il prefisso `tenant.`, in quelli dei tenant `name`.
-- **Revisione:** lo step `config` registra il tenant del deploy; la sorgente del registro e la sua revisione (un prefisso dello sha256 del file) sono in `manent tenants show`.
+- **Nomi:** i tenant usano lettere minuscole, cifre e `-` (al più 40); `untenanted` è riservato. Le applicazioni seguono la regola di `artifact.name`. Nei tag delle applicazioni sono riservati `application`, `tenant` e il prefisso `tenant.`, in quelli dei tenant `name`.
+- **Stesso nome in più tenant:** ammesso. Ogni coppia tenant/applicazione è una release a sé, con storico, inventario, configurazione e permessi propri.
+- **Tag solo nel registro:** il descrittore non può aggiungere tag, e il suo campo `tenant` sceglie soltanto tra i tenant che elencano l'applicazione.
+- **Registro non valido:** se `tenants.yml` diventa illeggibile o non valido a server avviati, resta in vigore l'ultimo registro valido. manent registra un avviso (anche nel SIEM) e `/readyz` risponde 503 finché il file non viene corretto.
+- **Revisione:** la sorgente del registro e la sua revisione (un prefisso dello sha256 del file) sono in `manent tenants show`.
 
 ```sh
 manent tenants list [-a <applicazione>] [--selector "division=commerce"]
 manent tenants show payments        # tag, applicazioni con i loro tag, coda
 ```
 
-## Il tenant è necessario per rilasciare?
-
-Dipende dalla configurazione del server:
-
-| Configurazione | Deploy di un'applicazione |
-|---|---|
-| Nessun registro (`tenants.file` vuoto, il default) | Ammesso per ogni applicazione, che non ha proprietario. Valgono solo `rbac.bindings` e le regole di governance. |
-| Registro configurato | Ammesso solo se un tenant elenca l'applicazione. Altrimenti è rifiutato all'invio, prima dell'accodamento: `application <nome> is not registered in any tenant`. |
-| Registro configurato, tenant proprietario con `disabled: true` | Rifiutato: `tenant <nome>, owner of <applicazione>, is disabled`. |
-
-Per aggiungere una nuova applicazione con un registro:
-
-1. Inseriscila sotto il suo tenant in `tenants.yml`, con i suoi tag.
-2. Attendi al più `tenants.cache` (default `30s`) che API e worker rileggano il registro.
-3. Rilascia: il proprietario viene registrato in automatico, il descrittore non lo indica mai.
-
-Un'applicazione elencata da due tenant rende non valido l'intero registro. Tieni il registro sotto controllo di versione e rivedilo come il resto della configurazione.
-
 ## Il tenant di un deploy
 
-Il tenant non si sceglie: viene dall'applicazione. All'invio l'engine legge il proprietario dal registro e lo registra nella richiesta (attributo `tenant`, `Status.tenant`, campo `tenant` di callback e messaggi chat, `tenant` nel risultato dello step `config`). L'identità del deploy resta applicazione/artefatto/ambiente.
+Il tenant viene dal registro. Il campo `tenant` del descrittore (o `--tenant`) serve solo quando più tenant elencano l'applicazione:
+
+| Caso | Tenant del deploy |
+|---|---|
+| Un solo tenant elenca l'applicazione, `tenant` assente | Quel tenant |
+| Più tenant la elencano, `tenant` assente | Rifiutato: l'errore elenca i tenant |
+| `tenant` indicato e quel tenant elenca l'applicazione | Quel tenant |
+| `tenant` indicato e quel tenant non la elenca | Rifiutato |
+| Nessun tenant elenca l'applicazione | `untenanted`, oppure rifiutato con `tenants.untenanted: reject` |
+| Il tenant è disabilitato | Rifiutato, mai `untenanted` |
+
+```yaml title="deploy.yml"
+application: shop
+tenant: retail          # necessario solo perché shop è in due tenant
+environment: prod
+```
+
+Il tenant risolto viene registrato nella richiesta e nel descrittore del deploy (attributo `tenant`, `Status.tenant`, campo `tenant` di callback e messaggi chat, esiti della CI). Promozioni e rollback restano nella sua identità. La stessa scelta vale per `rollback`, `promote`, `env validate` e `policy access` con `--tenant` (`-t`), e per `imports.<nome>.current.tenant`.
 
 ```sh
+manent deploy -f deploy.yml --tenant retail
+manent rollback -a shop -e prod --tenant payments
 manent list -t payments              # deploy delle applicazioni di payments
 manent inventory -t payments
-manent dora -t payments --by-tenant
 ```
+
+Senza registro ogni applicazione è `untenanted`: per chi non usa i tenant non cambia nulla.
+
+## Il tenant è necessario per rilasciare?
+
+| Configurazione | Deploy di un'applicazione che nessun tenant elenca |
+|---|---|
+| Nessun registro (`tenants.file` vuoto, il default) | Ammesso, come `untenanted`. |
+| Registro, `tenants.untenanted: allow` (default) | Ammesso, come `untenanted`: applicazioni dei tenant e applicazioni senza tenant coesistono. |
+| Registro, `tenants.untenanted: reject` | Rifiutato all'invio: `application <nome> is not registered in any tenant`. |
+
+Un'applicazione `untenanted` non ha coda, restrizioni né ruoli impliciti: danno accesso solo i binding espliciti con pattern senza prefisso (`applications: [shop]`).
+
+## Configurazione di ambiente
+
+I template di default contengono `{tenant}`, così due applicazioni con lo stesso nome leggono documenti diversi:
+
+| Provider | Template di default |
+|---|---|
+| `file` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` |
+| `consul` | `manent/{tenant}/{application}/{artifact}/{environment}` |
+| `git` | `{tenant}/{application}/{artifact}/{environment}.yml` |
+
+Le applicazioni senza tenant usano il segmento `untenanted`. `{tenant}` è disponibile anche in `descriptor_policy.secret_refs`. Un template senza `{tenant}` resta valido se i nomi delle applicazioni sono unici.
+
+## Pattern delle applicazioni qualificati
+
+In binding, grant della policy dei permessi, regole di governance, freeze e instradamento delle notifiche i pattern delle applicazioni sono **qualificati**:
+
+| Pattern | Vale per |
+|---|---|
+| `shop`, `uc-*`, `*` | Solo le applicazioni `untenanted` |
+| `payments/shop`, `payments/*` | Le applicazioni di `payments` |
+| `*/shop` | Ogni `shop`, di qualunque tenant |
+| `*/*` | Ogni applicazione |
+
+Un binding largo scritto per le applicazioni senza tenant (`applications: ["*"]`) non raggiunge quindi mai l'applicazione di un tenant. Senza registro tutto è `untenanted`, quindi `"*"` continua a coprire ogni applicazione.
+
+```yaml title="manent.yml"
+rbac:
+  bindings:
+    - {groups: [platform], role: admin, applications: ["*/*"], environments: ["*"]}
+    - {groups: [retail-ci], role: deployer, applications: ["retail/*"], environments: ["*"]}
+governance:
+  rules:
+    - {name: critiche, applications: ["*/*"], environments: [prod], selector: "criticality=high", approvals: {required: 2}}
+  freezes:
+    - {name: chiusura-retail, applications: ["retail/*"], environments: [prod], from: 2026-12-20T00:00:00Z, to: 2027-01-07T00:00:00Z}
+```
+
+Se un deployer di `payments` indica per errore `tenant: retail`, il deploy è rifiutato con 403, salvo un permesso esplicito sull'applicazione di `retail`: i ruoli impliciti coprono solo il proprio tenant, e i pattern senza prefisso solo le applicazioni `untenanted`.
 
 ## Selettori sui tag
 
-I selettori sulle applicazioni leggono i tag dell'applicazione, `application`, `tenant` e i tag del tenant con il prefisso `tenant.`: `criticality=high`, `tenant=payments`, `tenant.division in (commerce)`. I selettori sui tenant (`tenants`) leggono i tag del tenant e `name`.
+I selettori sulle applicazioni leggono i tag dell'applicazione, `application`, `tenant` e i tag del tenant con il prefisso `tenant.`: `criticality=high`, `tenant=payments`, `tenant=untenanted`, `tenant.division in (commerce)`. I selettori sui tenant (`tenants`) leggono i tag del tenant e `name`.
 
 | Dove | Campo |
 |---|---|
@@ -87,10 +139,7 @@ I selettori sulle applicazioni leggono i tag dell'applicazione, `application`, `
 rbac:
   selector_keys: [criticality, product, tenant]   # chiavi che i selettori dei permessi possono leggere
   bindings:
-    - {groups: [sre], role: approver, applications: ["*"], environments: [prod], selector: "criticality=high"}
-governance:
-  rules:
-    - {name: critiche, applications: ["*"], environments: [prod], selector: "criticality=high", approvals: {required: 2}}
+    - {groups: [sre], role: approver, applications: ["*/*"], environments: [prod], selector: "criticality=high"}
 ```
 
 I selettori dei permessi possono leggere solo le chiavi di `rbac.selector_keys` (vuoto: nessun selettore nei permessi): un tag cosmetico non deve dare accessi.
@@ -103,12 +152,14 @@ rbac:
   cross_tenant_inventory: true                       # default
 ```
 
-- **Membri e amministratori** di un tenant ricevono il ruolo di `tenant_roles` sulle applicazioni del tenant, in ogni ambiente. I ruoli impliciti non danno mai `policy.*`, decisi solo da `rbac.bindings`.
-- **I collaboratori** di altri team ricevono binding espliciti (`tenants: "name=payments"`).
+- **Membri e amministratori** di un tenant ricevono il ruolo di `tenant_roles` sulle applicazioni del tenant (`<tenant>/*`), in ogni ambiente. I ruoli impliciti non danno mai `policy.*`, decisi solo da `rbac.bindings`, e non coprono mai le applicazioni `untenanted`.
+- **I collaboratori** di altri team ricevono binding espliciti (`applications: ["payments/*"]` o `tenants: "name=payments"`).
 - **Tra tenant** chi appartiene a un tenant può leggere l'inventario degli altri (`cross_tenant_inventory`); tutto il resto richiede un permesso.
 - **I ruoli di piattaforma** (`platform.read`, `policy.*`, break-glass) restano trasversali.
 
 ## Isolamento tra tenant
+
+`untenanted` conta come un tenant a sé.
 
 - **ID dei deploy:** un ID già usato da un altro tenant è rifiutato (`deployment id … is already in use`), senza dire di chi è.
 - **Dipendenze:** `after` verso un deploy di un altro tenant è rifiutato, salvo che il deploy sia il produttore di un import; tra tenant gli import leggono solo gli export con `public: true`.
@@ -121,9 +172,19 @@ exports:
   admin_host: {from: deploy.admin, pattern: '[a-z0-9.-]+'}                # solo i deploy del proprietario
 ```
 
+## Spostare un'applicazione in un altro tenant
+
+Quando un'applicazione `untenanted` entra in un tenant, o passa da un tenant a un altro, la sua identità cambia. Per conservare storico, inventario e rollback, sposta il suo storico dopo aver aggiornato il registro:
+
+```sh
+manent-server -c manent.yml admin move-application -a legacy --from untenanted --to retail [--dry-run]
+```
+
+Cambia l'attributo `tenant` dei deploy conclusi (e delle loro approvazioni e attese); i workflow non conclusi sono elencati in `pending`. Sposta anche la configurazione di ambiente (per esempio da `untenanted/legacy/…` a `retail/legacy/…`). `admin rename-artifact` accetta `--tenant` per le applicazioni di un tenant.
+
 ## Code e worker per tenant
 
-Un tenant con `queue` esegue i suoi deploy su quella coda; gli altri usano la coda di default (`dbos.queue`). Ogni worker registra all'avvio le code del registro e, di default, serve qualunque tenant. Un pool dedicato ad alcuni team, con le loro credenziali nel proprio `manent.yml`, ascolta solo le loro code:
+Un tenant con `queue` esegue i suoi deploy su quella coda; gli altri, `untenanted` compreso, usano la coda di default (`dbos.queue`). Ogni worker registra all'avvio le code del registro e, di default, serve qualunque tenant. Un pool dedicato ad alcuni team, con le loro credenziali nel proprio `manent.yml`, ascolta solo le loro code:
 
 ```yaml title="manent.yml dei worker di payments"
 dbos:
@@ -132,7 +193,7 @@ plugins:
   ecs: {role_arn: "arn:aws:iam::111111111111:role/payments-deployer"}
 ```
 
-- `concurrency` del tenant è il limite globale della sua coda (quota); `environment_concurrency` vale comunque per artefatto e ambiente.
+- `concurrency` del tenant è il limite globale della sua coda (quota); `environment_concurrency` vale comunque per release (tenant, applicazione, artefatto, ambiente).
 - Con il routing per region i passi di un deploy del tenant girano su `<coda>.<region>`.
 - Una coda aggiunta al registro viene registrata dai worker al loro avvio successivo: fino ad allora i suoi deploy restano in coda.
 - Approvazioni, attese delle dipendenze e release restano sulla coda condivisa delle approvazioni: non eseguono codice dei plugin.

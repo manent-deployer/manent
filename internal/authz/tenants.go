@@ -9,7 +9,6 @@ import (
 	"github.com/joeg-ita/manent/internal/audit"
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/glob"
 	"github.com/joeg-ita/manent/internal/tenant"
 )
 
@@ -28,7 +27,7 @@ func (g *Guard) tenantBindings(ctx context.Context) []Binding {
 		if role == "" || m.Empty() {
 			return
 		}
-		out = append(out, Binding{Subjects: m.Subjects, Groups: m.Groups, Role: role, Applications: []string{"*"},
+		out = append(out, Binding{Subjects: m.Subjects, Groups: m.Groups, Role: role, Applications: []string{t.Name + "/*"},
 			Environments: []string{"*"}, Tenants: tenant.NameLabel + "=" + t.Name})
 	}
 	for _, t := range all {
@@ -87,7 +86,7 @@ func (g *Guard) readableTenant(ctx context.Context, p *auth.Principal, t engine.
 	for _, app := range slices.Sorted(maps.Keys(t.Applications)) {
 		ref := &tenant.Ref{Name: t.Name, Tags: tags, Application: app, AppTags: t.Applications[app].Tags}
 		for _, gr := range g.allGrants(ctx, p) {
-			if gr.Anywhere(DeploymentRead, now) && glob.Any(gr.Applications, app) && len(gr.Environments) > 0 &&
+			if gr.Anywhere(DeploymentRead, now) && tenant.AnyApp(gr.Applications, t.Name, app) && len(gr.Environments) > 0 &&
 				tenant.Matches(gr.Tenants, ref) && tenant.MatchesApp(gr.Selector, ref) {
 				return true
 			}

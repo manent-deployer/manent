@@ -69,7 +69,7 @@ terraform plan -var shop_version=1.4.0
 
 - A failed deploy fails the apply. With automatic rollback the environment is back on the previous version, and the next plan tries again.
 - `terraform destroy` does not touch the targets: manent does not uninstall releases, the resource just leaves the state.
-- An existing environment is imported with `terraform import manent_deployment.shop_prod shop/prod`.
+- An existing environment is imported with `terraform import manent_deployment.shop_prod shop/prod` (`payments/shop/prod` for the application of a [tenant](../guida/tenant.md)). The `tenant` attribute chooses among the tenants that list the application, required only when more than one does.
 - The `manent_tenants` data source lists the [tenants](../guida/tenant.md) with their applications, for example to drive a `for_each` over the applications of a team.
 
 ## 4. Gate configuration changes in the plan

@@ -40,7 +40,7 @@ governance:
       timezone: Europe/Rome
 ```
 
-Per ogni deploy vale **la prima regola** (in ordine) la cui `applications` e `environments` corrispondono (e, se presenti, `tenants` sul tenant proprietario, `artifacts` e `selector` sui [tag delle applicazioni](tenant.md)). Senza regole non ci sono vincoli. I [dry-run](dry-run.md) non sono soggetti alle regole, perché non modificano gli ambienti.
+Per ogni deploy vale **la prima regola** (in ordine) la cui `applications` (pattern qualificati: `payments/*` per un [tenant](tenant.md#pattern-delle-applicazioni-qualificati), i pattern senza prefisso solo per le applicazioni untenanted) e `environments` corrispondono (e, se presenti, `tenants` sul tenant proprietario, `artifacts` e `selector` sui [tag delle applicazioni](tenant.md)). Senza regole non ci sono vincoli. I [dry-run](dry-run.md) non sono soggetti alle regole, perché non modificano gli ambienti.
 
 ## Inventario
 
@@ -211,7 +211,8 @@ Durante una finestra di freeze i deploy reali sull'applicazione e sull'ambiente 
 | Chiave | Descrizione |
 |---|---|
 | `name`, `reason` | Nome e motivo, riportati nel messaggio di errore. |
-| `applications`, `environments` | Pattern con `*`. |
+| `applications` | Pattern qualificati con `*`: `shop` solo untenanted, `payments/*` le applicazioni di un tenant, `*/*` tutte ([dettagli](tenant.md#pattern-delle-applicazioni-qualificati)). |
+| `environments` | Pattern con `*`. |
 | `regions` | Facoltativo: limita la finestra ai passi dei [rilasci a ondate](ondate.md#approvazioni-e-freeze) su queste region (pattern con `*`). Una finestra con `regions` non blocca l'accodamento: il rollout si mette in pausa prima della region e riparte a finestra chiusa. |
 | `from`, `to` | Finestra singola (RFC 3339). |
 | `cron`, `duration`, `timezone` | Finestra ricorrente: ogni occorrenza inizia a `cron` (5 campi) e dura `duration`. |

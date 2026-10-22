@@ -1,6 +1,6 @@
 # Tenants
 
-A **tenant** is an internal team that owns a set of applications. Every application belongs to exactly one tenant, which lists it in the registry with its **tags** (product, criticality, …). The tenant is the scope of permissions, queues and restrictions; the tags group and select the applications across teams. There is no hierarchy: one owner per application, free tags on tenants and applications.
+A **tenant** is an internal team that owns a set of applications. The tenant lists its applications in the registry with their **tags** (product, criticality, …) and is the scope of permissions, queues and restrictions. The identity of a release is **tenant/application/artifact/environment**: two teams can each have an application called `shop`, and the applications no tenant lists belong to the reserved tenant `untenanted`.
 
 ## Registry
 
@@ -21,9 +21,9 @@ tenants:
     secret_refs: ["vault:secret/payments/*"] # allowed secret references (optional)
     artifact_sources: ["oci://registry.example.com/payments/"]   # allowed sources (optional)
     callback_hosts: [hooks.payments.example.com]                 # allowed callback hosts (optional)
-  platform:
+  retail:
     applications:
-      infra: {}
+      shop: {tags: {product: storefront}}   # another shop: the release retail/shop
     disabled: false                          # a disabled tenant cannot deploy
 ```
 
@@ -31,50 +31,102 @@ tenants:
 tenants:
   file: /etc/manent/tenants.yml
   cache: 30s           # how long the registry is kept before reading it again
+  untenanted: allow    # allow (default) | reject: the applications no tenant lists
 ```
 
-- **Ownership:** an application listed by two tenants makes the whole registry invalid.
-- **Registered applications only:** with a registry configured, the deploy of an application that no tenant lists is refused. Without a registry every application is accepted, without owner.
-- **Tags in the registry only:** the descriptor cannot set tenant or tags, otherwise a deploy could put itself in another team's scope.
-- **Names:** tenants use lowercase letters, digits and `-` (at most 40); applications follow the rule of `artifact.name`. `application`, `tenant` and the `tenant.` prefix are reserved in application tags, `name` in tenant tags.
-- **Revision:** the `config` step records the tenant of the deploy; the registry source and its revision (a prefix of the file's sha256) are in `manent tenants show`.
+- **Names:** tenants use lowercase letters, digits and `-` (at most 40); `untenanted` is reserved. Applications follow the rule of `artifact.name`. In application tags `application`, `tenant` and the `tenant.` prefix are reserved, in tenant tags `name`.
+- **Same name in several tenants:** allowed. Each pair tenant/application is a release of its own, with its history, inventory, configuration and permissions.
+- **Tags in the registry only:** the descriptor cannot add tags, and its `tenant` field only chooses among the tenants that list the application.
+- **Invalid registry:** if `tenants.yml` becomes unreadable or invalid while the servers run, the last valid registry stays in force. manent logs a warning (also to the SIEM) and `/readyz` answers 503 until the file is fixed.
+- **Revision:** the registry source and its revision (a prefix of the file's sha256) are in `manent tenants show`.
 
 ```sh
 manent tenants list [-a <application>] [--selector "division=commerce"]
 manent tenants show payments        # tags, applications with their tags, queue
 ```
 
-## Is a tenant required to deploy?
-
-It depends on the configuration of the server:
-
-| Configuration | Deploy of an application |
-|---|---|
-| No registry (`tenants.file` empty, the default) | Allowed for every application, which has no owner. Only `rbac.bindings` and the governance rules apply. |
-| Registry configured | Allowed only if a tenant lists the application. Otherwise it is refused at submission, before being queued: `application <name> is not registered in any tenant`. |
-| Registry configured, owner tenant with `disabled: true` | Refused: `tenant <name>, owner of <application>, is disabled`. |
-
-To onboard a new application with a registry:
-
-1. Add it under its tenant in `tenants.yml`, with its tags.
-2. Wait up to `tenants.cache` (default `30s`) for API and workers to read the registry again.
-3. Deploy: the owner is recorded automatically, the descriptor never sets it.
-
-An application listed by two tenants makes the whole registry invalid. Keep the registry under version control and review it like the rest of the configuration.
-
 ## The tenant of a deploy
 
-The tenant is not chosen: it comes from the application. At submission the engine reads the owner from the registry and records it in the request (`tenant` attribute, `Status.tenant`, field `tenant` of callbacks and chat messages, `tenant` in the result of the `config` step). The deploy identity stays application/artifact/environment.
+The tenant comes from the registry. The `tenant` field of the descriptor (or `--tenant`) is needed only when several tenants list the application:
+
+| Case | Tenant of the deploy |
+|---|---|
+| One tenant lists the application, no `tenant` | That tenant |
+| Several tenants list it, no `tenant` | Refused: the error lists the tenants |
+| `tenant` given and that tenant lists the application | That tenant |
+| `tenant` given and that tenant does not list it | Refused |
+| No tenant lists the application | `untenanted`, or refused with `tenants.untenanted: reject` |
+| The tenant is disabled | Refused, never `untenanted` |
+
+```yaml title="deploy.yml"
+application: shop
+tenant: retail          # required only because shop is in two tenants
+environment: prod
+```
+
+The resolved tenant is recorded in the request and in the descriptor of the deploy (`tenant` attribute, `Status.tenant`, field `tenant` of callbacks and chat messages, CI outputs). Promotions and rollbacks stay in its identity. The same choice applies to `rollback`, `promote`, `env validate` and `policy access` with `--tenant` (`-t`), and to `imports.<name>.current.tenant`.
 
 ```sh
+manent deploy -f deploy.yml --tenant retail
+manent rollback -a shop -e prod --tenant payments
 manent list -t payments              # deploys of the applications of payments
 manent inventory -t payments
-manent dora -t payments --by-tenant
 ```
+
+Without a registry every application is `untenanted`: nothing changes for those who do not use tenants.
+
+## Is a tenant required to deploy?
+
+| Configuration | Deploy of an application no tenant lists |
+|---|---|
+| No registry (`tenants.file` empty, the default) | Allowed, as `untenanted`. |
+| Registry, `tenants.untenanted: allow` (default) | Allowed, as `untenanted`: applications of tenants and applications without coexist. |
+| Registry, `tenants.untenanted: reject` | Refused at submission: `application <name> is not registered in any tenant`. |
+
+An `untenanted` application has no queue, restrictions or implicit roles: only explicit bindings with patterns without prefix (`applications: [shop]`) give access to it.
+
+## Environment configuration
+
+The default templates contain `{tenant}`, so two applications with the same name read different documents:
+
+| Provider | Default template |
+|---|---|
+| `file` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` |
+| `consul` | `manent/{tenant}/{application}/{artifact}/{environment}` |
+| `git` | `{tenant}/{application}/{artifact}/{environment}.yml` |
+
+The applications without tenant use the segment `untenanted`. `{tenant}` is also available in `descriptor_policy.secret_refs`. A template without `{tenant}` stays valid if your application names are unique.
+
+## Qualified application patterns
+
+In bindings, permission policy grants, governance rules, freezes and notification routes, application patterns are **qualified**:
+
+| Pattern | Applies to |
+|---|---|
+| `shop`, `uc-*`, `*` | Only the `untenanted` applications |
+| `payments/shop`, `payments/*` | The applications of `payments` |
+| `*/shop` | Every `shop`, of any tenant |
+| `*/*` | Every application |
+
+A wide binding written for the applications without tenant (`applications: ["*"]`) therefore never reaches a tenant's application. Without a registry everything is `untenanted`, so `"*"` keeps covering every application.
+
+```yaml title="manent.yml"
+rbac:
+  bindings:
+    - {groups: [platform], role: admin, applications: ["*/*"], environments: ["*"]}
+    - {groups: [retail-ci], role: deployer, applications: ["retail/*"], environments: ["*"]}
+governance:
+  rules:
+    - {name: critical, applications: ["*/*"], environments: [prod], selector: "criticality=high", approvals: {required: 2}}
+  freezes:
+    - {name: retail-close, applications: ["retail/*"], environments: [prod], from: 2026-12-20T00:00:00Z, to: 2027-01-07T00:00:00Z}
+```
+
+If a deployer of `payments` names `tenant: retail` by mistake, the deploy is refused with 403 unless they have an explicit permission on `retail`'s application: the implicit roles cover only their own tenant, and patterns without prefix only the `untenanted` applications.
 
 ## Selectors on tags
 
-Application selectors read the application tags, `application`, `tenant` and the tenant tags with the `tenant.` prefix: `criticality=high`, `tenant=payments`, `tenant.division in (commerce)`. Tenant selectors (`tenants`) read the tenant tags and `name`.
+Application selectors read the application tags, `application`, `tenant` and the tenant tags with the `tenant.` prefix: `criticality=high`, `tenant=payments`, `tenant=untenanted`, `tenant.division in (commerce)`. Tenant selectors (`tenants`) read the tenant tags and `name`.
 
 | Where | Field |
 |---|---|
@@ -87,10 +139,7 @@ Application selectors read the application tags, `application`, `tenant` and the
 rbac:
   selector_keys: [criticality, product, tenant]   # keys the selectors of permissions can read
   bindings:
-    - {groups: [sre], role: approver, applications: ["*"], environments: [prod], selector: "criticality=high"}
-governance:
-  rules:
-    - {name: critical, applications: ["*"], environments: [prod], selector: "criticality=high", approvals: {required: 2}}
+    - {groups: [sre], role: approver, applications: ["*/*"], environments: [prod], selector: "criticality=high"}
 ```
 
 The selectors of permissions can read only the keys of `rbac.selector_keys` (empty: no selector in permissions): a cosmetic tag must not give access.
@@ -103,12 +152,14 @@ rbac:
   cross_tenant_inventory: true                       # default
 ```
 
-- **Members and admins** of a tenant receive the role of `tenant_roles` on the tenant's applications, in every environment. The implicit roles never give `policy.*`, decided only by `rbac.bindings`.
-- **Collaborators** of other teams get explicit bindings (`tenants: "name=payments"`).
+- **Members and admins** of a tenant receive the role of `tenant_roles` on the tenant's applications (`<tenant>/*`), in every environment. The implicit roles never give `policy.*`, decided only by `rbac.bindings`, and never cover the `untenanted` applications.
+- **Collaborators** of other teams get explicit bindings (`applications: ["payments/*"]` or `tenants: "name=payments"`).
 - **Across tenants** whoever belongs to a tenant can read the inventory of the others (`cross_tenant_inventory`); everything else needs a permission.
 - **Platform roles** (`platform.read`, `policy.*`, break-glass) stay across tenants.
 
 ## Isolation between tenants
+
+`untenanted` counts as a tenant of its own.
 
 - **Deploy IDs:** an ID already used by another tenant is refused (`deployment id … is already in use`), without saying whose it is.
 - **Dependencies:** `after` towards a deploy of another tenant is refused, unless the deploy is the producer of an import; across tenants imports read only the exports with `public: true`.
@@ -121,9 +172,19 @@ exports:
   admin_host: {from: deploy.admin, pattern: '[a-z0-9.-]+'}                # only the owner's deploys
 ```
 
+## Moving an application to another tenant
+
+When an `untenanted` application joins a tenant, or passes from one tenant to another, its identity changes. To keep history, inventory and rollbacks, move its history after updating the registry:
+
+```sh
+manent-server -c manent.yml admin move-application -a legacy --from untenanted --to retail [--dry-run]
+```
+
+It changes the `tenant` attribute of the ended deploys (and of their approvals and waits); workflows not ended are listed in `pending`. Move the environment configuration too (for example from `untenanted/legacy/…` to `retail/legacy/…`). `admin rename-artifact` takes `--tenant` for the applications of a tenant.
+
 ## Queues and workers per tenant
 
-A tenant with `queue` runs its deploys on that queue; the others use the default queue (`dbos.queue`). Every worker registers the queues of the registry at startup and, by default, serves every tenant. A pool dedicated to some teams, with their credentials in its own `manent.yml`, listens only to their queues:
+A tenant with `queue` runs its deploys on that queue; the others, `untenanted` included, use the default queue (`dbos.queue`). Every worker registers the queues of the registry at startup and, by default, serves every tenant. A pool dedicated to some teams, with their credentials in its own `manent.yml`, listens only to their queues:
 
 ```yaml title="manent.yml of the payments workers"
 dbos:
@@ -132,7 +193,7 @@ plugins:
   ecs: {role_arn: "arn:aws:iam::111111111111:role/payments-deployer"}
 ```
 
-- `concurrency` of the tenant is the global limit of its queue (quota); `environment_concurrency` still applies per application artifact and environment.
+- `concurrency` of the tenant is the global limit of its queue (quota); `environment_concurrency` still applies per release (tenant, application, artifact, environment).
 - With region routing the passes of a tenant's deploy run on `<queue>.<region>`.
 - A queue added to the registry is registered by the workers at their next start: until then its deploys stay queued.
 - Approvals, dependency waits and releases stay on the shared approvals queue: they run no plugin code.

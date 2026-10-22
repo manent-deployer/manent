@@ -750,6 +750,8 @@ export interface components {
         Descriptor: {
             apiVersion: string;
             id?: string;
+            /** @description Tenant dell'applicazione: sceglie tra i tenant che la elencano, obbligatorio solo se più di uno; untenanted per le applicazioni senza tenant */
+            tenant?: string;
             application: string;
             environment: string;
             dryRun?: boolean;
@@ -784,6 +786,7 @@ export interface components {
         Import: {
             deployment?: string;
             current?: {
+                tenant?: string;
                 application: string;
                 /** @description Default l'ambiente del deploy che importa */
                 environment?: string;
@@ -1009,6 +1012,7 @@ export interface components {
             deploys: {
                 name: string;
                 deployment_id: string;
+                tenant?: string;
                 application: string;
                 artifact?: string;
                 environment: string;
@@ -1131,6 +1135,7 @@ export interface components {
             deployment_id: string;
             /** @enum {string} */
             kind: "deploy" | "pass" | "gate" | "approval" | "schedule" | "after" | "release";
+            tenant?: string;
             application?: string;
             environment?: string;
             region?: string;
@@ -1201,6 +1206,7 @@ export interface components {
             done: boolean;
         };
         EnvironmentCheck: {
+            tenant?: string;
             application: string;
             /** @description Artefatto a cui si riferisce la configurazione (template con {artifact}) */
             artifact?: string;
@@ -1393,6 +1399,7 @@ export interface components {
         };
         PolicyChange: {
             deployment: string;
+            tenant?: string;
             application: string;
             environment: string;
             version: string;
@@ -1413,6 +1420,7 @@ export interface components {
             cron: string;
             timezone?: string;
             status: string;
+            tenant?: string;
             application: string;
             environment: string;
             requested_by?: string;
@@ -1446,6 +1454,7 @@ export interface components {
             freeze_override?: string;
         };
         PromoteRequest: components["schemas"]["Redeploy"] & {
+            tenant?: string;
             application: string;
             from: string;
             to: string;
@@ -1457,6 +1466,7 @@ export interface components {
             config_ref?: string;
         };
         RollbackRequest: components["schemas"]["Redeploy"] & {
+            tenant?: string;
             application: string;
             environment: string;
             /** @description Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno */
@@ -1496,6 +1506,7 @@ export interface components {
         };
         AccessCheck: {
             action: string;
+            tenant?: string;
             application?: string;
             environment?: string;
             artifact?: string;

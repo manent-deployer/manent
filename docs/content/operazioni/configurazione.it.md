@@ -55,8 +55,9 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `file` | | Il [registro dei tenant](../guida/tenant.md) (`tenants.yml`). Vuoto: nessun registro, ogni applicazione ammessa senza proprietario. Con un registro i deploy delle applicazioni non registrate sono rifiutati ([dettagli](../guida/tenant.md#il-tenant-e-necessario-per-rilasciare)). |
+| `file` | | Il [registro dei tenant](../guida/tenant.md) (`tenants.yml`). Vuoto: nessun registro, ogni applicazione è `untenanted`. |
 | `cache` | `30s` | Per quanto si tiene il registro prima di rileggerlo. |
+| `untenanted` | `allow` | Le applicazioni che nessun tenant elenca: `allow` le rilascia come tenant `untenanted`, `reject` le rifiuta ([dettagli](../guida/tenant.md#il-tenant-e-necessario-per-rilasciare)). |
 
 ### `envconfig`
 
@@ -67,12 +68,12 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
 | `consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
 | `consul.datacenter` | | Datacenter Consul. |
-| `consul.key` | `manent/{application}/{artifact}/{environment}` | Modello della chiave KV. |
+| `consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | Modello della chiave KV. |
 | `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
+| `file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
 | `git.repository` | | Repository Git delle configurazioni (`https://`, `ssh://`, `git://`, `file://` o un percorso). Vedi [Repository Git](../integrazioni/git.md). |
 | `git.ref` | `refs/heads/main` | Ref di default. |
-| `git.path` | `{application}/{artifact}/{environment}.yml` | Modello del file nel repository. |
+| `git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | Modello del file nel repository. |
 | `git.allowed_refs` | `[]` | Altri ref (pattern con `*`) che `config.ref` può indicare; uno SHA deve essere raggiungibile da essi o da `git.ref`. |
 | `git.username`, `git.password_ref` | | Credenziali HTTPS (la password è un riferimento a un segreto). |
 | `git.ssh_key_ref`, `git.known_hosts` | | Chiave SSH (riferimento a un segreto) e file dei known hosts, obbligatori insieme. |
@@ -119,7 +120,7 @@ Vedi [Rollback](../guida/rollback.md).
 | `rbac.opa.cache` | `30s` | Per quanto si riusano i permessi di un'identità con `opa`. |
 | `rbac.opa.cache_size` | `10000` | Identità nella cache dei permessi. |
 | `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. |
-| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications`, `environments` (pattern con `*`), `artifacts`, `tenants` (selettore sul tenant proprietario) e `selector` (selettore sui tag dell'applicazione). |
+| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications` (pattern qualificati: `shop` solo untenanted, `payments/*`, `*/*` ogni [tenant](../guida/tenant.md#pattern-delle-applicazioni-qualificati)), `environments` (pattern con `*`), `artifacts`, `tenants` (selettore sul tenant proprietario) e `selector` (selettore sui tag dell'applicazione). |
 | `rbac.tenant_roles` | `{members: deployer, admins: admin}` | Ruoli impliciti di `members` e `admins` di un [tenant](../guida/tenant.md) sulle sue applicazioni. Mai `policy.*`. |
 | `rbac.selector_keys` | `[]` | Chiavi che il `selector` di binding e grant può leggere (vuoto: nessun selettore nei permessi). |
 | `rbac.cross_tenant_inventory` | `true` | Chi appartiene a un tenant legge l'inventario di tutti i tenant. |

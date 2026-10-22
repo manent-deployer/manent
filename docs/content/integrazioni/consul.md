@@ -9,7 +9,7 @@ The [environment configuration](../guida/configurazione-ambiente.md) of each app
 
 | Key | Content |
 |---|---|
-| `manent/<application>/<artifact>/<environment>` | Environment configuration, YAML or JSON. |
+| `manent/<tenant>/<application>/<artifact>/<environment>` | Environment configuration, YAML or JSON. |
 
 The template can be changed (`envconfig.consul.key`).
 
@@ -32,7 +32,7 @@ consul acl token create -description "manent workers and API" -policy-name manen
 Writers get their own, narrower policies, for example one per application owner:
 
 ```hcl title="shop-owners.hcl"
-key_prefix "manent/shop/" {
+key_prefix "manent/untenanted/shop/" {
   policy = "write"
 }
 ```
@@ -47,7 +47,7 @@ envconfig:
   consul:
     address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR or http://127.0.0.1:8500
     datacenter: ""
-    key: "manent/{application}/{artifact}/{environment}"
+    key: "manent/{tenant}/{application}/{artifact}/{environment}"
     token_file: /run/secrets/consul-token        # or CONSUL_HTTP_TOKEN
 ```
 
@@ -56,8 +56,8 @@ The ACL token is never written in `manent.yml`: it comes from `CONSUL_HTTP_TOKEN
 ## 4. Write a configuration
 
 ```sh
-consul kv put manent/shop/shop/prod @envconfig/shop/shop/prod.yml
-consul kv get -detailed manent/shop/shop/prod | grep ModifyIndex
+consul kv put manent/untenanted/shop/shop/prod @envconfig/untenanted/shop/shop/prod.yml
+consul kv get -detailed manent/untenanted/shop/shop/prod | grep ModifyIndex
 ```
 
 ```sh
@@ -65,7 +65,7 @@ manent validate -f deploy/prod.yml | jq .config
 ```
 
 ```json
-{"source": "consul:manent/shop/shop/prod", "revision": "4127", "targets": "6"}
+{"source": "consul:manent/untenanted/shop/shop/prod", "revision": "4127", "targets": "6"}
 ```
 
 `revision` is the key's `ModifyIndex`. The output of the `config` step of every deploy carries the same pair, so "which configuration did deploy X use?" has a precise answer.

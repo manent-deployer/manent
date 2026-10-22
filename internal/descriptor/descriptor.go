@@ -27,7 +27,12 @@ const APIVersion = "manent/v1"
 type Descriptor struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	// ID is optional: if set it is the idempotency key of the workflow.
-	ID          string      `json:"id,omitempty" yaml:"id,omitempty"`
+	ID string `json:"id,omitempty" yaml:"id,omitempty"`
+	// Tenant chooses among the tenants of the registry that list the application; required only
+	// when more than one does. It never assigns the application: the registry is authoritative.
+	// After submission it holds the resolved tenant ("untenanted" for an application no tenant
+	// lists): the release identity is tenant/application/artifact/environment.
+	Tenant      string      `json:"tenant,omitempty" yaml:"tenant,omitempty"`
 	Application string      `json:"application" yaml:"application"`
 	Environment string      `json:"environment" yaml:"environment"`
 	Artifact    Artifact    `json:"artifact" yaml:"artifact"`
@@ -327,6 +332,11 @@ func (d *Descriptor) Validate() error {
 	if d.APIVersion != APIVersion {
 		errs = append(errs, fmt.Errorf("apiVersion must be %q", APIVersion))
 	}
+	if d.Tenant != "" {
+		if err := ValidTenantName(d.Tenant); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if !validName(d.Application) {
 		errs = append(errs, fmt.Errorf("invalid application %q: %s", d.Application, nameRule))
 	}
@@ -529,7 +539,12 @@ func (d *Descriptor) ScheduleName() string {
 	if d.Schedule != nil && d.Schedule.Name != "" {
 		return d.Schedule.Name
 	}
-	return d.Application + "-" + d.Artifact.Name + "-" + d.Environment
+	name := d.Application + "-" + d.Artifact.Name + "-" + d.Environment
+	if d.Tenant != "" {
+		// Resolved at submission: two tenants can have applications with the same name.
+		name = d.Tenant + "-" + name
+	}
+	return name
 }
 
 // SecretRefByName returns the reference mapped to a logical name.

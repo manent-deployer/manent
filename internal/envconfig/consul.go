@@ -20,7 +20,7 @@ type ConsulProvider struct {
 	Token string
 	// Datacenter is optional.
 	Datacenter string
-	// KeyTemplate is the key template, with {application}, {artifact} and {environment}
+	// KeyTemplate is the key template, with {tenant}, {application}, {artifact} and {environment}
 	// placeholders.
 	KeyTemplate string
 	Client      *http.Client
@@ -35,8 +35,8 @@ type consulKV struct {
 
 // Get reads and decodes the key of the artifact in the application/environment; the revision
 // is the ModifyIndex.
-func (p *ConsulProvider) Get(ctx context.Context, application, artifact, environment string) (*Document, error) {
-	return readKey(p.KeyTemplate, application, artifact, environment, func(key string) (*Document, error) { return p.read(ctx, key) })
+func (p *ConsulProvider) Get(ctx context.Context, k Key) (*Document, error) {
+	return readKey(p.KeyTemplate, k, func(key string) (*Document, error) { return p.read(ctx, key) })
 }
 
 // read reads and decodes a Consul key.

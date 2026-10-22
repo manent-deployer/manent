@@ -50,12 +50,12 @@ func (s *provisionStep) deployOf(id string) descriptor.Deploy {
 // envProvider is an environment configuration provider with fixed documents per app/env.
 type envProvider map[string]envconfig.EnvConfig
 
-func (p envProvider) Get(_ context.Context, app, _, env string) (*envconfig.Document, error) {
-	c, ok := p[app+"/"+env]
+func (p envProvider) Get(_ context.Context, k envconfig.Key) (*envconfig.Document, error) {
+	c, ok := p[k.Application+"/"+k.Environment]
 	if !ok {
 		return nil, envconfig.ErrNotFound
 	}
-	return &envconfig.Document{Config: c, Source: "test/" + app + "/" + env}, nil
+	return &envconfig.Document{Config: c, Source: "test/" + k.Application + "/" + k.Environment}, nil
 }
 
 // exportEngine starts a worker with the provisioning step and, if given, the environment

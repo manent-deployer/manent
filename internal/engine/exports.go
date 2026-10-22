@@ -13,6 +13,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // attrExports is the workflow attribute with the exports of a successful deploy (JSON object):
@@ -137,7 +138,7 @@ func (e *Engine) applyImports(ctx context.Context, d descriptor.Descriptor, impo
 // (errImportPending); one ended without success, a dry-run or an environment without release
 // in service are permanent.
 func (e *Engine) readImport(ctx context.Context, d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
-	from, exports, err := e.readImportRaw(d, imp)
+	from, exports, err := e.readImportRaw(ctx, d, imp)
 	if err != nil || e.tenants == nil {
 		return from, exports, err
 	}
@@ -153,11 +154,7 @@ func (e *Engine) visibleExports(ctx context.Context, d descriptor.Descriptor, fr
 		return nil
 	}
 	producer := states[id]
-	mine := ""
-	if r := e.ownerRef(ctx, d.Application); r != nil {
-		mine = r.Name
-	}
-	if producer.Tenant == mine {
+	if producer.Tenant == tenantOf(&d) {
 		return exports
 	}
 	out := map[string]string{}
@@ -170,7 +167,7 @@ func (e *Engine) visibleExports(ctx context.Context, d descriptor.Descriptor, fr
 }
 
 // readImportRaw reads all the exports of an import, whatever the tenant.
-func (e *Engine) readImportRaw(d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
+func (e *Engine) readImportRaw(ctx context.Context, d descriptor.Descriptor, imp descriptor.Import) (string, map[string]string, error) {
 	if id := imp.Deployment; id != "" {
 		states, err := e.states([]string{id})
 		if err != nil {
@@ -191,7 +188,18 @@ func (e *Engine) readImportRaw(d descriptor.Descriptor, imp descriptor.Import) (
 		}
 	}
 	app, env, artifact := imp.Current.Application, cmp.Or(imp.Current.Environment, d.Environment), imp.Current.Artifact
-	entries, err := e.inventory(InventoryFilter{Application: app, Environment: env, Artifact: artifact})
+	// The importing deploy's tenant if it lists the application, otherwise the only owner.
+	chosen := imp.Current.Tenant
+	if mine := tenantOf(&d); chosen == "" && mine != tenant.Untenanted {
+		if t, err := tenant.Find(ctx, e.tenantsOrEmpty(), mine); err == nil && t.Owns(app) {
+			chosen = mine
+		}
+	}
+	owner, err := e.owner(ctx, app, chosen)
+	if err != nil {
+		return "", nil, err
+	}
+	entries, err := e.inventory(InventoryFilter{Tenant: owner.Name, Application: app, Environment: env, Artifact: artifact})
 	if err != nil {
 		return "", nil, err
 	}

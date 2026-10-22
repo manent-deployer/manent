@@ -10,7 +10,7 @@ import data.manent.lib.authz
 
 grants := authz.bindings | team | owners | oncall
 
-team contains {"name": "team-uc25", "role": "deployer", "applications": ["uc25-*"], "environments": ["*"]} if {
+team contains {"name": "team-uc25", "role": "deployer", "applications": ["uc25/uc25-*"], "environments": ["*"]} if {
 	"team-uc25" in input.identity.groups
 }
 
@@ -20,7 +20,7 @@ owners contains g if {
 	g := {
 		"name": sprintf("owner %s", [group]),
 		"role": "deployer",
-		"applications": ["uc24-*"],
+		"applications": ["*/uc24-*"],
 		"environments": ["*"],
 		"tenants": sprintf("owner=%s", [group]),
 	}
@@ -32,7 +32,7 @@ oncall contains g if {
 	g := {
 		"name": sprintf("oncall %s", [shift.subject]),
 		"actions": ["deployment.read", "deployment.cancel"],
-		"applications": ["*"],
+		"applications": ["*/*"],
 		"environments": ["prod"],
 		"until": shift.until,
 	}

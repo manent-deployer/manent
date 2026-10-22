@@ -55,7 +55,7 @@ The policy receives an **input** describing the deploy and returns a **decision*
 | `targets`, `plugin`, `rollout` | From the effective deploy (environment configuration merged), when it is known. |
 | `current` | Release in service in the environment; absent on the first release. |
 | `freezes.active` | Windows active at `now`, computed by manent. |
-| `tenant`, `application_tags` | The [tenant](tenant.md) that owns the application (`name`, `tags`) and the tags of the application in the registry; absent without registry. Schema 3 (schema 2 had the tenant as a customer and `tenants_run`). |
+| `tenant`, `application_tags` | The [tenant](tenant.md) of the release (`name`, `tags`; `untenanted` for the applications no tenant lists, also without registry) and the tags of the application in the registry. Schema 3 (schema 2 had the tenant as a customer and `tenants_run`). |
 
 The input contains no secrets and no plugin parameters. The schema is versioned (`schema`): fields are only added.
 
@@ -139,6 +139,7 @@ decision := {
 | `local_time(t, tz)` | `year`, `month`, `day`, `weekday` (0 = Sunday), `hour`, `minute` of an instant in a time zone. |
 | `business_hours(t, tz)` | 9:00–18:00, Monday to Friday. |
 | `tenant_matches(selector, tenant)` | A tenant selector on `input.tenant` (`{}` without tenant: never). |
+| `app_match_any(patterns, input)` | Qualified application patterns (`payments/*`, `*/*`; without prefix only untenanted) on the tenant and application of the input, as the rules of `manent.yml`. |
 | `app_matches(selector, input)` | An application selector on the application of the input: its tags, `application`, `tenant`, `tenant.<tag>`. |
 | `duration_ns(d)` | A duration (`"72h"`) in nanoseconds. |
 

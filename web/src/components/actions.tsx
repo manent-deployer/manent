@@ -31,7 +31,7 @@ export function DecisionButtons({ dep }: { dep: Status }) {
   const { t } = useI18n();
   const me = useMe();
   const [open, setOpen] = useState<"approve" | "reject" | null>(null);
-  if (dep.state !== "AWAITING_APPROVAL" || !can(me.data, "deployment.approve", dep.application, dep.environment)) return null;
+  if (dep.state !== "AWAITING_APPROVAL" || !can(me.data, "deployment.approve", dep.application, dep.environment, dep.tenant)) return null;
   const self = me.data?.auth_enabled && dep.requested_by === me.data.subject && !dep.approval?.allow_self && !dep.rollout?.approval?.allow_self;
   return (
     <>
@@ -137,7 +137,7 @@ export function CancelButton({ dep }: { dep: Status }) {
     },
     onError: (e) => toast("error", t("actions.failed", { message: errMessage(e) })),
   });
-  if (TERMINAL.has(dep.state) || !can(me.data, "deployment.cancel", dep.application, dep.environment)) return null;
+  if (TERMINAL.has(dep.state) || !can(me.data, "deployment.cancel", dep.application, dep.environment, dep.tenant)) return null;
   return (
     <>
       <Button variant="danger" icon={CircleSlash} onClick={() => setOpen(true)}>
@@ -222,12 +222,14 @@ export function PromoteDialog({
   application,
   artifact,
   from,
+  tenant,
   environments,
   onClose,
 }: {
   application: string;
   artifact?: string;
   from: string;
+  tenant?: string;
   environments: string[];
   onClose: () => void;
 }) {
@@ -240,13 +242,13 @@ export function PromoteDialog({
   // Suggested environments (the inventory's), but a new one can be typed: the first release to
   // an environment has no inventory row yet.
   const suggestions = environments.filter((e) => e !== from);
-  const [to, setTo] = useState(suggestions.find((e) => can(me.data, "deployment.submit", application, e)) ?? "");
+  const [to, setTo] = useState(suggestions.find((e) => can(me.data, "deployment.submit", application, e, tenant)) ?? "");
   const target = to.trim();
-  const allowed = target !== "" && target !== from && can(me.data, "deployment.submit", application, target);
+  const allowed = target !== "" && target !== from && can(me.data, "deployment.submit", application, target, tenant);
   const [override, setOverride] = useState("");
   const { dry, run, reset } = useDryRun();
-  const canOverride = can(me.data, "deployment.freeze-override", application, to);
-  const body = (dryRun: boolean) => ({ application, artifact: artifact || undefined, from, to: target, dry_run: dryRun || undefined, freeze_override: override.trim() || undefined });
+  const canOverride = can(me.data, "deployment.freeze-override", application, to, tenant);
+  const body = (dryRun: boolean) => ({ application, artifact: artifact || undefined, from, to: target, tenant: tenant || undefined, dry_run: dryRun || undefined, freeze_override: override.trim() || undefined });
   const m = useMutation({
     mutationFn: async () => unwrap(await api.POST("/api/v1/promotions", { body: body(false) })),
     onSuccess: (sub) => {
@@ -331,11 +333,13 @@ export function RollbackDialog({
   application,
   artifact,
   environment,
+  tenant,
   onClose,
 }: {
   application: string;
   artifact?: string;
   environment: string;
+  tenant?: string;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -347,11 +351,12 @@ export function RollbackDialog({
   const [version, setVersion] = useState("");
   const [override, setOverride] = useState("");
   const { dry, run, reset } = useDryRun();
-  const canOverride = can(me.data, "deployment.freeze-override", application, environment);
+  const canOverride = can(me.data, "deployment.freeze-override", application, environment, tenant);
   const body = (dryRun: boolean) => ({
     application,
     artifact: artifact || undefined,
     environment,
+    tenant: tenant || undefined,
     version: version.trim() || undefined,
     dry_run: dryRun || undefined,
     freeze_override: override.trim() || undefined,

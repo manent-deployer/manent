@@ -146,6 +146,7 @@ type WorkerTask struct {
 	// Kind is deploy, pass (rollout pass in a region), gate, approval, schedule, after
 	// (dependency wait) or release.
 	Kind        string     `json:"kind"`
+	Tenant      string     `json:"tenant,omitempty"`
 	Application string     `json:"application,omitempty"`
 	Environment string     `json:"environment,omitempty"`
 	Region      string     `json:"region,omitempty"`

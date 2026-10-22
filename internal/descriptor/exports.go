@@ -45,9 +45,12 @@ type Import struct {
 	Current *ImportCurrent `json:"current,omitempty" yaml:"current,omitempty"`
 }
 
-// ImportCurrent identifies the release in service to read the exports from. The tenant is the
-// importing deploy's.
+// ImportCurrent identifies the release in service to read the exports from.
 type ImportCurrent struct {
+	// Tenant chooses among the tenants that list the application (like the descriptor's
+	// tenant); default the importing deploy's tenant if it lists the application, otherwise the
+	// only one that does.
+	Tenant      string `json:"tenant,omitempty" yaml:"tenant,omitempty"`
 	Application string `json:"application" yaml:"application"`
 	// Environment defaults to the importing deploy's: a promotion then reads the exports of
 	// the target environment.
@@ -251,6 +254,8 @@ func ValidateImports(imports map[string]Import, targetsFrom []ExportRef, paramsF
 			}
 			if !validName(c.Application) || (c.Environment != "" && !validName(c.Environment)) || (c.Artifact != "" && !validName(c.Artifact)) {
 				errs = append(errs, fmt.Errorf("imports.%s.current: invalid application, environment or artifact", name))
+			} else if c.Tenant != "" && ValidTenantName(c.Tenant) != nil {
+				errs = append(errs, fmt.Errorf("imports.%s.current: invalid tenant %q", name, c.Tenant))
 			} else if c.Application == application && env == environment && (c.Artifact == "" || c.Artifact == artifact) {
 				errs = append(errs, fmt.Errorf("imports.%s.current: a deploy cannot import its own release in service", name))
 			}

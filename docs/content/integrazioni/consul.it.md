@@ -9,7 +9,7 @@ La [configurazione di ambiente](../guida/configurazione-ambiente.md) di ogni app
 
 | Chiave | Contenuto |
 |---|---|
-| `manent/<applicazione>/<artefatto>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
+| `manent/<tenant>/<applicazione>/<artefatto>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
 
 Il modello si può cambiare (`envconfig.consul.key`).
 
@@ -32,7 +32,7 @@ consul acl token create -description "manent workers and API" -policy-name manen
 Chi scrive riceve policy proprie e più ristrette, per esempio una per responsabile di applicazione:
 
 ```hcl title="shop-owners.hcl"
-key_prefix "manent/shop/" {
+key_prefix "manent/untenanted/shop/" {
   policy = "write"
 }
 ```
@@ -47,7 +47,7 @@ envconfig:
   consul:
     address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR o http://127.0.0.1:8500
     datacenter: ""
-    key: "manent/{application}/{artifact}/{environment}"
+    key: "manent/{tenant}/{application}/{artifact}/{environment}"
     token_file: /run/secrets/consul-token        # oppure CONSUL_HTTP_TOKEN
 ```
 
@@ -56,8 +56,8 @@ Il token ACL non si scrive mai in `manent.yml`: arriva da `CONSUL_HTTP_TOKEN` o 
 ## 4. Scrivi una configurazione
 
 ```sh
-consul kv put manent/shop/shop/prod @envconfig/shop/shop/prod.yml
-consul kv get -detailed manent/shop/shop/prod | grep ModifyIndex
+consul kv put manent/untenanted/shop/shop/prod @envconfig/untenanted/shop/shop/prod.yml
+consul kv get -detailed manent/untenanted/shop/shop/prod | grep ModifyIndex
 ```
 
 ```sh
@@ -65,7 +65,7 @@ manent validate -f deploy/prod.yml | jq .config
 ```
 
 ```json
-{"source": "consul:manent/shop/shop/prod", "revision": "4127", "targets": "6"}
+{"source": "consul:manent/untenanted/shop/shop/prod", "revision": "4127", "targets": "6"}
 ```
 
 `revision` è il `ModifyIndex` della chiave. L'output dello step `config` di ogni deploy riporta la stessa coppia, quindi alla domanda "quale configurazione ha usato il deploy X?" c'è una risposta precisa.

@@ -738,6 +738,7 @@ components:
       properties:
         apiVersion: {type: string, examples: [manent/v1]}
         id: {type: string}
+        tenant: {type: string, description: "Tenant dell'applicazione: sceglie tra i tenant che la elencano, obbligatorio solo se più di uno; untenanted per le applicazioni senza tenant"}
         application: {type: string}
         environment: {type: string}
         dryRun: {type: boolean}
@@ -774,6 +775,7 @@ components:
           type: object
           required: [application]
           properties:
+            tenant: {type: string}
             application: {type: string}
             environment: {type: string, description: Default l'ambiente del deploy che importa}
             artifact: {type: string, description: "Artefatto dell'applicazione; obbligatorio se l'ambiente ne ha più di uno"}
@@ -987,6 +989,7 @@ components:
             properties:
               name: {type: string}
               deployment_id: {type: string}
+              tenant: {type: string}
               application: {type: string}
               artifact: {type: string}
               environment: {type: string}
@@ -1059,6 +1062,7 @@ components:
         id: {type: string}
         deployment_id: {type: string}
         kind: {type: string, enum: [deploy, pass, gate, approval, schedule, after, release]}
+        tenant: {type: string}
         application: {type: string}
         environment: {type: string}
         region: {type: string}
@@ -1132,6 +1136,7 @@ components:
       type: object
       required: [application, environment, config]
       properties:
+        tenant: {type: string}
         application: {type: string}
         artifact: {type: string, description: "Artefatto a cui si riferisce la configurazione (template con {artifact})"}
         environment: {type: string}
@@ -1321,6 +1326,7 @@ components:
       required: [deployment, application, environment, version, created_at, before, after]
       properties:
         deployment: {type: string}
+        tenant: {type: string}
         application: {type: string}
         environment: {type: string}
         version: {type: string}
@@ -1343,6 +1349,7 @@ components:
         cron: {type: string}
         timezone: {type: string}
         status: {type: string}
+        tenant: {type: string}
         application: {type: string}
         environment: {type: string}
         requested_by: {type: string}
@@ -1381,6 +1388,7 @@ components:
         - type: object
           required: [application, from, to]
           properties:
+            tenant: {type: string}
             application: {type: string}
             from: {type: string}
             to: {type: string}
@@ -1394,6 +1402,7 @@ components:
         - type: object
           required: [application, environment]
           properties:
+            tenant: {type: string}
             application: {type: string}
             environment: {type: string}
             artifact: {type: string, description: "Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno"}
@@ -1425,6 +1434,7 @@ components:
       required: [action]
       properties:
         action: {type: string}
+        tenant: {type: string}
         application: {type: string}
         environment: {type: string}
         artifact: {type: string}

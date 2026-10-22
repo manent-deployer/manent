@@ -57,7 +57,7 @@ func (g Grant) grants(a Action, application, artifact, environment string, t *te
 	if !slices.Contains(g.Actions, All) && !slices.Contains(g.Actions, a) {
 		return false
 	}
-	return glob.Any(g.Applications, application) && glob.Any(g.Environments, environment) && tenant.Matches(g.Tenants, t) &&
+	return tenant.AnyApp(g.Applications, tenant.NameOf(t), application) && glob.Any(g.Environments, environment) && tenant.Matches(g.Tenants, t) &&
 		ArtifactMatches(g.Artifacts, artifact) && tenant.MatchesApp(g.Selector, t)
 }
 
@@ -168,7 +168,12 @@ func CheckGrant(g Grant, roles map[string][]Action) error {
 		}
 	}
 	if len(g.Applications) == 0 || len(g.Environments) == 0 {
-		return fmt.Errorf("grant %q: applications and environments are required (\"*\" for all)", g.Name)
+		return fmt.Errorf("grant %q: applications and environments are required (\"*/*\" for all)", g.Name)
+	}
+	for _, a := range g.Applications {
+		if err := tenant.CheckAppPattern(a); err != nil {
+			return fmt.Errorf("grant %q: applications: %w", g.Name, err)
+		}
 	}
 	if err := tenant.CheckSelector(g.Tenants); err != nil {
 		return fmt.Errorf("grant %q: tenants: %w", g.Name, err)

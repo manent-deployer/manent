@@ -105,6 +105,9 @@ type ServiceOptions struct {
 	// Tenants, if set, is the tenant registry (cached): tags for governance and permissions,
 	// selection of the multi-tenant releases.
 	Tenants tenant.Directory
+	// RejectUntenanted refuses the applications no tenant lists (tenants.untenanted: reject);
+	// by default they are deployed as the reserved tenant Untenanted.
+	RejectUntenanted bool
 	// Notifications, if set, chooses the chat notification destinations.
 	Notifications NotificationRouter
 	// Health, if set, checks that rollout health checks can run.
@@ -128,7 +131,7 @@ type ServiceOptions struct {
 
 // NotificationRouter chooses the notification destinations of a deploy.
 type NotificationRouter interface {
-	Match(application, environment string, dryRun bool) []string
+	Match(tenantName, application, environment string, dryRun bool) []string
 }
 
 // SourceChecker checks that an artifact source is allowed.
@@ -139,25 +142,27 @@ type SourceChecker interface {
 // Engine implements Service using only the DBOS client APIs: it enqueues and queries
 // workflows but does not run them (Workers do).
 type Engine struct {
-	client      dbos.Client
-	queueName   string
-	planner     pipeline.Planner
-	callbacks   callback.Policy
-	rollback    RollbackPolicy
-	sources     SourceChecker
-	resolver    ConfigResolver
-	governance  Governance
-	policies    PolicyAdmin
-	tenants     tenant.Directory
-	notify      NotificationRouter
-	health      rollout.Checker
-	traffic     TrafficOps
-	executors   ExecutorLister
-	targets     TargetStateReader
-	staleAfter  time.Duration
-	queueLimits QueueOptions
-	logger      *slog.Logger
-	now         func() time.Time
+	client     dbos.Client
+	queueName  string
+	planner    pipeline.Planner
+	callbacks  callback.Policy
+	rollback   RollbackPolicy
+	sources    SourceChecker
+	resolver   ConfigResolver
+	governance Governance
+	policies   PolicyAdmin
+	tenants    tenant.Directory
+	// rejectUntenanted refuses the applications no tenant lists.
+	rejectUntenanted bool
+	notify           NotificationRouter
+	health           rollout.Checker
+	traffic          TrafficOps
+	executors        ExecutorLister
+	targets          TargetStateReader
+	staleAfter       time.Duration
+	queueLimits      QueueOptions
+	logger           *slog.Logger
+	now              func() time.Time
 	// inv is the process inventory, updated incrementally.
 	inv inventoryCache
 }
@@ -168,25 +173,26 @@ func NewService(opts ServiceOptions) *Engine {
 		opts.Now = time.Now
 	}
 	return &Engine{
-		client:      opts.Client,
-		queueName:   opts.QueueName,
-		planner:     opts.Planner,
-		callbacks:   opts.CallbackPolicy,
-		rollback:    opts.Rollback,
-		sources:     opts.Sources,
-		resolver:    opts.Resolver,
-		governance:  opts.Governance,
-		policies:    opts.Policies,
-		tenants:     opts.Tenants,
-		notify:      opts.Notifications,
-		health:      opts.Health,
-		traffic:     opts.Traffic,
-		executors:   opts.Executors,
-		targets:     opts.TargetStates,
-		staleAfter:  cmp.Or(opts.StaleAfter, time.Minute),
-		queueLimits: opts.QueueLimits,
-		logger:      opts.Logger.With("component", "engine"),
-		now:         opts.Now,
+		client:           opts.Client,
+		queueName:        opts.QueueName,
+		planner:          opts.Planner,
+		callbacks:        opts.CallbackPolicy,
+		rollback:         opts.Rollback,
+		sources:          opts.Sources,
+		resolver:         opts.Resolver,
+		governance:       opts.Governance,
+		policies:         opts.Policies,
+		tenants:          opts.Tenants,
+		rejectUntenanted: opts.RejectUntenanted,
+		notify:           opts.Notifications,
+		health:           opts.Health,
+		traffic:          opts.Traffic,
+		executors:        opts.Executors,
+		targets:          opts.TargetStates,
+		staleAfter:       cmp.Or(opts.StaleAfter, time.Minute),
+		queueLimits:      opts.QueueLimits,
+		logger:           opts.Logger.With("component", "engine"),
+		now:              opts.Now,
 	}
 }
 
@@ -234,13 +240,16 @@ func (e *Engine) submit(ctx context.Context, d *descriptor.Descriptor, meta subm
 // prepare builds the request of a deploy: plan, checks (unless prechecked), governance
 // decision and notification destinations. Nothing is enqueued.
 func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta submitMeta) (*Request, error) {
-	owner, err := e.owner(ctx, d.Application)
+	owner, err := e.owner(ctx, d.Application, d.Tenant)
 	if errors.Is(err, pipeline.ErrPermanent) {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	if err != nil {
 		return nil, err
 	}
+	// The resolved tenant becomes part of the descriptor: the release identity, the
+	// environment configuration key and the descriptor of later promotions and rollbacks.
+	d.Tenant = owner.Name
 	plan, err := e.planner.Plan(d)
 	if err != nil {
 		return nil, err
@@ -260,7 +269,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	if p != nil {
 		req.RequestedGroups = p.Groups
 	}
-	if owner != nil {
+	{
 		req.Tenant, req.Queue, req.Limits = owner.Ref(d.Application), owner.Queue, limitsOf(owner)
 	}
 	if err := e.checkOwnership(ctx, d, req.Tenant); err != nil {
@@ -275,7 +284,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 		}
 	}
 	if e.notify != nil {
-		req.Notify = e.notify.Match(d.Application, d.Environment, d.DryRun)
+		req.Notify = e.notify.Match(tenantOf(d), d.Application, d.Environment, d.DryRun)
 	}
 	return &req, nil
 }
@@ -445,11 +454,15 @@ func (e *Engine) exampleDescriptor(ctx context.Context, c EnvironmentCheck) (*de
 		}
 		return &d, nil
 	}
-	artifact, err := e.resolveArtifact(c.Application, c.Environment, c.Artifact)
+	owner, err := e.owner(ctx, c.Application, c.Tenant)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	artifact, err := e.resolveArtifact(owner.Name, c.Application, c.Environment, c.Artifact)
 	if err != nil {
 		return nil, err
 	}
-	inv, err := e.Inventory(ctx, InventoryFilter{Application: c.Application, Environment: c.Environment, Artifact: artifact})
+	inv, err := e.Inventory(ctx, InventoryFilter{Tenant: owner.Name, Application: c.Application, Environment: c.Environment, Artifact: artifact})
 	if err != nil {
 		return nil, err
 	}
@@ -480,6 +493,15 @@ func (e *Engine) inspect(ctx context.Context, d *descriptor.Descriptor) (*Valida
 // inspectWith is inspect with the given environment configuration resolution (nil: none).
 func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 	resolve func(context.Context, descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error)) (*Validation, *descriptor.Descriptor, error) {
+	// The tenant is part of the identity and of the environment configuration key.
+	owner, err := e.owner(ctx, d.Application, d.Tenant)
+	switch {
+	case errors.Is(err, pipeline.ErrPermanent):
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	case err != nil:
+		return nil, nil, err
+	}
+	d.Tenant = owner.Name
 	for _, cb := range d.Callbacks {
 		if err := e.callbacks.Check(cb.URL); err != nil {
 			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -669,9 +691,7 @@ func attributes(req Request) map[string]any {
 	if req.Release != "" {
 		a[attrRelease] = req.Release
 	}
-	if req.Tenant != nil {
-		a[attrTenant] = req.Tenant.Name
-	}
+	a[attrTenant] = tenantOf(&d)
 	if req.Policy != nil {
 		a[attrPolicy], a[attrPolicyRule] = req.Policy.Revision, req.Policy.Rule
 	}
@@ -775,7 +795,7 @@ func (e *Engine) List(ctx context.Context, f ListFilter) ([]Status, error) {
 			return nil, err
 		}
 		match := f.Match
-		f.Match = func(s Status) bool { return sel(s.Application) && (match == nil || match(s)) }
+		f.Match = func(s Status) bool { return sel(s.Tenant, s.Application) && (match == nil || match(s)) }
 	}
 	var prefix []string
 	if f.Schedule != "" {
@@ -1001,7 +1021,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		s.Application, _, _ = strings.Cut(s.Application, artifactSep)
 	}
 	s.Release = attr(st, attrRelease)
-	s.Tenant = attr(st, attrTenant)
+	s.Tenant = cmp.Or(attr(st, attrTenant), tenant.Untenanted)
 	if rev := attr(st, attrPolicy); rev != "" {
 		s.Policy = &governance.Snapshot{Revision: rev, Rule: attr(st, attrPolicyRule)}
 	}
@@ -1051,9 +1071,10 @@ func workflowID(d *descriptor.Descriptor) string {
 	return d.ID
 }
 
-// partitionKey is the queue partition key: deploys of the same application artifact in an
-// environment obey the environment_concurrency limit across all workers. The first segment is
-// "<application>+<artifact>": '+' is not allowed in names, so the key stays unambiguous.
+// partitionKey is the queue partition key: deploys of the same release (tenant, application,
+// artifact, environment) obey the environment_concurrency limit across all workers. The first
+// segment is "<application>+<artifact>+<tenant>": '+' is not allowed in names, so the key stays
+// unambiguous and the application is its first part.
 func partitionKey(d *descriptor.Descriptor) string {
-	return d.Application + artifactSep + d.Artifact.Name + "/" + d.Environment
+	return d.Application + artifactSep + d.Artifact.Name + artifactSep + tenantOf(d) + "/" + d.Environment
 }

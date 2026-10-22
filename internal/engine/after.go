@@ -61,10 +61,7 @@ func (e *Engine) checkAfter(ctx context.Context, d *descriptor.Descriptor) (bool
 		return false, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	done := true
-	mine := ""
-	if r := e.ownerRef(ctx, d.Application); r != nil {
-		mine = r.Name
-	}
+	mine := tenantOf(d)
 	imported := map[string]bool{}
 	for _, imp := range d.Imports {
 		imported[imp.Deployment] = true

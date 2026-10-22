@@ -11,7 +11,7 @@ default_timeout := "72h"
 
 matching contains i if {
 	some i, r in data.manent.rules
-	lib.match_any(r.applications, input.application)
+	lib.app_match_any(r.applications, input)
 	lib.match_any(r.environments, input.environment)
 	tenant_ok(r)
 	artifact_ok(r)

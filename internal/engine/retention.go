@@ -124,7 +124,7 @@ func (a *Admin) releasesToKeep(keep int) (map[string]bool, error) {
 			if s.DryRun || s.Application == "" {
 				continue
 			}
-			k := s.Application + "/" + s.Artifact + "/" + s.Environment
+			k := releaseKey(s.Tenant, s.Application, s.Artifact, s.Environment)
 			if perEnv[k] < keep {
 				perEnv[k]++
 				ids[w.ID], ids[w.ID+approvalSuffix], ids[w.ID+afterSuffix] = true, true, true

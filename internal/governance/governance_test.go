@@ -196,9 +196,9 @@ func TestApprovatori(t *testing.T) {
 func TestRegoleEFreezePerTenant(t *testing.T) {
 	now := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)
 	p, err := New([]Rule{
-		{Name: "gold", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "tier=gold", Approvals: Approvals{Required: 2}},
-		{Name: "prod", Applications: []string{"*"}, Environments: []string{"prod"}, Approvals: Approvals{Required: 1}},
-	}, []Window{{Name: "acme-close", Applications: []string{"*"}, Environments: []string{"prod"}, Tenants: "name=acme", From: now.Add(-time.Hour), To: now.Add(time.Hour)}})
+		{Name: "gold", Applications: []string{"*/*"}, Environments: []string{"prod"}, Tenants: "tier=gold", Approvals: Approvals{Required: 2}},
+		{Name: "prod", Applications: []string{"*/*"}, Environments: []string{"prod"}, Approvals: Approvals{Required: 1}},
+	}, []Window{{Name: "acme-close", Applications: []string{"*/*"}, Environments: []string{"prod"}, Tenants: "name=acme", From: now.Add(-time.Hour), To: now.Add(time.Hour)}})
 	if err != nil {
 		t.Fatal(err)
 	}

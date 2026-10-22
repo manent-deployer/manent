@@ -19,6 +19,7 @@ import (
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/service"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 type mapSecrets map[string]string
@@ -102,13 +103,13 @@ func message(event string) Message {
 
 func TestDestinazioni(t *testing.T) {
 	n, _, _ := setup(t)
-	if got := n.Match("shop", "prod", false); !slices.Equal(got, []string{"prod", "audit", "teams"}) {
+	if got := n.Match(tenant.Untenanted, "shop", "prod", false); !slices.Equal(got, []string{"prod", "audit", "teams"}) {
 		t.Errorf("shop/prod: %v", got)
 	}
-	if got := n.Match("shop", "test", true); !slices.Equal(got, []string{"audit"}) {
+	if got := n.Match(tenant.Untenanted, "shop", "test", true); !slices.Equal(got, []string{"audit"}) {
 		t.Errorf("dry-run: %v", got)
 	}
-	if got := n.Match("cart", "prod-eu", false); !slices.Equal(got, []string{"teams"}) {
+	if got := n.Match(tenant.Untenanted, "cart", "prod-eu", false); !slices.Equal(got, []string{"teams"}) {
 		t.Errorf("cart/prod-eu: %v", got)
 	}
 	if !n.Wants("prod", EventApprovalRequested) || n.Wants("audit", EventApprovalRequested) || n.Wants("teams", EventStarted) || n.Wants("rimossa", EventStarted) {

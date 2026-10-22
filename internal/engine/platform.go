@@ -183,11 +183,11 @@ func workerInfo(x ExecutorStatus) *WorkerInfo {
 
 // toTask describes a running workflow. Rollout passes and probes have no attributes:
 // application, environment and region are read from the partition key
-// ("<application>/<environment>/<region>[/gate]").
+// ("<application>+<artifact>+<tenant>/<environment>/<region>[/gate]").
 func toTask(w dbos.WorkflowStatus) WorkerTask {
 	t := WorkerTask{
 		ID: w.ID, DeploymentID: w.ID, Queue: w.QueueName, Attempts: w.Attempts,
-		Application: attr(w, attrApplication), Environment: attr(w, attrEnvironment), Version: attr(w, attrVersion),
+		Tenant: attr(w, attrTenant), Application: attr(w, attrApplication), Environment: attr(w, attrEnvironment), Version: attr(w, attrVersion),
 	}
 	if !w.StartedAt.IsZero() {
 		at := w.StartedAt.UTC()
@@ -196,8 +196,12 @@ func toTask(w dbos.WorkflowStatus) WorkerTask {
 	parts := strings.Split(w.QueuePartitionKey, "/")
 	if t.Application == "" && len(parts) >= 2 {
 		t.Application, t.Environment = parts[0], parts[1]
-		// Artifact identity: "<application>+<artifact>".
-		t.Application, _, _ = strings.Cut(t.Application, artifactSep)
+		// Release identity: "<application>+<artifact>+<tenant>".
+		seg := strings.Split(t.Application, artifactSep)
+		t.Application = seg[0]
+		if len(seg) == 3 {
+			t.Tenant = seg[2]
+		}
 	}
 	if len(parts) >= 3 {
 		t.Region = parts[2]

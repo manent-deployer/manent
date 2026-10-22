@@ -61,6 +61,9 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 			"version=" + d.Artifact.Version,
 			fmt.Sprintf("dry_run=%t", d.DryRun),
 		}
+		if st.Tenant != "" {
+			lines = append(lines, "tenant="+st.Tenant)
+		}
 		if st.ConfigRevision != "" {
 			lines = append(lines, "config_revision="+st.ConfigRevision)
 		}
@@ -119,6 +122,7 @@ func appendFile(path, text string) error {
 // applied (a change in the repository of the configurations, a Terraform plan).
 type EnvValidateCmd struct {
 	global      *GlobalOptions
+	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione, obbligatorio se più tenant hanno un'applicazione con questo nome"`
 	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
 	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
 	Artifact    string `short:"A" long:"artifact" description:"artefatto a cui si riferisce la configurazione (template con {artifact})"`
@@ -132,7 +136,7 @@ func (c *EnvValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	check := service.EnvironmentCheck{Application: c.Application, Artifact: c.Artifact, Environment: c.Environment, Config: string(raw)}
+	check := service.EnvironmentCheck{Tenant: c.Tenant, Application: c.Application, Artifact: c.Artifact, Environment: c.Environment, Config: string(raw)}
 	if c.Descriptor != "" {
 		if check.Descriptor, err = descriptor.LoadYAMLFile(c.Descriptor); err != nil {
 			return err

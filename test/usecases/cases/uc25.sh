@@ -38,7 +38,7 @@ sim=$(as pol manent policy access "$rev" --subject oidc:carol --group team-uc25 
 expect_eq "il team guadagna uc25 e i tenant di cui è proprietario" "$(printf '%s' "$sim" | jq -r '[.gained[].name] | sort | join(",")')" "owner team-uc25,team-uc25"
 expect_eq "carol in produzione sarebbe negata..." "$(printf '%s' "$sim" | jq -r '"\(.check.allowed) \(.check.granted_by)"')" "false team-uc25"
 expect_match "...con il motivo del divieto" "$(printf '%s' "$sim" | jq -r '.check.denied[0]')" "contractors cannot change production"
-sim=$(as pol manent policy access "$rev" --subject oidc:dave --group team-uc25 --action deployment.submit -a uc24-shop -e prod --json)
+sim=$(as pol manent policy access "$rev" --subject oidc:dave --group team-uc25 --action deployment.submit -t payments -a uc24-shop -e prod --json)
 expect_eq "il team rilascia uc24-shop (tag owner del tenant payments)" "$(printf '%s' "$sim" | jq -r .check.granted_by)" "owner team-uc25"
 sim=$(as pol manent policy access "$rev" --subject oidc:dave --group team-uc25 --action deployment.submit -a uc24-legacy -e prod --json)
 expect_eq "ma non uc24-legacy (tenant legacy, senza il tag)" "$(printf '%s' "$sim" | jq -r .check.allowed)" false

@@ -55,7 +55,7 @@ La policy riceve un **input** che descrive il deploy e restituisce una **decisio
 | `targets`, `plugin`, `rollout` | Dal deploy effettivo (configurazione di ambiente fusa), quando è noto. |
 | `current` | Release in esercizio nell'ambiente; assente al primo rilascio. |
 | `freezes.active` | Finestre attive a `now`, calcolate da manent. |
-| `tenant`, `application_tags` | Il [tenant](tenant.md) proprietario dell'applicazione (`name`, `tags`) e i tag dell'applicazione nel registro; assenti senza registro. Schema 3 (lo schema 2 aveva il tenant come cliente e `tenants_run`). |
+| `tenant`, `application_tags` | Il [tenant](tenant.md) della release (`name`, `tags`; `untenanted` per le applicazioni che nessun tenant elenca, anche senza registro) e i tag dell'applicazione nel registro. Schema 3 (lo schema 2 aveva il tenant come cliente e `tenants_run`). |
 
 L'input non contiene segreti né parametri dei plugin. Lo schema è versionato (`schema`): i campi si aggiungono e non vengono mai rinominati.
 
@@ -139,6 +139,7 @@ decision := {
 | `local_time(t, tz)` | `year`, `month`, `day`, `weekday` (0 = domenica), `hour`, `minute` di un istante in un fuso orario. |
 | `business_hours(t, tz)` | Dalle 9:00 alle 18:00, dal lunedì al venerdì. |
 | `tenant_matches(selettore, tenant)` | Un selettore di tenant su `input.tenant` (`{}` senza tenant: mai). |
+| `app_match_any(pattern, input)` | Pattern qualificati delle applicazioni (`payments/*`, `*/*`; senza prefisso solo untenanted) sul tenant e l'applicazione dell'input, come le regole di `manent.yml`. |
 | `app_matches(selettore, input)` | Un selettore sull'applicazione dell'input: i suoi tag, `application`, `tenant`, `tenant.<tag>`. |
 | `duration_ns(d)` | Una durata (`"72h"`) in nanosecondi. |
 

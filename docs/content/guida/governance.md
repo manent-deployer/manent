@@ -40,7 +40,7 @@ governance:
       timezone: Europe/Rome
 ```
 
-For each deploy **the first rule** (in order) whose `applications` and `environments` match applies (and, if set, `tenants` on the owner tenant, `artifacts` and `selector` on the [application tags](tenant.md)). Without rules there are no constraints. [Dry-runs](dry-run.md) are not subject to the rules, because they do not change environments.
+For each deploy **the first rule** (in order) whose `applications` (qualified patterns: `payments/*` for a [tenant](tenant.md#qualified-application-patterns), patterns without prefix only for the untenanted applications) and `environments` match applies (and, if set, `tenants` on the owner tenant, `artifacts` and `selector` on the [application tags](tenant.md)). Without rules there are no constraints. [Dry-runs](dry-run.md) are not subject to the rules, because they do not change environments.
 
 ## Inventory { #inventario }
 
@@ -211,7 +211,8 @@ During a freeze window real deploys on the application and environment are block
 | Key | Description |
 |---|---|
 | `name`, `reason` | Name and reason, reported in the error message. |
-| `applications`, `environments` | Patterns with `*`. |
+| `applications` | Qualified patterns with `*`: `shop` only untenanted, `payments/*` the applications of a tenant, `*/*` all ([details](tenant.md#qualified-application-patterns)). |
+| `environments` | Patterns with `*`. |
 | `regions` | Optional: limits the window to the passes of [wave rollouts](ondate.md#approvazioni-e-freeze) in these regions (patterns with `*`). A window with `regions` does not block enqueuing: the rollout pauses before the region and resumes once the window closes. |
 | `from`, `to` | Single window (RFC 3339). |
 | `cron`, `duration`, `timezone` | Recurring window: each occurrence starts at `cron` (5 fields) and lasts `duration`. |

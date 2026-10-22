@@ -121,7 +121,12 @@ func NewPolicy(roles map[string][]Action, bindings []Binding) (Policy, error) {
 			return p, fmt.Errorf("rbac.bindings[%d]: provide subjects or groups", i)
 		}
 		if len(b.Applications) == 0 || len(b.Environments) == 0 {
-			return p, fmt.Errorf("rbac.bindings[%d]: applications and environments are required (\"*\" for all)", i)
+			return p, fmt.Errorf("rbac.bindings[%d]: applications and environments are required (\"*/*\" for all)", i)
+		}
+		for _, a := range b.Applications {
+			if err := tenant.CheckAppPattern(a); err != nil {
+				return p, fmt.Errorf("rbac.bindings[%d].applications: %w", i, err)
+			}
 		}
 		if err := tenant.CheckSelector(b.Tenants); err != nil {
 			return p, fmt.Errorf("rbac.bindings[%d].tenants: %w", i, err)
@@ -161,7 +166,8 @@ func (pol Policy) Allowed(p *auth.Principal, a Action, application, environment 
 }
 
 // AllowedFor is Allowed for a deploy of an artifact ("" for the actions on the whole
-// environment) and of a tenant (nil: untenanted deploy). A binding with tenants applies only
+// environment) and of a tenant (nil: Untenanted). Application patterns are qualified
+// (tenant.AppMatches): "shop" covers only the Untenanted shop, "payments/shop" the one of payments. A binding with tenants applies only
 // to the matching tenants, one with artifacts only to those artifacts.
 func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, artifact, environment string, t *tenant.Ref) bool {
 	if pol.Disabled {
@@ -174,7 +180,7 @@ func (pol Policy) AllowedFor(p *auth.Principal, a Action, application, artifact,
 		if !pol.grants(b.Role, a) || !b.matches(p) {
 			continue
 		}
-		if glob.Any(b.Applications, application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) &&
+		if tenant.AnyApp(b.Applications, tenant.NameOf(t), application) && glob.Any(b.Environments, environment) && tenant.Matches(b.Tenants, t) &&
 			ArtifactMatches(b.Artifacts, artifact) && tenant.MatchesApp(b.Selector, t) {
 			return true
 		}

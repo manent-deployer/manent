@@ -1,5 +1,7 @@
-// Package tenant models the tenants: the internal teams that own the applications. Every
-// application belongs to exactly one tenant, which lists it with its tags. Tags of tenants and
+// Package tenant models the tenants: the internal teams that own the applications. A tenant
+// lists its applications with their tags; two tenants can list applications with the same name,
+// which are different releases (identity tenant/application/artifact/environment). An
+// application no tenant lists belongs to the reserved tenant Untenanted. Tags of tenants and
 // applications are matched by selectors (permissions, governance rules, freezes, listings).
 // It depends only on light packages: the client imports it too.
 package tenant
@@ -22,6 +24,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/glob"
 	"github.com/joeg-ita/manent/internal/labels"
 )
 
@@ -39,6 +42,17 @@ const (
 
 // ErrNotFound means a tenant, or an application owner, that does not exist in the registry.
 var ErrNotFound = errors.New("tenant not found")
+
+// Errors of Resolve.
+var (
+	// ErrAmbiguous means an application listed by several tenants, without a tenant chosen.
+	ErrAmbiguous = errors.New("ambiguous application")
+	// ErrDisabled means a disabled owner: its applications cannot be deployed.
+	ErrDisabled = errors.New("tenant disabled")
+)
+
+// Untenanted is the reserved tenant of the applications no tenant lists.
+const Untenanted = "untenanted"
 
 // ValidName checks a tenant name.
 func ValidName(name string) error { return descriptor.ValidTenantName(name) }
@@ -93,8 +107,7 @@ type Registry struct {
 }
 
 // ParseRegistry decodes the registry (YAML or JSON), rejecting unknown fields, and validates
-// it as a whole: every application belongs to exactly one tenant. It returns the tenants
-// ordered by name; an empty document is an empty registry.
+// every tenant. It returns the tenants ordered by name; an empty document is an empty registry.
 func ParseRegistry(data []byte) ([]Tenant, error) {
 	var r Registry
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -104,7 +117,6 @@ func ParseRegistry(data []byte) ([]Tenant, error) {
 	}
 	out := []Tenant{}
 	var errs []error
-	owner := map[string]string{}
 	for _, name := range slices.Sorted(maps.Keys(r.Tenants)) {
 		t := r.Tenants[name]
 		if t == nil {
@@ -113,12 +125,6 @@ func ParseRegistry(data []byte) ([]Tenant, error) {
 		t.Name = name
 		if err := t.Validate(); err != nil {
 			errs = append(errs, err)
-		}
-		for _, app := range slices.Sorted(maps.Keys(t.Applications)) {
-			if prev, ok := owner[app]; ok {
-				errs = append(errs, fmt.Errorf("application %s belongs to two tenants: %s and %s", app, prev, name))
-			}
-			owner[app] = name
 		}
 		out = append(out, *t)
 	}
@@ -133,6 +139,9 @@ func (t *Tenant) Validate() error {
 	var errs []error
 	if err := ValidName(t.Name); err != nil {
 		errs = append(errs, err)
+	}
+	if t.Name == Untenanted {
+		errs = append(errs, fmt.Errorf("tenant name %q is reserved for the applications no tenant lists", Untenanted))
 	}
 	if err := labels.ValidLabels(t.Tags); err != nil {
 		errs = append(errs, fmt.Errorf("tenant %s: tags: %w", t.Name, err))
@@ -256,6 +265,42 @@ func matches(selector string, r *Ref, l func(*Ref) map[string]string) bool {
 	return s.Matches(l(r))
 }
 
+// AppMatches reports whether an application pattern applies to an application of a tenant. A
+// qualified pattern "<tenant>/<application>" (globs on both parts: "payments/*", "*/shop",
+// "*/*") applies to the applications of the matching tenants; a pattern without "/" only to the
+// Untenanted applications, so a wide binding written for them never reaches a tenant.
+func AppMatches(pattern, tenantName, application string) bool {
+	if tenantName == "" {
+		tenantName = Untenanted
+	}
+	if tp, ap, ok := strings.Cut(pattern, "/"); ok {
+		return glob.Match(tp, tenantName) && glob.Match(ap, application)
+	}
+	return tenantName == Untenanted && glob.Match(pattern, application)
+}
+
+// AnyApp reports whether one of the patterns applies to the application of the tenant.
+func AnyApp(patterns []string, tenantName, application string) bool {
+	return slices.ContainsFunc(patterns, func(p string) bool { return AppMatches(p, tenantName, application) })
+}
+
+// NameOf is the name of the tenant of a reference, Untenanted for nil.
+func NameOf(r *Ref) string {
+	if r == nil {
+		return Untenanted
+	}
+	return r.Name
+}
+
+// CheckAppPattern validates an application pattern: at most one "/" between non-empty parts.
+func CheckAppPattern(pattern string) error {
+	tp, ap, ok := strings.Cut(pattern, "/")
+	if pattern == "" || (ok && (tp == "" || ap == "" || strings.Contains(ap, "/"))) {
+		return fmt.Errorf("invalid application pattern %q: <application> or <tenant>/<application>", pattern)
+	}
+	return nil
+}
+
 // CheckSelector validates a selector (empty is valid).
 func CheckSelector(selector string) error {
 	if strings.TrimSpace(selector) == "" {
@@ -286,19 +331,75 @@ func Find(ctx context.Context, d Directory, name string) (*Tenant, error) {
 	return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
 }
 
-// Owner returns the tenant that owns the application; ErrNotFound if none does.
-func Owner(ctx context.Context, d Directory, application string) (*Tenant, error) {
+// Owners returns the tenants that list the application, ordered by name.
+func Owners(ctx context.Context, d Directory, application string) ([]Tenant, error) {
 	l, err := d.Tenants(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for i := range l {
-		if l[i].Owns(application) {
-			t := l[i]
-			return &t, nil
+	var out []Tenant
+	for _, t := range l {
+		if t.Owns(application) {
+			out = append(out, t)
 		}
 	}
-	return nil, fmt.Errorf("%w: application %s is not registered in any tenant", ErrNotFound, application)
+	return out, nil
+}
+
+// UntenantedOf returns the reserved tenant Untenanted for an application no tenant lists:
+// no tags, members, queue nor restrictions.
+func UntenantedOf(application string) *Tenant {
+	return &Tenant{Name: Untenanted, Applications: map[string]Application{application: {}}}
+}
+
+// IsUntenanted reports whether t is the reserved tenant of the applications no tenant lists.
+func (t *Tenant) IsUntenanted() bool { return t == nil || t.Name == Untenanted }
+
+// Resolve finds the tenant of an application. chosen (the tenant field of the descriptor, or
+// --tenant) only chooses among the tenants that list the application, never assigns it:
+//   - chosen set: that tenant if it lists the application (Untenanted if no tenant does);
+//   - chosen empty: the only tenant that lists it, Untenanted if none, ErrAmbiguous if several.
+//
+// Untenanted applications are refused (ErrNotFound) unless allowUntenanted; a disabled owner is
+// ErrDisabled, never Untenanted. Without a registry (d nil) every application is Untenanted.
+func Resolve(ctx context.Context, d Directory, application, chosen string, allowUntenanted bool) (*Tenant, error) {
+	var owners []Tenant
+	if d != nil {
+		var err error
+		if owners, err = Owners(ctx, d, application); err != nil {
+			return nil, err
+		}
+	}
+	var t *Tenant
+	switch {
+	case chosen != "" && chosen != Untenanted:
+		for i := range owners {
+			if owners[i].Name == chosen {
+				t = &owners[i]
+			}
+		}
+		if t == nil {
+			return nil, fmt.Errorf("%w: tenant %s does not list application %s", ErrNotFound, chosen, application)
+		}
+	case len(owners) == 1 && chosen == "":
+		t = &owners[0]
+	case len(owners) > 1 && chosen == "":
+		names := make([]string, len(owners))
+		for i, o := range owners {
+			names[i] = o.Name
+		}
+		return nil, fmt.Errorf("%w: application %s belongs to the tenants %s: choose one with tenant", ErrAmbiguous, application, strings.Join(names, ", "))
+	case len(owners) > 0:
+		return nil, fmt.Errorf("%w: application %s belongs to a tenant, it is not %s", ErrNotFound, application, Untenanted)
+	case !allowUntenanted:
+		return nil, fmt.Errorf("%w: application %s is not registered in any tenant (tenants.untenanted: reject)", ErrNotFound, application)
+	default:
+		return UntenantedOf(application), nil
+	}
+	if t.Disabled {
+		return nil, fmt.Errorf("%w: tenant %s, owner of %s, is disabled", ErrDisabled, t.Name, application)
+	}
+	return t, nil
 }
 
 // Cache keeps the listing of a Directory for TTL, so the selectors and the permission checks
@@ -306,10 +407,22 @@ func Owner(ctx context.Context, d Directory, application string) (*Tenant, error
 type Cache struct {
 	Next Directory
 	TTL  time.Duration
+	// OnError, if set, is called when the registry becomes unreadable or invalid (once per
+	// distinct error) while the last valid listing stays in force.
+	OnError func(error)
 
-	mu   sync.Mutex
-	at   time.Time
-	list []Tenant
+	mu      sync.Mutex
+	at      time.Time
+	list    []Tenant
+	lastErr error
+}
+
+// Err returns the error of the last read of the registry, nil once a read succeeds: a non-nil
+// value means the listing in use is an older valid one.
+func (c *Cache) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastErr
 }
 
 // Tenants implements Directory.
@@ -321,6 +434,10 @@ func (c *Cache) Tenants(ctx context.Context) ([]Tenant, error) {
 	}
 	l, err := c.Next.Tenants(ctx)
 	if err != nil {
+		if c.OnError != nil && (c.lastErr == nil || c.lastErr.Error() != err.Error()) {
+			c.OnError(err)
+		}
+		c.lastErr = err
 		if c.list != nil {
 			// The registry is unreadable: the last listing is better than nothing.
 			return c.list, nil
@@ -330,7 +447,7 @@ func (c *Cache) Tenants(ctx context.Context) ([]Tenant, error) {
 	if l == nil {
 		l = []Tenant{}
 	}
-	c.list, c.at = l, time.Now()
+	c.list, c.at, c.lastErr = l, time.Now(), nil
 	return l, nil
 }
 

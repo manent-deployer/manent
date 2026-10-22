@@ -21,23 +21,23 @@ type GitRepo interface {
 // rebuilt from artifact sha256 + repository@sha:path.
 type GitProvider struct {
 	Repo GitRepo
-	// PathTemplate is the path in the repository, with {application}, {artifact} and
+	// PathTemplate is the path in the repository, with {tenant}, {application}, {artifact} and
 	// {environment}; it never comes from the request.
 	PathTemplate string
 }
 
 // Get reads the configuration at the default ref.
-func (p *GitProvider) Get(ctx context.Context, application, artifact, environment string) (*Document, error) {
-	return p.GetAt(ctx, application, artifact, environment, Revision{})
+func (p *GitProvider) Get(ctx context.Context, k Key) (*Document, error) {
+	return p.GetAt(ctx, k, Revision{})
 }
 
 // GetAt reads the configuration at the requested revision.
-func (p *GitProvider) GetAt(ctx context.Context, application, artifact, environment string, rev Revision) (*Document, error) {
+func (p *GitProvider) GetAt(ctx context.Context, k Key, rev Revision) (*Document, error) {
 	c, err := p.Repo.Resolve(ctx, rev.Ref, rev.Pinned)
 	if err != nil {
 		return nil, err
 	}
-	return readKey(p.PathTemplate, application, artifact, environment, func(path string) (*Document, error) {
+	return readKey(p.PathTemplate, k, func(path string) (*Document, error) {
 		source := "git:" + p.Repo.URL() + "//" + path
 		data, err := p.Repo.Read(ctx, c.SHA, path)
 		if errors.Is(err, gitsrc.ErrNotFound) {

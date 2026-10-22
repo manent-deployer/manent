@@ -92,6 +92,8 @@ type App struct {
 	draining  atomic.Bool
 	// engine is the service without permissions (platform operations of manent-server admin).
 	engine *engine.Engine
+	// tenants is the tenant registry, nil without one: its errors make /readyz fail.
+	tenants tenant.Directory
 	// governance is the policy in force; stopGovernance ends its refresh.
 	governance     *policy.Runtime
 	stopGovernance context.CancelFunc
@@ -467,12 +469,15 @@ func NewResolver(cfg *config.Config, secrets gitsrc.Secrets) (envconfig.Resolver
 }
 
 // NewTenantCache returns the tenant registry (tenants.file) with a cache for owners,
-// selectors and permissions; nil without a registry.
-func NewTenantCache(cfg *config.Config) tenant.Directory {
+// selectors and permissions; nil without a registry. A registry that becomes unreadable or
+// invalid leaves the last valid one in force, with a warning (log and SIEM) and /readyz 503.
+func NewTenantCache(cfg *config.Config, log *slog.Logger) tenant.Directory {
 	if cfg.Tenants.File == "" {
 		return nil
 	}
-	return &tenant.Cache{Next: tenant.File{Path: cfg.Tenants.File}, TTL: cfg.Tenants.Cache}
+	return &tenant.Cache{Next: tenant.File{Path: cfg.Tenants.File}, TTL: cfg.Tenants.Cache, OnError: func(err error) {
+		log.Warn("registro dei tenant non leggibile o non valido: resta in vigore l'ultimo valido", "component", "tenants", "file", cfg.Tenants.File, "error", err)
+	}}
 }
 
 // tenantQueues returns the deploy queues of the tenants and, with dbos.tenants, the queues the
@@ -545,6 +550,8 @@ type components struct {
 	// tenantRoles and crossTenant configure the permissions of the tenants (rbac).
 	tenantRoles config.TenantRoles
 	crossTenant bool
+	// rejectUntenanted refuses the applications no tenant lists (tenants.untenanted: reject).
+	rejectUntenanted bool
 }
 
 // service builds the service exposed to CLI and API: the Engine wrapped by permissions.
@@ -559,7 +566,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
 		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
-		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, Health: c.health, Traffic: c.traffic, Logger: c.log,
+		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, RejectUntenanted: c.rejectUntenanted, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 		QueueLimits: engine.QueueOptions{
 			WorkerConcurrency:    cfg.DBOS.Concurrency,
@@ -666,32 +673,33 @@ func newComponents(cfg *config.Config) (*components, error) {
 		}
 	}
 	return &components{
-		metrics:     metrics,
-		health:      health,
-		traffic:     trafficOps,
-		plugins:     plugins,
-		policy:      policy,
-		notifier:    notifier,
-		log:         log,
-		siem:        sender,
-		steps:       reg,
-		store:       store,
-		planner:     pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg, Keys: specKeys},
-		custom:      NewCustomSteps(cfg, sp, specKeys, auditRec, gov, log),
-		resolver:    resolver,
-		rollback:    NewRollbackPolicy(cfg, locators),
-		sources:     sources,
-		authz:       authzPolicy,
-		authzOPA:    cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
-		audit:       auditRec,
-		governance:  gov,
-		tenants:     NewTenantCache(cfg),
-		tenantRoles: cfg.RBAC.TenantRoles,
-		crossTenant: cfg.RBAC.CrossTenant(),
-		secrets:     sp,
-		chat:        NewChatNotifier(cfg, sp, log),
-		change:      NewChangeProvider(cfg, sp),
-		closers:     []io.Closer{auditCloser},
+		metrics:          metrics,
+		health:           health,
+		traffic:          trafficOps,
+		plugins:          plugins,
+		policy:           policy,
+		notifier:         notifier,
+		log:              log,
+		siem:             sender,
+		steps:            reg,
+		store:            store,
+		planner:          pipeline.ConfigPlanner{Steps: cfg.Pipeline.Steps, Registry: reg, Keys: specKeys},
+		custom:           NewCustomSteps(cfg, sp, specKeys, auditRec, gov, log),
+		resolver:         resolver,
+		rollback:         NewRollbackPolicy(cfg, locators),
+		sources:          sources,
+		authz:            authzPolicy,
+		authzOPA:         cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
+		audit:            auditRec,
+		governance:       gov,
+		tenants:          NewTenantCache(cfg, log),
+		tenantRoles:      cfg.RBAC.TenantRoles,
+		crossTenant:      cfg.RBAC.CrossTenant(),
+		rejectUntenanted: cfg.Tenants.Untenanted == config.UntenantedReject,
+		secrets:          sp,
+		chat:             NewChatNotifier(cfg, sp, log),
+		change:           NewChangeProvider(cfg, sp),
+		closers:          []io.Closer{auditCloser},
 	}, nil
 }
 
@@ -756,6 +764,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Region:               cfg.DBOS.Region,
 		RegionRouting:        cfg.DBOS.RegionRouting,
 		TenantQueues:         tqueues,
+		Tenants:              c.tenants,
+		RejectUntenanted:     c.rejectUntenanted,
 		Listen:               listen,
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
@@ -784,7 +794,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 	svc := c.guard(eng)
 	stop := c.startGovernance()
 	return &App{
-		governance: c.governance, stopGovernance: stop, engine: eng,
+		governance: c.governance, stopGovernance: stop, engine: eng, tenants: c.tenants,
 		Config:   cfg,
 		Logger:   c.log,
 		Service:  svc,
@@ -829,7 +839,7 @@ func NewClient(cfg *config.Config) (*App, error) {
 		c.closers = append(c.closers, store)
 	}
 	a := &App{
-		governance: c.governance, stopGovernance: c.startGovernance(),
+		governance: c.governance, stopGovernance: c.startGovernance(), tenants: c.tenants,
 		Config:  cfg,
 		Logger:  c.log,
 		client:  client,
@@ -916,6 +926,13 @@ func (a *App) Ready(ctx context.Context) error {
 	if a.governance != nil {
 		if err := a.governance.Ready(ctx); err != nil {
 			return err
+		}
+	}
+	if c, ok := a.tenants.(*tenant.Cache); ok {
+		// A read refreshes the registry when its cache has expired.
+		_, _ = c.Tenants(ctx)
+		if err := c.Err(); err != nil {
+			return fmt.Errorf("tenant registry: %w", err)
 		}
 	}
 	_, err := dbos.ListWorkflows(a.dbosClient(), dbos.WithFilterLimit(1), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))

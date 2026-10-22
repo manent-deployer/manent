@@ -158,6 +158,9 @@ type Validation struct {
 // EnvironmentCheck asks to check a candidate environment configuration (e.g. a change in the
 // repository or in Terraform) before it reaches the configuration system.
 type EnvironmentCheck struct {
+	// Tenant chooses among the tenants that list the application, required only when more
+	// than one does.
+	Tenant      string `json:"tenant,omitempty"`
 	Application string `json:"application"`
 	// Artifact is the artifact the configuration is for (templates with {artifact}); it chooses
 	// the deploy in service used as example.
@@ -310,6 +313,7 @@ type ScheduleInfo struct {
 	Cron        string `json:"cron"`
 	Timezone    string `json:"timezone,omitempty"`
 	Status      string `json:"status"`
+	Tenant      string `json:"tenant,omitempty"`
 	Application string `json:"application"`
 	Environment string `json:"environment"`
 	// RequestedBy is who last created or updated the schedule.

@@ -102,7 +102,7 @@ governance:
 A new `artifact.name` is a new release, without history. To keep it, rename the artifact in the history:
 
 ```sh
-manent-server -c manent.yml admin rename-artifact -a shop --from api --to shop-api [--dry-run]
+manent-server -c manent.yml admin rename-artifact [-t <tenant>] -a shop --from api --to shop-api [--dry-run]
 ```
 
 It changes the `artifact` attribute of the ended deploys (and of their approvals and waits): inventory, rollbacks and promotions follow the new name, and a rollback releases the old version under the new name. Workflows not ended are listed in `pending` and left unchanged: run the command again when they end. The API processes rebuild their inventory within 10 minutes. Schedules keep the descriptor they were created with.

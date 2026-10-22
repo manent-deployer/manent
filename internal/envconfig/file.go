@@ -10,14 +10,14 @@ import (
 
 // FileProvider reads the configuration from local YAML/JSON files; useful for development and tests.
 type FileProvider struct {
-	// PathTemplate is the path template, with {application}, {artifact} and {environment}
+	// PathTemplate is the path template, with {tenant}, {application}, {artifact} and {environment}
 	// placeholders.
 	PathTemplate string
 }
 
 // Get reads the file of the artifact in the application/environment.
-func (p *FileProvider) Get(_ context.Context, application, artifact, environment string) (*Document, error) {
-	return readKey(p.PathTemplate, application, artifact, environment, p.read)
+func (p *FileProvider) Get(_ context.Context, k Key) (*Document, error) {
+	return readKey(p.PathTemplate, k, p.read)
 }
 
 // read reads and decodes a configuration file.

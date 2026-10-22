@@ -1,50 +1,59 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"slices"
 
+	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/labels"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/tenant"
 )
 
-// owner returns the tenant that owns the application. Without a registry it returns nil: every
-// application is accepted, without owner. With the registry an unregistered application, or
-// one of a disabled tenant, is a permanent error; an unreadable registry is temporary.
-func (e *Engine) owner(ctx context.Context, application string) (*tenant.Tenant, error) {
-	if e.tenants == nil {
-		return nil, nil
-	}
-	t, err := tenant.Owner(ctx, e.tenants, application)
+// owner resolves the tenant of an application: chosen (the descriptor's tenant, --tenant)
+// chooses among the tenants that list it (tenant.Resolve). An application no tenant lists is
+// Untenanted, unless tenants.untenanted: reject. Ambiguous, unknown, refused or disabled is a
+// permanent error; an unreadable registry is temporary.
+func (e *Engine) owner(ctx context.Context, application, chosen string) (*tenant.Tenant, error) {
+	t, err := tenant.Resolve(ctx, e.tenants, application, chosen, !e.rejectUntenanted)
 	switch {
-	case errors.Is(err, tenant.ErrNotFound):
+	case errors.Is(err, tenant.ErrNotFound), errors.Is(err, tenant.ErrAmbiguous), errors.Is(err, tenant.ErrDisabled):
 		return nil, pipeline.Permanent(err)
 	case err != nil:
 		return nil, fmt.Errorf("reading the tenant registry: %w", err)
-	case t.Disabled:
-		return nil, pipeline.Permanent(fmt.Errorf("tenant %s, owner of %s, is disabled", t.Name, application))
 	}
 	return t, nil
 }
 
-// ownerRef returns the owner of the application as recorded in requests and statuses; nil
-// without a registry or if the owner cannot be read.
-func (e *Engine) ownerRef(ctx context.Context, application string) *tenant.Ref {
-	t, err := e.owner(ctx, application)
-	if err != nil || t == nil {
-		return nil
+// ownerRef returns the owner of the application as recorded in requests and statuses; the
+// Untenanted reference if it cannot be resolved.
+func (e *Engine) ownerRef(ctx context.Context, application, chosen string) *tenant.Ref {
+	t, err := e.owner(ctx, application, chosen)
+	if err != nil {
+		return tenant.UntenantedOf(application).Ref(application)
 	}
 	return t.Ref(application)
 }
 
+// tenantRef returns the reference of a tenant by name for one of its applications, with the
+// tags of the registry; Untenanted, or a tenant no longer in the registry, without tags.
+func (e *Engine) tenantRef(ctx context.Context, name, application string) *tenant.Ref {
+	if name != tenant.Untenanted && e.tenants != nil {
+		if t, err := tenant.Find(ctx, e.tenants, name); err == nil {
+			return t.Ref(application)
+		}
+	}
+	return &tenant.Ref{Name: cmp.Or(name, tenant.Untenanted), Application: application}
+}
+
 // appSelector parses an application selector and returns the function that applies it to an
-// application, with the tags of the registry (none without registry: only "application" is
-// known).
-func (e *Engine) appSelector(ctx context.Context, selector string) (func(string) bool, error) {
+// application of a tenant, with the tags of the registry (Untenanted applications have only
+// "application" and "tenant").
+func (e *Engine) appSelector(ctx context.Context, selector string) (func(tenantName, app string) bool, error) {
 	s, err := labels.Parse(selector)
 	if err != nil {
 		return nil, fmt.Errorf("%w: selector: %w", ErrInvalidRequest, err)
@@ -55,23 +64,39 @@ func (e *Engine) appSelector(ctx context.Context, selector string) (func(string)
 			return nil, err
 		}
 	}
-	return func(app string) bool {
+	return func(tenantName, app string) bool {
 		for i := range all {
-			if all[i].Owns(app) {
+			if all[i].Name == tenantName && all[i].Owns(app) {
 				return s.Matches(all[i].Ref(app).AppLabels())
 			}
 		}
-		return s.Matches(tenant.AppLabels(app, nil, "", nil))
+		return s.Matches(tenant.AppLabels(app, nil, cmp.Or(tenantName, tenant.Untenanted), nil))
 	}, nil
 }
 
-// tenantName is the name of the owner, "" without.
+// tenantsOrEmpty is the registry, an empty one without registry.
+func (e *Engine) tenantsOrEmpty() tenant.Directory {
+	if e.tenants == nil {
+		return emptyDirectory{}
+	}
+	return e.tenants
+}
+
+// emptyDirectory is a registry without tenants.
+type emptyDirectory struct{}
+
+func (emptyDirectory) Tenants(context.Context) ([]tenant.Tenant, error) { return nil, nil }
+
+// tenantName is the name of the owner, Untenanted for requests without one.
 func tenantName(r *tenant.Ref) string {
 	if r == nil {
-		return ""
+		return tenant.Untenanted
 	}
 	return r.Name
 }
+
+// tenantOf is the tenant of a descriptor, resolved at submission (Untenanted if empty).
+func tenantOf(d *descriptor.Descriptor) string { return cmp.Or(d.Tenant, tenant.Untenanted) }
 
 // Tenants implements TenantService.
 func (e *Engine) Tenants(ctx context.Context, f TenantFilter) ([]TenantInfo, error) {

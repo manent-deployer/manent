@@ -75,6 +75,7 @@ The descriptor declares **what** to release and **where**. The CLI reads it as Y
 |---|---|---|
 | `apiVersion` | yes | Always `manent/v1`. |
 | `id` | no | Deploy ID and idempotency key: the same `id` is never run twice. Not allowed with `schedule.cron`. |
+| `tenant` | no | Chooses among the [tenants](tenant.md) that list the application; required only when more than one does. It never assigns the application: the registry decides. |
 | `application` | yes | Application name. |
 | `environment` | yes | Target environment (e.g. `test`, `prod`). |
 

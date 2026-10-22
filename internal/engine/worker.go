@@ -34,6 +34,7 @@ import (
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/telemetry"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // QueueOptions configures the partitioned deploy queue.
@@ -123,6 +124,10 @@ type WorkerOptions struct {
 	// TenantQueues are the deploy queues of the tenants (tenant registry), registered besides
 	// Queue with its limits; a GlobalConcurrency > 0 is the tenant's quota.
 	TenantQueues []QueueOptions
+	// Tenants is the tenant registry, used to resolve the tenant of the imports read in the
+	// config step; RejectUntenanted as in ServiceOptions.
+	Tenants          tenant.Directory
+	RejectUntenanted bool
 	// Listen, if set, are the only deploy queues the worker dequeues from (default queue and
 	// tenant queues): a pool dedicated to some tenants. Empty: every registered queue.
 	Listen []string
@@ -257,7 +262,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	}
 	w.logger = opts.Logger.With("component", "worker", "executor", w.id)
 	w.admin = NewAdmin(AdminOptions{Client: ctx, Registry: opts.Registry, Version: w.version, Audit: opts.Audit, Logger: opts.Logger})
-	w.reader = NewService(ServiceOptions{Client: ctx, QueueName: opts.Queue.Name, Logger: opts.Logger})
+	w.reader = NewService(ServiceOptions{Client: ctx, QueueName: opts.Queue.Name, Tenants: opts.Tenants, RejectUntenanted: opts.RejectUntenanted, Logger: opts.Logger})
 	w.chainPoll = cmp.Or(opts.ChainPollInterval, defaultChainPoll)
 	dbos.RegisterWorkflow(ctx, w.deployWorkflow, dbos.WithWorkflowName(workflowName))
 	dbos.RegisterWorkflow(ctx, w.scheduledWorkflow, dbos.WithWorkflowName(scheduledWorkflowName))

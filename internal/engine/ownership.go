@@ -67,7 +67,7 @@ func (l *TenantLimits) check(d *descriptor.Descriptor) error {
 // checkLimits verifies the effective descriptor against the restrictions of the application
 // owner, at submission and in validations.
 func (e *Engine) checkLimits(ctx context.Context, d *descriptor.Descriptor) error {
-	owner, err := e.owner(ctx, d.Application)
+	owner, err := e.owner(ctx, d.Application, d.Tenant)
 	if errors.Is(err, pipeline.ErrPermanent) {
 		return fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
@@ -91,11 +91,7 @@ func (e *Engine) checkOwnership(ctx context.Context, d *descriptor.Descriptor, o
 	if err != nil {
 		return nil
 	}
-	name := ""
-	if owner != nil {
-		name = owner.Name
-	}
-	if st.Tenant != name {
+	if st.Tenant != tenantName(owner) {
 		return fmt.Errorf("%w: deployment id %s is already in use", ErrInvalidRequest, d.ID)
 	}
 	return nil

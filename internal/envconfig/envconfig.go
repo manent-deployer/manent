@@ -4,6 +4,7 @@ package envconfig
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/joeg-ita/manent/internal/tenant"
 )
 
 // ErrNotFound means the application/environment has no configuration.
@@ -73,7 +75,7 @@ type Revision struct {
 
 // Versioned is a provider that can read a given revision (git).
 type Versioned interface {
-	GetAt(ctx context.Context, application, artifact, environment string, rev Revision) (*Document, error)
+	GetAt(ctx context.Context, k Key, rev Revision) (*Document, error)
 }
 
 // pinnedKey is the context key of the pinned revision.
@@ -98,10 +100,21 @@ func PinnedRevision(ctx context.Context) string {
 // errRefUnsupported is returned for config.ref without a versioned provider.
 var errRefUnsupported = errors.New("config.ref requires the git environment configuration provider (envconfig.provider: git)")
 
-// Provider reads the configuration of an artifact of an application in an environment.
-// Templates without {artifact} ignore the artifact: one document per application/environment.
+// Key identifies the configuration of a release: tenant, application, artifact and
+// environment. Templates without a placeholder ignore that part (e.g. without {artifact}, one
+// document per application/environment).
+type Key struct {
+	Tenant, Application, Artifact, Environment string
+}
+
+// KeyOf is the configuration key of a descriptor; an unresolved tenant is Untenanted.
+func KeyOf(d descriptor.Descriptor) Key {
+	return Key{Tenant: cmp.Or(d.Tenant, tenant.Untenanted), Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment}
+}
+
+// Provider reads the configuration of a release.
 type Provider interface {
-	Get(ctx context.Context, application, artifact, environment string) (*Document, error)
+	Get(ctx context.Context, k Key) (*Document, error)
 }
 
 // Parse decodes a YAML or JSON configuration, rejecting unknown fields.
@@ -115,18 +128,22 @@ func Parse(data []byte) (EnvConfig, error) {
 	return c, nil
 }
 
-// expandKey replaces {application}, {artifact} and {environment} in the key or path template.
-func expandKey(tmpl, application, artifact, environment string) string {
-	return strings.NewReplacer("{application}", application, "{artifact}", artifact, "{environment}", environment).Replace(tmpl)
+// expandKey replaces {tenant}, {application}, {artifact} and {environment} in the key or path
+// template.
+func expandKey(tmpl string, k Key) string {
+	return strings.NewReplacer("{tenant}", k.Tenant, "{application}", k.Application, "{artifact}", k.Artifact, "{environment}", k.Environment).Replace(tmpl)
 }
 
 // readKey expands the template and reads it with read. An artifact name that cannot be part
 // of a key or path is a permanent error when the template uses it.
-func readKey(tmpl, application, artifact, environment string, read func(key string) (*Document, error)) (*Document, error) {
-	if strings.Contains(tmpl, "{artifact}") && !descriptor.ValidArtifactName(artifact) {
-		return nil, pipeline.Permanent(fmt.Errorf("invalid artifact.name %q for the environment configuration key: %s", artifact, descriptor.ArtifactNameRule))
+func readKey(tmpl string, k Key, read func(key string) (*Document, error)) (*Document, error) {
+	if strings.Contains(tmpl, "{artifact}") && !descriptor.ValidArtifactName(k.Artifact) {
+		return nil, pipeline.Permanent(fmt.Errorf("invalid artifact.name %q for the environment configuration key: %s", k.Artifact, descriptor.ArtifactNameRule))
 	}
-	return read(expandKey(tmpl, application, artifact, environment))
+	if strings.Contains(tmpl, "{tenant}") && descriptor.ValidTenantName(k.Tenant) != nil {
+		return nil, pipeline.Permanent(fmt.Errorf("invalid tenant %q for the environment configuration key", k.Tenant))
+	}
+	return read(expandKey(tmpl, k))
 }
 
 // Merge applies the environment configuration to the descriptor and returns the effective
@@ -375,9 +392,9 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 		var doc *Document
 		var err error
 		if ok {
-			doc, err = versioned.GetAt(ctx, d.Application, d.Artifact.Name, d.Environment, rev)
+			doc, err = versioned.GetAt(ctx, KeyOf(d), rev)
 		} else {
-			doc, err = r.Provider.Get(ctx, d.Application, d.Artifact.Name, d.Environment)
+			doc, err = r.Provider.Get(ctx, KeyOf(d))
 		}
 		switch {
 		case errors.Is(err, ErrNotFound) && !r.Required:

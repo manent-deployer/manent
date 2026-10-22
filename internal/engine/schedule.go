@@ -144,6 +144,7 @@ func toScheduleInfo(s dbos.WorkflowSchedule) ScheduleInfo {
 		LastFiredAt: s.LastFiredAt,
 	}
 	if sc, err := dbos.DecodeScheduleContext[scheduleContext](dbos.ScheduledWorkflowInput{Context: s.Context}); err == nil {
+		info.Tenant = tenantOf(&sc.Request.Descriptor)
 		info.Application = sc.Request.Descriptor.Application
 		info.Environment = sc.Request.Descriptor.Environment
 		info.RequestedBy = sc.Request.RequestedBy

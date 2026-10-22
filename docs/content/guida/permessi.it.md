@@ -59,7 +59,8 @@ Output, un oggetto per permesso:
 |---|---|
 | `name` | Etichetta mostrata da `manent whoami`, nell'interfaccia web e nell'audit. |
 | `role` o `actions` | Un ruolo (predefinito o di `rbac.roles`/`data.manent.rbac.roles`) oppure un elenco di azioni. Le azioni `policy.*` sono **scartate** con un avviso: le concede solo `rbac.bindings`. |
-| `applications`, `environments` | Pattern con `*`, obbligatori. |
+| `applications` | Pattern qualificati con `*`: `shop` solo untenanted, `payments/*` le applicazioni di un tenant, `*/*` tutte ([dettagli](tenant.md#pattern-delle-applicazioni-qualificati)). Obbligatorio. |
+| `environments` | Pattern con `*`, obbligatori. |
 | `tenants` | Selettore sui tag e sul nome del [tenant](tenant.md) proprietario; assente: tutte le applicazioni. |
 | `artifacts` | Pattern su `artifact.name`; assente: tutti gli artefatti. |
 | `selector` | Selettore sui [tag delle applicazioni](tenant.md), con le chiavi di `rbac.selector_keys`; assente: tutte le applicazioni. |
@@ -117,7 +118,7 @@ owners contains g if {
 	g := {
 		"name": sprintf("owner %s", [group]),
 		"role": "deployer",
-		"applications": ["*"],
+		"applications": ["*/*"],
 		"environments": ["*"],
 		"tenants": sprintf("owner=%s", [group]),
 	}
@@ -127,7 +128,7 @@ owners contains g if {
 oncall contains g if {
 	some shift in data.oncall.shifts
 	shift.subject == input.identity.subject
-	g := {"name": "oncall", "role": "operator", "applications": ["*"], "environments": ["prod"], "until": shift.until}
+	g := {"name": "oncall", "role": "operator", "applications": ["*/*"], "environments": ["prod"], "until": shift.until}
 }
 
 # I contractor non cambiano mai la produzione.

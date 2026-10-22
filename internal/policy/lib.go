@@ -55,6 +55,23 @@ var builtins = []builtin{
 			}
 			return ast.BooleanTerm(glob.Any(ps, string(s))), nil
 		}),
+	newBuiltin2("manent.app_match_any", types.Args(types.NewArray(nil, types.S), types.A), types.B,
+		func(patterns, doc *ast.Term) (*ast.Term, error) {
+			var ps []string
+			if err := ast.As(patterns.Value, &ps); err != nil {
+				return nil, errors.New("manent.app_match_any: patterns must be an array of strings")
+			}
+			var x struct {
+				Application string `json:"application"`
+				Tenant      struct {
+					Name string `json:"name"`
+				} `json:"tenant"`
+			}
+			if err := ast.As(doc.Value, &x); err != nil {
+				return nil, fmt.Errorf("manent.app_match_any: %w", err)
+			}
+			return ast.BooleanTerm(tenant.AnyApp(ps, x.Tenant.Name, x.Application)), nil
+		}),
 	newBuiltin2("manent.semver_less", types.Args(types.S, types.S), types.B,
 		func(a, b *ast.Term) (*ast.Term, error) {
 			x, ok1 := a.Value.(ast.String)

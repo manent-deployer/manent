@@ -57,9 +57,10 @@ envconfig:
   provider: file
   required: false
   file:
-    path: /etc/manent/envconfig/{application}/{artifact}/{environment}.yml
+    path: /etc/manent/envconfig/{tenant}/{application}/{artifact}/{environment}.yml
 
-# UC24: registry of the teams that own the applications; every deployed application is listed.
+# UC24: registry of the teams that own the applications; the applications it does not list are
+# deployed as the tenant "untenanted" (tenants.untenanted: allow, the default).
 tenants:
   file: /etc/manent/envconfig/tenants.yml
   cache: 2s
@@ -139,14 +140,16 @@ rbac:
     # UC23: pushes and measures policy revisions, without activating them.
     policy-author: [deployment.read, policy.read, policy.write]
   bindings:
-    - {groups: [policy-authors], role: policy-author, applications: ["*"], environments: ["*"]}
+    - {groups: [policy-authors], role: policy-author, applications: ["*/*"], environments: ["*"]}
     # UC24: the members of team-payments receive deployer on the applications of payments
     # (tenant_roles); the SRE approve only the critical applications (selector on the tags).
-    - {groups: [sre], role: approver, applications: ["*"], environments: [prod], selector: "criticality=high"}
-    - {groups: [ci], role: operator, applications: ["*"], environments: ["*"]}
-    - {groups: [cab], role: approver, applications: ["*"], environments: ["*"]}
-    - {groups: [admins], role: admin, applications: ["*"], environments: ["*"]}
-    - {groups: [viewers], role: viewer, applications: ["*"], environments: ["*"]}
+    # Application patterns are qualified: "*" would cover only the untenanted applications,
+    # "*/*" covers those of every tenant too.
+    - {groups: [sre], role: approver, applications: ["*/*"], environments: [prod], selector: "criticality=high"}
+    - {groups: [ci], role: operator, applications: ["*/*"], environments: ["*"]}
+    - {groups: [cab], role: approver, applications: ["*/*"], environments: ["*"]}
+    - {groups: [admins], role: admin, applications: ["*/*"], environments: ["*"]}
+    - {groups: [viewers], role: viewer, applications: ["*/*"], environments: ["*"]}
 
 governance:
   # UC23: Rego policies evaluated by OPA, revisions managed with manent policy. Until a revision

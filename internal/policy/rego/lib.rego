@@ -8,6 +8,11 @@ import rego.v1
 # characters, as in manent.yml).
 match_any(patterns, value) := manent.glob_any(patterns, value)
 
+# app_match_any reports whether one of the application patterns applies to the application of
+# the input: "<tenant>/<application>" (globs on both parts) for the applications of the matching
+# tenants, a pattern without "/" only for the untenanted applications.
+app_match_any(patterns, doc) := manent.app_match_any(patterns, doc)
+
 # semver_less reports whether version a precedes b: "v" prefix and missing parts are allowed,
 # numeric parts compare as numbers and a pre-release precedes its release.
 semver_less(a, b) := manent.semver_less(a, b)

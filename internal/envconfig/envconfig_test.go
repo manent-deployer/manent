@@ -111,18 +111,18 @@ func TestConsulProvider(t *testing.T) {
 	p := &ConsulProvider{Address: srv.URL, Token: "tok", Datacenter: "dc1", KeyTemplate: "manent/{application}/{environment}"}
 	ctx := context.Background()
 
-	doc, err := p.Get(ctx, "myapp", "myapp-api", "prod")
+	doc, err := p.Get(ctx, Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp-api", Environment: "prod"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if doc.Source != "consul:manent/myapp/prod" || doc.Revision != "42" || doc.Config.Targets[0].Host != "h1" {
 		t.Errorf("documento inatteso: %+v", doc)
 	}
-	if _, err := p.Get(ctx, "myapp", "myapp-api", "test"); !errors.Is(err, ErrNotFound) {
+	if _, err := p.Get(ctx, Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp-api", Environment: "test"}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("atteso ErrNotFound, ricevuto %v", err)
 	}
 	p.Token = "sbagliato"
-	if _, err := p.Get(ctx, "myapp", "myapp-api", "prod"); err == nil || errors.Is(err, ErrNotFound) {
+	if _, err := p.Get(ctx, Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp-api", Environment: "prod"}); err == nil || errors.Is(err, ErrNotFound) {
 		t.Errorf("atteso errore di autorizzazione, ricevuto %v", err)
 	}
 }
@@ -130,7 +130,7 @@ func TestConsulProvider(t *testing.T) {
 func TestConsulProviderValoreNonValido(t *testing.T) {
 	srv := fakeConsul(t, "manent/myapp/prod", "plugin: x\ncampo_sconosciuto: 1\n", "", "")
 	p := &ConsulProvider{Address: srv.URL, KeyTemplate: "manent/{application}/{environment}"}
-	if _, err := p.Get(context.Background(), "myapp", "myapp-api", "prod"); err == nil {
+	if _, err := p.Get(context.Background(), Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp-api", Environment: "prod"}); err == nil {
 		t.Fatal("atteso errore per campo sconosciuto")
 	}
 }
@@ -168,7 +168,7 @@ func TestFileProviderEResolver(t *testing.T) {
 
 func TestEsempio(t *testing.T) {
 	p := &FileProvider{PathTemplate: "../../examples/envconfig/{application}/{artifact}/{environment}.yml"}
-	doc, err := p.Get(context.Background(), "myapp", "myapp", "test")
+	doc, err := p.Get(context.Background(), Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp", Environment: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestFileProviderPerArtefatto(t *testing.T) {
 	if _, _, err := (Resolver{Provider: p, Required: true}).Resolve(ctx, d); !errors.Is(err, ErrNotFound) {
 		t.Errorf("artefatto senza documento: atteso ErrNotFound, ricevuto %v", err)
 	}
-	if _, err := p.Get(ctx, "myapp", "../escape", "prod"); err == nil || !strings.Contains(err.Error(), "invalid artifact.name") {
+	if _, err := p.Get(ctx, Key{Tenant: "untenanted", Application: "myapp", Artifact: "../escape", Environment: "prod"}); err == nil || !strings.Contains(err.Error(), "invalid artifact.name") {
 		t.Errorf("atteso il rifiuto del nome dell'artefatto, ricevuto %v", err)
 	}
 }

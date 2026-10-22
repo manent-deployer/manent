@@ -59,7 +59,8 @@ Output, one object per grant:
 |---|---|
 | `name` | Label shown in `manent whoami`, in the web interface and in the audit. |
 | `role` or `actions` | A role (predefined or from `rbac.roles`/`data.manent.rbac.roles`) or a list of actions. `policy.*` actions are **discarded** with a warning: only `rbac.bindings` grants them. |
-| `applications`, `environments` | Patterns with `*`, required. |
+| `applications` | Qualified patterns with `*`: `shop` only untenanted, `payments/*` the applications of a tenant, `*/*` all ([details](tenant.md#qualified-application-patterns)). Required. |
+| `environments` | Patterns with `*`, required. |
 | `tenants` | Selector on the tags and the name of the owner [tenant](tenant.md); absent: every application. |
 | `artifacts` | Patterns on `artifact.name`; absent: every artifact. |
 | `selector` | Application selector on the [tags](tenant.md), with the keys of `rbac.selector_keys`; absent: every application. |
@@ -117,7 +118,7 @@ owners contains g if {
 	g := {
 		"name": sprintf("owner %s", [group]),
 		"role": "deployer",
-		"applications": ["*"],
+		"applications": ["*/*"],
 		"environments": ["*"],
 		"tenants": sprintf("owner=%s", [group]),
 	}
@@ -127,7 +128,7 @@ owners contains g if {
 oncall contains g if {
 	some shift in data.oncall.shifts
 	shift.subject == input.identity.subject
-	g := {"name": "oncall", "role": "operator", "applications": ["*"], "environments": ["prod"], "until": shift.until}
+	g := {"name": "oncall", "role": "operator", "applications": ["*/*"], "environments": ["prod"], "until": shift.until}
 }
 
 # Contractors never change production.

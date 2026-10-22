@@ -66,6 +66,11 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 	for i, rd := range order {
 		d := *rd.Descriptor
 		d.ID = ids[rd.Name]
+		owner, err := e.owner(ctx, d.Application, d.Tenant)
+		if err != nil {
+			return nil, fmt.Errorf("%w: deploy %s: %w", ErrInvalidRequest, rd.Name, err)
+		}
+		d.Tenant = owner.Name
 		after := make([]string, 0, len(rd.After)+len(d.After))
 		for _, a := range rd.After {
 			after = append(after, ids[a])
@@ -95,14 +100,13 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 				return nil, fmt.Errorf("deploy %s: %w", rd.Name, err)
 			}
 		}
-		owner := tenantName(e.ownerRef(ctx, d.Application))
-		if i > 0 && owner != rs.Deploys[0].Tenant {
+		if i > 0 && d.Tenant != rs.Deploys[0].Tenant {
 			return nil, fmt.Errorf("%w: deploy %s belongs to tenant %q, deploy %s to %q: a release contains the applications of one tenant",
-				ErrInvalidRequest, rd.Name, owner, rs.Deploys[0].Name, rs.Deploys[0].Tenant)
+				ErrInvalidRequest, rd.Name, d.Tenant, rs.Deploys[0].Name, rs.Deploys[0].Tenant)
 		}
 		descs[i] = d
 		rs.Deploys = append(rs.Deploys, ReleaseDeployState{
-			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment, Tenant: owner,
+			Name: rd.Name, DeploymentID: d.ID, Application: d.Application, Artifact: d.Artifact.Name, Environment: d.Environment, Tenant: d.Tenant,
 			Version: d.Artifact.Version, After: rd.After, State: StateEnqueued,
 		})
 		waitsFor = append(waitsFor, d.ID)

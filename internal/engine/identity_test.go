@@ -93,11 +93,15 @@ func TestIdentitaPerArtefatto(t *testing.T) {
 
 func TestPartizionePerArtefatto(t *testing.T) {
 	d := artifactDescriptor("api", "prod", "1.0.0")
-	if k := partitionKey(d); k != "app+api/prod" {
+	if k := partitionKey(d); k != "app+api+untenanted/prod" {
 		t.Errorf("chiave inattesa: %s", k)
 	}
 	if d.ScheduleName() != "app-api-prod" {
 		t.Errorf("nome di default della schedule: %s", d.ScheduleName())
+	}
+	d.Tenant = "payments"
+	if k := partitionKey(d); k != "app+api+payments/prod" || d.ScheduleName() != "payments-app-api-prod" {
+		t.Errorf("chiave e schedule con il tenant: %s %s", k, d.ScheduleName())
 	}
 }
 

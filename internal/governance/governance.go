@@ -5,12 +5,14 @@ package governance
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
 
 	"github.com/joeg-ita/manent/internal/glob"
 	"github.com/joeg-ita/manent/internal/labels"
+	tenantpkg "github.com/joeg-ita/manent/internal/tenant"
 )
 
 // DefaultApprovalTimeout is the default duration of an approval request.
@@ -172,7 +174,12 @@ func checkRules(rules []Rule) []error {
 	var errs []error
 	for i, r := range rules {
 		if len(r.Applications) == 0 || len(r.Environments) == 0 {
-			errs = append(errs, fmt.Errorf("governance.rules[%d]: applications and environments are required (\"*\" for all)", i))
+			errs = append(errs, fmt.Errorf("governance.rules[%d]: applications and environments are required (\"*/*\" for all)", i))
+		}
+		for _, a := range r.Applications {
+			if err := tenantpkg.CheckAppPattern(a); err != nil {
+				errs = append(errs, fmt.Errorf("governance.rules[%d].applications: %w", i, err))
+			}
 		}
 		if r.Approvals.Required < 0 {
 			errs = append(errs, fmt.Errorf("governance.rules[%d].approvals.required must be >= 0", i))
@@ -205,6 +212,11 @@ func PrepareWindows(windows []Window, field string) []error {
 		w := &windows[i]
 		if w.Name == "" || len(w.Applications) == 0 || len(w.Environments) == 0 {
 			errs = append(errs, fmt.Errorf("%s[%d]: name, applications and environments are required", field, i))
+		}
+		for _, a := range w.Applications {
+			if err := tenantpkg.CheckAppPattern(a); err != nil {
+				errs = append(errs, fmt.Errorf("%s[%d].applications: %w", field, i, err))
+			}
 		}
 		if w.Tenants != "" {
 			if _, err := labels.Parse(w.Tenants); err != nil {
@@ -254,12 +266,20 @@ func (p *Policy) RuleFor(application, artifact, environment string, tenant, app 
 		return Rule{}
 	}
 	for _, r := range p.Rules {
-		if glob.Any(r.Applications, application) && glob.Any(r.Environments, environment) && matchesTenant(r.Tenants, tenant) &&
+		if tenantpkg.AnyApp(r.Applications, tenantName(tenant), application) && glob.Any(r.Environments, environment) && matchesTenant(r.Tenants, tenant) &&
 			(len(r.Artifacts) == 0 || glob.Any(r.Artifacts, artifact)) && matchesTenant(r.Selector, app) {
 			return r
 		}
 	}
 	return Rule{}
+}
+
+// tenantName is the name in the tenant labels, Untenanted without.
+func tenantName(labels map[string]string) string {
+	if n := labels[tenantpkg.NameLabel]; n != "" {
+		return n
+	}
+	return tenantpkg.Untenanted
 }
 
 // matchesTenant reports whether a tenant selector applies: an empty one to every deploy, a
@@ -316,7 +336,7 @@ func ActiveWindows(ws []Window, application, environment, region string, t time.
 func ActiveWindowsFor(ws []Window, application, artifact, environment, region string, tenant, app map[string]string, t time.Time) []WindowStatus {
 	var out []WindowStatus
 	for _, w := range ws {
-		if !w.applies(application, environment) || !matchesTenant(w.Tenants, tenant) ||
+		if !w.appliesTo(tenantName(tenant), application, environment) || !matchesTenant(w.Tenants, tenant) ||
 			(artifact != "" && len(w.Artifacts) > 0 && !glob.Any(w.Artifacts, artifact)) ||
 			(app != nil && !matchesTenant(w.Selector, app)) {
 			continue
@@ -347,10 +367,24 @@ func ListWindows(ws []Window, application, environment string, t time.Time) []Wi
 	return out
 }
 
-// applies reports whether the window concerns the application and environment. An empty
-// value matches any pattern, for listings filtered on only one of the two.
+// applies reports whether the window concerns the application, of any tenant, and the
+// environment. An empty value matches any pattern, for listings filtered on only one of the two.
 func (w Window) applies(application, environment string) bool {
-	return (application == "" || glob.Any(w.Applications, application)) &&
+	appOK := application == ""
+	for _, p := range w.Applications {
+		_, ap, ok := strings.Cut(p, "/")
+		if !ok {
+			ap = p
+		}
+		appOK = appOK || glob.Match(ap, application)
+	}
+	return appOK && (environment == "" || glob.Any(w.Environments, environment))
+}
+
+// appliesTo reports whether the window concerns the application of the tenant and the
+// environment; patterns are qualified as in tenant.AppMatches.
+func (w Window) appliesTo(tenantName, application, environment string) bool {
+	return (application == "" || tenantpkg.AnyApp(w.Applications, tenantName, application)) &&
 		(environment == "" || glob.Any(w.Environments, environment))
 }
 

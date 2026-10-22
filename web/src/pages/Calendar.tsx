@@ -300,7 +300,7 @@ function Schedules() {
                   "—"
                 )}
               </td>
-              <td className="py-2">{can(me.data, "schedule.write", s.application, s.environment) ? <ScheduleActions s={s} /> : "—"}</td>
+              <td className="py-2">{can(me.data, "schedule.write", s.application, s.environment, s.tenant) ? <ScheduleActions s={s} /> : "—"}</td>
             </tr>
           ))}
         </tbody>

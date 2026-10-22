@@ -128,6 +128,7 @@ type PolicyImpact struct {
 // PolicyChange is a deploy whose decision would change with the evaluated revision.
 type PolicyChange struct {
 	Deployment  string    `json:"deployment"`
+	Tenant      string    `json:"tenant,omitempty"`
 	Application string    `json:"application"`
 	Environment string    `json:"environment"`
 	Version     string    `json:"version"`
@@ -152,7 +153,9 @@ type PolicyAccessRequest struct {
 // AccessCheck is an action on an application, environment and optionally tenant; Descriptor
 // gives the artifact to the denials (deny) of the changes.
 type AccessCheck struct {
-	Action      string                 `json:"action"`
+	Action string `json:"action"`
+	// Tenant chooses among the tenants that list the application.
+	Tenant      string                 `json:"tenant,omitempty"`
 	Application string                 `json:"application"`
 	Environment string                 `json:"environment"`
 	Artifact    string                 `json:"artifact,omitempty"`

@@ -19,7 +19,7 @@ import (
 // application/environment. It ignores dry-runs. The state is kept in a process cache
 // (inventoryCache): every call reads only new workflows and those not yet ended.
 func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryEntry, error) {
-	sel := func(string) bool { return true }
+	sel := func(string, string) bool { return true }
 	if f.Selector != "" {
 		var err error
 		if sel, err = e.appSelector(ctx, f.Selector); err != nil {
@@ -27,7 +27,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 		}
 	}
 	out, err := e.inventory(f)
-	out = slices.DeleteFunc(out, func(ie InventoryEntry) bool { return !sel(ie.Application) })
+	out = slices.DeleteFunc(out, func(ie InventoryEntry) bool { return !sel(ie.Tenant, ie.Application) })
 	if err != nil || e.targets == nil {
 		return out, err
 	}
@@ -38,7 +38,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 	}
 	byEnv := map[string][]cluster.TargetsRecord{}
 	for _, r := range recs {
-		k := releaseKey(r.Application, r.Artifact, r.Environment)
+		k := releaseKey(r.Tenant, r.Application, r.Artifact, r.Environment)
 		byEnv[k] = append(byEnv[k], r)
 	}
 	for i, ie := range out {
@@ -46,7 +46,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 			continue
 		}
 		// Only readings of the deploy in service count: an earlier one says nothing about it.
-		if st := mergeTargets(byEnv[releaseKey(ie.Application, ie.Artifact, ie.Environment)], ie.Current.ID); st != nil {
+		if st := mergeTargets(byEnv[releaseKey(ie.Tenant, ie.Application, ie.Artifact, ie.Environment)], ie.Current.ID); st != nil {
 			out[i].Targets = st
 			out[i].OutOfSync = slices.ContainsFunc(st.Targets, TargetState.Changed)
 		}
@@ -196,7 +196,7 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 		c.pending[w.ID] = true
 		return
 	}
-	k := releaseKey(s.Application, s.Artifact, s.Environment)
+	k := releaseKey(s.Tenant, s.Application, s.Artifact, s.Environment)
 	ie := c.entries[k]
 	if ie == nil {
 		ie = &InventoryEntry{Application: s.Application, Artifact: s.Artifact, Environment: s.Environment, Tenant: s.Tenant}
@@ -218,13 +218,13 @@ func (c *inventoryCache) apply(w dbos.WorkflowStatus) {
 	}
 }
 
-// findRelease returns the most recent successfully ended deploy (not dry-run) in the
-// application/environment that satisfies match, or nil. A non-empty artifact restricts it to
-// that artifact's deploys.
-func (e *Engine) findRelease(_ context.Context, application, artifact, environment string, match func(Status) bool) (*Status, error) {
+// findRelease returns the most recent successfully ended deploy (not dry-run) of the tenant's
+// application in the environment that satisfies match, or nil. A non-empty artifact restricts
+// it to that artifact's deploys.
+func (e *Engine) findRelease(_ context.Context, tenantName, application, artifact, environment string, match func(Status) bool) (*Status, error) {
 	var found *Status
 	err := e.scan(nil, func(s Status) bool {
-		if s.Application == application && s.Environment == environment && (artifact == "" || s.Artifact == artifact) && !s.DryRun &&
+		if s.Tenant == tenantName && s.Application == application && s.Environment == environment && (artifact == "" || s.Artifact == artifact) && !s.DryRun &&
 			s.State == string(dbos.WorkflowStatusSuccess) && match(s) {
 			found = &s
 			return false
@@ -257,6 +257,8 @@ func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 	// deploys: the targets come from the environment of the new deploy.
 	d.After, d.AfterTimeout = nil, ""
 	d.DropDeploymentImports()
+	// The tenant of the recorded release: the promotion and the rollback stay in its identity.
+	d.Tenant = src.Tenant
 	// The configuration revision is chosen again: the default ref of the environment, the one
 	// given with the promotion, the one recorded by the deploy a rollback goes back to.
 	d.Config = nil
@@ -287,11 +289,15 @@ func (e *Engine) Promote(ctx context.Context, r PromoteRequest) (*Submission, er
 
 // promoteDescriptor builds the descriptor of a promotion from the release in r.From.
 func (e *Engine) promoteDescriptor(ctx context.Context, r PromoteRequest) (*descriptor.Descriptor, *Status, error) {
-	artifact, err := e.resolveArtifact(r.Application, r.From, r.Artifact)
+	owner, err := e.owner(ctx, r.Application, r.Tenant)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	artifact, err := e.resolveArtifact(owner.Name, r.Application, r.From, r.Artifact)
 	if err != nil {
 		return nil, nil, err
 	}
-	src, err := e.findRelease(ctx, r.Application, artifact, r.From, func(s Status) bool {
+	src, err := e.findRelease(ctx, owner.Name, r.Application, artifact, r.From, func(s Status) bool {
 		return r.Version == "" || s.Version == r.Version
 	})
 	if err != nil {
@@ -344,13 +350,17 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 
 // rollbackDescriptor finds the release to go back to and builds the descriptor of the rollback.
 func (e *Engine) rollbackDescriptor(ctx context.Context, r RollbackRequest) (*descriptor.Descriptor, *Status, error) {
-	artifact, err := e.resolveArtifact(r.Application, r.Environment, r.Artifact)
+	owner, err := e.owner(ctx, r.Application, r.Tenant)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	artifact, err := e.resolveArtifact(owner.Name, r.Application, r.Environment, r.Artifact)
 	if err != nil {
 		return nil, nil, err
 	}
 	var current, target, failed *Status
 	err = e.scan(nil, func(s Status) bool {
-		if !e.sameRelease(s, r.Application, artifact, r.Environment) || s.DryRun {
+		if !e.sameRelease(s, owner.Name, r.Application, artifact, r.Environment) || s.DryRun {
 			return true
 		}
 		if s.State != string(dbos.WorkflowStatusSuccess) {

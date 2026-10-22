@@ -126,7 +126,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 	busy := map[string]bool{}
 	if act, err := w.reader.Activity(ctx, ActivityFilter{}); err == nil {
 		for _, s := range slices.Concat(act.Running, act.AwaitingApproval) {
-			busy[releaseKey(s.Application, s.Artifact, s.Environment)] = true
+			busy[releaseKey(s.Tenant, s.Application, s.Artifact, s.Environment)] = true
 		}
 	} else {
 		w.logger.Warn("riconciliazione: lettura dei deploy in corso fallita", "error", err)
@@ -137,12 +137,12 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 		for _, r := range recs {
 			var st service.TargetsState
 			if r.Scope == w.reconcileScope() && json.Unmarshal([]byte(r.Data), &st) == nil {
-				prev[releaseKey(r.Application, r.Artifact, r.Environment)] = st
+				prev[releaseKey(r.Tenant, r.Application, r.Artifact, r.Environment)] = st
 			}
 		}
 	}
 	for _, ie := range inv {
-		key := releaseKey(ie.Application, ie.Artifact, ie.Environment)
+		key := releaseKey(ie.Tenant, ie.Application, ie.Artifact, ie.Environment)
 		if ie.Current == nil || busy[key] {
 			continue
 		}
@@ -154,7 +154,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 			continue
 		}
 		raw, _ := json.Marshal(st)
-		rec := cluster.TargetsRecord{Application: ie.Application, Artifact: ie.Artifact, Environment: ie.Environment, Scope: w.reconcileScope(), CheckedAt: st.CheckedAt, Data: string(raw)}
+		rec := cluster.TargetsRecord{Tenant: ie.Tenant, Application: ie.Application, Artifact: ie.Artifact, Environment: ie.Environment, Scope: w.reconcileScope(), CheckedAt: st.CheckedAt, Data: string(raw)}
 		if err := store.SaveTargets(ctx, rec); err != nil {
 			w.logger.Warn("riconciliazione: salvataggio fallito", "application", ie.Application, "environment", ie.Environment, "error", err)
 			continue

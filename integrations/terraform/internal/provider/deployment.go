@@ -37,6 +37,7 @@ type deploymentResource struct {
 
 type deploymentModel struct {
 	ID                types.String `tfsdk:"id"`
+	Tenant            types.String `tfsdk:"tenant"`
 	Application       types.String `tfsdk:"application"`
 	Environment       types.String `tfsdk:"environment"`
 	Descriptor        types.String `tfsdk:"descriptor"`
@@ -64,6 +65,11 @@ func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "ID del deploy in esercizio.",
+			},
+			"tenant": schema.StringAttribute{
+				Optional: true, Computed: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIfConfigured(), stringplanmodifier.UseStateForUnknown()},
+				Description:   "Tenant dell'applicazione: obbligatorio solo se più tenant hanno un'applicazione con questo nome (untenanted per quelle senza tenant).",
 			},
 			"application": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Applicazione."},
 			"environment": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Ambiente."},
@@ -134,7 +140,7 @@ func (r *deploymentResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	inv, err := r.svc.Inventory(ctx, service.InventoryFilter{Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
+	inv, err := r.svc.Inventory(ctx, service.InventoryFilter{Tenant: m.Tenant.ValueString(), Application: m.Application.ValueString(), Environment: m.Environment.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("reading the inventory", err.Error())
 		return
@@ -168,6 +174,9 @@ func readInventory(m *deploymentModel, e service.InventoryEntry) {
 	cur := e.Current
 	m.ID, m.State, m.OutOfSync = types.StringValue(cur.ID), types.StringValue(cur.State), types.BoolValue(e.OutOfSync)
 	m.Version = types.StringValue(cur.Version)
+	if e.Tenant != "" {
+		m.Tenant = types.StringValue(e.Tenant)
+	}
 	if e.OutOfSync && m.RedeployOutOfSync.ValueBool() {
 		m.Version = types.StringValue(cur.Version + outOfSyncSuffix)
 	}
@@ -180,11 +189,16 @@ func (r *deploymentResource) Delete(_ context.Context, req resource.DeleteReques
 }
 
 // ImportState implements resource.ResourceWithImportState: the ID is
-// <application>/<environment>.
+// <application>/<environment> or <tenant>/<application>/<environment>.
 func (r *deploymentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	app, env, ok := cutPair(req.ID)
+	id := req.ID
+	if parts := strings.Split(id, "/"); len(parts) == 3 && parts[0] != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tenant"), parts[0])...)
+		id = parts[1] + "/" + parts[2]
+	}
+	app, env, ok := cutPair(id)
 	if !ok {
-		resp.Diagnostics.AddError("invalid import ID", "use <application>/<environment>")
+		resp.Diagnostics.AddError("invalid import ID", "use <application>/<environment> or <tenant>/<application>/<environment>")
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("application"), app)...)
@@ -212,6 +226,10 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 		return diags
 	}
 	m.ID = types.StringValue(sub.ID)
+	if m.Tenant.IsUnknown() {
+		// Computed: known before saving, also when the deploy fails.
+		m.Tenant = types.StringValue("")
+	}
 	wctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	_, werr := r.svc.Wait(wctx, sub.ID)
@@ -221,6 +239,9 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 		return diags
 	}
 	m.State, m.OutOfSync = types.StringValue(st.State), types.BoolValue(false)
+	if st.Tenant != "" {
+		m.Tenant = types.StringValue(st.Tenant)
+	}
 	if werr != nil {
 		diags.AddError("deploy "+sub.ID+" failed", werr.Error())
 	}
@@ -239,6 +260,9 @@ func buildDescriptor(m *deploymentModel) (*descriptor.Descriptor, error) {
 		return nil, fmt.Errorf("the descriptor is for %s/%s, the resource for %s/%s", d.Application, d.Environment, app, env)
 	}
 	d.ID = ""
+	if v := m.Tenant.ValueString(); v != "" {
+		d.Tenant = v
+	}
 	d.Artifact.Version = m.Version.ValueString()
 	if v := m.Source.ValueString(); v != "" {
 		d.Artifact.Source = v

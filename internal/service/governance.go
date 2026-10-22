@@ -142,6 +142,9 @@ type Redeploy struct {
 
 // PromoteRequest asks to release to To the artifact already successfully released to From.
 type PromoteRequest struct {
+	// Tenant chooses among the tenants that list the application, required only when more
+	// than one does.
+	Tenant      string `json:"tenant,omitempty"`
 	Application string `json:"application"`
 	From        string `json:"from"`
 	To          string `json:"to"`
@@ -160,6 +163,9 @@ type PromoteRequest struct {
 
 // RollbackRequest asks to go back to a previously released version.
 type RollbackRequest struct {
+	// Tenant chooses among the tenants that list the application, required only when more
+	// than one does.
+	Tenant      string `json:"tenant,omitempty"`
 	Application string `json:"application"`
 	Environment string `json:"environment"`
 	// Artifact chooses the artifact to roll back, required when the environment has more than one.

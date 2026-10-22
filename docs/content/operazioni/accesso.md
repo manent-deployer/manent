@@ -149,7 +149,7 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 
 `deployer` and `operator` cannot approve: whoever releases must not be able to approve themselves through a second role. Approvals are assigned to a dedicated group (e.g. the change advisory board) with the `approver` role.
 
-A binding with `tenants` (a selector on the tags of the owner [tenant](../guida/tenant.md) and on `name`) applies only to the deploys of its applications; `selector` reads the application tags (only the keys of `rbac.selector_keys`). Tenant members and admins also get the implicit roles of `rbac.tenant_roles`.
+Application patterns are qualified: `shop` covers only the untenanted `shop`, `payments/shop` the one of the [tenant](../guida/tenant.md#qualified-application-patterns) payments, `*/*` every application. A binding with `tenants` (a selector on the tags of the owner tenant and on `name`) applies only to the deploys of its applications; `selector` reads the application tags (only the keys of `rbac.selector_keys`). Tenant members and admins also get the implicit roles of `rbac.tenant_roles`.
 
 Further roles are defined in `rbac.roles`:
 
