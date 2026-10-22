@@ -55,7 +55,7 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `file` | | Il [registro dei tenant](../guida/tenant.md) (`tenants.yml`). Vuoto: nessun registro, ogni applicazione ammessa senza proprietario. |
+| `file` | | Il [registro dei tenant](../guida/tenant.md) (`tenants.yml`). Vuoto: nessun registro, ogni applicazione ammessa senza proprietario. Con un registro i deploy delle applicazioni non registrate sono rifiutati ([dettagli](../guida/tenant.md#il-tenant-e-necessario-per-rilasciare)). |
 | `cache` | `30s` | Per quanto si tiene il registro prima di rileggerlo. |
 
 ### `envconfig`

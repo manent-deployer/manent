@@ -44,6 +44,24 @@ manent tenants list [-a <application>] [--selector "division=commerce"]
 manent tenants show payments        # tags, applications with their tags, queue
 ```
 
+## Is a tenant required to deploy?
+
+It depends on the configuration of the server:
+
+| Configuration | Deploy of an application |
+|---|---|
+| No registry (`tenants.file` empty, the default) | Allowed for every application, which has no owner. Only `rbac.bindings` and the governance rules apply. |
+| Registry configured | Allowed only if a tenant lists the application. Otherwise it is refused at submission, before being queued: `application <name> is not registered in any tenant`. |
+| Registry configured, owner tenant with `disabled: true` | Refused: `tenant <name>, owner of <application>, is disabled`. |
+
+To onboard a new application with a registry:
+
+1. Add it under its tenant in `tenants.yml`, with its tags.
+2. Wait up to `tenants.cache` (default `30s`) for API and workers to read the registry again.
+3. Deploy: the owner is recorded automatically, the descriptor never sets it.
+
+An application listed by two tenants makes the whole registry invalid. Keep the registry under version control and review it like the rest of the configuration.
+
 ## The tenant of a deploy
 
 The tenant is not chosen: it comes from the application. At submission the engine reads the owner from the registry and records it in the request (`tenant` attribute, `Status.tenant`, field `tenant` of callbacks and chat messages, `tenant` in the result of the `config` step). The deploy identity stays application/artifact/environment.

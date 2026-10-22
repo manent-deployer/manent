@@ -55,7 +55,7 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 
 | Key | Default | Description |
 |---|---|---|
-| `file` | | The [tenant registry](../guida/tenant.md) (`tenants.yml`). Empty: no registry, every application accepted without owner. |
+| `file` | | The [tenant registry](../guida/tenant.md) (`tenants.yml`). Empty: no registry, every application accepted without owner. With a registry, the deploys of unregistered applications are refused ([details](../guida/tenant.md#is-a-tenant-required-to-deploy)). |
 | `cache` | `30s` | How long the registry is kept before reading it again. |
 
 ### `envconfig`

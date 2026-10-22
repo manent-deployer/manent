@@ -44,6 +44,24 @@ manent tenants list [-a <applicazione>] [--selector "division=commerce"]
 manent tenants show payments        # tag, applicazioni con i loro tag, coda
 ```
 
+## Il tenant è necessario per rilasciare?
+
+Dipende dalla configurazione del server:
+
+| Configurazione | Deploy di un'applicazione |
+|---|---|
+| Nessun registro (`tenants.file` vuoto, il default) | Ammesso per ogni applicazione, che non ha proprietario. Valgono solo `rbac.bindings` e le regole di governance. |
+| Registro configurato | Ammesso solo se un tenant elenca l'applicazione. Altrimenti è rifiutato all'invio, prima dell'accodamento: `application <nome> is not registered in any tenant`. |
+| Registro configurato, tenant proprietario con `disabled: true` | Rifiutato: `tenant <nome>, owner of <applicazione>, is disabled`. |
+
+Per aggiungere una nuova applicazione con un registro:
+
+1. Inseriscila sotto il suo tenant in `tenants.yml`, con i suoi tag.
+2. Attendi al più `tenants.cache` (default `30s`) che API e worker rileggano il registro.
+3. Rilascia: il proprietario viene registrato in automatico, il descrittore non lo indica mai.
+
+Un'applicazione elencata da due tenant rende non valido l'intero registro. Tieni il registro sotto controllo di versione e rivedilo come il resto della configurazione.
+
 ## Il tenant di un deploy
 
 Il tenant non si sceglie: viene dall'applicazione. All'invio l'engine legge il proprietario dal registro e lo registra nella richiesta (attributo `tenant`, `Status.tenant`, campo `tenant` di callback e messaggi chat, `tenant` nel risultato dello step `config`). L'identità del deploy resta applicazione/artefatto/ambiente.
