@@ -9,7 +9,7 @@ La [configurazione di ambiente](../guida/configurazione-ambiente.md) di ogni app
 
 | Chiave | Contenuto |
 |---|---|
-| `manent/<applicazione>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
+| `manent/<applicazione>/<artefatto>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
 
 Il modello si può cambiare (`envconfig.consul.key`).
 

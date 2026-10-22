@@ -14,6 +14,7 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ import (
 	"github.com/joeg-ita/manent/internal/engine"
 	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/extplugin"
+	"github.com/joeg-ita/manent/internal/gitsrc"
 	"github.com/joeg-ita/manent/internal/logging"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/policy"
@@ -425,11 +427,12 @@ func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker,
 // NewDescriptorPolicy returns the descriptor policy of the configuration.
 func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 	dp := cfg.DescriptorPolicy
-	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams}
+	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams, ConfigRef: cmp.Or(dp.ConfigRef, envconfig.ConfigRefNone)}
 }
 
-// NewResolver creates the environment configuration resolver for the configured provider.
-func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
+// NewResolver creates the environment configuration resolver for the configured provider;
+// secrets resolves the credentials of the git provider.
+func NewResolver(cfg *config.Config, secrets gitsrc.Secrets) (envconfig.Resolver, error) {
 	ec := cfg.EnvConfig
 	r := envconfig.Resolver{Required: ec.Required, Policy: NewDescriptorPolicy(cfg)}
 	switch ec.Provider {
@@ -447,6 +450,18 @@ func NewResolver(cfg *config.Config) (envconfig.Resolver, error) {
 		}
 	case config.EnvProviderFile:
 		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path}
+	case config.EnvProviderGit:
+		g := ec.Git
+		repo, err := gitsrc.New(gitsrc.Options{
+			Repository: g.Repository, DefaultRef: g.Ref, AllowedRefs: g.AllowedRefs,
+			Username: g.Username, PasswordRef: g.PasswordRef, SSHKeyRef: g.SSHKeyRef, KnownHosts: g.KnownHosts, CAFile: g.CAFile,
+			RequireSigned: g.RequireSigned, OpenPGPKeyring: g.Signers.OpenPGPKeyring, SSHAllowedSigners: g.Signers.SSHAllowedSigners,
+			MaxAge: g.MaxAge, CacheDir: cmp.Or(g.CacheDir, filepath.Join(cfg.WorkDir, ".git-cache")), RefTTL: g.RefTTL, Secrets: secrets,
+		})
+		if err != nil {
+			return r, err
+		}
+		r.Provider = &envconfig.GitProvider{Repo: repo, PathTemplate: g.Path}
 	}
 	return r, nil
 }
@@ -596,11 +611,11 @@ func newComponents(cfg *config.Config) (*components, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := NewResolver(cfg)
+	sp, err := NewSecretProvider(cfg)
 	if err != nil {
 		return nil, err
 	}
-	sp, err := NewSecretProvider(cfg)
+	resolver, err := NewResolver(cfg, sp)
 	if err != nil {
 		return nil, err
 	}

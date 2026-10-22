@@ -55,9 +55,48 @@ type Document struct {
 	Config EnvConfig
 	// Source identifies the configuration in the provider (e.g. Consul key).
 	Source string
-	// Revision is the configuration version (e.g. Consul ModifyIndex), if available.
+	// Revision is the configuration version (e.g. Consul ModifyIndex, Git commit SHA), if
+	// available.
 	Revision string
+	// Ref is the ref the revision was resolved from (git provider), if any.
+	Ref string
 }
+
+// Revision is the configuration revision a read asks for.
+type Revision struct {
+	// Ref is a ref name or a commit SHA; empty: the provider's default.
+	Ref string
+	// Pinned marks a revision recorded by a previous deploy (rollback, reconciliation): it is
+	// exempt from the age limit.
+	Pinned bool
+}
+
+// Versioned is a provider that can read a given revision (git).
+type Versioned interface {
+	GetAt(ctx context.Context, application, artifact, environment string, rev Revision) (*Document, error)
+}
+
+// pinnedKey is the context key of the pinned revision.
+type pinnedKey struct{}
+
+// WithRevision pins the configuration revision of the resolutions made with ctx (the one a
+// rollback goes back to, the one of the release a reconciliation reads); it takes precedence
+// over config.ref and only applies to versioned providers.
+func WithRevision(ctx context.Context, revision string) context.Context {
+	if revision == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, pinnedKey{}, revision)
+}
+
+// PinnedRevision returns the revision pinned with WithRevision, if any.
+func PinnedRevision(ctx context.Context) string {
+	s, _ := ctx.Value(pinnedKey{}).(string)
+	return s
+}
+
+// errRefUnsupported is returned for config.ref without a versioned provider.
+var errRefUnsupported = errors.New("config.ref requires the git environment configuration provider (envconfig.provider: git)")
 
 // Provider reads the configuration of an artifact of an application in an environment.
 // Templates without {artifact} ignore the artifact: one document per application/environment.
@@ -318,8 +357,28 @@ func (r Resolver) ResolveWith(_ context.Context, d descriptor.Descriptor, config
 func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
 	meta := map[string]string{"source": "descriptor"}
 	cfg := EnvConfig{}
+	rev := Revision{Ref: d.ConfigRef()}
+	if pinned := PinnedRevision(ctx); pinned != "" {
+		rev = Revision{Ref: pinned, Pinned: true}
+	}
+	// The revision is checked before reading it: a refused config.ref is never fetched.
+	if r.Policy != nil && !rev.Pinned {
+		if err := r.Policy.checkConfigRef(d); err != nil {
+			return d, nil, pipeline.Permanent(err)
+		}
+	}
+	versioned, ok := r.Provider.(Versioned)
+	if !ok && rev.Ref != "" && !rev.Pinned {
+		return d, nil, pipeline.Permanent(errRefUnsupported)
+	}
 	if r.Provider != nil {
-		doc, err := r.Provider.Get(ctx, d.Application, d.Artifact.Name, d.Environment)
+		var doc *Document
+		var err error
+		if ok {
+			doc, err = versioned.GetAt(ctx, d.Application, d.Artifact.Name, d.Environment, rev)
+		} else {
+			doc, err = r.Provider.Get(ctx, d.Application, d.Artifact.Name, d.Environment)
+		}
 		switch {
 		case errors.Is(err, ErrNotFound) && !r.Required:
 			meta["source"] = "descriptor (configurazione di ambiente assente)"
@@ -330,6 +389,9 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			meta["source"] = doc.Source
 			if doc.Revision != "" {
 				meta["revision"] = doc.Revision
+			}
+			if doc.Ref != "" {
+				meta["ref"] = doc.Ref
 			}
 		}
 	}

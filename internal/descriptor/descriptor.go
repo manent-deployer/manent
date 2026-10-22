@@ -69,6 +69,31 @@ type Descriptor struct {
 	Imports map[string]Import `json:"imports,omitempty" yaml:"imports,omitempty"`
 	// Exports are the outputs of the deploy that other deploys can import.
 	Exports map[string]Export `json:"exports,omitempty" yaml:"exports,omitempty"`
+	// Config chooses the revision of the environment configuration, with the git provider and
+	// only as far as descriptor_policy.config_ref allows.
+	Config *ConfigSource `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
+// ConfigSource is the revision of the environment configuration requested by the descriptor.
+type ConfigSource struct {
+	// Ref is a ref name (refs/tags/env-42, a branch) or a commit SHA.
+	Ref string `json:"ref,omitempty" yaml:"ref,omitempty"`
+}
+
+// ConfigRef returns the requested configuration revision, empty for the default one.
+func (d *Descriptor) ConfigRef() string {
+	if d.Config == nil {
+		return ""
+	}
+	return d.Config.Ref
+}
+
+// configRefRe is the shape of a ref name or of a SHA: no "..", no leading "-".
+var configRefRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$`)
+
+// ValidConfigRef says whether s can be a ref name or a commit SHA.
+func ValidConfigRef(s string) bool {
+	return configRefRe.MatchString(s) && !strings.Contains(s, "..") && !strings.HasSuffix(s, "/") && !strings.HasSuffix(s, ".lock")
 }
 
 // Rollback configures the automatic rollback. In the effective descriptor (after the config
@@ -325,6 +350,9 @@ func (d *Descriptor) Validate() error {
 	}
 	if d.Rollout != nil {
 		errs = append(errs, d.Rollout.Validate())
+	}
+	if ref := d.ConfigRef(); d.Config != nil && !ValidConfigRef(ref) {
+		errs = append(errs, fmt.Errorf("invalid config.ref %q: a ref name (refs/tags/env-1) or a commit SHA", ref))
 	}
 	if d.Traffic != nil {
 		errs = append(errs, errors.New("traffic is configured only in the environment configuration, not in the descriptor"))

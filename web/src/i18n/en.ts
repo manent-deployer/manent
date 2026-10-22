@@ -437,6 +437,7 @@ export const en = {
   "inventory.tenant": "Tenant",
   "inventory.artifact": "Artifact",
   "detail.tenant": "Tenant",
+  "detail.configRevision": "Configuration revision",
   "state.PENDING_START": "Not started",
   "state.SKIPPED": "Skipped",
   "state.DENIED": "Denied by the policy",

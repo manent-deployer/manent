@@ -275,11 +275,12 @@ const (
 	EnvProviderNone   = "none"
 	EnvProviderConsul = "consul"
 	EnvProviderFile   = "file"
+	EnvProviderGit    = "git"
 )
 
 // EnvConfig configures the system the deploy configuration of every environment is read from.
 type EnvConfig struct {
-	// Provider is none, consul or file.
+	// Provider is none, consul, file or git.
 	Provider string `yaml:"provider"`
 	// Required fails the deploy if the environment has no configuration.
 	Required bool `yaml:"required"`
@@ -287,6 +288,48 @@ type EnvConfig struct {
 	MaxRetries int          `yaml:"max_retries"`
 	Consul     ConsulConfig `yaml:"consul"`
 	File       FileConfig   `yaml:"file"`
+	Git        GitConfig    `yaml:"git"`
+}
+
+// GitConfig configures reading from a Git repository at a revision. Credentials are secret
+// references, resolved at every fetch.
+type GitConfig struct {
+	// Repository is the URL (https://, ssh://, git://, file://) or a local path; only from here,
+	// never from a request.
+	Repository string `yaml:"repository"`
+	// Ref is the default ref (default refs/heads/main).
+	Ref string `yaml:"ref"`
+	// Path is the file template in the repository, with {application}, {artifact} and
+	// {environment}.
+	Path string `yaml:"path"`
+	// AllowedRefs are other refs (patterns with *) that config.ref can name and from which a SHA
+	// must be reachable.
+	AllowedRefs []string `yaml:"allowed_refs"`
+	// Username and PasswordRef are the HTTPS credentials.
+	Username    string `yaml:"username"`
+	PasswordRef string `yaml:"password_ref"`
+	// SSHKeyRef is the SSH private key reference; KnownHosts is required with it.
+	SSHKeyRef  string `yaml:"ssh_key_ref"`
+	KnownHosts string `yaml:"known_hosts"`
+	// CAFile is an additional CA bundle for HTTPS.
+	CAFile string `yaml:"ca_file"`
+	// RequireSigned refuses commits without a valid signature of Signers.
+	RequireSigned bool       `yaml:"require_signed"`
+	Signers       GitSigners `yaml:"signers"`
+	// MaxAge refuses commits older than this (0 = no limit); rollbacks are exempt.
+	MaxAge time.Duration `yaml:"max_age"`
+	// CacheDir holds the local copies (default <workdir>/.git-cache).
+	CacheDir string `yaml:"cache_dir"`
+	// RefTTL is how long a ref resolution is reused before fetching again (default 30s).
+	RefTTL time.Duration `yaml:"ref_ttl"`
+}
+
+// GitSigners are the keys commit signatures are verified with.
+type GitSigners struct {
+	// OpenPGPKeyring is an armored public keyring.
+	OpenPGPKeyring string `yaml:"openpgp_keyring"`
+	// SSHAllowedSigners is an allowed_signers file (ssh-keygen format).
+	SSHAllowedSigners string `yaml:"ssh_allowed_signers"`
 }
 
 // Tenants configures the tenant registry: the teams and the applications they own.
@@ -632,6 +675,9 @@ type DescriptorPolicy struct {
 	// StepParams lists per custom step the patterns of the parameters a descriptor can set.
 	// Default: none, parameters come from the environment configuration.
 	StepParams map[string][]string `yaml:"step_params"`
+	// ConfigRef says which configuration revision a descriptor can choose with config.ref
+	// (git provider): none (default), ref (an allowed ref) or sha (also a commit SHA).
+	ConfigRef string `yaml:"config_ref"`
 }
 
 // Secrets configures the secret providers besides env: and file:.
@@ -729,6 +775,7 @@ func Default() *Config {
 			MaxRetries: 3,
 			Consul:     ConsulConfig{Key: "manent/{application}/{artifact}/{environment}"},
 			File:       FileConfig{Path: "./envconfig/{application}/{artifact}/{environment}.yml"},
+			Git:        GitConfig{Ref: "refs/heads/main", Path: "{application}/{artifact}/{environment}.yml", RefTTL: 30 * time.Second},
 		},
 		Tenants:   Tenants{Cache: 30 * time.Second},
 		RBAC:      RBAC{TenantRoles: TenantRoles{Members: "deployer", Admins: "admin"}},
@@ -858,8 +905,17 @@ func (c *Config) Validate() error {
 	}
 	switch c.EnvConfig.Provider {
 	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
+	case EnvProviderGit:
+		if c.EnvConfig.Git.Repository == "" {
+			errs = append(errs, errors.New("envconfig.git.repository is required with provider git"))
+		}
 	default:
-		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file)", c.EnvConfig.Provider))
+		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file|git)", c.EnvConfig.Provider))
+	}
+	switch c.DescriptorPolicy.ConfigRef {
+	case "", "none", "ref", "sha":
+	default:
+		errs = append(errs, fmt.Errorf("descriptor_policy.config_ref %q not supported (none|ref|sha)", c.DescriptorPolicy.ConfigRef))
 	}
 	if c.Callbacks.Timeout <= 0 || c.Callbacks.MaxRetries < 0 {
 		errs = append(errs, errors.New("callbacks: timeout must be > 0 and max_retries >= 0"))

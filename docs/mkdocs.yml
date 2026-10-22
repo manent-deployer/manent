@@ -134,6 +134,7 @@ plugins:
             CI/CD and IaC: CI/CD e IaC
             Configuration and secrets: Configurazione e segreti
             Artifact repositories: Repository degli artefatti
+            Git repository: Repository Git
             Identity: Identità
             OIDC identity providers: Identity provider OIDC
             Metrics and logs: Metriche e log
@@ -249,6 +250,7 @@ nav:
           - Terraform: integrazioni/terraform.md
       - Configuration and secrets:
           - HashiCorp Consul: integrazioni/consul.md
+          - Git repository: integrazioni/git.md
           - HashiCorp Vault: integrazioni/vault.md
           - Artifact repositories: integrazioni/repository-artefatti.md
       - Identity:

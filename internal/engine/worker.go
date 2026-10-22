@@ -29,6 +29,8 @@ import (
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/deploylog"
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/envconfig"
+	"github.com/joeg-ita/manent/internal/gitsrc"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
 	"github.com/joeg-ita/manent/internal/telemetry"
@@ -584,6 +586,9 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 		if v := s.Output[outSHA256]; s.Name == stepArtifacts && v != "" {
 			attrs[attrSHA256] = v
 		}
+		if v := s.Output[outRevision]; s.Name == stepConfig && gitsrc.IsSHA(v) {
+			attrs[attrConfigRevision] = v
+		}
 	}
 	if res.Change != nil {
 		attrs[attrChange], attrs[attrChangeURL] = res.Change.Number, res.Change.URL
@@ -606,6 +611,9 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 const (
 	stepArtifacts = "artifacts"
 	outSHA256     = "sha256"
+	// stepConfig records in outRevision the revision of the environment configuration.
+	stepConfig  = "config"
+	outRevision = "revision"
 )
 
 // recordOutcome records the final deploy outcome in the audit, in a DBOS step: after a
@@ -857,6 +865,8 @@ func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn
 func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig, error) {
 	d, approvals := req.Descriptor, req.Approval
 	meta := map[string]string{}
+	// A manual rollback reads the configuration revision of the deploy it goes back to.
+	ctx = envconfig.WithRevision(ctx, req.ConfigRevision)
 	if w.resolver != nil || d.HasImports() {
 		var err error
 		if d, meta, err = w.reader.importResolve(w.resolver)(ctx, d); err != nil {

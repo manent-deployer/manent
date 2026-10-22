@@ -62,7 +62,7 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `provider` | `none` | `none`, `consul` oppure `file`. |
+| `provider` | `none` | `none`, `consul`, `file` oppure `git`. |
 | `required` | `false` | Fa fallire il deploy se per l'ambiente non esiste configurazione. |
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
 | `consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
@@ -70,6 +70,17 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `consul.key` | `manent/{application}/{artifact}/{environment}` | Modello della chiave KV. |
 | `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
+| `git.repository` | | Repository Git delle configurazioni (`https://`, `ssh://`, `git://`, `file://` o un percorso). Vedi [Repository Git](../integrazioni/git.md). |
+| `git.ref` | `refs/heads/main` | Ref di default. |
+| `git.path` | `{application}/{artifact}/{environment}.yml` | Modello del file nel repository. |
+| `git.allowed_refs` | `[]` | Altri ref (pattern con `*`) che `config.ref` può indicare; uno SHA deve essere raggiungibile da essi o da `git.ref`. |
+| `git.username`, `git.password_ref` | | Credenziali HTTPS (la password è un riferimento a un segreto). |
+| `git.ssh_key_ref`, `git.known_hosts` | | Chiave SSH (riferimento a un segreto) e file dei known hosts, obbligatori insieme. |
+| `git.ca_file` | | CA aggiuntive per HTTPS. |
+| `git.require_signed` | `false` | Rifiuta i commit senza una firma valida di `git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
+| `git.max_age` | `0` | Età massima di un commit (`0` = nessuna); i rollback manuali ne sono esenti. |
+| `git.cache_dir` | `<workdir>/.git-cache` | Copie locali del repository. |
+| `git.ref_ttl` | `30s` | Per quanto si riusa la risoluzione di un ref prima di un nuovo fetch. |
 
 Vedi [Configurazione di ambiente](../guida/configurazione-ambiente.md).
 
@@ -147,6 +158,7 @@ Vedi [Governance dei rilasci](../guida/governance.md) e [Policy in Rego](../guid
 | `secret_refs` | `["*"]` | Riferimenti ai segreti dichiarabili dal descrittore. |
 | `targets` | `true` | Target indicati dal descrittore. |
 | `step_params` | `{}` | Parametri degli [step personalizzati](../guida/step-personalizzati.md) impostabili dal descrittore, per step (`"*"` = tutti). Default: nessuno. |
+| `config_ref` | `none` | Revisione della configurazione di ambiente che il descrittore può scegliere con `config.ref` ([provider git](../integrazioni/git.md)): `none`, `ref` (solo ref ammessi) o `sha` (anche SHA di commit). |
 
 Vedi [Sicurezza](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 

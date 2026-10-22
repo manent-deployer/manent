@@ -12,6 +12,7 @@ import (
 
 	"github.com/joeg-ita/manent/internal/cluster"
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/labels"
 	"github.com/joeg-ita/manent/internal/service"
 )
@@ -173,7 +174,9 @@ func (w *Worker) reconcileEnv(ctx context.Context, ie InventoryEntry) (service.T
 		return st, true
 	}
 	// The environment configuration valid now: targets may have been added or removed since the
-	// deploy.
+	// deploy. With the git provider the revision of the release in service is read instead: the
+	// difference with the default ref is a configuration change not yet deployed.
+	ctx = envconfig.WithRevision(ctx, cur.ConfigRevision)
 	d := req.Descriptor
 	if w.resolver != nil || d.HasImports() {
 		// Imports too are read again: the targets of a release in service may have changed.

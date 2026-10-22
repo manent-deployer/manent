@@ -33,6 +33,7 @@ manent sits between your CI, your artifact repositories and your targets, and ta
 | Tool | What you get | Guide |
 |---|---|---|
 | **HashiCorp Consul** | The environment configuration in the KV store, read at every deploy with its revision. | [HashiCorp Consul](consul.md) |
+| **Git** | The environment configuration in a Git repository, read at a commit whose SHA is recorded on the deploy; optional signed commits. | [Git repository](git.md) |
 | **HashiCorp Vault** | Secrets from KV v1 or v2, with token, AppRole or Kubernetes authentication. | [HashiCorp Vault](vault.md) |
 | **Nexus, Artifactory, OCI registries** | Allowed artifact sources with credentials per URL prefix and private CAs. | [Artifact repositories](repository-artefatti.md) |
 

@@ -62,6 +62,20 @@ Si configura in `manent.yml`, sezione `envconfig`:
     consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
     ```
 
+=== "Git"
+
+    ```yaml
+    envconfig:
+      provider: git
+      git:
+        repository: https://git.example.com/platform/envconfig.git
+        ref: refs/heads/main
+        path: "{application}/{artifact}/{environment}.yml"
+        password_ref: vault:secret/manent/git#token
+    ```
+
+    Il file viene letto a un commit: il suo SHA viene registrato sul deploy, e un descrittore può scegliere una revisione entro `descriptor_policy.config_ref`. Vedi [Repository Git](../integrazioni/git.md).
+
 === "File"
 
     ```yaml
@@ -87,7 +101,7 @@ Si configura in `manent.yml`, sezione `envconfig`:
 | `required` | `true`: il deploy fallisce se per l'ambiente non esiste configurazione. `false`: si usa solo il descrittore. |
 | `max_retries` | Tentativi aggiuntivi se il provider non risponde (es. Consul non raggiungibile). |
 
-I template (`consul.key`, `file.path`) contengono `{artifact}`, l'`artifact.name` del descrittore: un documento per artefatto di un'applicazione. Vedi [Applicazioni con più artefatti](artefatti.md).
+I template (`consul.key`, `file.path`, `git.path`) contengono `{artifact}`, l'`artifact.name` del descrittore: un documento per artefatto di un'applicazione. Vedi [Applicazioni con più artefatti](artefatti.md).
 
 ## Quando viene letta
 
@@ -96,7 +110,7 @@ La configurazione viene letta all'inizio di ogni deploy, nello step `config`. Ne
 - un deploy pianificato usa la configurazione valida al momento dell'esecuzione, non quella del momento in cui è stato pianificato;
 - una volta letta, viene salvata da DBOS. Se il deploy viene ripreso dopo un crash, riusa la stessa configurazione anche se nel frattempo è cambiata.
 
-L'output dello step `config` riporta la fonte (`source`, es. `consul:manent/myapp/myapp/test`) e la revisione (`revision`, il `ModifyIndex` di Consul), così ogni deploy è riconducibile alla configurazione esatta che ha usato.
+L'output dello step `config` riporta la fonte (`source`, es. `consul:manent/myapp/myapp/test`) e la revisione (`revision`: il `ModifyIndex` di Consul, o lo SHA del commit con Git), così ogni deploy è riconducibile alla configurazione esatta che ha usato.
 
 ## Regole di fusione
 

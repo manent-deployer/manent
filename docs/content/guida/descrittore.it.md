@@ -191,6 +191,15 @@ Motivo con cui il deploy deroga a una [finestra di freeze](governance.md#finestr
 freezeOverride: "INC-4711: correzione del calcolo IVA"
 ```
 
+### `config`
+
+Revisione della configurazione di ambiente, con il [provider git](../integrazioni/git.md) e solo se `descriptor_policy.config_ref` lo ammette: il nome di un ref o lo SHA di un commit raggiungibile dai ref ammessi. Senza, il ref di default.
+
+```yaml
+config:
+  ref: refs/tags/env-42
+```
+
 ## Validazione
 
 Il descrittore viene validato appena letto, sia dalla CLI sia dall'API. Gli errori vengono restituiti tutti insieme, non solo il primo. Alcuni controlli avvengono più tardi, perché dipendono da altro:

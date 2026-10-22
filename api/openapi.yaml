@@ -743,6 +743,11 @@ components:
         dryRun: {type: boolean}
         after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
         afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
+        config:
+          type: object
+          description: Revisione della configurazione di ambiente (provider git), entro descriptor_policy.config_ref
+          properties:
+            ref: {type: string, description: Nome di un ref (refs/tags/env-1) o SHA di un commit}
         imports:
           type: object
           description: Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom)
@@ -908,6 +913,7 @@ components:
         artifact: {type: string}
         version: {type: string}
         sha256: {type: string}
+        config_revision: {type: string, description: SHA del commit della configurazione di ambiente (provider git)}
         kind: {type: string, enum: [deploy, promotion, rollback]}
         source: {type: string, description: Deploy di origine di una promozione o di un rollback}
         dry_run: {type: boolean}
@@ -1381,6 +1387,7 @@ components:
             artifact: {type: string, description: "Artefatto da promuovere; obbligatorio se from ne ha più di uno"}
             version: {type: string}
             deploy: {$ref: '#/components/schemas/DeployTargets'}
+            config_ref: {type: string, description: "Revisione della configurazione dell'ambiente di destinazione (provider git); default il ref di default"}
     RollbackRequest:
       allOf:
         - $ref: '#/components/schemas/Redeploy'

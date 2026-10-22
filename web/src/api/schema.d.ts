@@ -757,6 +757,11 @@ export interface components {
             after?: string[];
             /** @description Attesa massima delle dipendenze (default 24h) */
             afterTimeout?: string;
+            /** @description Revisione della configurazione di ambiente (provider git), entro descriptor_policy.config_ref */
+            config?: {
+                /** @description Nome di un ref (refs/tags/env-1) o SHA di un commit */
+                ref?: string;
+            };
             /** @description Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom) */
             imports?: {
                 [key: string]: components["schemas"]["Import"];
@@ -922,6 +927,8 @@ export interface components {
             artifact?: string;
             version?: string;
             sha256?: string;
+            /** @description SHA del commit della configurazione di ambiente (provider git) */
+            config_revision?: string;
             /** @enum {string} */
             kind?: "deploy" | "promotion" | "rollback";
             /** @description Deploy di origine di una promozione o di un rollback */
@@ -1446,6 +1453,8 @@ export interface components {
             artifact?: string;
             version?: string;
             deploy?: components["schemas"]["DeployTargets"];
+            /** @description Revisione della configurazione dell'ambiente di destinazione (provider git); default il ref di default */
+            config_ref?: string;
         };
         RollbackRequest: components["schemas"]["Redeploy"] & {
             application: string;

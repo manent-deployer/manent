@@ -61,6 +61,9 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 			"version=" + d.Artifact.Version,
 			fmt.Sprintf("dry_run=%t", d.DryRun),
 		}
+		if st.ConfigRevision != "" {
+			lines = append(lines, "config_revision="+st.ConfigRevision)
+		}
 		for _, l := range lines {
 			if strings.ContainsAny(l, "\r\n") {
 				return fmt.Errorf("value cannot be written to %s: %q", r.outputs, l)
@@ -85,6 +88,9 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 		var b strings.Builder
 		fmt.Fprintf(&b, "### manent · %s di %s in %s\n\n| | |\n|---|---|\n", kind, d.Application, d.Environment)
 		fmt.Fprintf(&b, "| Versione | `%s` |\n| Deploy | `%s` |\n| Esito | **%s** |\n", d.Artifact.Version, sub.ID, st.State)
+		if st.ConfigRevision != "" {
+			fmt.Fprintf(&b, "| Configurazione | `%s` |\n", st.ConfigRevision)
+		}
 		if st.RolloutProgress != "" {
 			fmt.Fprintf(&b, "| Rollout | %s |\n", st.RolloutProgress)
 		}

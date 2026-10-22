@@ -62,6 +62,20 @@ Configured in `manent.yml`, section `envconfig`:
     consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
     ```
 
+=== "Git"
+
+    ```yaml
+    envconfig:
+      provider: git
+      git:
+        repository: https://git.example.com/platform/envconfig.git
+        ref: refs/heads/main
+        path: "{application}/{artifact}/{environment}.yml"
+        password_ref: vault:secret/manent/git#token
+    ```
+
+    The file is read at a commit: its SHA is recorded on the deploy, and a descriptor can choose a revision within `descriptor_policy.config_ref`. See [Git repository](../integrazioni/git.md).
+
 === "File"
 
     ```yaml
@@ -87,7 +101,7 @@ Configured in `manent.yml`, section `envconfig`:
 | `required` | `true`: the deploy fails if there is no configuration for the environment. `false`: only the descriptor is used. |
 | `max_retries` | Additional attempts if the provider does not respond (e.g. Consul unreachable). |
 
-Templates (`consul.key`, `file.path`) contain `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application. See [Applications with several artifacts](artefatti.md).
+Templates (`consul.key`, `file.path`, `git.path`) contain `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application. See [Applications with several artifacts](artefatti.md).
 
 ## When it is read
 
@@ -96,7 +110,7 @@ The configuration is read at the start of every deploy, in the `config` step. Tw
 - a scheduled deploy uses the configuration valid at run time, not the one at the time it was scheduled;
 - once read, it is saved by DBOS. If the deploy is resumed after a crash, it reuses the same configuration even if it has changed in the meantime.
 
-The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/myapp/test`) and the revision (`revision`, Consul's `ModifyIndex`), so every deploy can be traced back to the exact configuration it used.
+The output of the `config` step reports the source (`source`, e.g. `consul:manent/myapp/myapp/test`) and the revision (`revision`: Consul's `ModifyIndex`, or the commit SHA with Git), so every deploy can be traced back to the exact configuration it used.
 
 ## Merge rules { #regole-di-fusione }
 

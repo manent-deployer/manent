@@ -77,6 +77,13 @@ function Facts({ d }: { d: Status }) {
           <span className="font-mono text-sm">{d.tenant}</span>
         </Fact>
       )}
+      {d.config_revision && (
+        <Fact label={t("detail.configRevision")}>
+          <span className="font-mono text-sm" title={d.config_revision}>
+            {d.config_revision.slice(0, 12)}
+          </span>
+        </Fact>
+      )}
       {d.policy && (
         <Fact label={t("detail.policy")}>
           <span className="font-mono text-sm">

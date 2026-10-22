@@ -42,6 +42,9 @@ type ArtifactOverrides struct {
 	Version string `long:"version" description:"versione dell'artefatto, al posto di quella del descrittore"`
 	Source  string `long:"source" description:"sorgente dell'artefatto, al posto di quella del descrittore"`
 	SHA256  string `long:"sha256" description:"sha256 atteso dell'artefatto"`
+	// ConfigRef sets config.ref: in CI the commit of the configuration repository tested with
+	// the artifact.
+	ConfigRef string `long:"config-ref" description:"revisione della configurazione di ambiente (ref o SHA, provider git), entro descriptor_policy.config_ref"`
 }
 
 // apply writes the overrides into the descriptor and validates it again.
@@ -60,6 +63,9 @@ func (o ArtifactOverrides) apply(d *descriptor.Descriptor) bool {
 	}
 	if o.SHA256 != "" {
 		d.Artifact.SHA256 = o.SHA256
+	}
+	if o.ConfigRef != "" {
+		d.Config = &descriptor.ConfigSource{Ref: o.ConfigRef}
 	}
 	return true
 }
@@ -317,12 +323,13 @@ type PromoteCmd struct {
 	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (obbligatorio se l'ambiente di origine ne ha più di uno)"`
 	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
 	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
+	ConfigRef   string `long:"config-ref" description:"revisione della configurazione dell'ambiente di destinazione (ref o SHA, provider git); default: il ref di default"`
 	redeployOptions
 }
 
 // Execute implements flags.Commander.
 func (c *PromoteCmd) Execute([]string) error {
-	r := service.PromoteRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Version: c.Version, Redeploy: c.redeploy()}
+	r := service.PromoteRequest{Application: c.Application, Artifact: c.Artifact, From: c.From, To: c.To, Version: c.Version, ConfigRef: c.ConfigRef, Redeploy: c.redeploy()}
 	if c.DeployFile != "" {
 		data, err := os.ReadFile(c.DeployFile)
 		if err != nil {

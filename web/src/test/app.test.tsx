@@ -253,6 +253,7 @@ describe("catene", () => {
       id: "api-2",
       state: "WAITING_DEPENDENCY",
       release: "r1",
+      config_revision: "4f9c2e1a7b3d5f6a8c9e0b1d2f3a4c5e6b7d8f90",
       after: { status: "waiting", expires_at: "2026-10-12T10:00:00Z", dependencies: [{ id: "db-2", state: "PENDING" }] },
     });
     const { api } = fakeApi(({ path }) => {
@@ -269,6 +270,7 @@ describe("catene", () => {
     expect(within(list).getByText("Running")).toBeInTheDocument();
     expect(screen.getAllByText("Waiting for dependencies").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "r1" })).toHaveAttribute("href", "/releases/r1");
+    expect(screen.getByTitle("4f9c2e1a7b3d5f6a8c9e0b1d2f3a4c5e6b7d8f90")).toHaveTextContent("4f9c2e1a7b3d");
   });
 
   it("mostra una release con i deploy e il rollback", async () => {

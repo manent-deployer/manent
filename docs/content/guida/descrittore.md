@@ -191,6 +191,15 @@ Reason for which the deploy bypasses a [freeze window](governance.md#finestre-di
 freezeOverride: "INC-4711: VAT calculation fix"
 ```
 
+### `config`
+
+Revision of the environment configuration, with the [git provider](../integrazioni/git.md) and only if `descriptor_policy.config_ref` allows it: a ref name or a commit SHA reachable from the allowed refs. Without it, the default ref.
+
+```yaml
+config:
+  ref: refs/tags/env-42
+```
+
 ## Validation
 
 The descriptor is validated as soon as it is read, by both the CLI and the API. All errors are returned together, not just the first one. Some checks happen later, because they depend on other things:

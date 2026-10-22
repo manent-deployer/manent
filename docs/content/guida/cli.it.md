@@ -61,6 +61,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--after <id>` | Avvia il deploy solo dopo il successo del deploy `<id>` (ripetibile): vedi [Catene di deploy](catene.md). |
 | `--import <nome>=<id>` | Legge gli export del deploy `<id>` come import `<nome>` del descrittore e aggiunge `<id>` ad `after` (ripetibile): vedi [Export e import](catene.md#export-import). |
 | `--id`, `--version`, `--source`, `--sha256` | Sostituiscono ID e campi dell'artefatto del descrittore (la pipeline dà la versione). |
+| `--config-ref <ref>` | Imposta `config.ref`: la revisione della configurazione di ambiente ([provider git](../integrazioni/git.md)), entro `descriptor_policy.config_ref`. |
 | `--outputs <file>`, `--summary <file>`, `--ci` | Esiti `chiave=valore` e riepilogo Markdown per la CI: vedi [CI e infrastruttura come codice](ci-iac.md). |
 
 I deploy pianificati (`schedule` nel descrittore) e quelli in [attesa di approvazione](governance.md#approvazioni) non vengono attesi: il comando stampa lo stato e termina.
@@ -113,7 +114,7 @@ Vedi [Governance dei rilasci](governance.md).
 
 ```sh
 manent inventory [-a <applicazione>] [-e <ambiente>] [--out-of-sync]
-manent promote -a <applicazione> --from <ambiente> --to <ambiente> [--version <v>] [--deploy-file <yaml>]
+manent promote -a <applicazione> --from <ambiente> --to <ambiente> [--version <v>] [--deploy-file <yaml>] [--config-ref <ref>]
 manent rollback -a <applicazione> -e <ambiente> [--to <versione>]
 manent approve <id> [-m <commento>]
 manent reject <id> -m <motivo>

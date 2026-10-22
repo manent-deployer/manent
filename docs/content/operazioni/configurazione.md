@@ -62,7 +62,7 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 
 | Key | Default | Description |
 |---|---|---|
-| `provider` | `none` | `none`, `consul` or `file`. |
+| `provider` | `none` | `none`, `consul`, `file` or `git`. |
 | `required` | `false` | Makes the deploy fail if there is no configuration for the environment. |
 | `max_retries` | `3` | Additional read attempts. |
 | `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
@@ -70,6 +70,17 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | `consul.key` | `manent/{application}/{artifact}/{environment}` | KV key template. |
 | `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
 | `file.path` | `./envconfig/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
+| `git.repository` | | Git repository of the configurations (`https://`, `ssh://`, `git://`, `file://` or a path). See [Git repository](../integrazioni/git.md). |
+| `git.ref` | `refs/heads/main` | Default ref. |
+| `git.path` | `{application}/{artifact}/{environment}.yml` | File template in the repository. |
+| `git.allowed_refs` | `[]` | Other refs (patterns with `*`) `config.ref` may name; a SHA must be reachable from them or from `git.ref`. |
+| `git.username`, `git.password_ref` | | HTTPS credentials (the password is a secret reference). |
+| `git.ssh_key_ref`, `git.known_hosts` | | SSH key (secret reference) and known hosts file, required together. |
+| `git.ca_file` | | Additional CA bundle for HTTPS. |
+| `git.require_signed` | `false` | Refuses commits without a valid signature of `git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
+| `git.max_age` | `0` | Maximum age of a commit (`0` = none); manual rollbacks are exempt. |
+| `git.cache_dir` | `<workdir>/.git-cache` | Local copies of the repository. |
+| `git.ref_ttl` | `30s` | How long a ref resolution is reused before fetching again. |
 
 See [Environment configuration](../guida/configurazione-ambiente.md).
 
@@ -147,6 +158,7 @@ See [Release governance](../guida/governance.md) and [Policies in Rego](../guida
 | `secret_refs` | `["*"]` | Secret references the descriptor may declare. |
 | `targets` | `true` | Targets given by the descriptor. |
 | `step_params` | `{}` | Parameters of [custom steps](../guida/step-personalizzati.md) the descriptor may set, per step (`"*"` = all). Default: none. |
+| `config_ref` | `none` | Revision of the environment configuration the descriptor may choose with `config.ref` ([git provider](../integrazioni/git.md)): `none`, `ref` (allowed refs only) or `sha` (also commit SHAs). |
 
 See [Security](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 

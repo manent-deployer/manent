@@ -257,6 +257,9 @@ func applyRedeploy(r Redeploy, d *descriptor.Descriptor, src *Status) {
 	// deploys: the targets come from the environment of the new deploy.
 	d.After, d.AfterTimeout = nil, ""
 	d.DropDeploymentImports()
+	// The configuration revision is chosen again: the default ref of the environment, the one
+	// given with the promotion, the one recorded by the deploy a rollback goes back to.
+	d.Config = nil
 	if src.SHA256 != "" {
 		// Exactly the artifact already released is released: the qa step verifies it.
 		d.Artifact.SHA256 = src.SHA256
@@ -311,6 +314,9 @@ func (e *Engine) promoteDescriptor(ctx context.Context, r PromoteRequest) (*desc
 		d.Deploy = *r.Deploy
 	}
 	applyRedeploy(r.Redeploy, &d, src)
+	if r.ConfigRef != "" {
+		d.Config = &descriptor.ConfigSource{Ref: r.ConfigRef}
+	}
 	if err := d.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
@@ -333,7 +339,7 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	if err != nil {
 		return nil, err
 	}
-	return e.submit(ctx, d, submitMeta{kind: KindRollback, source: target.ID})
+	return e.submit(ctx, d, submitMeta{kind: KindRollback, source: target.ID, configRevision: target.ConfigRevision})
 }
 
 // rollbackDescriptor finds the release to go back to and builds the descriptor of the rollback.

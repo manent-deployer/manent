@@ -152,6 +152,9 @@ type PromoteRequest struct {
 	// Deploy replaces the deploy section of the source descriptor; without it, the source
 	// targets are not copied and come from To's environment configuration.
 	Deploy *descriptor.Deploy `json:"deploy,omitempty"`
+	// ConfigRef is the revision of To's environment configuration (git provider), within
+	// descriptor_policy.config_ref; default To's default ref.
+	ConfigRef string `json:"config_ref,omitempty"`
 	Redeploy
 }
 

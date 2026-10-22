@@ -22,9 +22,9 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -41,6 +41,7 @@ info "interfaccia web compilata"
 (cd ../.. && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/" ./cmd/manent ./cmd/manent-server &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-oidc" ./test/usecases/oidc &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-fakes" ./test/usecases/fakes &&
+  GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-git" ./test/usecases/gitserver &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-windows" ./test/usecases/windows/fake &&
   cd integrations/terraform && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/terraform-provider-manent" .)
 info "binari linux/$goarch compilati"
@@ -67,6 +68,10 @@ printf 'uc-nr-key' >"$WORK/keys/nr-key"
 printf 'uc-es-key' >"$WORK/keys/es-key"
 printf 'AKIDUCTEST' >"$WORK/keys/aws-id"
 printf 'uc-aws-secret' >"$WORK/keys/aws-secret"
+# UC27: token of the lab Git server and SSH key that signs the configuration commits.
+printf 'uc-git-token' >"$WORK/keys/git-token"
+ssh-keygen -q -t ed25519 -N '' -C uc27-signer -f "$WORK/keys/git-sign"
+printf 'uc27@example.com namespaces="git" %s\n' "$(cat "$WORK/keys/git-sign.pub")" >"$WORK/keys/git-allowed-signers"
 chmod 644 "$WORK"/keys/*
 
 # Configuration variants for the region workers (UC5).
@@ -82,8 +87,8 @@ region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
-dc --profile regions --profile containers --profile lb --profile jboss --profile windows build -q
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile containers --profile lb --profile jboss --profile windows --profile git build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0
 until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do

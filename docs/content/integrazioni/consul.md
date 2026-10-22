@@ -9,7 +9,7 @@ The [environment configuration](../guida/configurazione-ambiente.md) of each app
 
 | Key | Content |
 |---|---|
-| `manent/<application>/<environment>` | Environment configuration, YAML or JSON. |
+| `manent/<application>/<artifact>/<environment>` | Environment configuration, YAML or JSON. |
 
 The template can be changed (`envconfig.consul.key`).
 

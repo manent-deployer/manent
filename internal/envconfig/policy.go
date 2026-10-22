@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 
 	"github.com/joeg-ita/manent/internal/descriptor"
@@ -28,6 +29,35 @@ type DescriptorPolicy struct {
 	// StepParams lists, per custom step, the patterns of the parameters the descriptor can set;
 	// the "*" key applies to all steps. Empty: none.
 	StepParams map[string][]string
+	// ConfigRef says which configuration revision the descriptor can choose with config.ref:
+	// none (default), ref (an allowed ref name) or sha (also a commit SHA).
+	ConfigRef string
+}
+
+// Values of DescriptorPolicy.ConfigRef.
+const (
+	ConfigRefNone = "none"
+	ConfigRefRef  = "ref"
+	ConfigRefSHA  = "sha"
+)
+
+// shaRe is the shape of a full commit SHA (SHA-1 or SHA-256).
+var shaRe = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
+
+// checkConfigRef verifies config.ref against descriptor_policy.config_ref.
+func (p *DescriptorPolicy) checkConfigRef(d descriptor.Descriptor) error {
+	ref := d.ConfigRef()
+	switch {
+	case ref == "":
+		return nil
+	case p.ConfigRef == ConfigRefSHA:
+		return nil
+	case p.ConfigRef == ConfigRefRef && !shaRe.MatchString(ref):
+		return nil
+	case p.ConfigRef == ConfigRefRef:
+		return fmt.Errorf("config.ref %s: the descriptor can name refs, not commit SHAs (descriptor_policy.config_ref: ref)", ref)
+	}
+	return fmt.Errorf("config.ref cannot be set by the descriptor (descriptor_policy.config_ref)")
 }
 
 // Check verifies the descriptor against the policy, treating as already defined what comes
@@ -37,6 +67,9 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 		return nil
 	}
 	var errs []error
+	if err := p.checkConfigRef(d); err != nil {
+		errs = append(errs, err)
+	}
 	plugin := cmp.Or(c.Plugin, d.Deploy.Plugin)
 	allowed := slices.Concat(p.Params["*"], p.Params[plugin])
 	for _, k := range slices.Sorted(maps.Keys(d.Deploy.Params)) {

@@ -438,6 +438,7 @@ export const it: Record<MessageKey, string> = {
   "inventory.tenant": "Tenant",
   "inventory.artifact": "Artefatto",
   "detail.tenant": "Tenant",
+  "detail.configRevision": "Revisione della configurazione",
   "state.PENDING_START": "Non partito",
   "state.SKIPPED": "Saltato",
   "state.DENIED": "Negato dalla policy",

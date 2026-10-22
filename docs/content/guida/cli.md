@@ -61,6 +61,7 @@ manent deploy -f examples/descriptor.yml [--no-wait] [--timeout 30m] [--dry-run]
 | `--after <id>` | Starts the deploy only after the deploy `<id>` has succeeded (repeatable): see [Deploy chains](catene.md). |
 | `--import <name>=<id>` | Reads the exports of the deploy `<id>` as the import `<name>` of the descriptor and adds `<id>` to `after` (repeatable): see [Exports and imports](catene.md#export-import). |
 | `--id`, `--version`, `--source`, `--sha256` | Replace the ID and the artifact fields of the descriptor (the pipeline gives the version). |
+| `--config-ref <ref>` | Sets `config.ref`: the revision of the environment configuration ([git provider](../integrazioni/git.md)), within `descriptor_policy.config_ref`. |
 | `--outputs <file>`, `--summary <file>`, `--ci` | `key=value` outcome and Markdown summary for CI: see [CI and infrastructure as code](ci-iac.md). |
 
 Scheduled deploys (`schedule` in the descriptor) and those [awaiting approval](governance.md#approvazioni) are not waited for: the command prints the state and exits.
@@ -113,7 +114,7 @@ See [Release governance](governance.md).
 
 ```sh
 manent inventory [-a <application>] [-e <environment>] [--out-of-sync]
-manent promote -a <application> --from <environment> --to <environment> [--version <v>] [--deploy-file <yaml>]
+manent promote -a <application> --from <environment> --to <environment> [--version <v>] [--deploy-file <yaml>] [--config-ref <ref>]
 manent rollback -a <application> -e <environment> [--to <version>]
 manent approve <id> [-m <comment>]
 manent reject <id> -m <reason>

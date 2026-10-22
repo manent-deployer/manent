@@ -17,6 +17,7 @@ import (
 	"github.com/joeg-ita/manent/internal/auth"
 	"github.com/joeg-ita/manent/internal/callback"
 	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/joeg-ita/manent/internal/envconfig"
 	"github.com/joeg-ita/manent/internal/governance"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/rollout"
@@ -72,6 +73,10 @@ type Request struct {
 	// TraceParent is the trace (W3C traceparent) of the request: the worker's spans become its
 	// children. Empty for recurring schedule runs.
 	TraceParent string `json:"trace_parent,omitempty"`
+	// ConfigRevision pins the revision of the environment configuration (git provider): the
+	// one recorded by the deploy a manual rollback goes back to. Chosen by the server, it is not
+	// subject to descriptor_policy.config_ref.
+	ConfigRevision string `json:"config_revision,omitempty"`
 }
 
 // ServiceOptions configures the service.
@@ -196,6 +201,8 @@ func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Pla
 // submitMeta describes the origin of a deploy request.
 type submitMeta struct {
 	kind, source, release string
+	// configRevision pins the environment configuration revision (manual rollback).
+	configRevision string
 	// prechecked skips the policy and environment configuration check (check), already done by
 	// whoever accepted the request (deploy of a release).
 	prechecked bool
@@ -239,6 +246,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 		return nil, err
 	}
 	var eff *descriptor.Descriptor
+	ctx = envconfig.WithRevision(ctx, meta.configRevision)
 	if !meta.prechecked {
 		if eff, err = e.check(ctx, d); err != nil {
 			return nil, err
@@ -247,7 +255,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	p := auth.FromContext(ctx)
 	req := Request{
 		Descriptor: *d, Plan: plan, RequestedBy: p.String(), Kind: meta.kind, Source: meta.source,
-		Release: meta.release, TraceParent: telemetry.TraceParent(ctx),
+		Release: meta.release, TraceParent: telemetry.TraceParent(ctx), ConfigRevision: meta.configRevision,
 	}
 	if p != nil {
 		req.RequestedGroups = p.Groups
@@ -621,7 +629,9 @@ const (
 	attrApproval    = "approval"
 	attrOutcome     = "outcome"
 	attrSHA256      = "sha256"
-	attrRollback    = "rollback"
+	// attrConfigRevision is the commit SHA of the environment configuration (git provider).
+	attrConfigRevision = "config_revision"
+	attrRollback       = "rollback"
 	// attrChange and attrChangeURL are number and link of the change ticket.
 	attrChange    = "change"
 	attrChangeURL = "change_url"
@@ -980,7 +990,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 	s := Status{
 		ID: st.ID, State: string(st.Status), CreatedAt: st.CreatedAt, UpdatedAt: st.UpdatedAt, RequestedBy: st.AuthenticatedUser,
 		Application: attr(st, attrApplication), Environment: attr(st, attrEnvironment),
-		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256),
+		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256), ConfigRevision: attr(st, attrConfigRevision),
 		Kind: attr(st, attrKind), Source: attr(st, attrSource), DryRun: attr(st, attrDryRun) == "true",
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
 		Exports: exportsAttr(attr(st, attrExports)), PublicExports: strings.Fields(attr(st, attrPublicExports)),

@@ -1,0 +1,71 @@
+# UC27: manent server (API and worker, "serve") whose environment configuration comes from a Git
+# repository (envconfig.provider: git) served by the lab Git server with a token. It has its own
+# SQLite database and no authentication: only the case talks to it.
+app:
+  name: manent
+  version: 0.1.0
+
+dbos:
+  database_url: sqlite:/tmp/manent-git.db
+  queue: deployments
+  concurrency: 2
+  environment_concurrency: 1
+  drain_timeout: 10s
+
+http:
+  listen: ":8080"
+
+logging:
+  level: info
+  format: text
+
+workdir: /tmp/manent-work
+
+envconfig:
+  provider: git
+  required: true
+  max_retries: 2
+  git:
+    repository: http://gitserver:8080/envconfig.git
+    ref: refs/heads/main
+    path: "{application}/{artifact}/{environment}.yml"
+    username: manent
+    password_ref: file:/keys/git-token
+    allowed_refs: [refs/tags/env-*]
+    # Commits signed with the SSH key of the lab (.work/keys/git-sign).
+    require_signed: true
+    signers:
+      ssh_allowed_signers: /keys/git-allowed-signers
+    ref_ttl: 1s
+
+# The descriptor (and --config-ref) can choose a ref or a commit SHA reachable from the allowed refs.
+descriptor_policy:
+  config_ref: sha
+
+artifacts:
+  allow_unlisted: false
+  sources:
+    - prefix: file:///srv/artifacts/
+
+rollback:
+  locator: plugin
+  artifact_types:
+    application:
+      allowed: true
+      enabled: false
+      on: [deploy, activation]
+
+auth:
+  mode: none
+
+pipeline:
+  steps:
+    - {name: secrets, mode: mandatory}
+    - {name: artifacts, mode: mandatory, max_retries: 2}
+    - {name: deploy, mode: mandatory, max_retries: 1}
+    - {name: activation, mode: optional, enabled: true}
+
+plugins:
+  remote-copy:
+    insecure_ignore_host_key: true   # lab: host keys regenerated at every start
+    artifact_types: [application]

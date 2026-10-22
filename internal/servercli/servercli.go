@@ -131,7 +131,7 @@ func (c *ValidateCmd) Execute([]string) error {
 	}
 	out["governance"] = g
 	if !c.Offline {
-		resolver, err := app.NewResolver(cfg)
+		resolver, err := app.NewResolver(cfg, sp)
 		if err != nil {
 			return err
 		}

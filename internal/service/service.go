@@ -232,9 +232,12 @@ type Status struct {
 	Version  string `json:"version,omitempty"`
 	// SHA256 is the hash of the released artifact, recorded at the end of the deploy.
 	SHA256 string `json:"sha256,omitempty"`
-	Kind   string `json:"kind,omitempty"`
-	Source string `json:"source,omitempty"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	// ConfigRevision is the commit SHA of the environment configuration (git provider),
+	// recorded at the end of the deploy.
+	ConfigRevision string `json:"config_revision,omitempty"`
+	Kind           string `json:"kind,omitempty"`
+	Source         string `json:"source,omitempty"`
+	DryRun         bool   `json:"dry_run,omitempty"`
 	// Rollback is the outcome of the automatic rollback, if run.
 	Rollback    string     `json:"rollback,omitempty"`
 	RequestedBy string     `json:"requested_by,omitempty"`
