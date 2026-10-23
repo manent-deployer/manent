@@ -87,6 +87,7 @@ application=hello
 environment=test
 version=1.1.0
 dry_run=false
+tenant=untenanted
 ### manent · Deploy di hello in test
 
 | | |

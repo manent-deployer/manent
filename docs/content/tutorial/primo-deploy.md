@@ -134,7 +134,7 @@ deploy:
 `validate` runs on the server every check of a real submission, then prints the plan and the effective deploy. It enqueues nothing and does not touch the target.
 
 ```sh
-manent validate -f hello.yml
+manent validate -f hello.yml | jq '{valid, plan, rollback, secrets, config}'
 ```
 
 ```json
@@ -197,12 +197,11 @@ docker exec manent-tutorial-target ls -l /opt/hello
 The [inventory](../guida/governance.md#inventario) now knows what is live:
 
 ```sh
-manent inventory -a hello
+manent inventory -a hello | jq -c '.[] | {application, artifact, environment, tenant, current: (.current | {version, sha256, kind, requested_by})}'
 ```
 
 ```json
-[{"application": "hello", "environment": "test",
-  "current": {"version": "1.0.0", "sha256": "45aae56d…", "kind": "deploy", "requested_by": "none:anonymous"}}]
+{"application":"hello","artifact":"hello","environment":"test","tenant":"untenanted","current":{"version":"1.0.0","sha256":"45aae56d…","kind":"deploy","requested_by":"none:anonymous"}}
 ```
 
 ## 8. Release a new version
@@ -267,7 +266,7 @@ manent rollback -a hello -e test
 manent takes the last successful version different from the live one (1.0.0 here, `--to` picks another), downloads it again, verifies its sha256 and releases it as a new deploy of kind `rollback`:
 
 ```sh
-manent list -a hello -n 5 | jq -r '.[] | "\(.state) \(.kind) \(.version)"'
+manent list -a hello -n 5 | jq -r '.[] | select(.dry_run | not) | "\(.state) \(.kind) \(.version)"'
 ```
 
 ```text

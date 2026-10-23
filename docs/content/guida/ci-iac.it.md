@@ -22,7 +22,7 @@ manent deploy -f deploy/prod.yml --version "$TAG" --source "https://nexus.exampl
 |---|---|
 | `--version`, `--source`, `--sha256` | Sostituiscono i campi dell'artefatto del descrittore. |
 | `--id` | ID del deploy: con lo stesso ID un job rieseguito non rilascia di nuovo (idempotenza). |
-| `--outputs <file>` | Aggiunge al file `deployment_id`, `state`, `tenant`, `application`, `environment`, `version`, `dry_run` come righe `chiave=valore`, anche se il deploy fallisce, e gli [export](catene.md#export-import) di un deploy riuscito come `export_<nome>=<valore>` (solo valori su una riga); `config_revision` con il [provider git](../integrazioni/git.md). |
+| `--outputs <file>` | Aggiunge al file `deployment_id`, `state`, `application`, `environment`, `version`, `dry_run`, `tenant` come righe `chiave=valore`, anche se il deploy fallisce, e gli [export](catene.md#export-import) di un deploy riuscito come `export_<nome>=<valore>` (solo valori su una riga); `config_revision` con il [provider git](../integrazioni/git.md). |
 | `--summary <file>` | Aggiunge un riepilogo in Markdown: versione, deploy, esito, rollout, rollback ed errore. |
 | `--ci` | Su GitHub Actions (`GITHUB_ACTIONS=true`) esiti in `$GITHUB_OUTPUT` e riepilogo in `$GITHUB_STEP_SUMMARY`; su GitLab CI (`GITLAB_CI=true`) esiti in `manent.env` (o `$MANENT_DOTENV`). Fuori da una CI riconosciuta è un errore. |
 

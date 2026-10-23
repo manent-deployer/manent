@@ -22,7 +22,7 @@ manent deploy -f deploy/prod.yml --version "$TAG" --source "https://nexus.exampl
 |---|---|
 | `--version`, `--source`, `--sha256` | Replace the artifact fields of the descriptor. |
 | `--id` | Deploy ID: with the same ID a re-run job does not deploy again (idempotency). |
-| `--outputs <file>` | Appends `deployment_id`, `state`, `tenant`, `application`, `environment`, `version`, `dry_run` to the file as `key=value` lines, also when the deploy fails, and the [exports](catene.md#export-import) of a successful deploy as `export_<name>=<value>` (single-line values only); `config_revision` with the [git provider](../integrazioni/git.md). |
+| `--outputs <file>` | Appends `deployment_id`, `state`, `application`, `environment`, `version`, `dry_run`, `tenant` to the file as `key=value` lines, also when the deploy fails, and the [exports](catene.md#export-import) of a successful deploy as `export_<name>=<value>` (single-line values only); `config_revision` with the [git provider](../integrazioni/git.md). |
 | `--summary <file>` | Appends a Markdown summary: version, deploy, outcome, rollout, rollback and error. |
 | `--ci` | On GitHub Actions (`GITHUB_ACTIONS=true`) outcome in `$GITHUB_OUTPUT` and summary in `$GITHUB_STEP_SUMMARY`; on GitLab CI (`GITLAB_CI=true`) outcome in `manent.env` (or `$MANENT_DOTENV`). Outside a recognized CI it is an error. |
 

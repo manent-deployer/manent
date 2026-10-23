@@ -132,7 +132,7 @@ Suppose 1.3.0 raises the error rate in `eu-1a`. At the second consecutive red re
     "on_failure": "rollback-all",
     "stages": [
       {"name": "canary", "state": "succeeded"},
-      {"name": "rest/eu-1a", "state": "failed", "gate": "metric error-rate (eu-1/eu-1a): valore 0.034 fuori soglia"},
+      {"name": "rest/eu-1a", "state": "failed", "gate": "metric error-rate (eu-1/eu-1a): value 0.034 out of threshold"},
       {"name": "rest/eu-1b", "state": "pending"}
     ]
   }

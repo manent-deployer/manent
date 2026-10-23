@@ -212,7 +212,7 @@ manent status $MOTD | jq -c '.result.steps[] | select(.name == "config") | .outp
 ```
 
 ```json
-{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","rollback":"disabled","source":"file:./envconfig/motd/motd/test.yml","targets":"2"}
+{"import.infra":"06091bae-7712-4dd5-bc51-b884d5417b86@1.0.0","policy_revision":"builtin:4f53cda18c2b","rollback":"disabled","source":"file:./envconfig/motd/motd/test.yml","targets":"2","tenant":"untenanted"}
 ```
 
 Lo step `config` registra da dove arrivano i target: il deploy dell'infrastruttura e la sua versione. Sulle VM:

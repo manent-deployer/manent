@@ -133,7 +133,7 @@ manent approve 7d817406-dae3-4a37-a382-5a078f2ea912 -m ok
 ```
 
 ```text
-permission denied: token:alice cannot perform deployment.approve on hello/prod
+permission denied: token:alice cannot perform deployment.approve on hello/prod (artifact hello)
 ```
 
 Bob sees the request among those he can decide, and approves it with a reference to the change:

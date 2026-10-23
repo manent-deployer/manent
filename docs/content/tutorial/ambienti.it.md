@@ -133,13 +133,23 @@ I file vanno bene per lo sviluppo. In produzione la configurazione sta in un sis
 docker run -d --name manent-tutorial-consul -p 8500:8500 hashicorp/consul:1.20 agent -dev -client=0.0.0.0
 ```
 
-Il riferimento al segreto punterà a Vault (passo successivo), quindi scrivi la versione per Consul della configurazione con un riferimento `vault:`:
+Il riferimento al segreto punterà a Vault (passo successivo). La versione per Consul della configurazione è l'intero file del passo 1, con il solo riferimento alla chiave cambiato in `vault:`:
 
-```yaml title="envconfig/hello/test-consul.yml (cambia solo la sezione secrets)"
+```sh
+sed 's#ref: file:.*#ref: "vault:secret/data/hello/test\#ssh_key"#' \
+  envconfig/hello/hello/test.yml > envconfig/hello/test-consul.yml
+tail -5 envconfig/hello/test-consul.yml
+```
+
+```yaml title="envconfig/hello/test-consul.yml (fine)"
 secrets:
   - name: deploy-key
     ref: "vault:secret/data/hello/test#ssh_key"
+rollback:
+  enabled: true                # l'ambiente impone il rollback
 ```
+
+La chiave in Consul contiene l'intera configurazione: target, parametri, riferimenti ai segreti e rollback. Un file con la sola sezione `secrets` lascerebbe l'ambiente senza target.
 
 ```sh
 docker cp envconfig/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
