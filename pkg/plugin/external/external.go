@@ -360,6 +360,7 @@ func fromStatus(err error) error {
 func toProtoRequest(req *plugin.Request, secretsID uint32) *pb.DeployRequest {
 	r := &pb.DeployRequest{
 		DeploymentId: req.DeploymentID,
+		Tenant:       req.Tenant,
 		Application:  req.Application,
 		Environment:  req.Environment,
 		Artifact: &pb.Artifact{
@@ -385,6 +386,7 @@ func fromProtoRequest(r *pb.DeployRequest) *plugin.Request {
 	a := r.GetArtifact()
 	req := &plugin.Request{
 		DeploymentID: r.GetDeploymentId(),
+		Tenant:       r.GetTenant(),
 		Application:  r.GetApplication(),
 		Environment:  r.GetEnvironment(),
 		Artifact: plugin.Artifact{

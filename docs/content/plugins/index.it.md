@@ -30,6 +30,7 @@ type Factory func(cfg map[string]any, logger *slog.Logger) (plugin.Deployer, err
 ```go
 type Request struct {
 	DeploymentID string
+	Tenant       string            // untenanted per le applicazioni che nessun tenant elenca
 	Application  string
 	Environment  string
 	Artifact     Artifact          // Type, Name, Version, LocalPath, SHA256
@@ -39,7 +40,7 @@ type Request struct {
 }
 ```
 
-`Artifact.LocalPath` è il percorso dell'artefatto già scaricato e verificato sul worker. `Params` sono i parametri del plugin, dopo la fusione con la [configurazione di ambiente](../guida/configurazione-ambiente.md).
+`Tenant`, `Application`, `Artifact.Name` ed `Environment` identificano la release: un plugin che tiene stato per release (storico, marcatori sui target) deve usarli tutti e quattro come chiave, perché due [tenant](../guida/tenant.md) possono avere applicazioni con lo stesso nome e ogni artefatto di un'applicazione è una release a sé. `Tenant` vale `untenanted` per le applicazioni che nessun tenant elenca. `Artifact.LocalPath` è il percorso dell'artefatto già scaricato e verificato sul worker. `Params` sono i parametri del plugin, dopo la fusione con la [configurazione di ambiente](../guida/configurazione-ambiente.md).
 
 ### Il risultato
 

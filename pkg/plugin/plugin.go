@@ -59,10 +59,15 @@ type Target struct {
 // Request holds everything the plugin needs to run the deploy.
 type Request struct {
 	DeploymentID string
-	Application  string
-	Environment  string
-	Artifact     Artifact
-	Targets      []Target
+	// Tenant, Application, Artifact.Name and Environment identify the release: two tenants can
+	// have applications with the same name, and every artifact of an application is a release of
+	// its own. Tenant is "untenanted" for the applications no tenant lists. Plugins that keep
+	// state per release (history, markers) must key it on all four.
+	Tenant      string
+	Application string
+	Environment string
+	Artifact    Artifact
+	Targets     []Target
 	// Params are plugin-specific parameters, taken from the descriptor.
 	Params  map[string]string
 	Secrets SecretResolver

@@ -120,7 +120,7 @@ I permessi del token decidono cosa manent può modificare: un Role limitato al n
 | `keep_releases` | `5` | Release conservate nello storico (minimo 2). |
 | `require_image_digest` | `false` | `true`: rifiuta i workload con immagini non fissate al digest (`image@sha256:…`). |
 | `var.NOME` | | Valore di `${NOME}` nei manifest. |
-| `helm_release` | nome dell'applicazione | Nome della release Helm (`.Release.Name`). |
+| `helm_release` | nome dell'artefatto | Nome della release Helm (`.Release.Name`): due chart della stessa applicazione generano oggetti con nomi diversi. |
 | `helm_values_files` | | File di values contenuti nel chart, separati da virgola, applicati in ordine. |
 | `helm_values` | | Values in YAML. |
 | `helm_value.<percorso>` | | Un singolo value, interpretato come YAML: `helm_value.image.tag: "1.4.0"`, `helm_value.replicaCount: "3"`. |
@@ -132,7 +132,7 @@ I permessi del token decidono cosa manent può modificare: un Role limitato al n
 Per ogni cluster, in sequenza:
 
 1. legge i manifest e sostituisce le variabili, oppure renderizza il chart con le capabilities del cluster; poi verifica ogni oggetto con la discovery del cluster (apiVersion e kind esistenti). Agli oggetti senza namespace assegna `namespace`;
-2. aggiunge le etichette `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/environment` e le annotazioni `manent.io/version` e `manent.io/deployment`;
+2. aggiunge le etichette `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant`, `manent.io/environment` e le annotazioni `manent.io/version` e `manent.io/deployment`;
 3. applica prima i Namespace, poi salva la release nello storico, poi applica gli altri oggetti in ordine di dipendenza (CRD, permessi, ConfigMap e Secret, Service, workload). Il server-side apply usa il field manager `manent` ed è idempotente;
 4. attende il rollout di Deployment, StatefulSet e DaemonSet. Un Deployment oltre il suo `progressDeadlineSeconds` fallisce subito, senza attendere `wait_timeout`;
 5. con `prune`, elimina gli oggetti rimossi dai manifest;
@@ -146,6 +146,8 @@ Lo storico è fatto di ConfigMap nel namespace:
 
 - `manent-<app>-<env>`: la release in esercizio;
 - `manent-<app>-<env>-<versione>`: gli oggetti applicati da ogni release, compressi (al più circa 900 KiB per release).
+
+Questi sono i nomi di una release il cui artefatto ha il nome dell'applicazione, senza [tenant](../guida/tenant.md). Ogni altra release (un altro artefatto dell'applicazione, o l'applicazione di un tenant) ha uno storico proprio, con il nome ricavato da tenant, applicazione, artefatto e ambiente e un suffisso hash (per esempio `manent-untenanted-shop-shop-api-prod-1a2b3c4d`). Le ConfigMap hanno le etichette della release, e la pulizia oltre `keep_releases` tocca solo lo storico della release che si sta rilasciando.
 
 Il **rollback** riapplica su ogni cluster gli oggetti salvati della release precedente, ne attende il rollout e, con `prune`, elimina gli oggetti creati solo dalla release fallita. Non serve riscaricare l'artefatto precedente. La release in esercizio (locator `plugin`) si legge dallo storico; cluster con release diverse fermano il deploy nel checkpoint.
 

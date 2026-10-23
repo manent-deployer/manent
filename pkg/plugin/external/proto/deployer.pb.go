@@ -396,7 +396,10 @@ type DeployRequest struct {
 	// ID of the broker Secrets is served on (0 = no resolver, e.g. in Validate).
 	SecretsBrokerId uint32 `protobuf:"varint,7,opt,name=secrets_broker_id,json=secretsBrokerId,proto3" json:"secrets_broker_id,omitempty"`
 	// Present only in percentage rollouts.
-	Traffic       *TrafficRequest `protobuf:"bytes,8,opt,name=traffic,proto3" json:"traffic,omitempty"`
+	Traffic *TrafficRequest `protobuf:"bytes,8,opt,name=traffic,proto3" json:"traffic,omitempty"`
+	// Tenant of the release ("untenanted" for the applications no tenant lists): with application,
+	// artifact name and environment it identifies the release. Empty from hosts before it existed.
+	Tenant        string `protobuf:"bytes,9,opt,name=tenant,proto3" json:"tenant,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -485,6 +488,13 @@ func (x *DeployRequest) GetTraffic() *TrafficRequest {
 		return x.Traffic
 	}
 	return nil
+}
+
+func (x *DeployRequest) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
 }
 
 type TrafficRequest struct {
@@ -1123,7 +1133,7 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\x06Target\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x12\n" +
-	"\x04user\x18\x03 \x01(\tR\x04user\"\xcc\x03\n" +
+	"\x04user\x18\x03 \x01(\tR\x04user\"\xe4\x03\n" +
 	"\rDeployRequest\x12#\n" +
 	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12 \n" +
 	"\vapplication\x18\x02 \x01(\tR\vapplication\x12 \n" +
@@ -1132,7 +1142,8 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\atargets\x18\x05 \x03(\v2\x18.manent.plugin.v1.TargetR\atargets\x12C\n" +
 	"\x06params\x18\x06 \x03(\v2+.manent.plugin.v1.DeployRequest.ParamsEntryR\x06params\x12*\n" +
 	"\x11secrets_broker_id\x18\a \x01(\rR\x0fsecretsBrokerId\x12:\n" +
-	"\atraffic\x18\b \x01(\v2 .manent.plugin.v1.TrafficRequestR\atraffic\x1a9\n" +
+	"\atraffic\x18\b \x01(\v2 .manent.plugin.v1.TrafficRequestR\atraffic\x12\x16\n" +
+	"\x06tenant\x18\t \x01(\tR\x06tenant\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x02\n" +

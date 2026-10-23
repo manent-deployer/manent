@@ -56,6 +56,8 @@ const (
 const (
 	LabelManagedBy      = "app.kubernetes.io/managed-by"
 	LabelApplication    = "manent.io/application"
+	LabelArtifact       = "manent.io/artifact"
+	LabelTenant         = "manent.io/tenant"
 	LabelEnvironment    = "manent.io/environment"
 	LabelRole           = "manent.io/role"
 	AnnotationVersion   = "manent.io/version"
@@ -235,9 +237,51 @@ func (p *Plugin) connect(ctx context.Context, t plugin.Target, req *plugin.Reque
 // and the one of every version.
 type names struct{ pointer, prefix string }
 
+// historyNames keys the history on the release: tenant, application, artifact and environment.
+// The release whose artifact is named after the application, without tenant, keeps the name
+// "manent-<application>-<environment>" of the clusters already in use; every other release gets
+// a name from all four parts, made unique by dnsName's hash ("/" is not a valid character).
 func historyNames(req *plugin.Request) names {
 	base := dnsName("manent-" + req.Application + "-" + req.Environment)
+	if !legacyRelease(req) {
+		base = dnsName("manent-" + releaseTenant(req) + "/" + req.Application + "/" + req.Artifact.Name + "/" + req.Environment)
+	}
 	return names{pointer: base, prefix: base}
+}
+
+// legacyRelease reports whether the release is identified by application and environment alone:
+// artifact named after the application and no tenant.
+func legacyRelease(req *plugin.Request) bool {
+	return (req.Artifact.Name == "" || req.Artifact.Name == req.Application) && releaseTenant(req) == untenanted
+}
+
+// untenanted is the tenant of the applications no tenant lists.
+const untenanted = "untenanted"
+
+// releaseTenant is the tenant of the request, untenanted for hosts that do not send it.
+func releaseTenant(req *plugin.Request) string {
+	if req.Tenant == "" {
+		return untenanted
+	}
+	return req.Tenant
+}
+
+// releaseLabels are the labels that identify the release on objects and history: a selector on
+// them never reaches another artifact or tenant of the same application.
+func releaseLabels(req *plugin.Request) map[string]string {
+	return map[string]string{
+		LabelApplication: labelValue(req.Application),
+		LabelArtifact:    labelValue(cmpOr(req.Artifact.Name, req.Application)),
+		LabelTenant:      labelValue(releaseTenant(req)),
+		LabelEnvironment: labelValue(req.Environment),
+	}
+}
+
+func cmpOr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (n names) release(version string) string { return dnsName(n.prefix + "-" + version) }
@@ -313,8 +357,9 @@ func (p *Plugin) prepare(ctx context.Context, api API, req *plugin.Request) (*pr
 			pr.newNamespaces = append(pr.newNamespaces, o.Name())
 		}
 		o.setMap("labels", LabelManagedBy, managedBy)
-		o.setMap("labels", LabelApplication, labelValue(req.Application))
-		o.setMap("labels", LabelEnvironment, labelValue(req.Environment))
+		for k, v := range releaseLabels(req) {
+			o.setMap("labels", k, v)
+		}
 		o.setMap("annotations", AnnotationVersion, req.Artifact.Version)
 		o.setMap("annotations", AnnotationDeploy, req.DeploymentID)
 		if req.Params[ParamRequireDigest] == "true" {
@@ -669,12 +714,11 @@ func loadObjects(ctx context.Context, api API, ns string, n names, version strin
 }
 
 func historyLabels(req *plugin.Request, role string) map[string]any {
-	return map[string]any{
-		LabelManagedBy:   managedBy,
-		LabelApplication: labelValue(req.Application),
-		LabelEnvironment: labelValue(req.Environment),
-		LabelRole:        role,
+	l := map[string]any{LabelManagedBy: managedBy, LabelRole: role}
+	for k, v := range releaseLabels(req) {
+		l[k] = v
 	}
+	return l
 }
 
 // saveRelease saves the release objects in the history (compressed in binaryData, to stay
@@ -764,13 +808,28 @@ func prune(ctx context.Context, api API, previous, current []ObjectRef) ([]strin
 // service and the previous one. An error does not compromise the deploy.
 func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, req *plugin.Request, prev *release, log *slog.Logger) {
 	keep, _ := keepReleases(req)
+	rl := releaseLabels(req)
 	sel := LabelManagedBy + "=" + managedBy + "," + LabelRole + "=" + roleRelease + "," +
-		LabelApplication + "=" + labelValue(req.Application) + "," + LabelEnvironment + "=" + labelValue(req.Environment)
+		LabelApplication + "=" + rl[LabelApplication] + "," + LabelEnvironment + "=" + rl[LabelEnvironment]
 	list, err := api.List(ctx, configMapAPIVersion, "ConfigMap", ns, sel)
 	if err != nil {
 		log.WarnContext(ctx, "pulizia dello storico fallita", "error", err)
 		return
 	}
+	// Only this release's history: the other artifacts and tenants of the application have
+	// their own. A ConfigMap written before the artifact and tenant labels belongs to the
+	// release with the historical name.
+	legacy := legacyRelease(req)
+	list = slices.DeleteFunc(list, func(cm Object) bool {
+		for _, k := range []string{LabelArtifact, LabelTenant} {
+			labels, _ := cm.metadata()["labels"].(map[string]any)
+			v, ok := labels[k]
+			if (ok && v != rl[k]) || (!ok && !legacy) {
+				return true
+			}
+		}
+		return false
+	})
 	protect := map[string]bool{n.release(req.Artifact.Version): true}
 	if prev != nil {
 		protect[n.release(prev.version)] = true

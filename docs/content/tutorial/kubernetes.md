@@ -195,7 +195,7 @@ NAME            TYPE        CLUSTER-IP      PORT(S)
 service/hello   ClusterIP   10.43.225.169   80/TCP
 ```
 
-The deploy step ended only when the Deployment had rolled out. The objects carry the labels `app.kubernetes.io/managed-by: manent`, `manent.io/application` and `manent.io/environment`, and the annotation `manent.io/version`. The two ConfigMaps are the **history**: `manent-hello-test` points to the live release, `manent-hello-test-1-0-0-…` holds the objects applied by 1.0.0.
+The deploy step ended only when the Deployment had rolled out. The objects carry the labels `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant` and `manent.io/environment`, and the annotation `manent.io/version`. The two ConfigMaps are the **history**: `manent-hello-test` points to the live release, `manent-hello-test-1-0-0-…` holds the objects applied by 1.0.0.
 
 ## 6. A broken image, rolled back
 

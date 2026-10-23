@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/joeg-ita/manent/internal/tenant"
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
@@ -44,6 +46,7 @@ func (s Deploy) InspectTargets(ctx context.Context, d *descriptor.Descriptor, ta
 			// The artifact is not downloaded: plugins read the release from the targets only.
 			req := &plugin.Request{
 				DeploymentID: reconcileID,
+				Tenant:       cmp.Or(d.Tenant, tenant.Untenanted),
 				Application:  d.Application,
 				Environment:  d.Environment,
 				Artifact:     plugin.Artifact{Type: d.Artifact.Type, Name: d.Artifact.Name, Version: d.Artifact.Version},

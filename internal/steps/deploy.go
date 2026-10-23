@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/joeg-ita/manent/internal/descriptor"
 	"github.com/joeg-ita/manent/internal/pipeline"
 	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/joeg-ita/manent/internal/tenant"
 	"github.com/joeg-ita/manent/pkg/plugin"
 )
 
@@ -202,6 +204,7 @@ func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string
 	art := in.Outputs["artifacts"]
 	req := &plugin.Request{
 		DeploymentID: in.DeploymentID,
+		Tenant:       cmp.Or(d.Tenant, tenant.Untenanted),
 		Application:  d.Application,
 		Environment:  d.Environment,
 		Artifact: plugin.Artifact{

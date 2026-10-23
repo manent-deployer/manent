@@ -91,6 +91,9 @@ message DeployRequest {
   uint32 secrets_broker_id = 7;
   // Present only in percentage rollouts.
   TrafficRequest traffic = 8;
+  // Tenant of the release ("untenanted" for the applications no tenant lists): with application,
+  // artifact name and environment it identifies the release. Empty from hosts before it existed.
+  string tenant = 9;
 }
 
 message TrafficRequest {

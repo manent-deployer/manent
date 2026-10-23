@@ -26,7 +26,7 @@ import (
 
 // Descriptor parameters (deploy.params) for Helm charts.
 const (
-	ParamHelmRelease     = "helm_release"      // release name (.Release.Name, default: application name)
+	ParamHelmRelease     = "helm_release"      // release name (.Release.Name, default: artifact name)
 	ParamHelmValues      = "helm_values"       // values in YAML
 	ParamHelmValuesFiles = "helm_values_files" // values files inside the chart, comma separated, applied in order
 	ParamHelmValuePrefix = "helm_value."       // helm_value.<path> = YAML value (e.g. helm_value.image.tag)
@@ -229,7 +229,9 @@ func releaseName(req *plugin.Request) string {
 	if r := req.Params[ParamHelmRelease]; r != "" {
 		return r
 	}
-	return dnsName(req.Application)
+	// The artifact name: two charts of the same application render objects with different
+	// names. It is the application name for the artifact named after it.
+	return dnsName(cmpOr(req.Artifact.Name, req.Application))
 }
 
 // Render generates the chart manifests for a cluster with the given version and APIs, so
