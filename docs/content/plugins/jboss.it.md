@@ -6,7 +6,7 @@ Versioni supportate: JBoss EAP 7.4 e successive, WildFly 23 e successive (parame
 
 ## Come cambia la versione
 
-Ogni versione diventa un deployment distinto, `<applicazione>-<versione>.<ext>` (ad esempio `shop-1.4.0.war`), con lo stesso **runtime-name** (default `<applicazione>.<ext>`, così il context root non cambia). Per ogni target, in sequenza:
+Ogni versione diventa un deployment distinto, `<artefatto>-<versione>.<ext>` (ad esempio `shop-1.4.0.war`), con lo stesso **runtime-name** (default `<artefatto>.<ext>`, così il context root non cambia). Per un'applicazione con un solo artefatto il nome dell'artefatto è quello dell'applicazione, quindi i nomi restano quelli dei rilasci precedenti; due artefatti di un'applicazione sono due applicazioni sul server. Per le applicazioni di un [tenant](../guida/tenant.md) entrambi i nomi iniziano con il tenant (`payments.shop-1.4.0.war`, runtime-name `payments.shop.war`): due applicazioni su un server non possono condividere un context root. Per ogni target, in sequenza:
 
 1. legge i deployment; se la versione richiesta è già attiva con lo stesso contenuto non tocca nulla, quindi retry e recovery non riavviano l'applicazione;
 2. carica l'archivio (`/management/add-content`) e aggiunge il deployment, **disattivato**;
@@ -39,7 +39,7 @@ plugins:
 | `password_secret` | | Nome del segreto con la password di management. |
 | `tls` | `true` | `https` verso l'interfaccia di management (porta `9993`); `false` per `http` (porta `9990`). La `port` del target sostituisce la porta. |
 | `server_groups` | | Solo in domain mode: server group su cui rilasciare, separati da virgola. |
-| `runtime_name` | `<applicazione>.<ext>` | Nome di runtime comune a tutte le versioni (ad esempio `ROOT.war`). |
+| `runtime_name` | `<artefatto>.<ext>` (`<tenant>.<artefatto>.<ext>` per un tenant) | Nome di runtime comune a tutte le versioni (ad esempio `ROOT.war`). |
 | `suspend` | `false` | Sospende il server (in domain mode i server group) prima del cambio. |
 | `suspend_timeout` | `60s` | Tempo concesso alle richieste in corso durante la sospensione. |
 | `reload` | `false` | Ricarica il server dopo il cambio, senza riavviare la JVM. |

@@ -6,7 +6,7 @@ Supported versions: JBoss EAP 7.4 and later, WildFly 23 and later (the `suspend-
 
 ## How versions are switched
 
-Every version becomes a separate deployment, `<application>-<version>.<ext>` (for example `shop-1.4.0.war`), with the same **runtime-name** (default `<application>.<ext>`, so the context root does not change). For each target, in sequence:
+Every version becomes a separate deployment, `<artifact>-<version>.<ext>` (for example `shop-1.4.0.war`), with the same **runtime-name** (default `<artifact>.<ext>`, so the context root does not change). The artifact name is the application's for an application with a single artifact, so the names stay those of earlier releases; two artifacts of an application are two applications on the server. For the applications of a [tenant](../guida/tenant.md) both names start with the tenant (`payments.shop-1.4.0.war`, runtime-name `payments.shop.war`): two applications on a server cannot share a context root. For each target, in sequence:
 
 1. it reads the deployments; if the requested version is already active with the same content it touches nothing, so retries and recoveries do not restart the application;
 2. it uploads the archive (`/management/add-content`) and adds the deployment, **disabled**;
@@ -39,7 +39,7 @@ plugins:
 | `password_secret` | | Name of the secret with the management password. |
 | `tls` | `true` | `https` to the management interface (port `9993`); `false` for `http` (port `9990`). The target `port` overrides the port. |
 | `server_groups` | | Domain mode only: comma-separated server groups the application is deployed to. |
-| `runtime_name` | `<application>.<ext>` | Runtime name shared by all versions (for example `ROOT.war`). |
+| `runtime_name` | `<artifact>.<ext>` (`<tenant>.<artifact>.<ext>` for a tenant) | Runtime name shared by all versions (for example `ROOT.war`). |
 | `suspend` | `false` | Suspends the server (in domain mode the server groups) before the switch. |
 | `suspend_timeout` | `60s` | How long requests in progress have to finish during the suspend. |
 | `reload` | `false` | Reloads the server after the switch, without restarting the JVM. |

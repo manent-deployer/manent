@@ -1,8 +1,11 @@
 // Package jboss releases Java EE / Jakarta EE applications (war, ear) to JBoss EAP and WildFly
 // through the HTTP management API, in standalone or domain mode.
 //
-// Every version becomes a separate deployment, "<application>-<version>.<ext>", with the same
-// runtime-name (default "<application>.<ext>"): switching from the version in service to the
+// Every version becomes a separate deployment, "<artifact>-<version>.<ext>" ("<tenant>.<artifact>-…"
+// for the applications of a tenant), with the same runtime-name (default "<artifact>.<ext>",
+// "<tenant>.<artifact>.<ext>" for a tenant):
+// two artifacts of an application are two applications on the server. For the artifact named
+// after the application, without tenant, the names are those of earlier releases. Switching from the version in service to the
 // new one is a replace-deployment inside a composite operation, which the server applies
 // atomically. Previous versions stay in the content repository, disabled, up to
 // keep_releases: the rollback reactivates the previous one without uploading anything.
@@ -46,7 +49,7 @@ const (
 	ParamPasswordSecret = "password_secret" // secret with the management password
 	ParamTLS            = "tls"             // https to the management interface (default true)
 	ParamServerGroups   = "server_groups"   // domain mode: server groups, comma separated
-	ParamRuntimeName    = "runtime_name"    // default "<application>.<ext>"
+	ParamRuntimeName    = "runtime_name"    // default "<artifact>.<ext>" ("<tenant>.<artifact>.<ext>" for a tenant)
 	ParamSuspend        = "suspend"         // suspends the server before the version switch
 	ParamSuspendTimeout = "suspend_timeout" // wait for requests in progress (default 60s)
 	ParamReload         = "reload"          // server reload after the version switch
@@ -144,7 +147,14 @@ type options struct {
 // parse reads and validates the request parameters.
 func parse(req *plugin.Request) (options, error) {
 	var errs []error
-	o := options{username: req.Params[ParamUsername], passwordSecret: req.Params[ParamPasswordSecret], prefix: req.Application + "-"}
+	// The release is tenant/application/artifact/environment: the artifact name (the application
+	// for the artifact named after it) keeps two artifacts of an application apart, the tenant two
+	// applications with the same name of different tenants. The environment is the server.
+	base := cmp.Or(req.Artifact.Name, req.Application)
+	o := options{username: req.Params[ParamUsername], passwordSecret: req.Params[ParamPasswordSecret], prefix: base + "-"}
+	if req.Tenant != "" && req.Tenant != untenanted {
+		o.prefix = req.Tenant + "." + o.prefix
+	}
 	if o.username == "" || o.passwordSecret == "" {
 		errs = append(errs, fmt.Errorf("%s and %s are required", ParamUsername, ParamPasswordSecret))
 	}
@@ -187,14 +197,16 @@ func parse(req *plugin.Request) (options, error) {
 	if !pluginutil.VersionRe.MatchString(req.Artifact.Version) {
 		errs = append(errs, errors.New("artifact.version is required and becomes part of the deployment name: letters, digits, '.', '_', '+', '-' are allowed"))
 	}
-	if !pluginutil.VersionRe.MatchString(req.Application) {
-		errs = append(errs, fmt.Errorf("application %q is not valid as a deployment name", req.Application))
+	if !pluginutil.VersionRe.MatchString(base) {
+		errs = append(errs, fmt.Errorf("artifact %q is not valid as a deployment name", base))
 	}
 	o.ext = artifactExt(req.Artifact)
 	if o.ext == "" {
 		errs = append(errs, fmt.Errorf("unrecognized artifact extension: allowed %s (from the file or from artifact.type)", strings.Join(extensions, ", ")))
 	}
-	o.runtimeName = cmp.Or(req.Params[ParamRuntimeName], req.Application+o.ext)
+	// Two applications on a server cannot share a runtime-name (it gives the context root): the
+	// default carries the tenant too, "<tenant>.<artifact>.<ext>".
+	o.runtimeName = cmp.Or(req.Params[ParamRuntimeName], strings.TrimSuffix(o.prefix, "-")+o.ext)
 	if strings.ContainsAny(o.runtimeName, "/\\") || !slices.Contains(extensions, strings.ToLower(filepath.Ext(o.runtimeName))) {
 		errs = append(errs, fmt.Errorf("invalid %s %q: a file name with extension %s", ParamRuntimeName, o.runtimeName, strings.Join(extensions, ", ")))
 	}
@@ -216,6 +228,9 @@ func artifactExt(a plugin.Artifact) string {
 	}
 	return ""
 }
+
+// untenanted is the tenant of the applications no tenant lists.
+const untenanted = "untenanted"
 
 // deploymentName is the deployment name of a version.
 func (o options) deploymentName(version string) string { return o.prefix + version + o.ext }

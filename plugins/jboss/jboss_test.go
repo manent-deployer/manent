@@ -574,3 +574,39 @@ func TestCompareVersions(t *testing.T) {
 		}
 	}
 }
+
+// Two artifacts of an application, and the application of a tenant, are separate applications
+// on the server: their own deployments and runtime-names, the pruning of one never touches the
+// others.
+func TestReleaseSeparatePerArtefattoETenant(t *testing.T) {
+	f, srv := newFake(t, false)
+	p, ctx := testPlugin(), context.Background()
+	release := func(artifact, tenant, version string) {
+		t.Helper()
+		req := request(t, srv, version, map[string]string{ParamKeepReleases: "2"})
+		req.Artifact.Name, req.Tenant = artifact, tenant
+		if _, err := p.Deploy(ctx, req); err != nil {
+			t.Fatalf("%s/%s %s: %v", tenant, artifact, version, err)
+		}
+	}
+	release("shop", "", "1.0")
+	release("shop-admin", "untenanted", "1.0")
+	release("shop", "payments", "1.0")
+	release("shop-admin", "untenanted", "2.0")
+	release("shop-admin", "untenanted", "3.0")
+	eq(t, "stato", f.state(), map[string]string{
+		"shop-1.0.war":          "on", // the historical names of the artifact named after the application
+		"shop-admin-2.0.war":    "off",
+		"shop-admin-3.0.war":    "on",
+		"payments.shop-1.0.war": "on",
+	})
+	f.mu.Lock()
+	runtimes := map[string]string{}
+	for name, d := range f.deps {
+		runtimes[name] = d.runtime
+	}
+	f.mu.Unlock()
+	eq(t, "runtime-name", runtimes, map[string]string{
+		"shop-1.0.war": "shop.war", "shop-admin-2.0.war": "shop-admin.war", "shop-admin-3.0.war": "shop-admin.war", "payments.shop-1.0.war": "payments.shop.war",
+	})
+}
