@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // fakeRegistry serves the manifest of app:1.0 on /v2/team/app/manifests/; with a token it

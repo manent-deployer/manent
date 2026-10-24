@@ -12,9 +12,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/rbac"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/rbac"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // Defaults of the grants cache.

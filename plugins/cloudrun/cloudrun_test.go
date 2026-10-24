@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 const svcName = "projects/acme-prod/locations/europe-west1/services/shop"

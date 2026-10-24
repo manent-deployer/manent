@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // redactor replaces secret values with ***, also in the most common encoded forms.

@@ -11,7 +11,7 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // ExecutorLister lists the registered executors and those with pending workflows (Admin).

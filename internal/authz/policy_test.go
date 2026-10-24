@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/governance"
 )
 
 func (f *fakeService) CreateFreeze(_ context.Context, r engine.FreezeRequest) (*governance.WindowStatus, error) {

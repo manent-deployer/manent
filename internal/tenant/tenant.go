@@ -23,9 +23,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/glob"
-	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/labels"
 )
 
 // NameLabel is the label with the tenant name, available to the tenant selectors besides its

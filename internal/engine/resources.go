@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // resourceSampler samples the capacity and the use of the worker's host and process. It is

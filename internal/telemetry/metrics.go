@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/joeg-ita/manent/internal/cluster"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/cluster"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // BuildInfo identifies the running binary.

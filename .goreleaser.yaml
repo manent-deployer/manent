@@ -18,9 +18,9 @@ builds:
     flags: [-trimpath]
     ldflags: &ldflags
       - -s -w
-      - -X github.com/joeg-ita/manent/internal/version.Version={{ .Version }}
-      - -X github.com/joeg-ita/manent/internal/version.Commit={{ .FullCommit }}
-      - -X github.com/joeg-ita/manent/internal/version.Date={{ .CommitDate }}
+      - -X github.com/manent-deployer/manent/internal/version.Version={{ .Version }}
+      - -X github.com/manent-deployer/manent/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/manent-deployer/manent/internal/version.Date={{ .CommitDate }}
     mod_timestamp: "{{ .CommitTimestamp }}"
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
@@ -87,18 +87,18 @@ signs:
 dockers_v2:
   - id: server
     ids: [manent-server, manent, manent-plugin-remote-copy]
-    images: [ghcr.io/joeg-ita/manent-server]
+    images: [ghcr.io/manent-deployer/manent-server]
     tags: ["{{ .Version }}", "latest"]
     dockerfile: Dockerfile.release
     platforms: [linux/amd64, linux/arm64]
     labels: &labels
-      org.opencontainers.image.source: https://github.com/joeg-ita/manent
+      org.opencontainers.image.source: https://github.com/manent-deployer/manent
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.licenses: Apache-2.0
   - id: client
     ids: [manent]
-    images: [ghcr.io/joeg-ita/manent]
+    images: [ghcr.io/manent-deployer/manent]
     tags: ["{{ .Version }}", "latest"]
     dockerfile: Dockerfile.client.release
     platforms: [linux/amd64, linux/arm64]

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // Approval states of a ticket.

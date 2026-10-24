@@ -12,11 +12,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/secrets"
-	"github.com/joeg-ita/manent/internal/tenant"
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/tenant"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Policy selects the deploy plugin suited to the descriptor.

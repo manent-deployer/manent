@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // NewTenantsDataSource returns the manent_tenants data source.

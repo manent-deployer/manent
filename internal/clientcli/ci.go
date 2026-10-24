@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/cliutil"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/cliutil"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // ciReport says where the outcome of a deploy goes: key=value outputs and Markdown summary.

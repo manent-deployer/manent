@@ -16,7 +16,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Container image schemes: oci:// uses HTTPS, oci+http:// a plain-text registry

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/governance"
 )
 
 func (m *mockService) CreateFreeze(_ context.Context, r engine.FreezeRequest) (*governance.WindowStatus, error) {

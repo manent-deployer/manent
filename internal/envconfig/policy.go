@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/glob"
 )
 
 // DescriptorPolicy limits what a descriptor can add to the environment configuration.

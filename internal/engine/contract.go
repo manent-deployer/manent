@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // The service contract lives in internal/service, without DBOS dependencies, so the client

@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/cluster"
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/policy"
-	"github.com/joeg-ita/manent/internal/rollback"
-	"github.com/joeg-ita/manent/internal/service"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/cluster"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/policy"
+	"github.com/manent-deployer/manent/internal/rollback"
+	"github.com/manent-deployer/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // switchGov is a governance policy that tests change at runtime, as a new revision or a

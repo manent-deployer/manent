@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/remotecopy"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/remotecopy"
 )
 
 // Name is the plugin name.

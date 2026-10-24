@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // maxPolicyBodySize limits a policy revision upload (files in JSON).

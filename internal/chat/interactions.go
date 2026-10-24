@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/secrets"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // Identity is the manent identity of a Slack user.

@@ -16,9 +16,9 @@ import (
 	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/manent/internal/apiclient"
-	"github.com/joeg-ita/manent/internal/cliutil"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/apiclient"
+	"github.com/manent-deployer/manent/internal/cliutil"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // DefaultServer is the server used when none is configured: the local "manent-server serve".

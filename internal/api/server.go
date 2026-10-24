@@ -19,11 +19,11 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/service"
-	"github.com/joeg-ita/manent/internal/telemetry"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/telemetry"
 )
 
 // maxBodySize limits the size of a JSON descriptor.

@@ -17,7 +17,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/labels"
 )
 
 // APIVersion is the supported descriptor format version.

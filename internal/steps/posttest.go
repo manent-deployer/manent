@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // HTTPDoer abstracts the HTTP client to ease testing.

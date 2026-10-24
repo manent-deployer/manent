@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/customstep"
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/customstep"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // Settings of the nginx provider (open source NGINX over SSH).

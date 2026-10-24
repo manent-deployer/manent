@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // compStep is a compensable step that records checkpoints, runs and compensations.

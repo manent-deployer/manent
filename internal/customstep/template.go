@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/customspec"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // templateData is the placeholder data. Values like Version and Params come from whoever

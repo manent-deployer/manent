@@ -11,17 +11,17 @@ import (
 	"slices"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/app"
-	"github.com/joeg-ita/manent/internal/audit"
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/cliutil"
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/policy"
-	"github.com/joeg-ita/manent/internal/secrets"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/app"
+	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/cliutil"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/policy"
+	"github.com/manent-deployer/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // localGovernance evaluates the governance policy of the configuration on a descriptor

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Default endpoints of the Azure public cloud.

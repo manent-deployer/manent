@@ -7,8 +7,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/internal/pluginutil"
 )
 
 // Percentage rollouts: published versions are the slots and the alias with an additional

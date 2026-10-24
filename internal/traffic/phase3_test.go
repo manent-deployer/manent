@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/customstep"
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/customstep"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // fakeSSH simulates the NGINX instances: one file per host and the commands used by the pool.

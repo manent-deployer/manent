@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/change"
-	"github.com/joeg-ita/manent/internal/chat"
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/rollback"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/change"
+	"github.com/manent-deployer/manent/internal/chat"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/rollback"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // fakeChat records the sent messages; updated messages carry the reference of the previous send.

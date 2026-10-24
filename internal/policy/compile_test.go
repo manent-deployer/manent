@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/governance"
 )
 
 // examplePolicy is the policy of the design document.

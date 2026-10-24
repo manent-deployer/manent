@@ -37,7 +37,7 @@ The plugin implements the same contract as an [internal plugin](index.md) and ha
 package main
 
 import (
-	"github.com/joeg-ita/manent/pkg/plugin/external"
+	"github.com/manent-deployer/manent/pkg/plugin/external"
 	"example.com/team/myplugin"
 )
 

@@ -8,8 +8,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/pkg/plugin/external"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin/external"
 )
 
 type fake struct {

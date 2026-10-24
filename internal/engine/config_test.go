@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // fakeResolver simulates an environment configuration that can change during the test.

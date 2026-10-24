@@ -16,8 +16,8 @@ import (
 
 	"github.com/masterzen/winrm"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/remotecopy"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/remotecopy"
 )
 
 // Transport runs PowerShell scripts on one Windows host.

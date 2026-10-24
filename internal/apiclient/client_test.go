@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 func TestClient(t *testing.T) {

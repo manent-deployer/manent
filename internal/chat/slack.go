@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // DefaultSlackAPI is the address of the Slack Web API.

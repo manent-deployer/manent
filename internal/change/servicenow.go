@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // ServiceNow uses the Table API on the change request table. The deploy's ticket is the one

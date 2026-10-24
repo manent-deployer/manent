@@ -25,8 +25,8 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/pkg/plugin/external"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin/external"
 )
 
 // Key is the key that, in plugins.<name>, identifies an external plugin.

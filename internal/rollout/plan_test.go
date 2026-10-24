@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // topology creates 3 regions × 3 AZs with 2 nodes per AZ; the first eu-1a node is the canary.

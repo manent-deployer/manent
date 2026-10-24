@@ -78,7 +78,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 }
 
 // Tracer returns manent's tracer.
-func Tracer() trace.Tracer { return otel.Tracer("github.com/joeg-ita/manent") }
+func Tracer() trace.Tracer { return otel.Tracer("github.com/manent-deployer/manent") }
 
 // TraceParent returns the traceparent header of the current span, or "".
 func TraceParent(ctx context.Context) string {

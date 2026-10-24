@@ -5,8 +5,8 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // An API started before the workers on a new database creates the DBOS schema instead of failing.

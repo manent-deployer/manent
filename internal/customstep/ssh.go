@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // SSHDialer opens real SSH connections, with host key verification.

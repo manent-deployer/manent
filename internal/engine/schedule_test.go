@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // countStep counts runs safely across goroutines.

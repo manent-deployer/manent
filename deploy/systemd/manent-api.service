@@ -1,7 +1,7 @@
 # manent API without workers (manent-server api).
 [Unit]
 Description=manent API
-Documentation=https://github.com/joeg-ita/manent
+Documentation=https://github.com/manent-deployer/manent
 After=network-online.target
 Wants=network-online.target
 

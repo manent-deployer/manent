@@ -7,7 +7,7 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/audit"
 )
 
 // RetentionOptions configures the history cleanup.

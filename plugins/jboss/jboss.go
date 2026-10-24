@@ -36,8 +36,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/internal/pluginutil"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/internal/pluginutil"
 )
 
 // Name is the name the plugin registers with.

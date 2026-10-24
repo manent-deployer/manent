@@ -8,8 +8,8 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/customspec"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // SpecsOptions selects the custom step specs to look for.

@@ -10,7 +10,7 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/deploylog"
+	"github.com/manent-deployer/manent/internal/deploylog"
 )
 
 // workflowFor returns the ID of the workflow representing the deploy: the deploy itself or,

@@ -21,7 +21,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Descriptor parameters (deploy.params) for Helm charts.

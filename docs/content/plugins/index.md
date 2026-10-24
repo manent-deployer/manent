@@ -1,6 +1,6 @@
 # Writing a plugin
 
-The actual deploy is delegated to plugins. A plugin depends only on the public package `github.com/joeg-ita/manent/pkg/plugin` and can be:
+The actual deploy is delegated to plugins. A plugin depends only on the public package `github.com/manent-deployer/manent/pkg/plugin` and can be:
 
 - **internal**: compiled into manent and registered in `internal/app`;
 - **external**: a separate binary that manent starts and talks to over gRPC. See [External plugins](esterni.md).

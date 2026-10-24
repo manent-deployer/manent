@@ -13,9 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 
-	"github.com/joeg-ita/manent/internal/rollout"
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/internal/awsauth"
+	"github.com/manent-deployer/manent/internal/rollout"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/internal/awsauth"
 )
 
 // API is the CloudWatch operation used by the source; abstracted for tests.

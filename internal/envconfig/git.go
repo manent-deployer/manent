@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/joeg-ita/manent/internal/gitsrc"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/gitsrc"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // GitRepo reads files at a revision of a Git repository (gitsrc.Repo).

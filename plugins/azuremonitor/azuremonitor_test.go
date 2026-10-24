@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/azurefake"
-	"github.com/joeg-ita/manent/internal/rollout"
+	"github.com/manent-deployer/manent/internal/azurefake"
+	"github.com/manent-deployer/manent/internal/rollout"
 )
 
 func TestSerieEValore(t *testing.T) {

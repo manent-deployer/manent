@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/customspec"
-	"github.com/joeg-ita/manent/internal/customstep"
-	"github.com/joeg-ita/manent/internal/deploylog"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/customstep"
+	"github.com/manent-deployer/manent/internal/deploylog"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 type staticSecrets map[string]string

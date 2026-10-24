@@ -30,7 +30,7 @@ build:
     - if: $CI_COMMIT_TAG
 
 include:
-  - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+  - remote: https://raw.githubusercontent.com/manent-deployer/manent/v0.1.0/integrations/gitlab/manent.yml
     inputs:
       job: deploy-test
       stage: deploy
@@ -63,7 +63,7 @@ deploy-test:
 ```
 
 !!! tip "Faster jobs"
-    The default image compiles the client at every run. An image of yours that already has `manent` on the `PATH` (and a shell, which GitLab needs to run the script) skips the installation: pass it as `image`. The official `ghcr.io/joeg-ita/manent` image is distroless, without a shell, so it is not suitable as a GitLab job image.
+    The default image compiles the client at every run. An image of yours that already has `manent` on the `PATH` (and a shell, which GitLab needs to run the script) skips the installation: pass it as `image`. The official `ghcr.io/manent-deployer/manent` image is distroless, without a shell, so it is not suitable as a GitLab job image.
 
 ## 3. Use the outcome in later jobs
 
@@ -89,7 +89,7 @@ promote-prod:
   variables:
     MANENT_TOKEN: $MANENT_PROMOTE_TOKEN       # a token allowed to submit to production
   script:
-    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
+    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/manent-deployer/manent/cmd/manent@v0.1.0
     - manent promote -a shop --from test --to prod --version "$CI_COMMIT_TAG" --timeout 4h
   rules:
     - if: $CI_COMMIT_TAG
@@ -109,7 +109,7 @@ envconfig-check:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes: ["envconfig/**/*"]
   script:
-    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
+    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/manent-deployer/manent/cmd/manent@v0.1.0
     - manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml
 ```
 

@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/rollout"
-	"github.com/joeg-ita/manent/plugins/internal/azure"
+	"github.com/manent-deployer/manent/internal/rollout"
+	"github.com/manent-deployer/manent/plugins/internal/azure"
 )
 
 // Defaults of the Log Analytics query API.

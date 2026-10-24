@@ -14,14 +14,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/joeg-ita/manent/internal/callback"
-	"github.com/joeg-ita/manent/internal/deploylog"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/rollout"
-	"github.com/joeg-ita/manent/internal/service"
-	"github.com/joeg-ita/manent/internal/telemetry"
+	"github.com/manent-deployer/manent/internal/callback"
+	"github.com/manent-deployer/manent/internal/deploylog"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/rollout"
+	"github.com/manent-deployer/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/telemetry"
 )
 
 // Stable name of the child workflow that runs a rollout pass on its region's queue.

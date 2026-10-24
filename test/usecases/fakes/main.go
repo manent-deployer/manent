@@ -21,7 +21,7 @@ import (
 
 	"github.com/aws/smithy-go/encoding/cbor"
 
-	"github.com/joeg-ita/manent/internal/azurefake"
+	"github.com/manent-deployer/manent/internal/azurefake"
 )
 
 // record is a request received by the fakes.

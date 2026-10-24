@@ -10,9 +10,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/joeg-ita/manent/internal/glob"
-	"github.com/joeg-ita/manent/internal/labels"
-	tenantpkg "github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/labels"
+	tenantpkg "github.com/manent-deployer/manent/internal/tenant"
 )
 
 // DefaultApprovalTimeout is the default duration of an approval request.

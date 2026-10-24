@@ -2,7 +2,7 @@
 
 image:
   # Server image (manent-server, also with the manent client).
-  repository: ghcr.io/joeg-ita/manent-server
+  repository: ghcr.io/manent-deployer/manent-server
   # Default: the chart's appVersion.
   tag: ""
   pullPolicy: IfNotPresent

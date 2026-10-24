@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/joeg-ita/manent/internal/artifact"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/artifact"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // Output keys of the artifacts step, read by the next steps.

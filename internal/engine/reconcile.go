@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/cluster"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/envconfig"
-	"github.com/joeg-ita/manent/internal/labels"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/cluster"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/envconfig"
+	"github.com/manent-deployer/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // ReconcileOptions configures the periodic reading of the release in service on the targets.

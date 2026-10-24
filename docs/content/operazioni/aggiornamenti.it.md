@@ -2,7 +2,7 @@
 
 ## Versioni di manent
 
-manent adotta il [Semantic Versioning](https://semver.org/lang/it/). Le modifiche di ogni versione sono in [`CHANGELOG.md`](https://github.com/joeg-ita/manent/blob/main/CHANGELOG.md).
+manent adotta il [Semantic Versioning](https://semver.org/lang/it/). Le modifiche di ogni versione sono in [`CHANGELOG.md`](https://github.com/manent-deployer/manent/blob/main/CHANGELOG.md).
 
 Una versione **major** (o, prima della 1.0, una **minor**) può introdurre modifiche incompatibili a:
 

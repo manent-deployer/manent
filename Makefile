@@ -3,8 +3,8 @@ SERVER_BIN := bin/manent-server
 PROTO := pkg/plugin/external/proto/deployer.proto
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
-LDFLAGS := -s -w -X github.com/joeg-ita/manent/internal/version.Version=$(VERSION) \
-	-X github.com/joeg-ita/manent/internal/version.Commit=$(COMMIT)
+LDFLAGS := -s -w -X github.com/manent-deployer/manent/internal/version.Version=$(VERSION) \
+	-X github.com/manent-deployer/manent/internal/version.Commit=$(COMMIT)
 # Postgres for tests (make test-postgres starts a container if none is given).
 PG_TEST_URL ?= postgres://postgres:postgres@localhost:55432/postgres?sslmode=disable
 IMAGE ?= manent:$(VERSION)

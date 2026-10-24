@@ -129,7 +129,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: manent
-        uses: joeg-ita/manent/integrations/github@v0.1.0
+        uses: manent-deployer/manent/integrations/github@v0.1.0
         with:
           server: https://manent.example.com
           token: ${{ secrets.MANENT_TOKEN }}
@@ -152,7 +152,7 @@ Vedi [GitHub Actions](../integrazioni/github-actions.md) per i job di promozione
 stages: [build, deploy]
 
 include:
-  - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+  - remote: https://raw.githubusercontent.com/manent-deployer/manent/v0.1.0/integrations/gitlab/manent.yml
     inputs:
       job: deploy-test
       stage: deploy

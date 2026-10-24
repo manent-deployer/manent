@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // revisionPath is the path of a policy revision (0 = the one in force).

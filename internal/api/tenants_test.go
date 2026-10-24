@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/engine"
 )
 
 func (m *mockService) Tenants(_ context.Context, f engine.TenantFilter) ([]engine.TenantInfo, error) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // perHostDeployer reads a different release on every target.

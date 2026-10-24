@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/cluster"
+	"github.com/manent-deployer/manent/internal/cluster"
 )
 
 // MaintenanceOptions configures the worker's periodic tasks.

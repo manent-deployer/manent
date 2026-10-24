@@ -1,4 +1,4 @@
-module github.com/joeg-ita/manent
+module github.com/manent-deployer/manent
 
 go 1.27.2
 

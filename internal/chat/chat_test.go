@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/service"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 type mapSecrets map[string]string

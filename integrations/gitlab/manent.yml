@@ -4,7 +4,7 @@
 # MANENT_SERVER and MANENT_TOKEN come from the project's CI/CD variables (token masked).
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+#     - remote: https://raw.githubusercontent.com/manent-deployer/manent/v0.1.0/integrations/gitlab/manent.yml
 #       inputs:
 #         descriptor: deploy/prod.yml
 #         version: $CI_COMMIT_TAG
@@ -47,7 +47,7 @@ spec:
     # manent:script:begin (the use cases run these lines as the job would)
     - |
       if ! command -v manent >/dev/null 2>&1; then
-        GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@$[[ inputs.manent_ref ]]
+        GOBIN=/usr/local/bin go install github.com/manent-deployer/manent/cmd/manent@$[[ inputs.manent_ref ]]
       fi
       set -- deploy --ci -f "$[[ inputs.descriptor ]]" --timeout "$[[ inputs.timeout ]]"
       if [ -n "$[[ inputs.version ]]" ]; then set -- "$@" --version "$[[ inputs.version ]]"; fi

@@ -1221,7 +1221,7 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\fRouteTesters\x12\x1f.manent.plugin.v1.DeployRequest\x1a!.manent.plugin.v1.DetailsResponse\x12J\n" +
 	"\x0eScaleCandidate\x12\x1f.manent.plugin.v1.WeightRequest\x1a\x17.manent.plugin.v1.Empty2V\n" +
 	"\aSecrets\x12K\n" +
-	"\x06Secret\x12\x1f.manent.plugin.v1.SecretRequest\x1a .manent.plugin.v1.SecretResponseB?Z=github.com/joeg-ita/manent/pkg/plugin/external/proto;pluginpbb\x06proto3"
+	"\x06Secret\x12\x1f.manent.plugin.v1.SecretRequest\x1a .manent.plugin.v1.SecretResponseBFZDgithub.com/manent-deployer/manent/pkg/plugin/external/proto;pluginpbb\x06proto3"
 
 var (
 	file_pkg_plugin_external_proto_deployer_proto_rawDescOnce sync.Once

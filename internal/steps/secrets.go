@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // Secrets checks that all declared secrets can be resolved.

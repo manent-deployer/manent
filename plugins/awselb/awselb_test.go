@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/traffic"
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/traffic"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // fakeAWS emulates target groups, rules and Auto Scaling groups.

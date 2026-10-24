@@ -10,8 +10,8 @@
 package main
 
 import (
-	"github.com/joeg-ita/manent/pkg/plugin/external"
-	"github.com/joeg-ita/manent/plugins/remotecopy"
+	"github.com/manent-deployer/manent/pkg/plugin/external"
+	"github.com/manent-deployer/manent/plugins/remotecopy"
 )
 
 func main() {

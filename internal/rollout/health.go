@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // GateInput describes the targets to check after a stage.

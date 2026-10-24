@@ -19,7 +19,7 @@ COPY . .
 COPY --from=web /src/internal/webui/dist internal/webui/dist
 ARG VERSION=dev
 ARG COMMIT=
-RUN LDFLAGS="-s -w -X github.com/joeg-ita/manent/internal/version.Version=${VERSION} -X github.com/joeg-ita/manent/internal/version.Commit=${COMMIT}" \
+RUN LDFLAGS="-s -w -X github.com/manent-deployer/manent/internal/version.Version=${VERSION} -X github.com/manent-deployer/manent/internal/version.Commit=${COMMIT}" \
  && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o /out/manent ./cmd/manent \
  && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o /out/manent-server ./cmd/manent-server \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/manent-plugin-remote-copy ./cmd/manent-plugin-remote-copy

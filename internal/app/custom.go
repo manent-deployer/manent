@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/audit"
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/customspec"
-	"github.com/joeg-ita/manent/internal/customstep"
-	"github.com/joeg-ita/manent/internal/policy"
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/customstep"
+	"github.com/manent-deployer/manent/internal/policy"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // NewSpecKeys resolves the keys that sign custom step specs. Both the submitter (signature in

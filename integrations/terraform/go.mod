@@ -1,10 +1,10 @@
-module github.com/joeg-ita/manent/integrations/terraform
+module github.com/manent-deployer/manent/integrations/terraform
 
 go 1.27.2
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
-	github.com/joeg-ita/manent v0.0.0
+	github.com/manent-deployer/manent v0.0.0
 )
 
 require (
@@ -34,4 +34,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/joeg-ita/manent => ../..
+replace github.com/manent-deployer/manent => ../..

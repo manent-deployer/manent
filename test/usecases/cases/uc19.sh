@@ -13,7 +13,7 @@ rm -rf "$TF"/* "$TF"/.terraform* 2>/dev/null
 cat >"$TF/.terraformrc" <<'EOT'
 provider_installation {
   dev_overrides {
-    "joeg-ita/manent" = "/provider"
+    "manent-deployer/manent" = "/provider"
   }
   direct {}
 }
@@ -32,7 +32,7 @@ EOT
 cat >"$TF/main.tf" <<EOT
 terraform {
   required_providers {
-    manent = { source = "joeg-ita/manent" }
+    manent = { source = "manent-deployer/manent" }
   }
 }
 

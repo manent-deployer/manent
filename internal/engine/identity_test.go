@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/rollback"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/rollback"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // artifactEngine starts a worker and an engine.

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // artifactSep separates application and artifact in the queue partition key.

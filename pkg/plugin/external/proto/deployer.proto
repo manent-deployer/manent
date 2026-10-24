@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package manent.plugin.v1;
 
-option go_package = "github.com/joeg-ita/manent/pkg/plugin/external/proto;pluginpb";
+option go_package = "github.com/manent-deployer/manent/pkg/plugin/external/proto;pluginpb";
 
 // Deployer is implemented by the plugin. It mirrors plugin.Deployer and the optional interfaces
 // plugin.DryRunner, plugin.ReleaseInspector and plugin.Rollbacker.

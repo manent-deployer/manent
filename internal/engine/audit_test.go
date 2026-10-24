@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/audit"
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 type memAudit struct {

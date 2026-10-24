@@ -9,9 +9,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // States of a Submission and of a deploy besides the workflow ones.

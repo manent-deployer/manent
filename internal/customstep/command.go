@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // SSHAuth holds the credentials resolved at connection time.

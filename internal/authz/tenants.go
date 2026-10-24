@@ -6,10 +6,10 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/joeg-ita/manent/internal/audit"
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // tenantBindings are the implicit bindings of the tenants: members and admins receive the roles

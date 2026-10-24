@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/joeg-ita/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/engine"
 )
 
 // tenants lists the tenants (query: application, selector).

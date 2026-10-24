@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: manent
-        uses: joeg-ita/manent/integrations/github@v0.1.0
+        uses: manent-deployer/manent/integrations/github@v0.1.0
         with:
           server: https://manent.example.com
           token: ${{ secrets.MANENT_TOKEN }}
@@ -74,7 +74,7 @@ Outputs: `deployment-id`, `state`, `version`; the job summary appears on the wor
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+  - remote: https://raw.githubusercontent.com/manent-deployer/manent/v0.1.0/integrations/gitlab/manent.yml
     inputs:
       descriptor: deploy/prod.yml
       version: $CI_COMMIT_TAG
@@ -90,7 +90,7 @@ The provider is in `integrations/terraform` (a separate Go module: it adds no de
 
 ```hcl
 provider_installation {
-  dev_overrides { "joeg-ita/manent" = "/opt/terraform/providers" }   # directory with terraform-provider-manent
+  dev_overrides { "manent-deployer/manent" = "/opt/terraform/providers" }   # directory with terraform-provider-manent
   direct {}
 }
 ```
@@ -98,7 +98,7 @@ provider_installation {
 ```hcl
 terraform {
   required_providers {
-    manent = { source = "joeg-ita/manent" }
+    manent = { source = "manent-deployer/manent" }
   }
 }
 

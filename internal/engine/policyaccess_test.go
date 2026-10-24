@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/rbac"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/rbac"
 )
 
 // accessAdmin is a PolicyAdmin for the simulation: revision 2 adds the on-call grant and

@@ -44,7 +44,7 @@ Con GitHub Pages, dalla radice del repository:
 docs/.venv/bin/mkdocs gh-deploy -f docs/mkdocs.yml   # pubblica sul branch gh-pages
 ```
 
-Se il sito non viene servito da `https://joeg-ita.github.io/manent/`, aggiornare `site_url` in `mkdocs.yml`.
+Se il sito non viene servito da `https://manent-deployer.github.io/manent/`, aggiornare `site_url` in `mkdocs.yml`.
 
 ## Tema
 

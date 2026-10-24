@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 type mapSecrets map[string]string

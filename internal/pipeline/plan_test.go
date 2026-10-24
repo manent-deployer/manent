@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/customspec"
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // stubStep is an empty step used in tests.

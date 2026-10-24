@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 func openTest(t *testing.T) *SQL {

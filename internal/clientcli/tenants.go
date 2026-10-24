@@ -3,8 +3,8 @@ package clientcli
 import (
 	"context"
 
-	"github.com/joeg-ita/manent/internal/cliutil"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/cliutil"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // TenantsListCmd lists the tenants.

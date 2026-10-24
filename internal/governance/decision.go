@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // Phases of a governance evaluation (Input.Phase).

@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	pb "github.com/joeg-ita/manent/pkg/plugin/external/proto"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	pb "github.com/manent-deployer/manent/pkg/plugin/external/proto"
 )
 
 // Serve starts the plugin and keeps listening until manent stops it. Call it from the

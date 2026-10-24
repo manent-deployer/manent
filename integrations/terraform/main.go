@@ -9,15 +9,15 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/joeg-ita/manent/integrations/terraform/internal/provider"
-	"github.com/joeg-ita/manent/internal/version"
+	"github.com/manent-deployer/manent/integrations/terraform/internal/provider"
+	"github.com/manent-deployer/manent/internal/version"
 )
 
 func main() {
 	debug := flag.Bool("debug", false, "starts the provider in debug mode (for debuggers such as delve)")
 	flag.Parse()
 	err := providerserver.Serve(context.Background(), provider.New(version.Version), providerserver.ServeOpts{
-		Address: "registry.terraform.io/joeg-ita/manent",
+		Address: "registry.terraform.io/manent-deployer/manent",
 		Debug:   *debug,
 	})
 	if err != nil {

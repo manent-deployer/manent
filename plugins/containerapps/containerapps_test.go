@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/azurefake"
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/internal/azurefake"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 const sub = "11111111-2222-3333-4444-555555555555"

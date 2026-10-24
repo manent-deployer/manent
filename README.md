@@ -430,7 +430,7 @@ Tutti supportano dry-run, lettura della release in esercizio e rollback. Per le 
 
 ## Scrivere un plugin di deploy
 
-Un plugin implementa `plugin.Deployer` del package `github.com/joeg-ita/manent/pkg/plugin`:
+Un plugin implementa `plugin.Deployer` del package `github.com/manent-deployer/manent/pkg/plugin`:
 
 ```go
 type Deployer interface {
@@ -456,7 +456,7 @@ Il plugin di riferimento è [`plugins/remotecopy`](plugins/remotecopy): copia l'
 Un plugin può anche essere distribuito come binario separato, senza ricompilare manent. Usa la stessa `plugin.Factory`:
 
 ```go
-func main() { external.Serve(mioplugin.Factory) }   // github.com/joeg-ita/manent/pkg/plugin/external
+func main() { external.Serve(mioplugin.Factory) }   // github.com/manent-deployer/manent/pkg/plugin/external
 ```
 
 ```yaml

@@ -22,7 +22,7 @@ Verifica della firma e dell'archivio:
 ```sh
 cosign verify-blob \
   --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity-regexp 'https://github.com/joeg-ita/manent/.github/workflows/release.yml@refs/tags/v.*' \
+  --certificate-identity-regexp 'https://github.com/manent-deployer/manent/.github/workflows/release.yml@refs/tags/v.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 sha256sum --ignore-missing -c checksums.txt
@@ -34,19 +34,19 @@ Compilazione dai sorgenti: `make build` (`bin/manent` e `bin/manent-server`, ver
 
 | Immagine | Entrypoint | Contenuto |
 |---|---|---|
-| `ghcr.io/joeg-ita/manent-server` | `manent-server` (default `serve`) | Server, client e plugin `remote-copy`. Configurazione da `/etc/manent/manent.yml` (`MANENT_CONFIG`); porte `8080` (API) e `9090` (`observability.listen`). |
-| `ghcr.io/joeg-ita/manent` | `manent` | Solo il client, per le pipeline di CI. |
+| `ghcr.io/manent-deployer/manent-server` | `manent-server` (default `serve`) | Server, client e plugin `remote-copy`. Configurazione da `/etc/manent/manent.yml` (`MANENT_CONFIG`); porte `8080` (API) e `9090` (`observability.listen`). |
+| `ghcr.io/manent-deployer/manent` | `manent` | Solo il client, per le pipeline di CI. |
 
 ```sh
-docker run --rm ghcr.io/joeg-ita/manent-server:VERSION version
-docker run --rm -e MANENT_SERVER=https://manent.example.com -e MANENT_TOKEN ghcr.io/joeg-ita/manent:VERSION list
+docker run --rm ghcr.io/manent-deployer/manent-server:VERSION version
+docker run --rm -e MANENT_SERVER=https://manent.example.com -e MANENT_TOKEN ghcr.io/manent-deployer/manent:VERSION list
 ```
 
 Entrambe sono basate su `distroless/static` e girano come utente non root. Le immagini dei rilasci sono firmate con cosign:
 
 ```sh
-cosign verify ghcr.io/joeg-ita/manent-server:VERSION \
-  --certificate-identity-regexp 'https://github.com/joeg-ita/manent/.*' \
+cosign verify ghcr.io/manent-deployer/manent-server:VERSION \
+  --certificate-identity-regexp 'https://github.com/manent-deployer/manent/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

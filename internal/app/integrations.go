@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/change"
-	"github.com/joeg-ita/manent/internal/chat"
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/change"
+	"github.com/manent-deployer/manent/internal/chat"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // integrationTimeout is the default timeout of calls to Slack, Teams and the ITSMs.

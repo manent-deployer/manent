@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/customspec"
 )
 
 // maxResponse limits the response read.

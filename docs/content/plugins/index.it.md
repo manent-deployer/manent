@@ -1,6 +1,6 @@
 # Scrivere un plugin
 
-Il deploy vero e proprio è delegato ai plugin. Un plugin dipende solo dal package pubblico `github.com/joeg-ita/manent/pkg/plugin` e può essere:
+Il deploy vero e proprio è delegato ai plugin. Un plugin dipende solo dal package pubblico `github.com/manent-deployer/manent/pkg/plugin` e può essere:
 
 - **interno**: compilato dentro manent e registrato in `internal/app`;
 - **esterno**: un binario separato che manent avvia e con cui comunica via gRPC. Vedi [Plugin esterni](esterni.md).

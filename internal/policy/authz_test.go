@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/rbac"
-	"github.com/joeg-ita/manent/internal/service"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/rbac"
+	"github.com/manent-deployer/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // testRBAC is an RBAC configuration with every kind of binding: subjects, groups, patterns,

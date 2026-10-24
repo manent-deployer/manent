@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // fakeBin is the testdata/fakeplugin binary, built once in TestMain.

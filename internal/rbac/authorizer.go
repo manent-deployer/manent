@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/glob"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // Engines of the permissions.

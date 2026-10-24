@@ -3,7 +3,7 @@ package rbac
 import (
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/auth"
 )
 
 // A binding with artifacts applies only to the deploys of those artifacts, never to the

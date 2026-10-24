@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/engine"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/engine"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 func (f *fakeService) Tenants(context.Context, engine.TenantFilter) ([]engine.TenantInfo, error) {

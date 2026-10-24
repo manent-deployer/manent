@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Name is the name the plugin registers with.

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/labels"
 )
 
 // Plan is the sequence of a rollout's stages. Stages run one after the other, with the

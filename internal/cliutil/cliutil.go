@@ -12,7 +12,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 
-	"github.com/joeg-ita/manent/internal/version"
+	"github.com/manent-deployer/manent/internal/version"
 )
 
 // PrintJSON prints v to stdout as indented JSON.

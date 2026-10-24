@@ -40,7 +40,7 @@ export MANENT_TOKEN=…
 manent deploy -f release.yml
 ```
 
-In a CI pipeline you can use the `ghcr.io/joeg-ita/manent` image, which contains only the client.
+In a CI pipeline you can use the `ghcr.io/manent-deployer/manent` image, which contains only the client.
 
 ## Deploy
 

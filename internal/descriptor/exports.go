@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/labels"
 )
 
 // Formats of an export.

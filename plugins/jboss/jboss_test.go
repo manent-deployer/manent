@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // fakeServer imitates the WildFly HTTP management API: MD5 digest authentication,

@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/glob"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/secrets"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // Notified events.

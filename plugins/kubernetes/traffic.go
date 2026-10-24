@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Parameters of percentage rollouts (rollout with strategy: traffic).

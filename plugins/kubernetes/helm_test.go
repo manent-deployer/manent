@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // writeChart packages a chart like "helm package": a .tgz with <name>/... .

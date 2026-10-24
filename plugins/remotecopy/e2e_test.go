@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // E2E tests use a real SSH server: scripts/e2e-ssh.sh starts one in Docker and sets

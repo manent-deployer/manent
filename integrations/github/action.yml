@@ -2,7 +2,7 @@
 # manent client from this repository (same version as the action) if it is not on the PATH, and
 # runs "manent deploy --ci": outputs in $GITHUB_OUTPUT, summary in $GITHUB_STEP_SUMMARY.
 #
-#   - uses: joeg-ita/manent/integrations/github@v0.1.0
+#   - uses: manent-deployer/manent/integrations/github@v0.1.0
 #     with:
 #       server: https://manent.example.com
 #       token: ${{ secrets.MANENT_TOKEN }}

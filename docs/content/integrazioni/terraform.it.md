@@ -19,7 +19,7 @@ Finché non è nel registry, indica a Terraform dove trovarlo con `dev_overrides
 
 ```hcl title="~/.terraformrc"
 provider_installation {
-  dev_overrides { "joeg-ita/manent" = "/opt/terraform/providers" }
+  dev_overrides { "manent-deployer/manent" = "/opt/terraform/providers" }
   direct {}
 }
 ```
@@ -31,7 +31,7 @@ Terraform stampa poi un avviso che il provider è sostituito da una build locale
 ```hcl title="main.tf"
 terraform {
   required_providers {
-    manent = { source = "joeg-ita/manent" }
+    manent = { source = "manent-deployer/manent" }
   }
 }
 

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // Output is the result of a step. DBOS persists it: it must never contain secrets.

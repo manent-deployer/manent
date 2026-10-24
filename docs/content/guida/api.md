@@ -1,6 +1,6 @@
 # HTTP API
 
-The complete contract is the OpenAPI specification in [`api/openapi.yaml`](https://github.com/joeg-ita/manent/blob/main/api/openapi.yaml): a test checks that it matches the routes the server registers, and the [web interface](interfaccia-web.md) generates its types from it.
+The complete contract is the OpenAPI specification in [`api/openapi.yaml`](https://github.com/manent-deployer/manent/blob/main/api/openapi.yaml): a test checks that it matches the routes the server registers, and the [web interface](interfaccia-web.md) generates its types from it.
 
 The API is served by `manent-server serve` (default `:8080`). It accepts and returns JSON. A descriptor body can be at most 1 MiB.
 

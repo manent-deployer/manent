@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // split returns the fake service's traffic as "revision=percent".

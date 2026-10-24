@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/deploylog"
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/telemetry"
-	"github.com/joeg-ita/manent/internal/testdb"
+	"github.com/manent-deployer/manent/internal/deploylog"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/telemetry"
+	"github.com/manent-deployer/manent/internal/testdb"
 )
 
 // versionStep fails for version "bad" and writes to the deploy log.

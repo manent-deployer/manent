@@ -11,8 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/joeg-ita/manent/internal/authz"
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/authz"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 // UIConfig is the configuration the web interface reads from /ui/config.json before login.

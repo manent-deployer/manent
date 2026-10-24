@@ -30,7 +30,7 @@ build:
     - if: $CI_COMMIT_TAG
 
 include:
-  - remote: https://raw.githubusercontent.com/joeg-ita/manent/v0.1.0/integrations/gitlab/manent.yml
+  - remote: https://raw.githubusercontent.com/manent-deployer/manent/v0.1.0/integrations/gitlab/manent.yml
     inputs:
       job: deploy-test
       stage: deploy
@@ -63,7 +63,7 @@ deploy-test:
 ```
 
 !!! tip "Job più veloci"
-    L'immagine predefinita compila il client a ogni esecuzione. Un'immagine tua che ha già `manent` nel `PATH` (e una shell, che serve a GitLab per eseguire lo script) evita l'installazione: passala come `image`. L'immagine ufficiale `ghcr.io/joeg-ita/manent` è distroless, senza shell, quindi non è adatta come immagine di un job GitLab.
+    L'immagine predefinita compila il client a ogni esecuzione. Un'immagine tua che ha già `manent` nel `PATH` (e una shell, che serve a GitLab per eseguire lo script) evita l'installazione: passala come `image`. L'immagine ufficiale `ghcr.io/manent-deployer/manent` è distroless, senza shell, quindi non è adatta come immagine di un job GitLab.
 
 ## 3. Usa l'esito nei job successivi
 
@@ -89,7 +89,7 @@ promote-prod:
   variables:
     MANENT_TOKEN: $MANENT_PROMOTE_TOKEN       # un token che può rilasciare in produzione
   script:
-    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
+    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/manent-deployer/manent/cmd/manent@v0.1.0
     - manent promote -a shop --from test --to prod --version "$CI_COMMIT_TAG" --timeout 4h
   rules:
     - if: $CI_COMMIT_TAG
@@ -109,7 +109,7 @@ envconfig-check:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes: ["envconfig/**/*"]
   script:
-    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
+    - command -v manent >/dev/null || GOBIN=/usr/local/bin go install github.com/manent-deployer/manent/cmd/manent@v0.1.0
     - manent env validate -a shop -e prod -f envconfig/shop/shop/prod.yml
 ```
 

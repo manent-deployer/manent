@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	pb "github.com/joeg-ita/manent/pkg/plugin/external/proto"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	pb "github.com/manent-deployer/manent/pkg/plugin/external/proto"
 )
 
 // ProtocolVersion is the host-plugin protocol version. Increment it at every incompatible

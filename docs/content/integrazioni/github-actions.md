@@ -1,6 +1,6 @@
 # GitHub Actions
 
-The repository ships a composite action, `joeg-ita/manent/integrations/github`, that deploys with manent, validates a descriptor or checks a candidate environment configuration. It installs the client if the runner does not have it, waits for the outcome, fails the job when the deploy fails, and publishes the result as step outputs and in the job summary.
+The repository ships a composite action, `manent-deployer/manent/integrations/github`, that deploys with manent, validates a descriptor or checks a candidate environment configuration. It installs the client if the runner does not have it, waits for the outcome, fails the job when the deploy fails, and publishes the result as step outputs and in the job summary.
 
 !!! abstract "What you need"
     A manent server reachable from the runners (GitHub-hosted runners need a public address; otherwise use self-hosted runners in your network) · a token for CI ([static token](../operazioni/accesso.md) in `auth.tokens_file`)
@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: manent
-        uses: joeg-ita/manent/integrations/github@v0.1.0
+        uses: manent-deployer/manent/integrations/github@v0.1.0
         with:
           server: https://manent.example.com
           token: ${{ secrets.MANENT_TOKEN }}
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: joeg-ita/manent/integrations/github@v0.1.0
+      - uses: manent-deployer/manent/integrations/github@v0.1.0
         with:
           server: https://manent.example.com
           token: ${{ secrets.MANENT_TOKEN }}
@@ -103,7 +103,7 @@ The action covers `deploy`, `validate` and `env-validate`. For a promotion, inst
     steps:
       - uses: actions/setup-go@v5
         with: {go-version: "1.27"}
-      - run: go install github.com/joeg-ita/manent/cmd/manent@v0.1.0
+      - run: go install github.com/manent-deployer/manent/cmd/manent@v0.1.0
       - run: manent promote -a shop --from test --to prod --version "${{ github.ref_name }}" --timeout 4h
         env:
           MANENT_SERVER: https://manent.example.com
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: joeg-ita/manent/integrations/github@v0.1.0
+      - uses: manent-deployer/manent/integrations/github@v0.1.0
         with:
           server: https://manent.example.com
           token: ${{ secrets.MANENT_TOKEN }}

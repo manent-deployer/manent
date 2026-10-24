@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/rbac"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/rbac"
 )
 
 // ServiceGrant converts a grant of the permission model to the service contract.

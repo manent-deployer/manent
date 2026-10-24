@@ -1,9 +1,9 @@
 # manent documentation site: make docs (build into docs/site) or make docs-serve.
 site_name: manent
 site_description: Deploy as code on durable DBOS workflows
-site_url: https://joeg-ita.github.io/manent/
-repo_url: https://github.com/joeg-ita/manent
-repo_name: joeg-ita/manent
+site_url: https://manent-deployer.github.io/manent/
+repo_url: https://github.com/manent-deployer/manent
+repo_name: manent-deployer/manent
 edit_uri: edit/main/docs/content/
 copyright: Distributed under the license in the repository's LICENSE file
 
@@ -58,7 +58,7 @@ extra:
   generator: false
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/joeg-ita/manent
+      link: https://github.com/manent-deployer/manent
 
 plugins:
   - search:

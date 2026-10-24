@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/joeg-ita/manent/internal/servercli"
+	"github.com/manent-deployer/manent/internal/servercli"
 )
 
 func main() {

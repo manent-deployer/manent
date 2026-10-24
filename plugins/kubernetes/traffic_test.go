@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 const routePath = "/apis/gateway.networking.k8s.io/v1/namespaces/shop/httproutes/shop"

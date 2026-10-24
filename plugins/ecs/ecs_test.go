@@ -17,8 +17,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/internal/awsauth"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/internal/awsauth"
 )
 
 // fakeECS emulates the ECS JSON protocol for the operations used by the plugin. A deployment

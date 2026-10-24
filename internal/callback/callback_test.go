@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))

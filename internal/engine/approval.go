@@ -10,11 +10,11 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/audit"
-	"github.com/joeg-ita/manent/internal/auth"
-	"github.com/joeg-ita/manent/internal/change"
-	"github.com/joeg-ita/manent/internal/chat"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/auth"
+	"github.com/manent-deployer/manent/internal/change"
+	"github.com/manent-deployer/manent/internal/chat"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 const (

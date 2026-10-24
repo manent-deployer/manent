@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // fakeCluster is a minimal API server: discovery, server-side apply, get, list and delete.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/labels"
 )
 
 // Behaviors of a rollout when a pass fails.

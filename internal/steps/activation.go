@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // Activator puts the release into service (traffic switch, change opening, ...).

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // fakeSource returns fixed series per track ({track} in the query) and records the queries.

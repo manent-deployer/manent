@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // routing reads the additional weights of the live alias from the fake Lambda.

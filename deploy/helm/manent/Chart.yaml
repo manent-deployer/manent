@@ -4,6 +4,6 @@ description: Deploy as code su workflow durevoli DBOS (API e worker).
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/joeg-ita/manent
+home: https://github.com/manent-deployer/manent
 sources:
-  - https://github.com/joeg-ita/manent
+  - https://github.com/manent-deployer/manent

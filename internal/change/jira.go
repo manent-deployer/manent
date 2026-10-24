@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // Jira creates an issue for every deploy with the REST API v2 (Jira Cloud and Data Center).

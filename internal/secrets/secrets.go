@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
 // Provider resolves a reference (e.g. "env:VAR", "file:/path") into the secret value.

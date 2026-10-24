@@ -3,7 +3,7 @@
 // package rbac and is re-exported here.
 package authz
 
-import "github.com/joeg-ita/manent/internal/rbac"
+import "github.com/manent-deployer/manent/internal/rbac"
 
 // Types of the permission model (package rbac).
 type (

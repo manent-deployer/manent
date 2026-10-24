@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/config"
-	"github.com/joeg-ita/manent/internal/governance"
-	"github.com/joeg-ita/manent/internal/policy"
-	"github.com/joeg-ita/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/config"
+	"github.com/manent-deployer/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/policy"
+	"github.com/manent-deployer/manent/internal/secrets"
 )
 
 // NewStaticGovernance creates the release rules and the freeze windows of the configuration.

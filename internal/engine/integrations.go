@@ -9,10 +9,10 @@ import (
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
-	"github.com/joeg-ita/manent/internal/callback"
-	"github.com/joeg-ita/manent/internal/change"
-	"github.com/joeg-ita/manent/internal/chat"
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/callback"
+	"github.com/manent-deployer/manent/internal/change"
+	"github.com/manent-deployer/manent/internal/chat"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // ChatNotifier sends chat notifications to a destination by name (internal/chat).

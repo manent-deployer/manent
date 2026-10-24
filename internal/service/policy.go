@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/governance"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/governance"
 )
 
 // PolicyService manages the governance policy revisions and the freeze windows created at

@@ -15,9 +15,9 @@ import (
 	"github.com/open-policy-agent/opa/v1/tester"
 	"github.com/open-policy-agent/opa/v1/types"
 
-	"github.com/joeg-ita/manent/internal/glob"
-	"github.com/joeg-ita/manent/internal/labels"
-	"github.com/joeg-ita/manent/internal/tenant"
+	"github.com/manent-deployer/manent/internal/glob"
+	"github.com/manent-deployer/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // libFS holds the Rego library of manent (packages manent.lib, manent.lib.rules) and the

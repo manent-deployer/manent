@@ -1,5 +1,5 @@
 // Package version identifies the manent binary. Values are set at build time with
-// -ldflags "-X github.com/joeg-ita/manent/internal/version.Version=..." (Makefile, GoReleaser).
+// -ldflags "-X github.com/manent-deployer/manent/internal/version.Version=..." (Makefile, GoReleaser).
 package version
 
 import "runtime/debug"

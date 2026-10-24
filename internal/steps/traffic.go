@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/descriptor"
-	"github.com/joeg-ita/manent/internal/pipeline"
-	"github.com/joeg-ita/manent/internal/secrets"
-	"github.com/joeg-ita/manent/internal/traffic"
-	"github.com/joeg-ita/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/internal/descriptor"
+	"github.com/manent-deployer/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/secrets"
+	"github.com/manent-deployer/manent/internal/traffic"
+	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
 // Names of the pool steps: the engine inserts them around the steps of every batch when the

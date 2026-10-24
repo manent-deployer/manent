@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/traffic"
-	"github.com/joeg-ita/manent/pkg/plugin"
-	"github.com/joeg-ita/manent/plugins/remotecopy"
+	"github.com/manent-deployer/manent/internal/traffic"
+	"github.com/manent-deployer/manent/pkg/plugin"
+	"github.com/manent-deployer/manent/plugins/remotecopy"
 )
 
 // Traffic pools on Windows load balancers, driven with PowerShell on a management host over

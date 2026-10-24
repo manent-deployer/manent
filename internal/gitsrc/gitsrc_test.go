@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/pipeline"
+	"github.com/manent-deployer/manent/internal/pipeline"
 )
 
 // fixture is a source repository built with the git binary.

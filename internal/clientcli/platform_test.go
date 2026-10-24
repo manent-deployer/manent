@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeg-ita/manent/internal/service"
+	"github.com/manent-deployer/manent/internal/service"
 )
 
 func TestStampaWorkerEAttivita(t *testing.T) {
