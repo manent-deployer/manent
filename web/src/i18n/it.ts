@@ -460,6 +460,7 @@ export const it: Record<MessageKey, string> = {
   "platform.kind.deployments": "Deploy",
   "platform.kind.approvals": "Approvazioni e attese",
   "platform.kind.region": "Passi di una region",
+  "platform.kind.plugin": "Coda di un plugin",
   "platform.kind.other": "Altro",
   "platform.limit.worker": "{n} per worker",
   "platform.limit.partition": "{n} per ambiente",

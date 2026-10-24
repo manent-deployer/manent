@@ -157,6 +157,23 @@ services:
       - ./.work/artifacts:/srv/artifacts:ro
     networks: [core, us1]
 
+  # UC29: worker with ansible-core that serves the ansible plugin's queue (dbos.plugins).
+  worker-ansible:
+    <<: *manent
+    image: manent-uc-ansible:dev
+    build:
+      context: .work/bin
+      dockerfile: ../../ansible/Dockerfile
+    profiles: [ansible]
+    command: ["worker"]
+    hostname: worker-ansible
+    volumes:
+      - ./.work/config/worker-ansible.yml:/etc/manent/manent.yml:ro
+      - ./config/envconfig:/etc/manent/envconfig:ro
+      - ./.work/keys:/keys:ro
+      - ./.work/artifacts:/srv/artifacts:ro
+    networks: [core, eu1, us1]
+
   client:
     image: manent-uc:dev
     profiles: [tools]

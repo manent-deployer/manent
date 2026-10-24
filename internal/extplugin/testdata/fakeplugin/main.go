@@ -46,6 +46,7 @@ func (f fake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, er
 			"leak":       os.Getenv("LEAK_ME"),
 			"foo":        os.Getenv("FOO"),
 			"pid":        strconv.Itoa(os.Getpid()),
+			"region":     r.Targets[0].Labels["region"],
 		},
 	}}}, nil
 }

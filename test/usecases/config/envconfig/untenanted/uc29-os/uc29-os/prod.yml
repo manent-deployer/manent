@@ -1,0 +1,12 @@
+# UC29: configuration of the VMs with the ansible plugin, on its queue (worker-ansible). The
+# targets come from the infrastructure deploy named in the descriptor (imports + targetsFrom).
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: ansible
+params:
+  ssh_key_secret: deploy-key
+  release_marker: "true"
+  release_marker_dir: /home/deploy/.manent/releases
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}
+exports:
+  app_dir: {from: deploy.app_dir, pattern: '/home/deploy/apps/[a-z0-9-]+'}

@@ -52,7 +52,7 @@ func (s Deploy) InspectTargets(ctx context.Context, d *descriptor.Descriptor, ta
 				Artifact:     plugin.Artifact{Type: d.Artifact.Type, Name: d.Artifact.Name, Version: d.Artifact.Version},
 				Params:       d.Deploy.Params,
 				Secrets:      secrets.DescriptorResolver{Provider: s.Secrets, Descriptor: d},
-				Targets:      []plugin.Target{{Host: t.Host, Port: t.Port, User: t.User}},
+				Targets:      []plugin.Target{{Host: t.Host, Port: t.Port, User: t.User, Labels: t.Labels}},
 			}
 			rel, err := ins.CurrentRelease(c, req)
 			switch {

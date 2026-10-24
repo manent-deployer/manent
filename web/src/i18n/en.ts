@@ -459,6 +459,7 @@ export const en = {
   "platform.kind.deployments": "Deployments",
   "platform.kind.approvals": "Approvals and waits",
   "platform.kind.region": "Region passes",
+  "platform.kind.plugin": "Plugin queue",
   "platform.kind.other": "Other",
   "platform.limit.worker": "{n} per worker",
   "platform.limit.partition": "{n} per environment",

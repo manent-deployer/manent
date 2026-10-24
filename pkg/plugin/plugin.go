@@ -74,6 +74,9 @@ type Target struct {
 	Host string `json:"host"`
 	Port int    `json:"port,omitempty"`
 	User string `json:"user,omitempty"`
+	// Labels classify the target (region and az are reserved, used by wave rollouts): a plugin
+	// can use them, for example to group hosts in an inventory.
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // Request holds everything the plugin needs to run the deploy.

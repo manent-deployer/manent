@@ -214,6 +214,10 @@ type DBOS struct {
 	// queues, or the default one for those without): a pool dedicated to some teams, with their
 	// credentials. Empty: every queue.
 	Tenants []string `yaml:"tenants"`
+	// Plugins are the plugins with their own queue (plugins.<name>.queue) this worker serves:
+	// it registers and dequeues their queues besides its own. A worker that does not list a
+	// plugin never runs its deploys, and needs neither its binary nor its runtime.
+	Plugins []string `yaml:"plugins"`
 	// DrainTimeout is how long a stopping worker waits for the running deploys after it stopped
 	// dequeuing (0 = no wait).
 	DrainTimeout time.Duration `yaml:"drain_timeout"`
@@ -941,6 +945,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateMetricSources()...)
 	errs = append(errs, c.validateGovernance()...)
 	errs = append(errs, c.validateRBACEngine()...)
+	errs = append(errs, c.validatePluginQueues()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency cannot exceed global_concurrency"))

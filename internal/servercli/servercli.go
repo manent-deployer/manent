@@ -98,7 +98,7 @@ func (c *ValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	plugins, err := app.NewPlugins(cfg, log)
+	plugins, err := app.NewPlugins(cfg, log, false)
 	if err != nil {
 		return err
 	}

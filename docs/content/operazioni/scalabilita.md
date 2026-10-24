@@ -42,6 +42,28 @@ A worker started with the ID of another one that is still active (not stopped an
 
 With targets in several regions, [wave rollouts](../guida/ondate.md) update one region (or one AZ) at a time. With `dbos.region_routing` each worker declares its `dbos.region` and runs only the passes on that region's targets, from the `<queue>.<region>` queue: SSH, downloads and checks start from the region's network. There is still a single database, reached by all regions.
 
+## Plugin queues { #plugin-queues }
+
+Some plugins need a runtime that manent's distroless image does not have: the [ansible](../plugins/ansible.md) plugin needs Python and `ansible-core` on the machine of the worker that runs it. Give such a plugin its own queue, and let only a dedicated pool of workers serve it:
+
+```yaml title="manent.yml (every process)"
+plugins:
+  ansible:
+    external: {command: /usr/local/bin/manent-plugin-ansible, sha256: "<sha256>"}
+    artifact_types: [ansible]
+    queue: ansible
+```
+
+```yaml title="manent.yml (only the workers of the pool, image server-ansible)"
+dbos:
+  plugins: [ansible]
+```
+
+- At submission manent routes the deploy to the plugin's queue: by the plugin of the effective descriptor (`deploy.plugin`, also when it comes from the environment configuration) or, when the environment configuration cannot be read at that moment, by the artifact type (`artifact_types`, so each type belongs to at most one plugin with a queue). The plugin's queue wins over a [tenant's](../guida/tenant.md) queue.
+- Only the workers that list the plugin in `dbos.plugins` register and dequeue its queue, besides their own. As soon as a plugin has its own queue, every worker dequeues only the queues it knows (default, tenants, its region, its plugins): DBOS keeps the registered queues in the database, and without this a worker would also dequeue the plugin's. Everywhere else, the API included, the plugin is a stub that knows its name and artifact types: it never starts, so its binary and runtime are not needed there. A deploy that reached such a worker anyway fails without retries.
+- The queue has the limits of the default queue (`concurrency`, `environment_concurrency`, `global_concurrency`) and shows as kind `plugin` in `manent queues` and in the Platform page.
+- `dbos.plugins` is not supported together with `dbos.region_routing` yet.
+
 ## Concurrency
 
 The queue is partitioned by `<application>/<environment>`.

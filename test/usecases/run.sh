@@ -22,9 +22,9 @@ done
 
 cleanup() {
   if [ "$keep" = 1 ]; then
-    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v"
+    echo "laboratorio attivo: docker compose -f test/usecases/compose.yml --profile regions --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git --profile ansible down -v"
   else
-    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+    dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git --profile ansible down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -53,6 +53,15 @@ else
     go install -trimpath "github.com/manent-deployer/manent-plugin-terraform@${TERRAFORM_PLUGIN_VERSION:-v0.1.0}" &&
     cp "$(find "$WORK/gopath/bin" -name manent-plugin-terraform -type f | head -1)" "$WORK/bin/")
 fi || { echo "build del plugin terraform fallita" >&2; exit 1; }
+# Ansible plugin (UC29), the same way.
+ansplugin=${MANENT_PLUGIN_ANSIBLE:-../../../manent-plugin-ansible}
+if [ -f "$ansplugin/go.mod" ]; then
+  (cd "$ansplugin" && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-plugin-ansible" .)
+else
+  (cd "$WORK" && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 GOBIN= GOPATH="$WORK/gopath" \
+    go install -trimpath "github.com/manent-deployer/manent-plugin-ansible@${ANSIBLE_PLUGIN_VERSION:-v0.1.0}" &&
+    cp "$(find "$WORK/gopath/bin" -name manent-plugin-ansible -type f | head -1)" "$WORK/bin/")
+fi || { echo "build del plugin ansible fallita" >&2; exit 1; }
 info "binari linux/$goarch compilati"
 
 # Lab SSH key: readable by the nonroot user of the manent containers.
@@ -93,12 +102,15 @@ region_config() {
 printf 'uc-k8s-token\n' >"$WORK/k3s/token"
 printf 'uc-k8s-token,manent,manent,system:masters\n' >"$WORK/k3s/tokens.csv"
 
+# Worker that serves the ansible plugin's queue (UC29).
+awk '{ print } /^dbos:/ { print "  plugins: [ansible]" }' config/manent.yml >"$WORK/config/worker-ansible.yml"
+
 region_config orchestrator ""
 region_config worker-eu1 eu-1
 region_config worker-us1 us-1
 
-dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
-dc --profile regions --profile containers --profile lb --profile jboss --profile windows --profile git build -q
+dc --profile regions --profile tools --profile containers --profile kubernetes --profile lb --profile jboss --profile metrics --profile terraform --profile windows --profile git --profile ansible down -v -t 5 --remove-orphans >/dev/null 2>&1 || true
+dc --profile regions --profile containers --profile lb --profile jboss --profile windows --profile git --profile ansible build -q
 dc up -d --quiet-pull >/dev/null 2>&1 || dc up -d
 t=0
 until curl -fs http://127.0.0.1:18080/readyz >/dev/null 2>&1; do

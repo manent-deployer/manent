@@ -219,7 +219,7 @@ func (s Deploy) request(dep plugin.Deployer, in pipeline.Input, localPath string
 		Traffic: trafficRequest(in),
 	}
 	for _, t := range d.Deploy.Targets {
-		req.Targets = append(req.Targets, plugin.Target{Host: t.Host, Port: t.Port, User: t.User})
+		req.Targets = append(req.Targets, plugin.Target{Host: t.Host, Port: t.Port, User: t.User, Labels: t.Labels})
 	}
 	if err := dep.Validate(req); err != nil {
 		// Not marked permanent: an external plugin can fail Validate because the process is

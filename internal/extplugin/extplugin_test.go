@@ -96,7 +96,7 @@ func request(params map[string]string) *plugin.Request {
 	return &plugin.Request{
 		DeploymentID: "d1",
 		Artifact:     plugin.Artifact{Type: "application", LocalPath: "/tmp/app.tgz"},
-		Targets:      []plugin.Target{{Host: "h1"}},
+		Targets:      []plugin.Target{{Host: "h1", Labels: map[string]string{"region": "eu-1"}}},
 		Params:       params,
 		Secrets:      mapSecrets{"tok": "s3cr3t"},
 	}
@@ -118,7 +118,8 @@ func TestDeploy(t *testing.T) {
 	}
 	det := res.Targets[0].Details
 	// The secret arrives through the resolver; the worker's variables are not inherited.
-	if det["secret_len"] != "6" || det["leak"] != "" || det["foo"] != "bar" || res.Targets[0].Status != plugin.StatusDeployed {
+	// The labels of the targets cross the protocol.
+	if det["secret_len"] != "6" || det["leak"] != "" || det["foo"] != "bar" || det["region"] != "eu-1" || res.Targets[0].Status != plugin.StatusDeployed {
 		t.Errorf("risultato inatteso: %+v", res.Targets[0])
 	}
 	// The outputs cross the protocol (exports of the deploy).

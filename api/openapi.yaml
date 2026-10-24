@@ -1045,7 +1045,7 @@ components:
       required: [name, kind, enqueued, running, delayed, workers]
       properties:
         name: {type: string}
-        kind: {type: string, enum: [deployments, approvals, region, other]}
+        kind: {type: string, enum: [deployments, approvals, region, plugin, other]}
         region: {type: string}
         worker_concurrency: {type: integer, description: Workflows run together by one worker (absent = no limit)}
         global_concurrency: {type: integer, description: Workflows run together across all workers}

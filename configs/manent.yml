@@ -22,6 +22,9 @@ dbos:
   # and runs only the passes on that region's targets.
   # region: eu-1
   # region_routing: true
+  # Plugins with their own queue (plugins.<name>.queue) served by this worker: only on the pool
+  # with their runtime, e.g. the server-ansible image (docs: Scalability, Plugin queues).
+  # plugins: [ansible]
 
 # Health gate of wave rollouts.
 rollout:
@@ -387,3 +390,13 @@ plugins:
   #     start_timeout: 1m
   #   known_hosts: ~/.ssh/known_hosts
   #   artifact_types: [application]
+  # Infrastructure with the external terraform plugin (tofu and the binary are in the image).
+  # terraform:
+  #   external: {command: /usr/local/bin/manent-plugin-terraform}
+  #   artifact_types: [terraform]
+  # System configuration with the external ansible plugin, on its own queue: only the workers
+  # of the server-ansible image with dbos.plugins: [ansible] run it.
+  # ansible:
+  #   external: {command: /usr/local/bin/manent-plugin-ansible}
+  #   artifact_types: [ansible]
+  #   queue: ansible

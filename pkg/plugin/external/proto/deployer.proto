@@ -78,6 +78,8 @@ message Target {
   string host = 1;
   int32 port = 2;
   string user = 3;
+  // Labels of the target (region and az included); empty for plugins of earlier versions.
+  map<string, string> labels = 4;
 }
 
 message DeployRequest {

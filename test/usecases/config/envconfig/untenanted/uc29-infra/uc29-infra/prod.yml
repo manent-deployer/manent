@@ -1,0 +1,14 @@
+# UC29: the VMs (terraform_data) of the chain infrastructure -> configuration -> application,
+# exported as targets with their labels.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: terraform
+targets:
+  - {host: uc29-eu}
+params:
+  backend.schema_name: uc29_tfstate
+  env.PG_CONN_STR: pg-conn
+  require_lock_file: "false"
+secrets:
+  - {name: pg-conn, ref: file:/keys/pg-conn}
+exports:
+  vms: {from: deploy.vm_hosts, format: targets, pattern: 'eu1-[a-c]'}

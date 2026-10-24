@@ -131,6 +131,13 @@ type WorkerOptions struct {
 	// Listen, if set, are the only deploy queues the worker dequeues from (default queue and
 	// tenant queues): a pool dedicated to some tenants. Empty: every registered queue.
 	Listen []string
+	// PluginQueues are the queues of the plugins this worker serves (dbos.plugins), registered
+	// and dequeued besides the others, with the limits of Queue.
+	PluginQueues []QueueOptions
+	// ListenExplicitly makes the worker dequeue only its own queues (ListenQueues). Needed when
+	// plugins have their own queues: DBOS keeps the registered queues in the database, and a
+	// worker without a listen filter would dequeue every queue there, a plugin's included.
+	ListenExplicitly bool
 }
 
 // ConfigResolver fetches the environment configuration and merges it with the descriptor.
@@ -307,6 +314,22 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	if len(opts.Listen) > 0 {
 		w.deployQueues = slices.DeleteFunc(w.deployQueues, func(n string) bool { return !slices.Contains(opts.Listen, n) })
 		w.listenOnly = true
+	}
+	if opts.ListenExplicitly {
+		w.listenOnly = true
+	}
+	for _, pq := range opts.PluginQueues {
+		if slices.Contains(w.deployQueues, pq.Name) {
+			continue
+		}
+		popts := []dbos.QueueOption{dbos.WithWorkerConcurrency(q.WorkerConcurrency), dbos.WithPartitionConcurrency(q.PartitionConcurrency)}
+		if q.GlobalConcurrency > 0 {
+			popts = append(popts, dbos.WithGlobalConcurrency(q.GlobalConcurrency))
+		}
+		if _, err = dbos.RegisterQueue(ctx, pq.Name, popts...); err != nil {
+			return nil, fmt.Errorf("registering queue %q: %w", pq.Name, err)
+		}
+		w.deployQueues = append(w.deployQueues, pq.Name)
 	}
 	if w.region != "" {
 		// The region's rollout passes: one at a time per application/environment/region.

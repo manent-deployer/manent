@@ -99,6 +99,9 @@ const (
 	QueueApprovals = "approvals"
 	// QueueRegion holds the rollout passes of a region, run only by that region's workers.
 	QueueRegion = "region"
+	// QueuePlugin is the queue of a plugin (plugins.<name>.queue), run only by the workers
+	// that serve it.
+	QueuePlugin = "plugin"
 	// QueueOther is a queue not created by manent (for example DBOS's internal queue).
 	QueueOther = "other"
 )

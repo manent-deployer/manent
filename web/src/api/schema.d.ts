@@ -1102,7 +1102,7 @@ export interface components {
         Queue: {
             name: string;
             /** @enum {string} */
-            kind: "deployments" | "approvals" | "region" | "other";
+            kind: "deployments" | "approvals" | "region" | "plugin" | "other";
             region?: string;
             /** @description Workflows run together by one worker (absent = no limit) */
             worker_concurrency?: number;

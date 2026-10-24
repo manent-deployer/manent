@@ -300,6 +300,14 @@ plugins:
     artifact_types: [containerapps]
     management_endpoint: http://fakes:9400
     authority: http://fakes:9400
+  # UC29: external Ansible plugin on its own queue: only worker-ansible (dbos.plugins) runs it,
+  # the other processes know it as a stub (no Python, no binary needed).
+  ansible:
+    external:
+      command: /usr/local/bin/manent-plugin-ansible
+    artifact_types: [ansible]
+    queue: ansible
+    insecure_ignore_host_key: true   # lab: host keys regenerated at every start
   # UC28: external Terraform plugin (repository manent-plugin-terraform) with OpenTofu.
   terraform:
     external:

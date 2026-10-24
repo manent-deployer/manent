@@ -34,13 +34,13 @@ type Request struct {
 	Application  string
 	Environment  string
 	Artifact     Artifact          // Type, Name, Version, LocalPath, SHA256
-	Targets      []Target          // Host, Port, User
+	Targets      []Target          // Host, Port, User, Labels
 	Params       map[string]string // deploy.params del descrittore effettivo
 	Secrets      SecretResolver
 }
 ```
 
-`Tenant`, `Application`, `Artifact.Name` ed `Environment` identificano la release: un plugin che tiene stato per release (storico, marcatori sui target) deve usarli tutti e quattro come chiave, perché due [tenant](../guida/tenant.md) possono avere applicazioni con lo stesso nome e ogni artefatto di un'applicazione è una release a sé. `Tenant` vale `untenanted` per le applicazioni che nessun tenant elenca. `Artifact.LocalPath` è il percorso dell'artefatto già scaricato e verificato sul worker. `Params` sono i parametri del plugin, dopo la fusione con la [configurazione di ambiente](../guida/configurazione-ambiente.md).
+`Tenant`, `Application`, `Artifact.Name` ed `Environment` identificano la release: un plugin che tiene stato per release (storico, marcatori sui target) deve usarli tutti e quattro come chiave, perché due [tenant](../guida/tenant.md) possono avere applicazioni con lo stesso nome e ogni artefatto di un'applicazione è una release a sé. `Tenant` vale `untenanted` per le applicazioni che nessun tenant elenca. `Targets[].Labels` sono le etichette dei target (comprese `region` e `az`), per esempio per raggrupparli in un inventario; le ricevono anche i plugin esterni (`Target.labels`). `Artifact.LocalPath` è il percorso dell'artefatto già scaricato e verificato sul worker. `Params` sono i parametri del plugin, dopo la fusione con la [configurazione di ambiente](../guida/configurazione-ambiente.md).
 
 ### Il risultato
 

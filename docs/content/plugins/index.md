@@ -34,13 +34,13 @@ type Request struct {
 	Application  string
 	Environment  string
 	Artifact     Artifact          // Type, Name, Version, LocalPath, SHA256
-	Targets      []Target          // Host, Port, User
+	Targets      []Target          // Host, Port, User, Labels
 	Params       map[string]string // deploy.params of the effective descriptor
 	Secrets      SecretResolver
 }
 ```
 
-`Tenant`, `Application`, `Artifact.Name` and `Environment` identify the release: a plugin that keeps state per release (history, markers on the targets) must key it on all four, because two [tenants](../guida/tenant.md) can have applications with the same name and every artifact of an application is a release of its own. `Tenant` is `untenanted` for the applications no tenant lists. `Artifact.LocalPath` is the path of the artifact already downloaded and verified on the worker. `Params` are the plugin parameters, after the merge with the [environment configuration](../guida/configurazione-ambiente.md).
+`Tenant`, `Application`, `Artifact.Name` and `Environment` identify the release: a plugin that keeps state per release (history, markers on the targets) must key it on all four, because two [tenants](../guida/tenant.md) can have applications with the same name and every artifact of an application is a release of its own. `Tenant` is `untenanted` for the applications no tenant lists. `Targets[].Labels` are the labels of the targets (`region` and `az` included), for example to group them in an inventory; external plugins receive them too (`Target.labels`). `Artifact.LocalPath` is the path of the artifact already downloaded and verified on the worker. `Params` are the plugin parameters, after the merge with the [environment configuration](../guida/configurazione-ambiente.md).
 
 ### The result
 

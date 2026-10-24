@@ -97,5 +97,15 @@ func (e *Engine) checkOwnership(ctx context.Context, d *descriptor.Descriptor, o
 	return nil
 }
 
+// pluginQueue returns the queue of the plugin of the deploy, or "": the plugin named by the
+// (effective, when read) descriptor, else the one routed by the artifact type. The type also
+// covers a plugin set by an environment configuration not read at submission.
+func (e *Engine) pluginQueue(d *descriptor.Descriptor) string {
+	if d.Deploy.Plugin != "" {
+		return e.pluginQueues[d.Deploy.Plugin]
+	}
+	return e.typeQueues[d.Artifact.Type]
+}
+
 // deployQueue is the queue a deploy request runs on: the owner's, or def.
 func deployQueue(req Request, def string) string { return cmp.Or(req.Queue, def) }

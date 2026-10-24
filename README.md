@@ -428,8 +428,9 @@ make web-dev    # development server on http://127.0.0.1:5173
 | `containerapps` | registry image: new revision with a suffix derived from the deploy, traffic on the latest healthy revision | Azure Container Apps apps |
 | `windows` | `.zip` archive extracted into a directory per version or `.msi` package, over WinRM or OpenSSH, with PowerShell: IIS `physicalPath`, service `binPath`, scheduled task action, MSI installation | IIS, Windows services, scheduled tasks and MSI packages (Windows Server 2016+) |
 | `terraform` (external, [manent-plugin-terraform](https://github.com/manent-deployer/manent-plugin-terraform)) | Terraform root module (`.tgz` with its lock file): `init`, `plan` and `apply` of that plan with OpenTofu, `max_destroy` guard, non-sensitive outputs exported to other deploys | one Terraform state per target, in a remote backend |
+| `ansible` (external, [manent-plugin-ansible](https://github.com/manent-deployer/manent-plugin-ansible)) | Ansible project (`.tgz` with playbooks, roles and collections): `ansible-playbook` with an inventory built from the targets (one group per label), check mode as dry-run, `set_stats` data exported to other deploys, optional release marker on the targets | servers and VMs over SSH, from workers with Python on the plugin's own queue |
 
-All of them support dry-run; all but `terraform`, whose rollback is a manual new apply of the previous version, support reading the live release and rollback. For images, the manifest digest becomes the artifact's sha256: promotions and rollbacks release exactly the verified image.
+All of them support dry-run. All but `terraform` and `ansible` support reading the live release and automatic rollback: `terraform` and `ansible` roll back manually, releasing the previous version again (`ansible` reads the live release with `release_marker`). For images, the manifest digest becomes the artifact's sha256: promotions and rollbacks release exactly the verified image.
 
 ## Writing a deploy plugin
 

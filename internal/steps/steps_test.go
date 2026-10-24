@@ -88,7 +88,7 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 		DeploymentID: "d1",
 		Descriptor: &descriptor.Descriptor{
 			Artifact: descriptor.Artifact{Type: "application"},
-			Deploy:   descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1"}}},
+			Deploy:   descriptor.Deploy{Targets: []descriptor.Target{{Host: "h1", Labels: map[string]string{"region": "eu-1"}}}},
 		},
 		Outputs: map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/app.tgz", OutSHA256: "abc"}},
 	}
@@ -97,7 +97,7 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The plugin receives the path guaranteed by the store, not the one recorded by the artifacts step.
-	if dep.got.Artifact.LocalPath != "/altro-worker/app.tgz" || dep.got.Targets[0].Host != "h1" || out["plugin"] != "app" {
+	if dep.got.Artifact.LocalPath != "/altro-worker/app.tgz" || dep.got.Targets[0].Host != "h1" || dep.got.Targets[0].Labels["region"] != "eu-1" || out["plugin"] != "app" {
 		t.Errorf("richiesta al plugin inattesa: %+v", dep.got)
 	}
 }

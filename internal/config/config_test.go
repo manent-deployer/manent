@@ -282,3 +282,48 @@ func TestMotoreDeiPermessi(t *testing.T) {
 		t.Errorf("motore opa: %+v %v", cfg.RBAC, err)
 	}
 }
+
+func TestCodeDeiPlugin(t *testing.T) {
+	// loadRaw writes the whole file: these cases set dbos themselves.
+	loadRaw := func(yaml string) (*Config, error) {
+		p := filepath.Join(t.TempDir(), "manent.yml")
+		if err := os.WriteFile(p, []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(p)
+	}
+	cfg, err := loadRaw(`
+plugins:
+  ansible:
+    external: {command: /usr/local/bin/manent-plugin-ansible}
+    artifact_types: [ansible]
+    queue: ansible-pool
+  remote-copy: {}
+dbos:
+  executor_id: w1
+  plugins: [ansible]
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PluginQueue("ansible") != "ansible-pool" || cfg.PluginQueue("remote-copy") != "" {
+		t.Errorf("plugin queues: %v", cfg.Plugins)
+	}
+	if !cfg.ServesPlugin("ansible", true) || cfg.ServesPlugin("ansible", false) || !cfg.ServesPlugin("remote-copy", false) {
+		t.Error("only a worker that lists the plugin serves its queue; plugins without a queue are served everywhere")
+	}
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"bad name":       {"plugins: {ansible: {artifact_types: [ansible], queue: 'a b'}}", "invalid queue name"},
+		"manent's queue": {"plugins: {ansible: {artifact_types: [ansible], queue: deployments}}", "is a queue of manent"},
+		"no types":       {"plugins: {ansible: {queue: ansible-pool}}", "needs artifact_types"},
+		"same type": {"plugins: {a: {artifact_types: [x], queue: qa}, b: {artifact_types: [x], queue: qb}}",
+			"already routed"},
+		"unknown plugin": {"dbos: {executor_id: w1, plugins: [ansible]}", "plugin ansible is not configured"},
+		"no queue":       {"plugins: {remote-copy: {}}\ndbos: {executor_id: w1, plugins: [remote-copy]}", "has no queue"},
+		"region routing": {"plugins: {ansible: {artifact_types: [ansible], queue: q}}\ndbos: {executor_id: w1, region_routing: true, plugins: [ansible]}", "region_routing"},
+	} {
+		if _, err := loadRaw(tc.yaml); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

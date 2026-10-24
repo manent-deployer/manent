@@ -121,6 +121,11 @@ type ServiceOptions struct {
 	// QueueLimits are the concurrency limits of the deploy queue (Name is ignored: it is
 	// QueueName), reported by Queues.
 	QueueLimits QueueOptions
+	// PluginQueues maps the plugins with their own queue to it, TypeQueues the artifact types
+	// of those plugins: a deploy of one of them is enqueued there instead of on the default or
+	// the tenant's queue (plugins.<name>.queue).
+	PluginQueues map[string]string
+	TypeQueues   map[string]string
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
@@ -161,6 +166,8 @@ type Engine struct {
 	targets          TargetStateReader
 	staleAfter       time.Duration
 	queueLimits      QueueOptions
+	pluginQueues     map[string]string
+	typeQueues       map[string]string
 	logger           *slog.Logger
 	now              func() time.Time
 	// inv is the process inventory, updated incrementally.
@@ -191,6 +198,8 @@ func NewService(opts ServiceOptions) *Engine {
 		targets:          opts.TargetStates,
 		staleAfter:       cmp.Or(opts.StaleAfter, time.Minute),
 		queueLimits:      opts.QueueLimits,
+		pluginQueues:     opts.PluginQueues,
+		typeQueues:       opts.TypeQueues,
 		logger:           opts.Logger.With("component", "engine"),
 		now:              opts.Now,
 	}
@@ -271,6 +280,10 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	}
 	{
 		req.Tenant, req.Queue, req.Limits = owner.Ref(d.Application), owner.Queue, limitsOf(owner)
+	}
+	if q := e.pluginQueue(cmp.Or(eff, d)); q != "" {
+		// The plugin's queue wins over the tenant's: only its workers can run the deploy.
+		req.Queue = q
 	}
 	if err := e.checkOwnership(ctx, d, req.Tenant); err != nil {
 		return nil, err

@@ -147,7 +147,11 @@ func recorder(m *telemetry.Metrics) telemetry.Recorder {
 // NewPlugins registers the available plugins and activates the configured ones.
 // Plugins compiled into manent are added here with Register; external plugins
 // ("external" key in the configuration) are registered automatically with their name.
-func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) {
+//
+// A plugin with its own queue (plugins.<name>.queue) is instantiated only by the workers that
+// serve it (dbos.plugins, worker true): everywhere else, the API included, it is a stub that
+// knows its name and artifact types, so selection and routing work without its binary.
+func NewPlugins(cfg *config.Config, log *slog.Logger, worker bool) (*plugin.Registry, error) {
 	reg := plugin.NewRegistry()
 	for name, f := range map[string]plugin.Factory{
 		remotecopy.Name:    remotecopy.Factory,
@@ -161,13 +165,22 @@ func NewPlugins(cfg *config.Config, log *slog.Logger) (*plugin.Registry, error) 
 		appservice.Name:    appservice.Factory,
 		containerapps.Name: containerapps.Factory,
 	} {
+		if !cfg.ServesPlugin(name, worker) {
+			continue
+		}
 		if err := reg.Register(name, f); err != nil {
 			return nil, err
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Plugins)) {
-		pc := cfg.Plugins[name]
-		if extplugin.IsExternal(pc) {
+		pc := maps.Clone(cfg.Plugins[name])
+		delete(pc, config.PluginQueueKey)
+		switch {
+		case !cfg.ServesPlugin(name, worker):
+			if err := reg.Register(name, queuedPlugin(name, cfg.PluginQueue(name), cfg.PluginArtifactTypes(name))); err != nil {
+				return nil, err
+			}
+		case extplugin.IsExternal(pc):
 			if err := reg.Register(name, extplugin.NewFactory(name)); err != nil {
 				return nil, fmt.Errorf("external plugin: %w", err)
 			}
@@ -514,6 +527,38 @@ func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (a
 	return all, listen, nil
 }
 
+// pluginRouting maps the plugins with their own queue, and their artifact types, to the queue.
+func pluginRouting(cfg *config.Config) (byPlugin, byType map[string]string) {
+	byPlugin, byType = map[string]string{}, map[string]string{}
+	for name := range cfg.Plugins {
+		if q := cfg.PluginQueue(name); q != "" {
+			byPlugin[name] = q
+			for _, t := range cfg.PluginArtifactTypes(name) {
+				byType[t] = q
+			}
+		}
+	}
+	return byPlugin, byType
+}
+
+// hasPluginQueues reports whether some plugin has its own queue.
+func hasPluginQueues(cfg *config.Config) bool {
+	byPlugin, _ := pluginRouting(cfg)
+	return len(byPlugin) > 0
+}
+
+// servedPluginQueues are the queues of the plugins this worker serves (dbos.plugins).
+func servedPluginQueues(cfg *config.Config) []engine.QueueOptions {
+	var qs []engine.QueueOptions
+	for _, name := range cfg.DBOS.Plugins {
+		q := cfg.PluginQueue(name)
+		if q != "" && !slices.ContainsFunc(qs, func(o engine.QueueOptions) bool { return o.Name == q }) {
+			qs = append(qs, engine.QueueOptions{Name: q})
+		}
+	}
+	return qs
+}
+
 // NewCallbackPolicy returns the limits on callback URLs set in the configuration.
 func NewCallbackPolicy(cfg *config.Config) callback.Policy {
 	return callback.Policy{AllowHTTP: cfg.Callbacks.AllowHTTP, AllowedHosts: cfg.Callbacks.AllowedHosts}
@@ -574,6 +619,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
 		},
 	}
+	opts.PluginQueues, opts.TypeQueues = pluginRouting(cfg)
 	if r, ok := executors.(engine.TargetStateReader); ok {
 		opts.TargetStates = r
 	}
@@ -609,12 +655,12 @@ func (c *components) guard(eng *engine.Engine) engine.Service {
 	return g
 }
 
-func newComponents(cfg *config.Config) (*components, error) {
+func newComponents(cfg *config.Config, worker bool) (*components, error) {
 	log, sender, err := NewLogger(cfg)
 	if err != nil {
 		return nil, err
 	}
-	plugins, err := NewPlugins(cfg, log)
+	plugins, err := NewPlugins(cfg, log, worker)
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +752,7 @@ func newComponents(cfg *config.Config) (*components, error) {
 // NewWorker starts a DBOS worker that runs deploys, with the service built on its context.
 // Used by "serve" and "worker".
 func NewWorker(cfg *config.Config) (*App, error) {
-	c, err := newComponents(cfg)
+	c, err := newComponents(cfg, true)
 	if err != nil {
 		return nil, err
 	}
@@ -767,6 +813,8 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		Tenants:              c.tenants,
 		RejectUntenanted:     c.rejectUntenanted,
 		Listen:               listen,
+		PluginQueues:         servedPluginQueues(cfg),
+		ListenExplicitly:     hasPluginQueues(cfg),
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
 		Hostname:             host,
@@ -812,7 +860,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 // NewClient creates an application that enqueues and queries deploys without running or
 // recovering them: used by CLI commands and by "serve --no-worker". Deploys need at least one running worker.
 func NewClient(cfg *config.Config) (*App, error) {
-	c, err := newComponents(cfg)
+	c, err := newComponents(cfg, false)
 	if err != nil {
 		return nil, err
 	}

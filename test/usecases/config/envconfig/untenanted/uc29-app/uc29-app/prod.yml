@@ -1,0 +1,10 @@
+# UC29: application released on the VMs, in the directory prepared by uc29-os (imports of the
+# release's deploys: targetsFrom and paramsFrom in the descriptor).
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+params:
+  layout: releases
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}

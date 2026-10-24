@@ -1,9 +1,10 @@
 # Use case target: SSH server for the remote-copy plugin plus an HTTP server exposing the
 # released applications (http://<host>:8080/<app>/current/healthz), used by post-test and
 # health gate. Debian and not Alpine: the plugin uses GNU coreutils (sha256sum, mv -T, readlink).
+# python3 runs the Ansible modules (UC29).
 FROM debian:bookworm-slim
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssh-server coreutils tar gzip busybox \
+ && apt-get install -y --no-install-recommends openssh-server coreutils tar gzip busybox python3 \
  && rm -rf /var/lib/apt/lists/* \
  && useradd -m -s /bin/bash deploy \
  && mkdir -p /run/sshd /home/deploy/.ssh /home/deploy/apps /home/deploy/fault \

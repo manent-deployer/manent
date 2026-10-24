@@ -381,7 +381,7 @@ func toProtoRequest(req *plugin.Request, secretsID uint32) *pb.DeployRequest {
 		r.Traffic = &pb.TrafficRequest{State: t.State, TesterHeader: t.TesterHeader, TesterTag: t.TesterTag, ProportionalReplicas: t.ProportionalReplicas}
 	}
 	for _, t := range req.Targets {
-		r.Targets = append(r.Targets, &pb.Target{Host: t.Host, Port: int32(t.Port), User: t.User})
+		r.Targets = append(r.Targets, &pb.Target{Host: t.Host, Port: int32(t.Port), User: t.User, Labels: t.Labels})
 	}
 	return r
 }
@@ -407,7 +407,7 @@ func fromProtoRequest(r *pb.DeployRequest) *plugin.Request {
 			ProportionalReplicas: t.GetProportionalReplicas()}
 	}
 	for _, t := range r.GetTargets() {
-		req.Targets = append(req.Targets, plugin.Target{Host: t.GetHost(), Port: int(t.GetPort()), User: t.GetUser()})
+		req.Targets = append(req.Targets, plugin.Target{Host: t.GetHost(), Port: int(t.GetPort()), User: t.GetUser(), Labels: t.GetLabels()})
 	}
 	return req
 }

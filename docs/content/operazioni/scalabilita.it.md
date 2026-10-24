@@ -42,6 +42,28 @@ Un worker che parte con l'ID di un altro ancora attivo (non arrestato e con un h
 
 Con target in più region, i [rilasci a ondate](../guida/ondate.md) aggiornano una region (o un'AZ) alla volta. Con `dbos.region_routing` ogni worker dichiara la sua `dbos.region` ed esegue solo i passi sui target di quella region, dalla coda `<queue>.<region>`: SSH, download e controlli partono dalla rete della region. Il database resta uno, raggiunto da tutte le region.
 
+## Code dei plugin { #plugin-queues }
+
+Alcuni plugin hanno bisogno di un runtime che l'immagine distroless di manent non ha: il plugin [ansible](../plugins/ansible.md) richiede Python e `ansible-core` sulla macchina del worker che lo esegue. Date a un plugin del genere una coda propria e fatela servire solo a un gruppo di worker dedicato:
+
+```yaml title="manent.yml (tutti i processi)"
+plugins:
+  ansible:
+    external: {command: /usr/local/bin/manent-plugin-ansible, sha256: "<sha256>"}
+    artifact_types: [ansible]
+    queue: ansible
+```
+
+```yaml title="manent.yml (solo i worker del gruppo, immagine server-ansible)"
+dbos:
+  plugins: [ansible]
+```
+
+- All'accodamento manent instrada il deploy sulla coda del plugin: in base al plugin del descrittore effettivo (`deploy.plugin`, anche quando arriva dalla configurazione di ambiente) oppure, se in quel momento la configurazione di ambiente non è leggibile, in base al tipo di artefatto (`artifact_types`, quindi ogni tipo appartiene al più a un plugin con coda). La coda del plugin prevale su quella di un [tenant](../guida/tenant.md).
+- Solo i worker che elencano il plugin in `dbos.plugins` registrano e prelevano la sua coda, oltre alla propria. Appena un plugin ha una coda propria, ogni worker preleva solo dalle code che conosce (di default, dei tenant, della sua region, dei suoi plugin): DBOS conserva le code registrate nel database e, senza questo, un worker preleverebbe anche quella del plugin. Ovunque altrove, API compresa, il plugin è uno stub che conosce nome e tipi di artefatto: non viene mai avviato, quindi lì non servono né il binario né il runtime. Un deploy arrivato comunque a un worker del genere fallisce senza retry.
+- La coda ha i limiti della coda di default (`concurrency`, `environment_concurrency`, `global_concurrency`) e compare con tipo `plugin` in `manent queues` e nella pagina Piattaforma.
+- `dbos.plugins` non è ancora supportato insieme a `dbos.region_routing`.
+
 ## Concorrenza
 
 La coda è partizionata per `<application>/<environment>`.
