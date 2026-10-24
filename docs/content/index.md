@@ -11,11 +11,11 @@ hide:
 
 <span class="mn-hero__eyebrow">deploy as code · durable DBOS workflows</span>
 
-# manent
+# Your deployment process, under control.
 
-<p class="mn-hero__lead">Ship an artifact to production <strong>exactly as it was tested</strong>: a declarative, durable and auditable pipeline of steps, from the CI commit to the last target.</p>
+<p class="mn-hero__subtitle">Define what to release. Control how it reaches production.</p>
 
-<p class="mn-hero__lead">The name comes from the Latin <em>manere</em>, "to remain, to stand firm": the artifact never changes along the way.</p>
+<p class="mn-hero__lead">Manent is an open-source deployment engine that coordinates durable workflows, artifact verification, progressive rollouts and release governance across VMs, Kubernetes and cloud platforms.</p>
 
 <div class="mn-hero__actions">
 <a class="md-button md-button--primary" href="tutorial/">Start the tutorials →</a>
@@ -183,6 +183,44 @@ flowchart LR
 ```
 
 Every phase is recorded: the [deploy lifecycle](concetti/ciclo-di-vita.md) explains each state, and [deploy types](concetti/tipologie-deploy.md) every way a release can be triggered and rolled out.
+
+## The web interface
+
+The server also serves a web interface, with the same permissions as the API: follow deploys and waves live, approve, promote and roll back, see what runs where. The screenshots come from a demo environment with five applications, three environments and four weeks of history; the [web interface guide](guida/interfaccia-web.md) describes every view.
+
+<div class="mn-shots" markdown>
+
+<figure markdown="span">
+  [![Deployments](assets/screenshots/deployments.png){ loading=lazy }](assets/screenshots/deployments.png)
+  <figcaption><strong>Deployments</strong>: every deploy, promotion and rollback, with state, requester and duration.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Wave rollout](assets/screenshots/deployment-waves.png){ loading=lazy }](assets/screenshots/deployment-waves.png)
+  <figcaption><strong>Wave rollout</strong>: approval, canary, then one availability zone at a time across two regions.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Automatic rollback](assets/screenshots/deployment-rollback.png){ loading=lazy }](assets/screenshots/deployment-rollback.png)
+  <figcaption><strong>Automatic rollback</strong>: a failed health check in eu-central-1 rolls every wave back.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Inventory](assets/screenshots/inventory.png){ loading=lazy }](assets/screenshots/inventory.png)
+  <figcaption><strong>Inventory</strong>: the release running in each application and environment, with promote and roll back.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Activity](assets/screenshots/activity.png){ loading=lazy }](assets/screenshots/activity.png)
+  <figcaption><strong>Activity</strong>: running, waiting, queued and scheduled deploys and the workers running them.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Metrics](assets/screenshots/metrics.png){ loading=lazy }](assets/screenshots/metrics.png)
+  <figcaption><strong>Metrics</strong>: DORA metrics computed from the deployment history.</figcaption>
+</figure>
+
+</div>
 
 ## Where to start
 

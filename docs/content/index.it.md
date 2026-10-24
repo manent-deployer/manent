@@ -11,11 +11,11 @@ hide:
 
 <span class="mn-hero__eyebrow">deploy as code · workflow durevoli DBOS</span>
 
-# manent
+# Il tuo processo di deploy, sotto controllo.
 
-<p class="mn-hero__lead">Porta in esercizio un artefatto <strong>così com'è stato testato</strong>: una pipeline di step dichiarativa, durevole e verificabile, dal commit della CI fino all'ultimo target.</p>
+<p class="mn-hero__subtitle">Definisci cosa rilasciare. Controlla come arriva in produzione.</p>
 
-<p class="mn-hero__lead">Il nome viene dal latino <em>manere</em>, "rimanere, restare saldo": l'artefatto non cambia lungo il viaggio.</p>
+<p class="mn-hero__lead">Manent è un motore di deploy open source che coordina workflow durevoli, verifica degli artefatti, rollout progressivi e governance dei rilasci su VM, Kubernetes e piattaforme cloud.</p>
 
 <div class="mn-hero__actions">
 <a class="md-button md-button--primary" href="tutorial/">Inizia dai tutorial →</a>
@@ -183,6 +183,44 @@ flowchart LR
 ```
 
 Ogni fase viene registrata: il [ciclo di vita di un deploy](concetti/ciclo-di-vita.md) spiega ogni stato, e le [tipologie di deploy](concetti/tipologie-deploy.md) tutti i modi in cui un rilascio può partire e raggiungere i target.
+
+## L'interfaccia web
+
+Il server serve anche un'interfaccia web, con gli stessi permessi dell'API: segui deploy e ondate in tempo reale, approva, promuovi e torna indietro, guarda cosa gira dove. Gli screenshot vengono da un ambiente demo con cinque applicazioni, tre ambienti e quattro settimane di storico; la [guida all'interfaccia web](guida/interfaccia-web.md) descrive ogni vista.
+
+<div class="mn-shots" markdown>
+
+<figure markdown="span">
+  [![Deploy](assets/screenshots/deployments.png){ loading=lazy }](assets/screenshots/deployments.png)
+  <figcaption><strong>Deploy</strong>: ogni deploy, promozione e rollback, con stato, richiedente e durata.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Rilascio a ondate](assets/screenshots/deployment-waves.png){ loading=lazy }](assets/screenshots/deployment-waves.png)
+  <figcaption><strong>Rilascio a ondate</strong>: approvazione, canary, poi una zona di disponibilità alla volta su due region.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Rollback automatico](assets/screenshots/deployment-rollback.png){ loading=lazy }](assets/screenshots/deployment-rollback.png)
+  <figcaption><strong>Rollback automatico</strong>: un health check fallito in eu-central-1 riporta indietro tutte le ondate.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Inventario](assets/screenshots/inventory.png){ loading=lazy }](assets/screenshots/inventory.png)
+  <figcaption><strong>Inventario</strong>: la release in esercizio per ogni applicazione e ambiente, con promozione e rollback.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Attività](assets/screenshots/activity.png){ loading=lazy }](assets/screenshots/activity.png)
+  <figcaption><strong>Attività</strong>: deploy in corso, in attesa, in coda e pianificati, e i worker che li eseguono.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Metriche](assets/screenshots/metrics.png){ loading=lazy }](assets/screenshots/metrics.png)
+  <figcaption><strong>Metriche</strong>: metriche DORA calcolate dallo storico dei deploy.</figcaption>
+</figure>
+
+</div>
 
 ## Da dove iniziare
 

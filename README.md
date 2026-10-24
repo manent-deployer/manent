@@ -1,10 +1,59 @@
-# manent
+# Manent — The Deployment Engine
+
+**Define once. Deploy reliably. Resume anywhere.**
+
+Manent is an open-source, deploy-as-code engine for orchestrating reliable application releases across heterogeneous environments.
+
+Describe a deployment in YAML, submit it through a CLI or API, and let Manent coordinate the execution through durable workflows.
 
 > The name **manent** comes from the Latin *manere*, "to remain, to stand firm": it expresses the immutability of the artifact, which stays exactly as it was tested, validated and put into service.
 
-A **deploy as code** tool built on [DBOS](https://github.com/dbos-inc/dbos-transact-golang) durable workflows.
-A deploy descriptor (YAML from the CLI, JSON from the API) starts a pipeline of configurable steps: secrets, artifacts, QA, deploy through a plugin, post-deploy tests and activation.
-If the process stops, the deploy resumes from the last completed step.
+## Why Manent?
+
+- **Durable execution:** every step is a durable [DBOS](https://github.com/dbos-inc/dbos-transact-golang) workflow step, saved in Postgres (or SQLite) before the next one starts. If a worker crashes, the deploy resumes from the last completed step instead of starting over, and an `id` makes resubmissions idempotent.
+- **Controlled rollouts:** release in waves (canary, then one region or availability zone at a time) or shift traffic by percentage to a new version running side by side. Health gates on Prometheus, Datadog, CloudWatch and others, plus approvals between waves, decide whether to continue, stop or roll back automatically.
+- **Built-in governance:** promotion paths, approvals (also from Slack), change tickets in ServiceNow or Jira, freeze windows and policies in YAML or Rego. Role-based access per application and environment applies the same way to CLI, API, web UI and CI, and every change or denied request is written to a hash-chained audit log.
+- **Secrets and configuration:** descriptors carry only references (`vault:…`, `file:…`, `env:…`), resolved by the worker at the moment of use and never stored in history or logs. Targets and parameters of each environment come from Consul, Git or files, and the environment's configuration always wins over the descriptor.
+- **Extensible targets:** built-in plugins for VMs over SSH, containers, Kubernetes and Helm, AWS ECS and Lambda, Cloud Run, Azure, JBoss/WildFly, IIS and Windows services. Your own plugins run as separate processes over gRPC, with the same rollback and dry-run contract.
+- **Automation-friendly:** the `manent` CLI, a REST API with an OpenAPI spec, a GitHub Action, a GitLab CI template and a Terraform provider. Each one submits the same descriptor and reports the outcome back to the pipeline.
+
+Manent focuses on the deployment process itself: coordinating execution, preserving state, enforcing release policies and making outcomes observable.
+
+Explore the project: https://github.com/manent-deployer/manent
+
+## How it works
+
+```mermaid
+flowchart LR
+    CLI["manent client<br/>(YAML)"] -->|JSON| API
+    API["HTTP API<br/>(manent-server)"] --> D[Descriptor]
+    D --> E["Engine<br/>computes the plan and enqueues"]
+    E --> Q[("DBOS queue<br/>on Postgres")]
+    E -.->|approvals| A[("Approval queue")]
+    A -.->|approved| Q
+    Q --> W1[Worker 1]
+    Q --> W2[Worker N]
+    W1 --> P["Pipeline steps"]
+    P --> PL["Deploy plugin"]
+    PL --> T["Targets"]
+```
+
+1. The API authenticates the request, applies permissions and validates the descriptor.
+2. The **engine** computes the plan, checks policies and governance rules, and enqueues the deploy, or an approval workflow that enqueues it once approved.
+3. A **worker** picks it up, reads the environment configuration and runs the steps in order, saving each result before the next one.
+4. The `deploy` step hands the release to a **plugin**. If a step fails and the policy allows it, the worker rolls back the steps already started.
+
+More in the [architecture](docs/content/concetti/architettura.md) page.
+
+## Screenshots
+
+The same server also serves a [web interface](#web-interface) for following deploys, approving them and seeing what runs where. These screenshots come from a demo environment with five applications, three environments and four weeks of history.
+
+| | |
+|---|---|
+| ![Deployments](docs/content/assets/screenshots/deployments.png)<br/>**Deployments**: every deploy, promotion and rollback, with state, requester and duration. | ![Wave rollout](docs/content/assets/screenshots/deployment-waves.png)<br/>**Wave rollout**: approval and canary, then one availability zone at a time across two regions. |
+| ![Automatic rollback](docs/content/assets/screenshots/deployment-rollback.png)<br/>**Automatic rollback**: a failed health check in eu-central-1 rolls every wave back. | ![Inventory](docs/content/assets/screenshots/inventory.png)<br/>**Inventory**: the release running in each application and environment, with promote and roll back. |
+| ![Activity](docs/content/assets/screenshots/activity.png)<br/>**Activity**: running, waiting, queued and scheduled deploys and the workers running them. | ![Metrics](docs/content/assets/screenshots/metrics.png)<br/>**Metrics**: DORA metrics computed from the deployment history. |
 
 The full documentation is in [`docs/`](docs): `make docs` builds the static site in `docs/site`.
 

@@ -24,6 +24,44 @@ Ogni vista ha un URL proprio con i filtri nella query string, così un link inco
 
 **Promozioni e rollback** passano sempre da un [dry-run](dry-run.md): il dialogo lo esegue su un worker e abilita la conferma solo se riesce. Il motivo di una deroga al freeze è proposto solo a chi ha `deployment.freeze-override`. Le **approvazioni** seguono le regole della [governance](governance.md#approvazioni): chi ha richiesto un deploy non può approvarlo, e il pulsante spiega perché. Il dettaglio di un deploy mostra la revisione della policy di governance che lo ha deciso e, se la policy li limita, gli approvatori ammessi.
 
+## Screenshot
+
+Da un ambiente demo con cinque applicazioni, tre ambienti e quattro settimane di storico.
+
+<div class="mn-shots" markdown>
+
+<figure markdown="span">
+  [![Deploy](../assets/screenshots/deployments.png){ loading=lazy }](../assets/screenshots/deployments.png)
+  <figcaption><strong>Deploy</strong>: ogni deploy, promozione e rollback, con stato, richiedente e durata.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Rilascio a ondate](../assets/screenshots/deployment-waves.png){ loading=lazy }](../assets/screenshots/deployment-waves.png)
+  <figcaption><strong>Rilascio a ondate</strong>: approvazione, canary, poi una zona di disponibilità alla volta su due region.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Rollback automatico](../assets/screenshots/deployment-rollback.png){ loading=lazy }](../assets/screenshots/deployment-rollback.png)
+  <figcaption><strong>Rollback automatico</strong>: un health check fallito in eu-central-1 riporta indietro tutte le ondate.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Inventario](../assets/screenshots/inventory.png){ loading=lazy }](../assets/screenshots/inventory.png)
+  <figcaption><strong>Inventario</strong>: la release in esercizio per ogni applicazione e ambiente, con promozione e rollback.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Attività](../assets/screenshots/activity.png){ loading=lazy }](../assets/screenshots/activity.png)
+  <figcaption><strong>Attività</strong>: deploy in corso, in attesa, in coda e pianificati, e i worker che li eseguono.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Metriche](../assets/screenshots/metrics.png){ loading=lazy }](../assets/screenshots/metrics.png)
+  <figcaption><strong>Metriche</strong>: metriche DORA calcolate dallo storico dei deploy.</figcaption>
+</figure>
+
+</div>
+
 ## Accesso
 
 Con l'autenticazione attiva l'interfaccia usa OIDC con Authorization Code e PKCE: il browser ottiene un token dall'identity provider e lo manda all'API come fa la CLI. I token restano solo in memoria (niente cookie né localStorage), quindi niente CSRF; dopo un ricaricamento della pagina l'identity provider fa rientrare l'utente senza chiedere le credenziali finché la sua sessione è attiva.

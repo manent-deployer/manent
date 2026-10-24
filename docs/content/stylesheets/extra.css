@@ -230,10 +230,11 @@ body {
   color: var(--mn-cyan);
 }
 .md-typeset .mn-hero h1 {
-  font-size: 3.2rem;
-  line-height: 1.05;
+  font-size: 2.6rem;
+  line-height: 1.1;
   margin: 0.4rem 0 0.8rem;
 }
+.mn-hero__subtitle { font-size: 1.1rem; font-weight: 600; margin: 0 0 0.8rem; max-width: 34rem; }
 .mn-hero__lead { font-size: 0.95rem; color: var(--md-default-fg-color--light); max-width: 34rem; }
 .mn-hero__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.4rem; }
 .md-typeset .mn-hero .md-button {
@@ -329,3 +330,26 @@ body {
 .md-typeset .headerlink { color: var(--md-default-fg-color--lighter); opacity: 0; }
 .md-typeset :is(h2, h3, h4, h5, h6):hover .headerlink,
 .md-typeset .headerlink:focus { opacity: 1; }
+
+/* Screenshot gallery: two columns, one on narrow screens */
+.mn-shots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 1.2rem 0 2rem;
+}
+@media (max-width: 760px) { .mn-shots { grid-template-columns: 1fr; } }
+.md-typeset .mn-shots figure { margin: 0; max-width: none; width: 100%; display: block; }
+.md-typeset .mn-shots figure > a { display: block; }
+/* Same frame for every screenshot (cropped from the top); the link opens the full image. */
+.md-typeset .mn-shots img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--mn-border);
+  border-radius: 0.6rem;
+  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.35);
+}
+.md-typeset .mn-shots figcaption { max-width: none; margin: 0.6rem 0 0; font-size: 0.72rem; font-style: normal; text-align: left; color: var(--md-default-fg-color--light); }

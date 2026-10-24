@@ -24,6 +24,44 @@ Every view has its own URL with filters in the query string, so a link pasted in
 
 **Promotions and rollbacks** always go through a [dry-run](dry-run.md): the dialog runs it on a worker and enables confirmation only if it succeeds. A freeze override reason is offered only to those with `deployment.freeze-override`. **Approvals** follow the rules of [governance](governance.md#approvazioni): whoever requested a deploy cannot approve it, and the button explains why. The detail of a deploy shows the revision of the governance policy that decided it and, if the policy limits them, the allowed approvers.
 
+## Screenshots
+
+From a demo environment with five applications, three environments and four weeks of history.
+
+<div class="mn-shots" markdown>
+
+<figure markdown="span">
+  [![Deployments](../assets/screenshots/deployments.png){ loading=lazy }](../assets/screenshots/deployments.png)
+  <figcaption><strong>Deployments</strong>: every deploy, promotion and rollback, with state, requester and duration.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Wave rollout](../assets/screenshots/deployment-waves.png){ loading=lazy }](../assets/screenshots/deployment-waves.png)
+  <figcaption><strong>Wave rollout</strong>: approval, canary, then one availability zone at a time across two regions.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Automatic rollback](../assets/screenshots/deployment-rollback.png){ loading=lazy }](../assets/screenshots/deployment-rollback.png)
+  <figcaption><strong>Automatic rollback</strong>: a failed health check in eu-central-1 rolls every wave back.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Inventory](../assets/screenshots/inventory.png){ loading=lazy }](../assets/screenshots/inventory.png)
+  <figcaption><strong>Inventory</strong>: the release running in each application and environment, with promote and roll back.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Activity](../assets/screenshots/activity.png){ loading=lazy }](../assets/screenshots/activity.png)
+  <figcaption><strong>Activity</strong>: running, waiting, queued and scheduled deploys and the workers running them.</figcaption>
+</figure>
+
+<figure markdown="span">
+  [![Metrics](../assets/screenshots/metrics.png){ loading=lazy }](../assets/screenshots/metrics.png)
+  <figcaption><strong>Metrics</strong>: DORA metrics computed from the deployment history.</figcaption>
+</figure>
+
+</div>
+
 ## Sign-in
 
 With authentication enabled the interface uses OIDC with Authorization Code and PKCE: the browser obtains a token from the identity provider and sends it to the API exactly like the CLI does. Tokens stay in memory only (no cookies or localStorage), so there is no CSRF; after a page reload the identity provider signs the user in again without asking for credentials while its session is active.
