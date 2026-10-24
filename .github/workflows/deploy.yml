@@ -36,9 +36,6 @@ jobs:
       - name: Build site
         run: mkdocs build --strict --config-file docs/mkdocs.yml --site-dir dist
 
-      - name: Build site
-        run: mkdocs build --strict --config-file docs/mkdocs.yml --site-dir dist
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
