@@ -277,6 +277,8 @@ func (s *server) call(ctx context.Context, r *pb.DeployRequest, fn func(context.
 	switch {
 	case errors.Is(err, plugin.ErrDryRunUnsupported), errors.Is(err, plugin.ErrRollbackUnsupported), errors.Is(err, plugin.ErrTrafficUnsupported):
 		return nil, status.Error(codes.Unimplemented, err.Error())
+	case errors.Is(err, plugin.ErrPermanent):
+		return nil, status.Error(codes.Aborted, err.Error())
 	case err != nil:
 		return nil, status.Error(codes.Unknown, err.Error())
 	}

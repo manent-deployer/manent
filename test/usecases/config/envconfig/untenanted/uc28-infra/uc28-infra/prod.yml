@@ -1,0 +1,19 @@
+# UC28: infrastructure released with the external Terraform plugin (OpenTofu). Two states (one
+# per region) in the pg backend on the lab Postgres; terraform_data resources, so no provider is
+# downloaded. The VMs "created" are exported as targets for uc28-app.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: terraform
+targets:
+  - {host: uc28-eu, labels: {region: eu-1}}
+  - {host: uc28-us, labels: {region: us-1}}
+params:
+  workspace: "{host}"
+  backend.schema_name: uc28_tfstate
+  var.env: "{environment}"
+  env.PG_CONN_STR: pg-conn
+  require_lock_file: "false"       # terraform_data needs no provider, so the module has no lock file
+  max_destroy: "0"
+secrets:
+  - {name: pg-conn, ref: file:/keys/pg-conn}
+exports:
+  vms: {from: deploy.vm_hosts, format: targets, pattern: 'eu1-[a-c]'}

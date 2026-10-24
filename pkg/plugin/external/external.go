@@ -354,6 +354,10 @@ func fromStatus(err error) error {
 	if !ok {
 		return err
 	}
+	if st.Code() == codes.Aborted {
+		// ABORTED is how the plugin marks a permanent error (plugin.Permanent).
+		return plugin.Permanent(errors.New(st.Message()))
+	}
 	return errors.New(st.Message())
 }
 

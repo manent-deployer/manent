@@ -149,6 +149,7 @@ plugins:
             Servers and VMs: Server e VM
             Cloud services: Servizi cloud
             Application servers and Windows: Application server e Windows
+            Infrastructure: Infrastruttura
             External plugins: Plugin esterni
             Operations: Operazioni
             Installation: Installazione
@@ -278,6 +279,8 @@ nav:
       - Application servers and Windows:
           - jboss: plugins/jboss.md
           - windows: plugins/windows.md
+      - Infrastructure:
+          - terraform: plugins/terraform.md
       - External plugins: plugins/esterni.md
   - Operations:
       - Installation: operazioni/installazione.md

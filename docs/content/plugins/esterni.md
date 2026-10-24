@@ -77,6 +77,16 @@ The same logger can also be obtained with `external.Logger()`. Direct writes to 
 
 `req.Secrets.Secret(ctx, name)` works as in an internal plugin. Behind the scenes manent exposes the `Secrets` service on the go-plugin channel only for the duration of the `Deploy`, `DryRun`, `CurrentRelease` or `Rollback` call: the plugin does not receive secrets in advance and cannot read them outside a call.
 
+### Errors that a retry cannot fix
+
+By default manent retries a failed step (`max_retries` of the step), because an external system can fail only for a moment. When a retry would give the same outcome, for example a request with an invalid parameter or a change refused by a safety limit, return the error wrapped with `plugin.Permanent(err)`: the step fails at once, without retries. The mark crosses the protocol as the gRPC code `ABORTED`, and works the same in an internal plugin.
+
+```go
+if destroyed > maxDestroy {
+	return nil, plugin.Permanent(fmt.Errorf("the plan destroys %d resources, more than max_destroy (%d)", destroyed, maxDestroy))
+}
+```
+
 ### Dry-run
 
 If the deployer implements `plugin.DryRunner`, the dry-run is forwarded to the plugin. Otherwise the plugin responds `UNIMPLEMENTED` and manent stops at validation, as for an internal plugin without dry-run.

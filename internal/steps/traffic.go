@@ -639,10 +639,19 @@ func trafficRequest(in pipeline.Input) *plugin.TrafficRequest {
 }
 
 // unsupported makes permanent the error of an operation the plugin does not support (an
-// external plugin finds out only at runtime): a retry would not change the outcome.
+// external plugin finds out only at runtime) or that the plugin marked with plugin.Permanent:
+// a retry would not change the outcome.
 func unsupported(dep plugin.Deployer, err error) error {
 	if errors.Is(err, plugin.ErrTrafficUnsupported) {
 		return pipeline.Permanent(fmt.Errorf("plugin %q: %w", dep.Name(), err))
+	}
+	return permanentFrom(err)
+}
+
+// permanentFrom turns a plugin.Permanent error into a permanent error of the step.
+func permanentFrom(err error) error {
+	if errors.Is(err, plugin.ErrPermanent) {
+		return pipeline.Permanent(err)
 	}
 	return err
 }

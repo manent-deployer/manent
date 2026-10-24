@@ -1,6 +1,7 @@
 # manent images, static (SQLite is pure Go) and without a shell, run as a non-root user:
 #   - server (default): manent-server (API, worker, admin), the manent client, the external
-#     remote-copy plugin and helm (chart rendering in the kubernetes plugin);
+#     remote-copy and terraform plugins, helm (chart rendering in the kubernetes plugin) and
+#     tofu (run by the terraform plugin);
 #   - client (--target client): only the manent client, which talks to the API.
 # Web interface: vite build writes to internal/webui/dist, embedded by go:embed.
 FROM node:22.11.0-bookworm-slim AS web
@@ -23,9 +24,16 @@ RUN LDFLAGS="-s -w -X github.com/manent-deployer/manent/internal/version.Version
  && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o /out/manent ./cmd/manent \
  && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o /out/manent-server ./cmd/manent-server \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/manent-plugin-remote-copy ./cmd/manent-plugin-remote-copy
+# The terraform plugin lives in its own repository (manent-deployer/manent-plugin-terraform).
+ARG TERRAFORM_PLUGIN_VERSION=v0.1.0
+RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags "-s -w" \
+    github.com/manent-deployer/manent-plugin-terraform@${TERRAFORM_PLUGIN_VERSION}
 
 # Static Helm binary, used only for "helm template" by the kubernetes plugin.
 FROM alpine/helm:4.3.0 AS helm
+
+# Static OpenTofu binary, run by the terraform plugin.
+FROM ghcr.io/opentofu/opentofu:1.13.2-minimal AS tofu
 
 FROM gcr.io/distroless/static-debian12:nonroot AS client
 COPY --from=build /out/manent /usr/local/bin/
@@ -33,8 +41,9 @@ USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/manent"]
 
 FROM gcr.io/distroless/static-debian12:nonroot AS server
-COPY --from=build /out/manent-server /out/manent /out/manent-plugin-remote-copy /usr/local/bin/
+COPY --from=build /out/manent-server /out/manent /out/manent-plugin-remote-copy /out/manent-plugin-terraform /usr/local/bin/
 COPY --from=helm /usr/bin/helm /usr/local/bin/helm
+COPY --from=tofu /usr/local/bin/tofu /usr/local/bin/tofu
 WORKDIR /var/lib/manent
 ENV MANENT_CONFIG=/etc/manent/manent.yml
 # 8080: API; 9090: /metrics, /healthz, /readyz (observability.listen).

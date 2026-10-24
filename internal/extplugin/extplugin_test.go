@@ -125,8 +125,13 @@ func TestDeploy(t *testing.T) {
 	if res.Outputs["vms"] != `["10.0.0.1"]` {
 		t.Errorf("output del plugin: %+v", res.Outputs)
 	}
-	if _, err := p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "manca"})); err == nil {
-		t.Error("atteso errore per segreto mancante")
+	if _, err := p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "manca"})); err == nil || errors.Is(err, plugin.ErrPermanent) {
+		t.Errorf("atteso errore non permanente per segreto mancante: %v", err)
+	}
+	// plugin.Permanent crosses the protocol: manent does not retry the step.
+	_, err = p.Deploy(context.Background(), request(map[string]string{"dest": "/opt", "secret": "tok", "permanent": "true"}))
+	if !errors.Is(err, plugin.ErrPermanent) || !strings.Contains(err.Error(), "refused by a safety limit") {
+		t.Errorf("errore permanente perso: %v", err)
 	}
 	// Plugin logs reach manent's logger, asynchronously with respect to the response.
 	deadline := time.Now().Add(5 * time.Second)

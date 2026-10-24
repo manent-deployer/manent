@@ -31,6 +31,26 @@ type DryRunner interface {
 // an external plugin): manent treats it as a plugin without DryRunner.
 var ErrDryRunUnsupported = errors.New("dry-run not supported by the plugin")
 
+// ErrPermanent marks the errors a retry cannot fix (an invalid request, a change refused by a
+// safety limit): manent fails the step at once, without retries. Wrap an error with Permanent.
+var ErrPermanent = errors.New("permanent plugin error")
+
+// permanentError keeps the message of the original error.
+type permanentError struct{ err error }
+
+func (e permanentError) Error() string        { return e.err.Error() }
+func (e permanentError) Unwrap() error        { return e.err }
+func (e permanentError) Is(target error) bool { return target == ErrPermanent }
+
+// Permanent marks err as permanent (errors.Is(err, ErrPermanent)); nil stays nil. External
+// plugins carry the mark over gRPC.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return permanentError{err}
+}
+
 // Factory builds a Deployer from its application configuration.
 type Factory func(cfg map[string]any, logger *slog.Logger) (Deployer, error)
 

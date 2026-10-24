@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -21,6 +22,7 @@ type fakeDeployer struct {
 	name  string
 	types []string
 	got   *plugin.Request
+	err   error
 }
 
 func (f *fakeDeployer) Name() string { return f.name }
@@ -35,6 +37,9 @@ func (f *fakeDeployer) Supports(t string) bool {
 func (f *fakeDeployer) Validate(*plugin.Request) error { return nil }
 func (f *fakeDeployer) Deploy(_ context.Context, r *plugin.Request) (*plugin.Result, error) {
 	f.got = r
+	if f.err != nil {
+		return nil, f.err
+	}
 	return &plugin.Result{Plugin: f.name}, nil
 }
 
@@ -94,6 +99,28 @@ func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	// The plugin receives the path guaranteed by the store, not the one recorded by the artifacts step.
 	if dep.got.Artifact.LocalPath != "/altro-worker/app.tgz" || dep.got.Targets[0].Host != "h1" || out["plugin"] != "app" {
 		t.Errorf("richiesta al plugin inattesa: %+v", dep.got)
+	}
+}
+
+func TestDeployErrorePermanenteDelPlugin(t *testing.T) {
+	for _, tc := range []struct {
+		err       error
+		permanent bool
+	}{{plugin.Permanent(errors.New("over max_destroy")), true}, {errors.New("connection reset"), false}} {
+		dep := &fakeDeployer{name: "infra", types: []string{"terraform"}, err: tc.err}
+		s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, dep)}}, Artifacts: &fakeStore{path: "/w/m.tgz"}, Logger: discard}
+		in := pipeline.Input{
+			DeploymentID: "d1",
+			Descriptor: &descriptor.Descriptor{
+				Artifact: descriptor.Artifact{Type: "terraform"},
+				Deploy:   descriptor.Deploy{Targets: []descriptor.Target{{Host: "prod-eu"}}},
+			},
+			Outputs: map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/m.tgz", OutSHA256: "abc"}},
+		}
+		_, err := s.Run(context.Background(), in)
+		if err == nil || errors.Is(err, pipeline.ErrPermanent) != tc.permanent {
+			t.Errorf("%v: permanente=%v atteso %v", err, errors.Is(err, pipeline.ErrPermanent), tc.permanent)
+		}
 	}
 }
 

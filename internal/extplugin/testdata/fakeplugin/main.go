@@ -30,6 +30,9 @@ func (f fake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, er
 	if r.Params["crash"] == "true" {
 		os.Exit(3)
 	}
+	if r.Params["permanent"] == "true" {
+		return nil, plugin.Permanent(errors.New("refused by a safety limit"))
+	}
 	secret, err := r.Secrets.Secret(ctx, r.Params["secret"])
 	if err != nil {
 		return nil, err

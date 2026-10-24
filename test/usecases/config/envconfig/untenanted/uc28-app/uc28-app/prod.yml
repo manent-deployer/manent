@@ -1,0 +1,13 @@
+# UC28: application released on the VMs exported by the last successful uc28-infra deploy.
+# Use cases (test/usecases): targets, parameters and secrets of the environment.
+plugin: remote-copy
+imports:
+  infra: {current: {application: uc28-infra}}
+targets_from: [{import: infra, export: vms}]
+params:
+  dest_dir: /home/deploy/apps/uc28-app
+  layout: releases
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+secrets:
+  - {name: deploy-key, ref: file:/keys/id}

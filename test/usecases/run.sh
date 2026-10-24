@@ -44,6 +44,15 @@ info "interfaccia web compilata"
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-git" ./test/usecases/gitserver &&
   GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-uc-windows" ./test/usecases/windows/fake &&
   cd integrations/terraform && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/terraform-provider-manent" .)
+# Terraform plugin (UC28): from the checkout next to manent if present, else the released module.
+tfplugin=${MANENT_PLUGIN_TERRAFORM:-../../../manent-plugin-terraform}
+if [ -f "$tfplugin/go.mod" ]; then
+  (cd "$tfplugin" && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/manent-plugin-terraform" .)
+else
+  (cd "$WORK" && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 GOBIN= GOPATH="$WORK/gopath" \
+    go install -trimpath "github.com/manent-deployer/manent-plugin-terraform@${TERRAFORM_PLUGIN_VERSION:-v0.1.0}" &&
+    cp "$(find "$WORK/gopath/bin" -name manent-plugin-terraform -type f | head -1)" "$WORK/bin/")
+fi || { echo "build del plugin terraform fallita" >&2; exit 1; }
 info "binari linux/$goarch compilati"
 
 # Lab SSH key: readable by the nonroot user of the manent containers.
@@ -58,6 +67,7 @@ printf 'uc-azure-secret' >"$WORK/keys/azure-secret"
 printf 's3cret-uc12-db' >"$WORK/keys/db-pass"
 printf 'tok-uc12-hook' >"$WORK/keys/hook-token"
 printf 'xoxb-uc-test' >"$WORK/keys/slack-token"
+printf 'postgres://manent:manent@postgres:5432/manent?sslmode=disable' >"$WORK/keys/pg-conn"
 printf 'uc-slack-signing' >"$WORK/keys/slack-signing"
 printf 'http://fakes:9100/teams/cab' >"$WORK/keys/teams-webhook"
 printf 'uc-snow' >"$WORK/keys/snow-password"

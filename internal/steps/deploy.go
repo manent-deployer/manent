@@ -151,7 +151,7 @@ func (s Deploy) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output,
 	}
 	if err != nil {
 		log.ErrorContext(ctx, "dry-run failed", "error", err)
-		return nil, err
+		return nil, permanentFrom(err)
 	}
 	raw, err := json.Marshal(res)
 	if err != nil {
@@ -310,7 +310,7 @@ func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.O
 	res, err := rb.Rollback(ctx, req, prev)
 	if err != nil {
 		log.ErrorContext(ctx, "rollback failed", "version", prev.Version, "error", err)
-		return nil, err
+		return nil, permanentFrom(err)
 	}
 	raw, err := json.Marshal(res)
 	if err != nil {
