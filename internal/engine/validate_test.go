@@ -89,7 +89,7 @@ func TestValidateEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !v.Valid || v.Config["source"] != "configurazione candidata" || len(v.Deploy.Targets) != 2 || v.Rollout == nil || len(v.Rollout.Stages) != 2 {
+	if !v.Valid || v.Config["source"] != "candidate configuration" || len(v.Deploy.Targets) != 2 || v.Rollout == nil || len(v.Rollout.Stages) != 2 {
 		t.Errorf("validazione: %+v", v)
 	}
 	for want, config := range map[string]string{

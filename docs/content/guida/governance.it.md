@@ -120,7 +120,7 @@ Una lettura conta solo per il deploy con cui è stata fatta: dopo un nuovo deplo
 manent inventory --out-of-sync      # solo gli ambienti con target cambiati fuori da manent
 ```
 
-Ogni target che passa a `drifted` o `missing` produce un log di livello warning (`target cambiato fuori da manent`, con host, versione attesa e trovata), inviato anche al SIEM; il ritorno in linea un log informativo. La metrica `manent_targets` conta i target per stato (vedi [Osservabilità](../operazioni/osservabilita.md)). Nell'interfaccia web la cella dell'inventario elenca i target cambiati.
+Ogni target che passa a `drifted` o `missing` produce un log di livello warning (`target changed outside manent`, con host, versione attesa e trovata), inviato anche al SIEM; il ritorno in linea un log informativo. La metrica `manent_targets` conta i target per stato (vedi [Osservabilità](../operazioni/osservabilita.md)). Nell'interfaccia web la cella dell'inventario elenca i target cambiati.
 
 ## Promozione { #promozione }
 
@@ -164,7 +164,7 @@ Con un [rilascio a ondate](ondate.md#approvazioni-e-freeze) o un [rilascio per p
 
 ```sh
 manent deploy -f prod.yml
-# deploy in attesa di approvazione: manent approve 7c0e…
+# deploy awaiting approval: manent approve 7c0e…
 
 manent list --state AWAITING_APPROVAL       # richieste in attesa
 manent approve 7c0e… -m "CHG-1234"          # chi ha il permesso deployment.approve

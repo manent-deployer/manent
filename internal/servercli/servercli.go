@@ -31,7 +31,7 @@ import (
 
 // GlobalOptions are the options shared by all commands.
 type GlobalOptions struct {
-	Config string `short:"c" long:"config" env:"MANENT_CONFIG" description:"file di configurazione YAML"`
+	Config string `short:"c" long:"config" env:"MANENT_CONFIG" description:"YAML configuration file"`
 }
 
 // Run runs the CLI with the given arguments.
@@ -39,7 +39,7 @@ func Run(args []string) error {
 	var global GlobalOptions
 	p := flags.NewParser(&global, flags.Default)
 	p.Name = "manent-server"
-	p.LongDescription = "manent-server: API, worker e operazioni di piattaforma di manent"
+	p.LongDescription = "manent-server: API, workers and platform operations of manent"
 
 	add := func(name, short string, cmd any) {
 		if _, err := p.AddCommand(name, short, short, cmd); err != nil {
@@ -47,28 +47,28 @@ func Run(args []string) error {
 		}
 	}
 	g := &global
-	add("serve", "Avvia l'API e, nello stesso processo, un worker (salvo --no-worker)", &ServeCmd{global: g})
-	add("api", "Avvia solo l'API: accoda i deploy senza eseguirli (come serve --no-worker)", &ServeCmd{global: g, NoWorker: true})
-	add("worker", "Avvia un worker che esegue i deploy dalla coda", &WorkerCmd{global: g})
-	add("validate", "Verifica configurazione e descrittore in locale, senza database", &ValidateCmd{global: g})
-	add("version", "Mostra la versione di manent-server", &cliutil.VersionCmd{})
-	if err := cliutil.AddGroup(p, "admin", "Operazioni di piattaforma sul database di sistema",
-		"Operazioni di piattaforma: worker, recovery dei nodi persi e degli aggiornamenti, retention dello storico", append([]cliutil.Command{
-			{Name: "executors", Short: "Elenca i worker registrati e i loro workflow in sospeso", Cmd: &ExecutorsCmd{global: g}},
-			{Name: "recover", Short: "Riprende i workflow di un worker perso o di una versione precedente", Cmd: &RecoverCmd{global: g}},
-			{Name: "prune", Short: "Elimina lo storico dei workflow più vecchio della retention", Cmd: &PruneCmd{global: g}},
-			{Name: "specs", Short: "Elenca deploy in attesa e schedule che contengono specifiche revocate degli step personalizzati", Cmd: &SpecsCmd{global: g}},
-			{Name: "rename-artifact", Short: "Rinomina un artefatto nello storico di un'applicazione (inventario, rollback e promozioni seguono il nuovo nome)", Cmd: &RenameArtifactCmd{global: g}},
-			{Name: "move-application", Short: "Sposta lo storico di un'applicazione da un tenant a un altro (anche da untenanted)", Cmd: &MoveApplicationCmd{global: g}},
+	add("serve", "Starts the API and, in the same process, a worker (unless --no-worker)", &ServeCmd{global: g})
+	add("api", "Starts only the API: enqueues deploys without running them (as serve --no-worker)", &ServeCmd{global: g, NoWorker: true})
+	add("worker", "Starts a worker that runs the deploys from the queue", &WorkerCmd{global: g})
+	add("validate", "Checks configuration and descriptor locally, without database", &ValidateCmd{global: g})
+	add("version", "Shows the manent-server version", &cliutil.VersionCmd{})
+	if err := cliutil.AddGroup(p, "admin", "Platform operations on the system database",
+		"Platform operations: workers, recovery of lost nodes and of upgrades, history retention", append([]cliutil.Command{
+			{Name: "executors", Short: "Lists the registered workers and their pending workflows", Cmd: &ExecutorsCmd{global: g}},
+			{Name: "recover", Short: "Resumes the workflows of a lost worker or of a previous version", Cmd: &RecoverCmd{global: g}},
+			{Name: "prune", Short: "Deletes the workflow history older than the retention", Cmd: &PruneCmd{global: g}},
+			{Name: "specs", Short: "Lists waiting deploys and schedules that contain revoked custom step specifications", Cmd: &SpecsCmd{global: g}},
+			{Name: "rename-artifact", Short: "Renames an artifact in the history of an application (inventory, rollbacks and promotions follow the new name)", Cmd: &RenameArtifactCmd{global: g}},
+			{Name: "move-application", Short: "Moves the history of an application from one tenant to another (also from untenanted)", Cmd: &MoveApplicationCmd{global: g}},
 		}, adminPolicyCommands(g)...)); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "policy", "Verifica in locale le policy di governance (Rego)",
-		"Compila, testa e valuta una directory di policy Rego senza server e senza database", policyCommands(g)); err != nil {
+	if err := cliutil.AddGroup(p, "policy", "Checks governance policies (Rego) locally",
+		"Compiles, tests and evaluates a Rego policy directory without server and without database", policyCommands(g)); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "audit", "Strumenti per il file di audit", "Strumenti per il file di audit", []cliutil.Command{
-		{Name: "verify", Short: "Verifica la catena di hash del file di audit e dei suoi file ruotati", Cmd: &AuditVerifyCmd{global: g}},
+	if err := cliutil.AddGroup(p, "audit", "Tools for the audit file", "Tools for the audit file", []cliutil.Command{
+		{Name: "verify", Short: "Verifies the hash chain of the audit file and of its rotated files", Cmd: &AuditVerifyCmd{global: g}},
 	}); err != nil {
 		return err
 	}
@@ -80,8 +80,8 @@ func Run(args []string) error {
 // Unlike "deploy --dry-run" it touches no secrets, artifact or targets.
 type ValidateCmd struct {
 	global  *GlobalOptions
-	File    string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
-	Offline bool   `long:"offline" description:"non leggere la configurazione di ambiente"`
+	File    string `short:"f" long:"file" required:"true" description:"YAML deploy descriptor"`
+	Offline bool   `long:"offline" description:"do not read the environment configuration"`
 }
 
 // Execute implements flags.Commander.
@@ -165,7 +165,7 @@ func (c *ValidateCmd) Execute([]string) error {
 		if eff.HasImports() {
 			// The exports of other deploys are read from the database when the deploy starts.
 			out["imports"] = map[string]any{"imports": eff.Imports, "targetsFrom": eff.Deploy.TargetsFrom, "paramsFrom": eff.Deploy.ParamsFrom,
-				"note": "risolti all'avvio del deploy: 'manent validate' verso il server li legge"}
+				"note": "resolved when the deploy starts: 'manent validate' against the server reads them"}
 		}
 		if eff.Rollout != nil && len(eff.Deploy.Targets) > 0 {
 			p, err := rollout.Build(eff.Deploy.Targets, eff.Rollout)
@@ -191,8 +191,8 @@ func (c *ValidateCmd) Execute([]string) error {
 // execution to the workers.
 type ServeCmd struct {
 	global   *GlobalOptions
-	Listen   string `short:"l" long:"listen" description:"indirizzo di ascolto (sovrascrive la configurazione)"`
-	NoWorker bool   `long:"no-worker" description:"solo API: accoda i deploy senza eseguirli"`
+	Listen   string `short:"l" long:"listen" description:"listen address (overrides the configuration)"`
+	NoWorker bool   `long:"no-worker" description:"API only: enqueues deploys without running them"`
 }
 
 // Execute implements flags.Commander.
@@ -230,14 +230,14 @@ func (c *ServeCmd) Execute([]string) error {
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	a.Logger.Info("server API avviato", "addr", addr)
+	a.Logger.Info("API server started", "addr", addr)
 
 	select {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
 	}
-	a.Logger.Info("arresto server API")
+	a.Logger.Info("stopping API server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
@@ -269,7 +269,7 @@ func (c *WorkerCmd) Execute([]string) error {
 	ctx, stop := cliutil.SignalContext()
 	defer stop()
 	<-ctx.Done()
-	a.Logger.Info("arresto worker")
+	a.Logger.Info("stopping worker")
 	return nil
 }
 
@@ -340,7 +340,7 @@ func (c *AuditVerifyCmd) Execute([]string) error {
 		_ = cliutil.PrintJSON(rep)
 		return fmt.Errorf("invalid audit chain: %w", err)
 	}
-	fmt.Fprintln(os.Stderr, "catena di audit integra")
+	fmt.Fprintln(os.Stderr, "audit chain intact")
 	return cliutil.PrintJSON(rep)
 }
 
@@ -383,12 +383,12 @@ func (c *ExecutorsCmd) Execute([]string) error {
 // RecoverCmd resumes the workflows of a lost worker or of a version no longer run.
 type RecoverCmd struct {
 	global      *GlobalOptions
-	Executor    string `long:"executor" description:"riprende i workflow in sospeso di questo worker perso"`
-	FromVersion string `long:"from-version" description:"riprende i workflow in sospeso o in coda di questa versione (dopo un aggiornamento)"`
-	ToVersion   string `long:"to-version" description:"versione con cui riprenderli (default app.version)"`
-	FromStart   bool   `long:"from-start" description:"riesegue i workflow dall'inizio invece che dall'ultimo step concluso"`
-	Force       bool   `long:"force" description:"procede anche se il worker risulta attivo, è sconosciuto o è già stato recuperato"`
-	DryRun      bool   `long:"dry-run" description:"mostra cosa verrebbe fatto senza modificare nulla"`
+	Executor    string `long:"executor" description:"resumes the pending workflows of this lost worker"`
+	FromVersion string `long:"from-version" description:"resumes the pending or queued workflows of this version (after an upgrade)"`
+	ToVersion   string `long:"to-version" description:"version to resume them with (default app.version)"`
+	FromStart   bool   `long:"from-start" description:"rerun the workflows from the start instead of from the last completed step"`
+	Force       bool   `long:"force" description:"goes on even if the worker is running, unknown or already recovered"`
+	DryRun      bool   `long:"dry-run" description:"shows what would be done without changing anything"`
 }
 
 // Execute implements flags.Commander.
@@ -408,11 +408,11 @@ func (c *RecoverCmd) Execute([]string) error {
 // RenameArtifactCmd renames an artifact in the history of an application.
 type RenameArtifactCmd struct {
 	global      *GlobalOptions
-	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione (default untenanted)"`
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	From        string `long:"from" required:"true" description:"nome attuale dell'artefatto (artifact.name)"`
-	To          string `long:"to" required:"true" description:"nuovo nome dell'artefatto"`
-	DryRun      bool   `long:"dry-run" description:"conta i workflow senza modificarli"`
+	Tenant      string `short:"t" long:"tenant" description:"tenant of the application (default untenanted)"`
+	Application string `short:"a" long:"application" required:"true" description:"application"`
+	From        string `long:"from" required:"true" description:"current name of the artifact (artifact.name)"`
+	To          string `long:"to" required:"true" description:"new name of the artifact"`
+	DryRun      bool   `long:"dry-run" description:"count the workflows without changing them"`
 }
 
 // Execute implements flags.Commander.
@@ -429,10 +429,10 @@ func (c *RenameArtifactCmd) Execute([]string) error {
 // MoveApplicationCmd moves the history of an application from one tenant to another.
 type MoveApplicationCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	From        string `long:"from" required:"true" description:"tenant attuale (untenanted per le applicazioni senza tenant)"`
-	To          string `long:"to" required:"true" description:"nuovo tenant"`
-	DryRun      bool   `long:"dry-run" description:"conta i workflow senza modificarli"`
+	Application string `short:"a" long:"application" required:"true" description:"application"`
+	From        string `long:"from" required:"true" description:"current tenant (untenanted for the applications without tenant)"`
+	To          string `long:"to" required:"true" description:"new tenant"`
+	DryRun      bool   `long:"dry-run" description:"count the workflows without changing them"`
 }
 
 // Execute implements flags.Commander.
@@ -449,9 +449,9 @@ func (c *MoveApplicationCmd) Execute([]string) error {
 // PruneCmd deletes the history older than retention.max_age (or --max-age).
 type PruneCmd struct {
 	global       *GlobalOptions
-	MaxAge       time.Duration `long:"max-age" description:"età oltre la quale eliminare i workflow conclusi (default retention.max_age)"`
-	KeepReleases int           `long:"keep-releases" description:"deploy riusciti conservati per applicazione e ambiente (default retention.keep_releases)"`
-	DryRun       bool          `long:"dry-run" description:"conta i workflow senza eliminarli"`
+	MaxAge       time.Duration `long:"max-age" description:"age beyond which the ended workflows are deleted (default retention.max_age)"`
+	KeepReleases int           `long:"keep-releases" description:"successful deploys kept per application and environment (default retention.keep_releases)"`
+	DryRun       bool          `long:"dry-run" description:"count the workflows without deleting them"`
 }
 
 // Execute implements flags.Commander.
@@ -481,8 +481,8 @@ func (c *PruneCmd) Execute([]string) error {
 // (pipeline.custom.revoked_specs or --hash).
 type SpecsCmd struct {
 	global *GlobalOptions
-	Hash   []string `long:"hash" description:"sha256 della specifica da cercare, al posto di pipeline.custom.revoked_specs (ripetibile)"`
-	All    bool     `long:"all" description:"elenca tutte le specifiche fotografate nei piani, revocate o no"`
+	Hash   []string `long:"hash" description:"sha256 of the specification to search for, instead of pipeline.custom.revoked_specs (repeatable)"`
+	All    bool     `long:"all" description:"lists all the specifications captured in the plans, revoked or not"`
 }
 
 // Execute implements flags.Commander.
@@ -520,10 +520,10 @@ func startOps(a *app.App) func() {
 	srv := &http.Server{Addr: addr, Handler: a.OpsHandler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			a.Logger.Error("server di observability", "addr", addr, "error", err)
+			a.Logger.Error("observability server", "addr", addr, "error", err)
 		}
 	}()
-	a.Logger.Info("server di observability avviato", "addr", addr)
+	a.Logger.Info("observability server started", "addr", addr)
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

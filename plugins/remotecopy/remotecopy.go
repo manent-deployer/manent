@@ -233,7 +233,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 	if err := sess.Upload(ctx, req.Artifact.LocalPath, remote); err != nil {
 		return nil, fmt.Errorf("upload: %w", err)
 	}
-	log.InfoContext(ctx, "artefatto copiato", "remote_path", remote)
+	log.InfoContext(ctx, "artifact copied", "remote_path", remote)
 
 	if req.Params[ParamVerify] != "false" && req.Artifact.SHA256 != "" {
 		out, err := sess.Run(ctx, "sha256sum "+shellQuote(remote))
@@ -259,7 +259,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 			return nil, err
 		}
 		details["release"], details["previous"] = req.Artifact.Version, previous
-		log.InfoContext(ctx, "release attivata", "release", req.Artifact.Version, "previous", previous)
+		log.InfoContext(ctx, "release activated", "release", req.Artifact.Version, "previous", previous)
 	}
 	if cmd := req.Params[ParamPostCommand]; cmd != "" {
 		if err := p.runCommand(ctx, log, sess, "post_command", env+cmd); err != nil {
@@ -271,7 +271,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, r
 		keep, _ := keepReleases(req)
 		if _, err := sess.Run(ctx, pruneCommand(dest, keep, req.Artifact.Version, previous)); err != nil {
 			// Cleanup does not compromise the deploy: extra releases stay on the target.
-			log.WarnContext(ctx, "pulizia delle release precedenti fallita", "error", err)
+			log.WarnContext(ctx, "cleanup of the previous releases failed", "error", err)
 		}
 	}
 	return details, nil
@@ -283,7 +283,7 @@ func (p *Plugin) runCommand(ctx context.Context, log *slog.Logger, sess Session,
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
 	}
-	log.InfoContext(ctx, name+" eseguito", "output", strings.TrimSpace(out))
+	log.InfoContext(ctx, name+" run", "output", strings.TrimSpace(out))
 	return nil
 }
 
@@ -433,7 +433,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, auth Auth,
 		return nil, err
 	}
 	details := map[string]string{"release": version}
-	log.WarnContext(ctx, "release precedente ripristinata", "release", version)
+	log.WarnContext(ctx, "previous release restored", "release", version)
 	cmd := req.Params[ParamRollbackCommand]
 	if cmd == "" {
 		cmd = req.Params[ParamPostCommand]
@@ -504,7 +504,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, auth Auth, re
 	if req.Params[ParamPostCommand] != "" {
 		details["post_command"] = "skipped"
 	}
-	log.InfoContext(ctx, "target pronto per il deploy", "remote_path", remote)
+	log.InfoContext(ctx, "target ready for the deploy", "remote_path", remote)
 	return details, nil
 }
 

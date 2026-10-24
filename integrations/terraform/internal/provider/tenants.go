@@ -43,17 +43,17 @@ func (d *tenantsDataSource) Metadata(_ context.Context, req datasource.MetadataR
 // Schema implements datasource.DataSource.
 func (d *tenantsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Tenant del registro di manent (i team proprietari delle applicazioni), filtrati per applicazione posseduta e selettore sui tag.",
+		Description: "Tenants of the manent registry (the teams that own the applications), filtered by owned application and tag selector.",
 		Attributes: map[string]schema.Attribute{
-			"application": schema.StringAttribute{Optional: true, Description: "Solo il tenant proprietario di questa applicazione."},
-			"selector":    schema.StringAttribute{Optional: true, Description: "Selettore sui tag del tenant e sul nome, es. division=commerce."},
-			"names":       schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Nomi dei tenant, per for_each."},
+			"application": schema.StringAttribute{Optional: true, Description: "Only the tenant that owns this application."},
+			"selector":    schema.StringAttribute{Optional: true, Description: "Selector on the tenant tags and name, e.g. division=commerce."},
+			"names":       schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Tenant names, for for_each."},
 			"tenants": schema.ListNestedAttribute{
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"name":         schema.StringAttribute{Computed: true},
 					"tags":         schema.MapAttribute{Computed: true, ElementType: types.StringType},
-					"applications": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Applicazioni possedute."},
+					"applications": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Owned applications."},
 				}},
 			},
 		},

@@ -388,7 +388,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		if err != nil {
 			return details, fmt.Errorf("updating the service: %w", err)
 		}
-		log.InfoContext(ctx, "servizio aggiornato, in attesa della revisione", "image", image)
+		log.InfoContext(ctx, "service updated, waiting for the revision", "image", image)
 		if err := p.wait(ctx, s.api, op, timeout); err != nil {
 			return details, err
 		}
@@ -408,7 +408,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	if u := str(svc, "uri"); u != "" {
 		details["url"] = u
 	}
-	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "revision", ready)
+	log.InfoContext(ctx, "active release", "version", req.Artifact.Version, "revision", ready)
 	return details, nil
 }
 
@@ -440,7 +440,7 @@ func (p *Plugin) wait(ctx context.Context, api API, op *Operation, timeout time.
 // revision without the manent annotation has no release; different versions are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
-	details := map[string]string{"source": "revisione che riceve il traffico"}
+	details := map[string]string{"source": "revision receiving the traffic"}
 	for _, t := range req.Targets {
 		s, err := p.read(ctx, t, req)
 		if err != nil {
@@ -519,7 +519,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 			return details, err
 		}
 	}
-	p.logger.WarnContext(ctx, "release precedente ripristinata", "deployment", req.DeploymentID, "region", s.region,
+	p.logger.WarnContext(ctx, "previous release restored", "deployment", req.DeploymentID, "region", s.region,
 		"service", serviceName(req), "version", previous.Version, "revision", rev, "rollback", true)
 	return details, nil
 }
@@ -586,6 +586,6 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 	if _, err := s.api.UpdateService(ctx, s.name, svc, true); err != nil {
 		return details, fmt.Errorf("checking the update: %w", err)
 	}
-	p.logger.InfoContext(ctx, "servizio pronto per il deploy", "deployment", req.DeploymentID, "region", s.region, "service", serviceName(req), "dry_run", true)
+	p.logger.InfoContext(ctx, "service ready for the deploy", "deployment", req.DeploymentID, "region", s.region, "service", serviceName(req), "dry_run", true)
 	return details, nil
 }

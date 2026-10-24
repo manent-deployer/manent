@@ -20,7 +20,7 @@ siem:
 Each record becomes an RFC 5424 message with facility `local0`, the severity of the log level, `APP-NAME` from `app.name` and the record's attributes as structured data in the SD-ID `manent@32473`:
 
 ```text
-<134>1 2026-10-19T17:26:31.094Z worker-0 manent 7 - [manent@32473 component="step" deployment="49bef919-…" step="deploy" plugin="remote-copy"] deploy completato
+<134>1 2026-10-19T17:26:31.094Z worker-0 manent 7 - [manent@32473 component="step" deployment="49bef919-…" step="deploy" plugin="remote-copy"] deploy completed
 ```
 
 An unreachable collector never blocks manent: the error goes to the application log and the connection is reopened on the next record. Over UDP each message is limited to 60 KB, shortened rather than lost.
@@ -73,7 +73,7 @@ All destinations are active together, and an error on one does not stop the othe
 | `audit=true` | Every audit entry: submissions (allowed and denied), approvals, cancellations, freezes, policy changes, final outcomes. |
 | `audit=true action="deployment.submit" outcome="denied"` | Attempts outside a role's permissions. |
 | `deployment="<id>"` | Everything about one deploy, across API and workers. |
-| `msg="target cambiato fuori da manent"` | Targets changed outside manent, found by reconciliation. |
+| `msg="target changed outside manent"` | Targets changed outside manent, found by reconciliation. |
 | `component="worker" level=WARN` | Recovery, lost workers, chat notifications not sent. |
 
 The log of each deploy is also kept with the deploy and readable with `manent logs <id>` without access to the SIEM; the SIEM is where you correlate it with everything else and keep it for as long as your retention policy says.

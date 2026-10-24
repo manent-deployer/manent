@@ -93,7 +93,7 @@ func (g *Guard) check(ctx context.Context, a Action, t target) error {
 	case errors.Is(err, governance.ErrUnavailable):
 		return fmt.Errorf("%w: permission policy unavailable: %v", engine.ErrUnavailable, err)
 	case err != nil:
-		g.Logger.Error("valutazione dei divieti della policy fallita", "action", a, "error", err)
+		g.Logger.Error("evaluation of the policy denials failed", "action", a, "error", err)
 		err = fmt.Errorf("%w: %s cannot perform %s on %s: policy evaluation failed: %v (policy %s)", engine.ErrForbidden, actor(p), a, where, err, rev)
 	case len(reasons) > 0:
 		err = fmt.Errorf("%w: %s cannot perform %s on %s: %s (policy %s)", engine.ErrForbidden, actor(p), a, where, strings.Join(reasons, "; "), rev)
@@ -176,7 +176,7 @@ func (g *Guard) grantsOf(ctx context.Context, p *auth.Principal) []Grant {
 	}
 	gs, err := g.Authorizer.Grants(ctx, p)
 	if err != nil {
-		g.Logger.Warn("permessi dell'identità non disponibili: tutto negato", "subject", actor(p), "error", err)
+		g.Logger.Warn("permissions of the identity unavailable: everything denied", "subject", actor(p), "error", err)
 		return nil
 	}
 	return gs
@@ -227,7 +227,7 @@ func (g *Guard) record(ctx context.Context, a Action, t target, outcome string, 
 		}
 	}
 	if rerr := g.Audit.Record(ctx, e); rerr != nil {
-		g.Logger.Error("registrazione nell'audit fallita", "action", a, "error", rerr)
+		g.Logger.Error("audit recording failed", "action", a, "error", rerr)
 	}
 }
 

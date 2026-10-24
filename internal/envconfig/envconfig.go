@@ -366,7 +366,7 @@ func (r Resolver) ResolveWith(_ context.Context, d descriptor.Descriptor, config
 	if err != nil {
 		return d, nil, pipeline.Permanent(err)
 	}
-	return eff, map[string]string{"source": "configurazione candidata", "targets": strconv.Itoa(len(eff.Deploy.Targets))}, nil
+	return eff, map[string]string{"source": "candidate configuration", "targets": strconv.Itoa(len(eff.Deploy.Targets))}, nil
 }
 
 // Resolve reads the environment configuration and merges it with the descriptor.
@@ -398,7 +398,7 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 		}
 		switch {
 		case errors.Is(err, ErrNotFound) && !r.Required:
-			meta["source"] = "descriptor (configurazione di ambiente assente)"
+			meta["source"] = "descriptor (no environment configuration)"
 		case err != nil:
 			return d, nil, err
 		default:

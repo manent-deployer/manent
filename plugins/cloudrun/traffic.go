@@ -124,7 +124,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 	if _, err := s.api.GetRevision(ctx, s.name+"/revisions/"+cand); err != nil {
 		return details, fmt.Errorf("reading revision %s: %w", cand, err)
 	}
-	p.logger.InfoContext(ctx, "revisione candidata pronta, senza traffico", "deployment", req.DeploymentID, "region", s.region, "revision", cand, "stable", stable)
+	p.logger.InfoContext(ctx, "candidate revision ready, without traffic", "deployment", req.DeploymentID, "region", s.region, "revision", cand, "stable", stable)
 	return details, nil
 }
 
@@ -155,7 +155,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 		if err := p.setTraffic(ctx, s, req, split(req, stableOf(req, t), cand, percent)); err != nil {
 			return fmt.Errorf("region %s: %w", t.Host, err)
 		}
-		p.logger.InfoContext(ctx, "traffico del servizio aggiornato", "deployment", req.DeploymentID, "region", s.region, "revision", cand, "percent", percent)
+		p.logger.InfoContext(ctx, "service traffic updated", "deployment", req.DeploymentID, "region", s.region, "revision", cand, "percent", percent)
 	}
 	return nil
 }

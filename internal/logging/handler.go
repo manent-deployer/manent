@@ -142,7 +142,7 @@ func (h *siemHandler) Handle(_ context.Context, r slog.Record) error {
 	}
 	// An unreachable SIEM must not block the application: the error is only reported.
 	if err := h.sender.Send(msg); err != nil {
-		fmt.Fprintf(h.errOut, "invio al SIEM fallito: %v\n", err)
+		fmt.Fprintf(h.errOut, "sending to the SIEM failed: %v\n", err)
 	}
 	return nil
 }

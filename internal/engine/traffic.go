@@ -186,7 +186,7 @@ func (w *Worker) poolWait(ctx dbos.Context, id string, ev *events, d *descriptor
 		}
 		if elapsed >= max(timeout, minWait) {
 			if phase == steps.DrainStep && cfg.OnTimeout != descriptor.OnTimeoutFail {
-				w.logger.Warn("svuotamento oltre il timeout: il deploy prosegue", "deployment", id, "pending", out["pending"], "timeout", timeout)
+				w.logger.Warn("draining beyond the timeout: the deploy goes on", "deployment", id, "pending", out["pending"], "timeout", timeout)
 				return nil
 			}
 			return fmt.Errorf("%s: targets not ready within %s (%s)", phase, timeout, out["pending"])
@@ -306,7 +306,7 @@ func (w *Worker) runTraffic(ctx dbos.Context, id string, req Request, d *descrip
 			base += len(d.Rollout.Traffic.Steps)
 		}
 		if multiPass(d) && stage.LastOfWave && si < len(plan.Stages)-1 && !d.DryRun && slices.Contains(d.Rollout.ApprovalsBetween, stage.Wave) {
-			if err := w.waitRolloutApproval(ctx, id, req, "l'ondata "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
+			if err := w.waitRolloutApproval(ctx, id, req, "the wave "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
 				return w.trafficFailure(ctx, id, d, ev, res, rs, runs, err)
 			}
 		}
@@ -403,7 +403,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 	// On the first release the intermediate steps, and their approvals, are skipped: with the
 	// governance approvals moved into the rollout they are asked before any traffic.
 	if slices.Contains(d.Rollout.ApprovalsBetween, descriptor.StageZero) || (!hasStable && req.Approval.InRollout() && !d.DryRun) {
-		if err := w.waitRolloutApproval(ctx, id, req, "i test a peso 0", service.RolloutPausedApproval, rs); err != nil {
+		if err := w.waitRolloutApproval(ctx, id, req, "the tests at weight 0", service.RolloutPausedApproval, rs); err != nil {
 			return err
 		}
 	}
@@ -457,7 +457,7 @@ func (w *Worker) trafficPass(ctx dbos.Context, id string, req Request, d *descri
 		w.publishRollout(ctx, rs)
 		ev.send(d, callback.Event{Type: descriptor.CallbackEventStep, Step: "stage:" + rs.Stages[i].Name, Status: callback.StatusSucceeded})
 		if pct < 100 && slices.Contains(d.Rollout.ApprovalsBetween, strconv.Itoa(pct)) {
-			if err := w.waitRolloutApproval(ctx, id, req, "il gradino del "+rs.Stages[i].Name, service.RolloutPausedApproval, rs); err != nil {
+			if err := w.waitRolloutApproval(ctx, id, req, "the step at "+rs.Stages[i].Name, service.RolloutPausedApproval, rs); err != nil {
 				return err
 			}
 		}
@@ -489,8 +489,8 @@ func (w *Worker) checkDrift(ctx dbos.Context, id string, req Request, d *descrip
 	if cur == last {
 		return nil
 	}
-	msg := fmt.Sprintf("pesi cambiati fuori da manent: la candidata riceve il %d%%, atteso %d%%", cur, last)
-	w.logger.Warn("deriva dei pesi del router", "deployment", id, "weight", cur, "expected", last)
+	msg := fmt.Sprintf("weights changed outside manent: the candidate receives %d%%, expected %d%%", cur, last)
+	w.logger.Warn("router weights drift", "deployment", id, "weight", cur, "expected", last)
 	return w.waitRolloutApproval(ctx, id, req, msg, service.RolloutPausedDrift, rs)
 }
 
@@ -562,7 +562,7 @@ type retireInput struct {
 func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *trafficRun) {
 	q, err := dbos.RetrieveQueue(w.dbos, approvalQueue(w.queueName))
 	if err != nil {
-		w.logger.Warn("ridimensionamento della versione sostituita non pianificato", "deployment", id, "error", err)
+		w.logger.Warn("scale-down of the replaced version not scheduled", "deployment", id, "error", err)
 		return
 	}
 	wid := id + ".retire"
@@ -584,7 +584,7 @@ func (w *Worker) scheduleRetire(ctx dbos.Context, id string, req Request, run *t
 		}
 	}
 	if _, err := dbos.RunWorkflow(ctx, w.retireWorkflow, retireInput{DeploymentID: id, Descriptor: *d, Outputs: keep, RequestedBy: req.RequestedBy}, opts...); err != nil {
-		w.logger.Warn("ridimensionamento della versione sostituita non pianificato", "deployment", id, "error", err)
+		w.logger.Warn("scale-down of the replaced version not scheduled", "deployment", id, "error", err)
 	}
 }
 

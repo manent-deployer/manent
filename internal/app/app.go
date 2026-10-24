@@ -476,7 +476,7 @@ func NewTenantCache(cfg *config.Config, log *slog.Logger) tenant.Directory {
 		return nil
 	}
 	return &tenant.Cache{Next: tenant.File{Path: cfg.Tenants.File}, TTL: cfg.Tenants.Cache, OnError: func(err error) {
-		log.Warn("registro dei tenant non leggibile o non valido: resta in vigore l'ultimo valido", "component", "tenants", "file", cfg.Tenants.File, "error", err)
+		log.Warn("tenant registry unreadable or invalid: the last valid one stays in force", "component", "tenants", "file", cfg.Tenants.File, "error", err)
 	}}
 }
 
@@ -509,7 +509,7 @@ func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (a
 		}
 	}
 	if len(listen) > 0 {
-		log.Info("worker dedicato ai tenant", "tenants", cfg.DBOS.Tenants, "queues", listen)
+		log.Info("worker dedicated to tenants", "tenants", cfg.DBOS.Tenants, "queues", listen)
 	}
 	return all, listen, nil
 }
@@ -711,11 +711,11 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 	if strings.HasPrefix(cfg.DBOS.DatabaseURL, "sqlite:") {
-		c.log.Warn("database SQLite: supporta worker solo sulla stessa macchina; per più nodi usare Postgres")
+		c.log.Warn("SQLite database: supports workers on the same machine only; use Postgres for several nodes")
 	}
 	var reg cluster.Registry
 	if r, err := cluster.Open(context.Background(), cfg.DBOS.DatabaseURL); err != nil {
-		c.log.Warn("registro dei worker non disponibile: niente heartbeat, recovery automatica, retention e freeze a runtime", "error", err)
+		c.log.Warn("worker registry unavailable: no heartbeat, automatic recovery, retention or runtime freezes", "error", err)
 	} else {
 		reg = r
 		c.governance.SetStore(r)
@@ -833,7 +833,7 @@ func NewClient(cfg *config.Config) (*App, error) {
 	// The policy store lives in the same database: the API needs it for runtime freezes and
 	// policy revisions.
 	if store, err := cluster.Open(context.Background(), cfg.DBOS.DatabaseURL); err != nil {
-		c.log.Warn("archivio della policy non disponibile: niente freeze a runtime né revisioni della policy", "error", err)
+		c.log.Warn("policy store unavailable: no runtime freezes or policy revisions", "error", err)
 	} else {
 		c.governance.SetStore(store)
 		c.closers = append(c.closers, store)
@@ -884,7 +884,7 @@ func (a *App) Admin() *engine.Admin {
 		}
 		r, err := cluster.Open(context.Background(), a.Config.DBOS.DatabaseURL)
 		if err != nil {
-			a.Logger.Warn("registro dei worker non disponibile", "error", err)
+			a.Logger.Warn("worker registry unavailable", "error", err)
 		} else {
 			a.registry = r
 		}
@@ -967,7 +967,7 @@ func (a *App) APIOptions() api.Options {
 		}
 		h := webui.New(webui.Options{ConnectOrigins: origins})
 		if !h.Built() {
-			a.Logger.Warn("interfaccia web non incorporata nel binario: make web e poi make build")
+			a.Logger.Warn("web interface not embedded in the binary: run make web, then make build")
 		}
 		o.UI = h
 	}
@@ -999,7 +999,7 @@ func NewUIConfig(cfg *config.Config) api.UIConfig {
 // worker) call it, not every CLI command.
 func (a *App) WarnInsecure() {
 	for _, w := range a.Config.SecurityWarnings() {
-		a.Logger.Warn("configurazione non adatta alla produzione", "detail", w)
+		a.Logger.Warn("configuration not fit for production", "detail", w)
 	}
 }
 
@@ -1022,7 +1022,7 @@ func (a *App) Close() {
 	}
 	// Plugins stop after DBOS, when no deploy is using them any more.
 	if err := a.plugins.Close(); err != nil {
-		a.Logger.Error("arresto plugin", "error", err)
+		a.Logger.Error("stopping plugins", "error", err)
 	}
 	if a.registry != nil {
 		_ = a.registry.Close()

@@ -77,8 +77,8 @@ func TestStampaDegliAccessi(t *testing.T) {
 		Check:    &service.AccessOutcome{GrantedBy: "team-shop", Denied: []string{"contractors cannot change production"}},
 	})
 	out := b.String()
-	for _, want := range []string{"Identità oidc:alice, revisione 2:def", "team-shop", "deployer", "deployment.read,deployment.cancel",
-		"permesso scartato: grant x", "revisione attiva 1:abc", "+ oncall", "negato dalla policy", "- contractors cannot change production"} {
+	for _, want := range []string{"Identity oidc:alice, revision 2:def", "team-shop", "deployer", "deployment.read,deployment.cancel",
+		"permission discarded: grant x", "active revision 1:abc", "+ oncall", "denied by the policy", "- contractors cannot change production"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("manca %q in:\n%s", want, out)
 		}

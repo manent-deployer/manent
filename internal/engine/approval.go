@@ -135,10 +135,10 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 		case dec.Approver == "":
 			continue
 		case !st.AllowSelf && dec.Approver == in.Request.RequestedBy:
-			log.Warn("decisione scartata: auto-approvazione non ammessa", "approver", dec.Approver)
+			log.Warn("decision discarded: self-approval not allowed", "approver", dec.Approver)
 			continue
 		case slices.ContainsFunc(st.Decisions, func(d Decision) bool { return d.Approver == dec.Approver }):
-			log.Warn("decisione scartata: approvatore già registrato", "approver", dec.Approver)
+			log.Warn("decision discarded: approver already recorded", "approver", dec.Approver)
 			continue
 		}
 		st.Decisions = append(st.Decisions, dec)
@@ -163,7 +163,7 @@ func (w *Worker) approvalWorkflow(ctx dbos.Context, in approvalInput) (ApprovalS
 		// The deploy will not run: whoever waits for it can end at once.
 		w.notifyWaiters(ctx, in.DeploymentID)
 	}
-	log.Info("approvazione conclusa", "status", st.Status, "decisions", len(st.Decisions))
+	log.Info("approval ended", "status", st.Status, "decisions", len(st.Decisions))
 	w.recordApproval(ctx, in, st)
 	w.notifyChat(ctx, in.DeploymentID, in.Request.Notify, w.approvalMessage(in, st, approvalChatEvent(st.Status)), refs)
 	return st, nil
@@ -222,7 +222,7 @@ func (w *Worker) openApprovalChange(ctx dbos.Context, in approvalInput) (*Change
 		}
 		t, err := w.change.Open(c, w.changeRequest(in.DeploymentID, in.Request))
 		if err == nil {
-			w.logger.InfoContext(c, "change aperto, in attesa di approvazione", "deployment", in.DeploymentID, "change", t.Number, "system", w.change.Name())
+			w.logger.InfoContext(c, "change opened, awaiting approval", "deployment", in.DeploymentID, "change", t.Number, "system", w.change.Name())
 		}
 		return t, changeErr(err)
 	}, dbos.WithStepName("change:open"), dbos.WithStepMaxRetries(3), dbos.WithStepRetryPredicate(pipeline.Retryable))
@@ -254,7 +254,7 @@ func (w *Worker) refreshApprovalChange(ctx dbos.Context, in approvalInput, st *A
 		return read{Ticket: t, At: time.Now().UTC()}, err
 	}, dbos.WithStepName("change:status"))
 	if err != nil {
-		w.logger.Warn("lettura del change fallita", "deployment", in.DeploymentID, "change", st.Change.Number, "error", err)
+		w.logger.Warn("reading the change failed", "deployment", in.DeploymentID, "change", st.Change.Number, "error", err)
 		return
 	}
 	st.Change = ticketOf(r.Ticket)
@@ -273,7 +273,7 @@ func (w *Worker) changeDecision(st *ApprovalState, t *ChangeTicket, at time.Time
 		system = w.change.Name()
 	}
 	st.Decisions = append(st.Decisions, Decision{
-		Approver: system + ":" + t.Number, Approve: false, Comment: "change respinto nel sistema ITSM", Time: at,
+		Approver: system + ":" + t.Number, Approve: false, Comment: "change rejected in the ITSM system", Time: at,
 	})
 }
 
@@ -312,7 +312,7 @@ func (w *Worker) recordApproval(ctx dbos.Context, in approvalInput, st ApprovalS
 		e.Time = time.Now().UTC()
 		return "", w.audit.Record(c, e)
 	}, dbos.WithStepName("audit")); err != nil {
-		w.logger.Error("registrazione dell'approvazione nell'audit fallita", "deployment", in.DeploymentID, "error", err)
+		w.logger.Error("recording the approval in the audit failed", "deployment", in.DeploymentID, "error", err)
 	}
 }
 
@@ -379,6 +379,6 @@ func (e *Engine) Decide(ctx context.Context, id string, r DecisionRequest) error
 	if err := dbos.Send(e.client, target, dec, topic); err != nil {
 		return err
 	}
-	e.logger.Info("decisione registrata", "deployment", id, "approver", approver, "approve", r.Approve)
+	e.logger.Info("decision recorded", "deployment", id, "approver", approver, "approve", r.Approve)
 	return nil
 }

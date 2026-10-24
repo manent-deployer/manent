@@ -89,11 +89,11 @@ func (a *Admin) Prune(ctx context.Context, o RetentionOptions) (*PruneReport, er
 			offset += kept
 		}
 	}
-	a.logger.Info("retention dello storico", "cutoff", rep.Cutoff, "deleted", rep.Deleted, "kept", rep.Kept, "dry_run", o.DryRun)
+	a.logger.Info("history retention", "cutoff", rep.Cutoff, "deleted", rep.Deleted, "kept", rep.Kept, "dry_run", o.DryRun)
 	if a.audit != nil && !o.DryRun && rep.Deleted > 0 {
 		_ = a.audit.Record(ctx, audit.Entry{
 			Time: a.now().UTC(), Actor: o.By, Action: ActionAdminPrune, Outcome: audit.OutcomeSucceeded,
-			Comment: fmt.Sprintf("cutoff=%s eliminati=%d conservati=%d", rep.Cutoff.Format(time.RFC3339), rep.Deleted, rep.Kept),
+			Comment: fmt.Sprintf("cutoff=%s deleted=%d kept=%d", rep.Cutoff.Format(time.RFC3339), rep.Deleted, rep.Kept),
 		})
 	}
 	return rep, nil

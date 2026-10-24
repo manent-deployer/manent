@@ -120,7 +120,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 	}
 	inv, err := w.reader.Inventory(ctx, InventoryFilter{})
 	if err != nil {
-		w.logger.Warn("riconciliazione: lettura dell'inventario fallita", "error", err)
+		w.logger.Warn("reconciliation: reading the inventory failed", "error", err)
 		return
 	}
 	busy := map[string]bool{}
@@ -129,7 +129,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 			busy[releaseKey(s.Tenant, s.Application, s.Artifact, s.Environment)] = true
 		}
 	} else {
-		w.logger.Warn("riconciliazione: lettura dei deploy in corso fallita", "error", err)
+		w.logger.Warn("reconciliation: reading the running deploys failed", "error", err)
 		return
 	}
 	prev := map[string]service.TargetsState{}
@@ -156,7 +156,7 @@ func (w *Worker) reconcileAll(ctx context.Context, renew func() bool) {
 		raw, _ := json.Marshal(st)
 		rec := cluster.TargetsRecord{Tenant: ie.Tenant, Application: ie.Application, Artifact: ie.Artifact, Environment: ie.Environment, Scope: w.reconcileScope(), CheckedAt: st.CheckedAt, Data: string(raw)}
 		if err := store.SaveTargets(ctx, rec); err != nil {
-			w.logger.Warn("riconciliazione: salvataggio fallito", "application", ie.Application, "environment", ie.Environment, "error", err)
+			w.logger.Warn("reconciliation: saving failed", "application", ie.Application, "environment", ie.Environment, "error", err)
 			continue
 		}
 		w.logTargetChanges(ie, prev[key], st)
@@ -236,7 +236,7 @@ func markStandby(ts []service.TargetState) {
 	}
 	for i, t := range ts {
 		if t.Slot != "" && !active[t.Slot] && t.State == service.TargetDrifted {
-			ts[i].State, ts[i].Detail = service.TargetStandby, "slot senza traffico"
+			ts[i].State, ts[i].Detail = service.TargetStandby, "slot without traffic"
 		}
 	}
 }
@@ -250,7 +250,7 @@ func (w *Worker) logTargetChanges(ie InventoryEntry, prev, cur service.TargetsSt
 	}
 	if cur.Error != "" {
 		if cur.Error != prev.Error {
-			w.logger.Warn("riconciliazione: target non leggibili", "application", ie.Application, "environment", ie.Environment, "error", cur.Error)
+			w.logger.Warn("reconciliation: targets unreadable", "application", ie.Application, "environment", ie.Environment, "error", cur.Error)
 		}
 		return
 	}
@@ -262,10 +262,10 @@ func (w *Worker) logTargetChanges(ie InventoryEntry, prev, cur service.TargetsSt
 		before := cmp.Or(was[t.Host], service.TargetInSync)
 		switch {
 		case t.Changed() && before != t.State:
-			w.logger.Warn("target cambiato fuori da manent", "application", ie.Application, "environment", ie.Environment,
+			w.logger.Warn("target changed outside manent", "application", ie.Application, "environment", ie.Environment,
 				"host", t.Host, "state", t.State, "expected", cur.Version, "found", t.Version, "deployment", cur.Deployment)
 		case t.State == service.TargetInSync && before != service.TargetInSync && before != service.TargetUnknown:
-			w.logger.Info("target di nuovo allineato", "application", ie.Application, "environment", ie.Environment, "host", t.Host, "version", t.Version)
+			w.logger.Info("target in sync again", "application", ie.Application, "environment", ie.Environment, "host", t.Host, "version", t.Version)
 		}
 	}
 }

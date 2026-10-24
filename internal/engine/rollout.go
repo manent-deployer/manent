@@ -186,7 +186,7 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 		w.publishRollout(ctx, rs)
 		ev.send(d, callback.Event{Type: descriptor.CallbackEventStep, Step: "stage:" + stage.Name, Status: callback.StatusSucceeded})
 		if stage.LastOfWave && i < len(plan.Stages)-1 && !d.DryRun && slices.Contains(d.Rollout.ApprovalsBetween, stage.Wave) {
-			if err := w.waitRolloutApproval(ctx, id, req, "l'ondata "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
+			if err := w.waitRolloutApproval(ctx, id, req, "the wave "+stage.Wave, service.RolloutPausedApproval, rs); err != nil {
 				return w.rolloutFailure(ctx, id, d, ev, res, done, rs, i, err)
 			}
 		}
@@ -212,7 +212,7 @@ func (w *Worker) runRollout(ctx dbos.Context, id string, req Request, d *descrip
 // publishRollout publishes the rollout state, read by Status and the client.
 func (w *Worker) publishRollout(ctx dbos.Context, rs *RolloutState) {
 	if err := dbos.SetEvent(ctx, rolloutEvent, *rs); err != nil {
-		w.logger.Warn("pubblicazione dello stato del rollout fallita", "error", err)
+		w.logger.Warn("publishing the rollout state failed", "error", err)
 	}
 }
 
@@ -436,7 +436,7 @@ func (w *Worker) passWorkflow(ctx dbos.Context, in passInput) (passOutput, error
 		if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 			return "", w.cleaner.Cleanup(c, in.DeploymentID)
 		}, dbos.WithStepName("cleanup")); err != nil {
-			w.logger.Warn("pulizia del passo fallita", "deployment", in.DeploymentID, "pass", in.Pass.Name, "error", err)
+			w.logger.Warn("cleanup of the pass failed", "deployment", in.DeploymentID, "pass", in.Pass.Name, "error", err)
 		}
 	}
 	return out, nil
@@ -447,7 +447,7 @@ func (w *Worker) copyPassLogs(ctx dbos.Context, childID string) {
 	if _, err := dbos.RunAsStep(ctx, func(c context.Context) (int, error) {
 		return deploylog.Copy(c, w.dbos, childID)
 	}, dbos.WithStepName("logs@"+childID)); err != nil {
-		w.logger.Warn("copia del log del passo fallita", "workflow", childID, "error", err)
+		w.logger.Warn("copying the log of the pass failed", "workflow", childID, "error", err)
 	}
 }
 
@@ -665,7 +665,7 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 	if a := req.Approval; a != nil {
 		st.Approvers = a.Approvers
 	}
-	rs.Status, rs.Paused, rs.Approval = status, "approvazione dopo "+after, &st
+	rs.Status, rs.Paused, rs.Approval = status, "approval after "+after, &st
 	if status == service.RolloutPausedDrift {
 		rs.Paused = after
 	}
@@ -688,7 +688,7 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 		case dec.Approver == "":
 			continue
 		case !rule.AllowSelf && dec.Approver == req.RequestedBy:
-			log.Warn("decisione scartata: auto-approvazione non ammessa", "approver", dec.Approver)
+			log.Warn("decision discarded: self-approval not allowed", "approver", dec.Approver)
 			continue
 		case slices.ContainsFunc(st.Decisions, func(x Decision) bool { return x.Approver == dec.Approver }):
 			continue
@@ -701,7 +701,7 @@ func (w *Worker) waitRolloutApproval(ctx dbos.Context, id string, req Request, a
 			st.Status = ApprovalApproved
 		}
 	}
-	log.Info("approvazione del rollout conclusa", "status", st.Status)
+	log.Info("rollout approval ended", "status", st.Status)
 	if st.Status != ApprovalApproved {
 		w.publishRollout(ctx, rs)
 		return fmt.Errorf("rollout stopped (%s): approval %s", rs.Paused, st.Status)

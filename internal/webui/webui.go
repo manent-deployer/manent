@@ -115,7 +115,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "index.html", h.loaded, bytes.NewReader(h.index))
 }
 
-const notBuilt = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>manent</title></head>
-<body><main><h1>Interfaccia web non compilata</h1>
-<p>Questo binario è stato compilato senza la UI. Eseguire <code>make web</code> e poi <code>make build</code>,
-oppure usare un binario o un'immagine di rilascio. L'API è disponibile su <code>/api/v1</code>.</p></main></body></html>`
+const notBuilt = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>manent</title></head>
+<body><main><h1>Web interface not built</h1>
+<p>This binary was built without the UI. Run <code>make web</code> and then <code>make build</code>,
+or use a release binary or image. The API is available at <code>/api/v1</code>.</p></main></body></html>`

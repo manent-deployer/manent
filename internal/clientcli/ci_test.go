@@ -83,7 +83,7 @@ func TestDeployCIRiconosceLaPiattaforma(t *testing.T) {
 	}
 	out, _ := os.ReadFile(filepath.Join(dir, "out"))
 	sum, _ := os.ReadFile(filepath.Join(dir, "summary.md"))
-	if !strings.Contains(string(out), "state=ERROR\n") || !strings.Contains(string(sum), "| Esito | **ERROR** |") ||
+	if !strings.Contains(string(out), "state=ERROR\n") || !strings.Contains(string(sum), "| Outcome | **ERROR** |") ||
 		!strings.Contains(string(sum), `post-test \| fallito`) || !strings.Contains(string(sum), "| Rollback | completed |") {
 		t.Errorf("GitHub:\n%s\n%s", out, sum)
 	}

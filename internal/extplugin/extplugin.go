@@ -78,7 +78,7 @@ func NewFactory(name string) plugin.Factory {
 			return nil, fmt.Errorf("plugin configuration cannot be serialized to JSON: %w", err)
 		}
 		if c.SHA256 == "" {
-			logger.Warn("plugin esterno senza sha256: il binario non viene verificato", "command", c.Command)
+			logger.Warn("external plugin without sha256: the binary is not verified", "command", c.Command)
 		}
 		return &Process{
 			name:       name,
@@ -167,7 +167,7 @@ func (p *Process) Name() string { return p.name }
 func (p *Process) Supports(artifactType string) bool {
 	c, err := p.conn()
 	if err != nil {
-		p.logger.Error("plugin esterno non disponibile", "error", err)
+		p.logger.Error("external plugin unavailable", "error", err)
 		return false
 	}
 	return c.Supports(artifactType)
@@ -331,7 +331,7 @@ func (p *Process) conn() (*external.Client, error) {
 		return p.rpc, nil
 	}
 	if p.client != nil {
-		p.logger.Warn("processo del plugin terminato, riavvio")
+		p.logger.Warn("plugin process ended, restarting")
 		p.client.Kill()
 		p.client = nil
 	}
@@ -393,7 +393,7 @@ func (p *Process) handshake(client *goplugin.Client) (*external.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configuration: %w", err)
 	}
-	p.logger.Info("plugin esterno avviato", "command", p.cfg.Command, "remote_name", remote, "protocol", client.NegotiatedVersion())
+	p.logger.Info("external plugin started", "command", p.cfg.Command, "remote_name", remote, "protocol", client.NegotiatedVersion())
 	return rpc, nil
 }
 

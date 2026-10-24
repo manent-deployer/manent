@@ -16,23 +16,23 @@ type collector struct {
 }
 
 var (
-	descRevision = prometheus.NewDesc("manent_policy_revision_info", "Revisione della policy di governance in vigore (valore 1).",
+	descRevision = prometheus.NewDesc("manent_policy_revision_info", "Governance policy revision in force (value 1).",
 		[]string{"engine", "source", "revision"}, nil)
-	descAge = prometheus.NewDesc("manent_policy_age_seconds", "Secondi dall'ultimo aggiornamento riuscito della policy e dei freeze.", nil, nil)
+	descAge = prometheus.NewDesc("manent_policy_age_seconds", "Seconds since the last successful update of the policy and of the freezes.", nil, nil)
 )
 
 func newCollector(r *Runtime) *collector {
 	return &collector{
 		r: r,
 		evaluations: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "manent_policy_evaluations_total", Help: "Valutazioni della policy di governance per fase ed esito.",
+			Name: "manent_policy_evaluations_total", Help: "Evaluations of the governance policy by phase and outcome.",
 		}, []string{"phase", "outcome"}),
 		durations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "manent_policy_eval_duration_seconds", Help: "Durata delle valutazioni della policy di governance.",
+			Name: "manent_policy_eval_duration_seconds", Help: "Duration of the evaluations of the governance policy.",
 			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5},
 		}, []string{"phase"}),
 		loadErrors: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "manent_policy_load_errors_total", Help: "Aggiornamenti della policy o dei freeze falliti (revisione rifiutata o sorgente irraggiungibile).",
+			Name: "manent_policy_load_errors_total", Help: "Failed updates of the policy or of the freezes (revision refused or source unreachable).",
 		}),
 		authz: newAuthzMetrics(),
 	}

@@ -25,7 +25,7 @@ type LogActivator struct {
 
 // Activate logs the activation without other effects.
 func (a LogActivator) Activate(ctx context.Context, in pipeline.Input) error {
-	a.Logger.InfoContext(ctx, "rilascio attivato in esercizio",
+	a.Logger.InfoContext(ctx, "release activated in service",
 		"deployment", in.DeploymentID,
 		"application", in.Descriptor.Application,
 		"environment", in.Descriptor.Environment,
@@ -35,7 +35,7 @@ func (a LogActivator) Activate(ctx context.Context, in pipeline.Input) error {
 
 // Deactivate logs the undoing of the activation without other effects.
 func (a LogActivator) Deactivate(ctx context.Context, in pipeline.Input) error {
-	a.Logger.WarnContext(ctx, "attivazione annullata dal rollback",
+	a.Logger.WarnContext(ctx, "activation undone by the rollback",
 		"deployment", in.DeploymentID,
 		"application", in.Descriptor.Application,
 		"environment", in.Descriptor.Environment,
@@ -63,7 +63,7 @@ func (a Activation) Run(ctx context.Context, in pipeline.Input) (pipeline.Output
 func (a Activation) Compensate(ctx context.Context, in pipeline.Input, _ pipeline.Output) (pipeline.Output, error) {
 	d, ok := a.Activator.(Deactivator)
 	if !ok {
-		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "attivazione non annullabile"}, nil
+		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "activation cannot be undone"}, nil
 	}
 	if err := d.Deactivate(ctx, in); err != nil {
 		return nil, err

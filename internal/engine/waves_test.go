@@ -278,7 +278,7 @@ func TestRolloutApprovazioneTraLeOndate(t *testing.T) {
 	}
 	ctx := context.Background()
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
-	if st.Approval == nil || st.Rollout.Paused != "approvazione dopo l'ondata canary" || len(env.log.get()) != 2 {
+	if st.Approval == nil || st.Rollout.Paused != "approval after the wave canary" || len(env.log.get()) != 2 {
 		t.Fatalf("pausa inattesa: %+v %v", st.Rollout, env.log.get())
 	}
 	// Self-approval is discarded by the workflow; another identity's approval unblocks it.

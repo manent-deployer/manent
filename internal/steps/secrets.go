@@ -37,7 +37,7 @@ func (s Secrets) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, e
 			return nil, fmt.Errorf("secret %q not available: %w", ref.Name, err)
 		}
 	}
-	s.Logger.InfoContext(ctx, "segreti verificati", "deployment", in.DeploymentID, "count", len(in.Descriptor.Secrets))
+	s.Logger.InfoContext(ctx, "secrets verified", "deployment", in.DeploymentID, "count", len(in.Descriptor.Secrets))
 	return pipeline.Output{"count": strconv.Itoa(len(in.Descriptor.Secrets))}, nil
 }
 

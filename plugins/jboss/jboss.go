@@ -546,7 +546,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 			details["previous_version"] = v
 		}
 		if cur.Name == name && cur.Enabled && (sum == "" || cur.Hash == sum) {
-			s.log.InfoContext(ctx, "deployment già attivo", "name", name)
+			s.log.InfoContext(ctx, "deployment already active", "name", name)
 			details["unchanged"] = "true"
 			return details, nil
 		}
@@ -570,7 +570,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 		if err := s.add(ctx, req.Artifact.LocalPath, name, o.runtimeName); err != nil {
 			return details, err
 		}
-		s.log.InfoContext(ctx, "contenuto caricato", "name", name, "runtime_name", o.runtimeName)
+		s.log.InfoContext(ctx, "content uploaded", "name", name, "runtime_name", o.runtimeName)
 		if deps, err = s.deployments(ctx); err != nil {
 			return details, err
 		}
@@ -592,13 +592,13 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 		if suspended {
 			// The server rolled the switch back: put the previous version back in service.
 			if rerr := s.resume(ctx); rerr != nil {
-				s.log.ErrorContext(ctx, "resume dopo un cambio di versione fallito", "error", rerr)
+				s.log.ErrorContext(ctx, "resume after a failed version switch", "error", rerr)
 				err = fmt.Errorf("%w; resume failed: %v", err, rerr)
 			}
 		}
 		return details, err
 	}
-	s.log.InfoContext(ctx, "versione attivata", "name", name, "previous", details["previous"])
+	s.log.InfoContext(ctx, "version activated", "name", name, "previous", details["previous"])
 	switch {
 	case o.restart:
 		if err := s.restartServer(ctx, o.wait); err != nil {
@@ -618,7 +618,7 @@ func (p *Plugin) release(ctx context.Context, s *session, req *plugin.Request, o
 	if sum != "" {
 		if err := s.cleanup(ctx, o, name, details["previous"]); err != nil {
 			// Cleanup does not fail a successful release.
-			s.log.WarnContext(ctx, "pulizia dei deployment precedenti fallita", "error", err)
+			s.log.WarnContext(ctx, "cleanup of the previous deployments failed", "error", err)
 		}
 	}
 	return details, nil
@@ -707,7 +707,7 @@ func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 				return fmt.Errorf("suspend of server group %s: %w", g, err)
 			}
 		}
-		s.log.InfoContext(ctx, "server group sospesi", "groups", s.groups)
+		s.log.InfoContext(ctx, "server groups suspended", "groups", s.groups)
 		return nil
 	}
 	if _, err := s.c.Execute(ctx, op("suspend", nil, "suspend-timeout", secs)); err != nil {
@@ -719,11 +719,11 @@ func (s *session) suspend(ctx context.Context, timeout time.Duration) error {
 	for {
 		state, err := s.attribute(ctx, nil, "suspend-state")
 		if err == nil && state == "SUSPENDED" {
-			s.log.InfoContext(ctx, "server sospeso")
+			s.log.InfoContext(ctx, "server suspended")
 			return nil
 		}
 		if time.Now().After(deadline) {
-			s.log.WarnContext(ctx, "server non ancora sospeso allo scadere di suspend_timeout: si prosegue", "state", state)
+			s.log.WarnContext(ctx, "server not yet suspended when suspend_timeout expired: going on", "state", state)
 			return nil
 		}
 		if err := sleep(ctx, s.poll); err != nil {
@@ -778,7 +778,7 @@ func (s *session) groupOp(ctx context.Context, name string) error {
 			return fmt.Errorf("%s of server group %s: %w", name, g, err)
 		}
 	}
-	s.log.InfoContext(ctx, name+" completato", "groups", s.groups)
+	s.log.InfoContext(ctx, name+" completed", "groups", s.groups)
 	return nil
 }
 
@@ -793,7 +793,7 @@ func (s *session) waitRunning(ctx context.Context, wait time.Duration) error {
 	for {
 		state, err := s.attribute(ctx, nil, "server-state")
 		if err == nil && state == "running" {
-			s.log.InfoContext(ctx, "server di nuovo in esecuzione")
+			s.log.InfoContext(ctx, "server running again")
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -854,7 +854,7 @@ func (s *session) cleanup(ctx context.Context, o options, current, previous stri
 		if err := s.remove(ctx, d); err != nil {
 			return err
 		}
-		s.log.InfoContext(ctx, "deployment precedente rimosso", "name", d.Name)
+		s.log.InfoContext(ctx, "previous deployment removed", "name", d.Name)
 	}
 	return nil
 }

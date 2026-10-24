@@ -38,10 +38,10 @@ func (q QA) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error)
 		out[c.Name()] = "passed"
 	}
 	if err := errors.Join(errs...); err != nil {
-		q.Logger.WarnContext(ctx, "QA fallita", "deployment", in.DeploymentID, "error", err)
+		q.Logger.WarnContext(ctx, "QA failed", "deployment", in.DeploymentID, "error", err)
 		return nil, err
 	}
-	q.Logger.InfoContext(ctx, "QA superata", "deployment", in.DeploymentID)
+	q.Logger.InfoContext(ctx, "QA passed", "deployment", in.DeploymentID)
 	return out, nil
 }
 

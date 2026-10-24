@@ -47,7 +47,7 @@ func (w *Worker) notifyChat(ctx dbos.Context, id string, routes []string, msg ch
 		}, dbos.WithStepName("notify:"+route+":"+msg.Event), dbos.WithStepMaxRetries(w.callbackRetries),
 			dbos.WithStepRetryPredicate(pipeline.Retryable))
 		if err != nil {
-			w.logger.Warn("notifica in chat non inviata", "deployment", id, "route", route, "event", msg.Event, "error", err)
+			w.logger.Warn("chat notification not sent", "deployment", id, "route", route, "event", msg.Event, "error", err)
 			ref = before
 		}
 		refs[route] = ref
@@ -115,9 +115,9 @@ func (w *Worker) openChange(ctx dbos.Context, id string, req Request) (*ChangeTi
 		}
 		if err := w.change.Start(c, t); err != nil {
 			// The ticket exists: a rejected state change does not block the deploy.
-			w.logger.WarnContext(c, "avvio del change non registrato", "deployment", id, "change", t.Number, "error", err)
+			w.logger.WarnContext(c, "start of the change not recorded", "deployment", id, "change", t.Number, "error", err)
 		}
-		w.logger.InfoContext(c, "change aperto", "deployment", id, "change", t.Number, "system", w.change.Name())
+		w.logger.InfoContext(c, "change opened", "deployment", id, "change", t.Number, "system", w.change.Name())
 		return t, nil
 	}, dbos.WithStepName("change:open"), dbos.WithStepMaxRetries(3), dbos.WithStepRetryPredicate(pipeline.Retryable))
 	if err != nil {
@@ -127,7 +127,7 @@ func (w *Worker) openChange(ctx dbos.Context, id string, req Request) (*ChangeTi
 	attrs := attributes(req)
 	attrs[attrChange], attrs[attrChangeURL] = ct.Number, ct.URL
 	if err := dbos.SetWorkflowAttributes(ctx, id, attrs); err != nil {
-		w.logger.Warn("aggiornamento degli attributi del deploy fallito", "deployment", id, "error", err)
+		w.logger.Warn("updating the deploy attributes failed", "deployment", id, "error", err)
 	}
 	return ct, nil
 }
@@ -143,7 +143,7 @@ func (w *Worker) closeChange(ctx dbos.Context, id string, t *ChangeTicket, final
 		return "", changeErr(w.change.Close(c, w.ticketFor(t), o))
 	}, dbos.WithStepName("change:close"), dbos.WithStepMaxRetries(3), dbos.WithStepRetryPredicate(pipeline.Retryable))
 	if err != nil {
-		w.logger.Error("chiusura del change fallita", "deployment", id, "change", t.Number, "error", err)
+		w.logger.Error("closing the change failed", "deployment", id, "change", t.Number, "error", err)
 	}
 }
 

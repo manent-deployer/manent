@@ -82,5 +82,5 @@ Una volta presa confidenza, la sezione [Integrazioni](../integrazioni/index.md) 
 ## Convenzioni
 
 - I comandi si eseguono dalla directory del tutorial, con `manent` e `manent-server` nel `PATH`.
-- Output dei comandi e log sono riportati come li stampa manent: log e messaggi in italiano, messaggi di errore in inglese.
+- Output dei comandi e log sono riportati come li stampa manent: in inglese.
 - I valori da sostituire sono tra parentesi angolari, per esempio `<tuo-cluster>`.

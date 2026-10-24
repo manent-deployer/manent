@@ -55,7 +55,7 @@ expect_eq "eu1-a resta allineato" "$(uc17_state "$e" eu1-a)" "in-sync 1.1.0"
 expect_eq "l'inventario resta sul deploy in esercizio" "$(printf '%s' "$e" | jq -r .current.version)" 1.1.0
 expect_eq "manent inventory --out-of-sync elenca l'ambiente" \
   "$(manent inventory --out-of-sync | jq -r --arg a $APP '[.[] | select(.application == $a)] | length')" 1
-logs=$(dc logs --no-color --since "$since" worker-1 worker-2 2>/dev/null | grep 'target cambiato fuori da manent' | grep 'host=eu1-b')
+logs=$(dc logs --no-color --since "$since" worker-1 worker-2 2>/dev/null | grep 'target changed outside manent' | grep 'host=eu1-b')
 expect_match "il worker registra il cambio con versione attesa e trovata" "$logs" "expected=1.1.0 found=1.0.0"
 m=$(curl -s http://127.0.0.1:18080/metrics | grep "^manent_targets{application=\"$APP\"")
 expect_match "metrica manent_targets con il target drifted" "$m" "state=\"drifted\"} 1"
@@ -79,7 +79,7 @@ uc17_link eu1-b 1.1.0
 uc17_link eu1-a 1.1.0
 e=$(uc17_wait '.out_of_sync != true and ([.targets.targets[]? | select(.state == "in-sync")] | length) == 2')
 expect_eq "di nuovo allineati senza un nuovo deploy" "$(uc17_state "$e" eu1-a) / $(uc17_state "$e" eu1-b)" "in-sync 1.1.0 / in-sync 1.1.0"
-logs=$(dc logs --no-color --since "$since" worker-1 worker-2 2>/dev/null | grep 'target di nuovo allineato' | grep -c 'host=eu1-b')
+logs=$(dc logs --no-color --since "$since" worker-1 worker-2 2>/dev/null | grep 'target in sync again' | grep -c 'host=eu1-b')
 [ "$logs" -ge 1 ] && pass "il ritorno in linea di eu1-b è registrato" || fail "nessun log del ritorno in linea di eu1-b"
 
 info "-- un nuovo deploy rende superata la lettura precedente"

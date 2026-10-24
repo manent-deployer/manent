@@ -88,13 +88,13 @@ environment=test
 version=1.1.0
 dry_run=false
 tenant=untenanted
-### manent · Deploy di hello in test
+### manent · Deploy of hello to test
 
 | | |
 |---|---|
-| Versione | `1.1.0` |
+| Version | `1.1.0` |
 | Deploy | `ci-1001` |
-| Esito | **SUCCESS** |
+| Outcome | **SUCCESS** |
 ```
 
 Esegui di nuovo lo stesso comando: restituisce il deploy `ci-1001` con il suo esito invece di rilasciare ancora. L'`--id` è la **chiave di idempotenza** che rende sicuro un job ritentato. Il comando esce con un codice diverso da zero se il deploy non riesce, quindi il job fallisce con lui.

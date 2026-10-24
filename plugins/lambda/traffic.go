@@ -66,7 +66,7 @@ func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plu
 			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
 			return res, fmt.Errorf("region %s: %w", t.Host, err)
 		}
-		log.InfoContext(ctx, "versione candidata pubblicata, alias invariato", "function_version", v)
+		log.InfoContext(ctx, "candidate version published, alias unchanged", "function_version", v)
 		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusDeployed, Details: details})
 	}
 	return res, nil
@@ -123,7 +123,7 @@ func (p *Plugin) setWeight(ctx context.Context, t plugin.Target, req *plugin.Req
 	if err != nil {
 		return fmt.Errorf("updating alias %s: %w", alias, err)
 	}
-	p.logger.InfoContext(ctx, "traffico dell'alias aggiornato", "deployment", req.DeploymentID, "region", t.Host, "alias", alias, "candidate", cand, "percent", percent)
+	p.logger.InfoContext(ctx, "alias traffic updated", "deployment", req.DeploymentID, "region", t.Host, "alias", alias, "candidate", cand, "percent", percent)
 	return nil
 }
 

@@ -28,13 +28,13 @@ hide:
 <div class="mn-terminal">
 <div class="mn-terminal__bar"><i></i><i></i><i></i><span>~/myapp — manent</span></div>
 <pre><code><span class="p">$</span> manent deploy -f release.yml
-<span class="dim">deploy accodato: 7c0e… (manent logs -f 7c0e…)</span>
+<span class="dim">deploy enqueued: 7c0e… (manent logs -f 7c0e…)</span>
 <span class="p">$</span> manent logs -f 7c0e…
-<span class="dim">14:03:10</span> INFO  <span class="v">[secrets]</span>    segreti verificati
-<span class="dim">14:03:12</span> INFO  <span class="v">[artifacts]</span>  sha256=2d27fbdf… verificato
-<span class="dim">14:03:12</span> INFO  <span class="v">[qa]</span>         QA superata
-<span class="dim">14:03:15</span> INFO  <span class="v">[deploy]</span>     release 1.4.0 attivata su 3 target
-<span class="dim">14:03:15</span> INFO  <span class="v">[activation]</span> in esercizio
+<span class="dim">14:03:10</span> INFO  <span class="v">[secrets]</span>    secrets verified
+<span class="dim">14:03:12</span> INFO  <span class="v">[artifacts]</span>  sha256=2d27fbdf… verified
+<span class="dim">14:03:12</span> INFO  <span class="v">[qa]</span>         QA passed
+<span class="dim">14:03:15</span> INFO  <span class="v">[deploy]</span>     release 1.4.0 activated on 3 targets
+<span class="dim">14:03:15</span> INFO  <span class="v">[activation]</span> live
 <span class="ok">✔ SUCCESS</span>  myapp/prod  1.4.0  <span class="dim">kind=promotion</span></code></pre>
 </div>
 

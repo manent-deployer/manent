@@ -164,7 +164,7 @@ func (s *server) Rollback(ctx context.Context, r *pb.RollbackRequest) (*pb.Deplo
 	}
 	prev := fromProtoRelease(r.GetPrevious())
 	if prev == nil {
-		return nil, status.Error(codes.InvalidArgument, "release precedente mancante")
+		return nil, status.Error(codes.InvalidArgument, "previous release missing")
 	}
 	return s.call(ctx, r.GetRequest(), func(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 		return rb.Rollback(ctx, req, *prev)
@@ -268,7 +268,7 @@ func (s *server) call(ctx context.Context, r *pb.DeployRequest, fn func(context.
 	if id := r.GetSecretsBrokerId(); id != 0 {
 		conn, err := s.broker.Dial(id)
 		if err != nil {
-			return nil, status.Errorf(codes.Unavailable, "connessione al resolver dei segreti: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "connection to the secret resolver: %v", err)
 		}
 		defer conn.Close()
 		req.Secrets = secretsClient{rpc: pb.NewSecretsClient(conn)}

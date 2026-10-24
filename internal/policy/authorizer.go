@@ -133,7 +133,7 @@ func (r *Runtime) Grants(ctx context.Context, p *auth.Principal) ([]rbac.Grant, 
 	r.metrics.authzEval("grants", "ok", time.Since(start))
 	for _, w := range res.Warnings {
 		r.metrics.authz.invalidGrants.Inc()
-		r.log.Warn("permesso della policy scartato", "subject", p.String(), "revision", c.Revision, "detail", w)
+		r.log.Warn("policy permission discarded", "subject", p.String(), "revision", c.Revision, "detail", w)
 	}
 	r.grants.put(key, res.Grants, now)
 	return res.Grants, nil
@@ -171,22 +171,22 @@ type authzMetrics struct {
 	invalidGrants prometheus.Counter
 }
 
-var descAuthzCache = prometheus.NewDesc("manent_authz_cache_entries", "Identità con i permessi in cache.", nil, nil)
+var descAuthzCache = prometheus.NewDesc("manent_authz_cache_entries", "Identities with cached permissions.", nil, nil)
 
 func newAuthzMetrics() authzMetrics {
 	return authzMetrics{
 		grantEvals: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "manent_authz_grants_evaluations_total", Help: "Calcoli dei permessi di un'identità per esito (ok, cached, error).",
+			Name: "manent_authz_grants_evaluations_total", Help: "Computations of the permissions of an identity by outcome (ok, cached, error).",
 		}, []string{"outcome"}),
 		denyEvals: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "manent_authz_deny_evaluations_total", Help: "Valutazioni dei divieti per azione ed esito (allowed, denied, error).",
+			Name: "manent_authz_deny_evaluations_total", Help: "Evaluations of the denials by action and outcome (allowed, denied, error).",
 		}, []string{"action", "outcome"}),
 		durations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "manent_authz_eval_duration_seconds", Help: "Durata delle valutazioni della policy dei permessi.",
+			Name: "manent_authz_eval_duration_seconds", Help: "Duration of the evaluations of the permission policy.",
 			Buckets: []float64{0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.2},
 		}, []string{"part"}),
 		invalidGrants: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "manent_authz_invalid_grants_total", Help: "Permessi prodotti dalla policy e scartati perché non validi o con azioni policy.*.",
+			Name: "manent_authz_invalid_grants_total", Help: "Permissions produced by the policy and discarded because invalid or with policy.* actions.",
 		}),
 	}
 }

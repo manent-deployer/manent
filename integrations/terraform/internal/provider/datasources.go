@@ -46,16 +46,16 @@ func (d *inventoryDataSource) Metadata(_ context.Context, req datasource.Metadat
 // Schema implements datasource.DataSource.
 func (d *inventoryDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Release in esercizio per applicazione e ambiente (inventario di manent).",
+		Description: "Release in service per application and environment (manent inventory).",
 		Attributes: map[string]schema.Attribute{
-			"application": schema.StringAttribute{Optional: true, Description: "Solo questa applicazione."},
-			"environment": schema.StringAttribute{Optional: true, Description: "Solo questo ambiente."},
-			"artifact":    schema.StringAttribute{Optional: true, Description: "Solo questo artefatto (artifact.name)."},
+			"application": schema.StringAttribute{Optional: true, Description: "Only this application."},
+			"environment": schema.StringAttribute{Optional: true, Description: "Only this environment."},
+			"artifact":    schema.StringAttribute{Optional: true, Description: "Only this artifact (artifact.name)."},
 			"entries": schema.ListNestedAttribute{
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"application":   schema.StringAttribute{Computed: true},
-					"artifact":      schema.StringAttribute{Computed: true, Description: "Artefatto (artifact.name) della voce."},
+					"artifact":      schema.StringAttribute{Computed: true, Description: "Artifact (artifact.name) of the entry."},
 					"environment":   schema.StringAttribute{Computed: true},
 					"tenant":        schema.StringAttribute{Computed: true},
 					"version":       schema.StringAttribute{Computed: true},
@@ -134,17 +134,17 @@ func (d *environmentCheckDataSource) Metadata(_ context.Context, req datasource.
 // Schema implements datasource.DataSource.
 func (d *environmentCheckDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Verifica sul server una configurazione di ambiente candidata, come la userebbe un deploy: " +
-			"una configurazione non valida fa fallire il plan.",
+		Description: "Checks on the server a candidate environment configuration, as a deploy would use it: " +
+			"an invalid configuration fails the plan.",
 		Attributes: map[string]schema.Attribute{
 			"application": schema.StringAttribute{Required: true},
 			"environment": schema.StringAttribute{Required: true},
-			"config":      schema.StringAttribute{Required: true, Description: "Configurazione di ambiente YAML o JSON."},
-			"descriptor":  schema.StringAttribute{Optional: true, Description: "Descrittore di esempio YAML; default la richiesta del deploy in esercizio."},
+			"config":      schema.StringAttribute{Required: true, Description: "Environment configuration in YAML or JSON."},
+			"descriptor":  schema.StringAttribute{Optional: true, Description: "Example descriptor in YAML; default the request of the deploy in service."},
 			"valid":       schema.BoolAttribute{Computed: true},
-			"plugin":      schema.StringAttribute{Computed: true, Description: "Plugin del deploy effettivo."},
-			"targets":     schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Host dei target del deploy effettivo."},
-			"stages":      schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Stadi del rollout, se c'è."},
+			"plugin":      schema.StringAttribute{Computed: true, Description: "Plugin of the effective deploy."},
+			"targets":     schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Target hosts of the effective deploy."},
+			"stages":      schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Rollout stages, if any."},
 			"warnings":    schema.ListAttribute{Computed: true, ElementType: types.StringType},
 		},
 	}
@@ -197,7 +197,7 @@ func (d *environmentCheckDataSource) Read(ctx context.Context, req datasource.Re
 	}
 	for _, w := range v.Warnings {
 		m.Warnings = append(m.Warnings, types.StringValue(w))
-		resp.Diagnostics.AddWarning("verifica della configurazione", w)
+		resp.Diagnostics.AddWarning("configuration check", w)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }

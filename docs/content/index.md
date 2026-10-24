@@ -28,7 +28,7 @@ hide:
 <div class="mn-terminal">
 <div class="mn-terminal__bar"><i></i><i></i><i></i><span>~/myapp — manent</span></div>
 <pre><code><span class="p">$</span> manent deploy -f release.yml
-<span class="dim">deploy queued: 7c0e… (manent logs -f 7c0e…)</span>
+<span class="dim">deploy enqueued: 7c0e… (manent logs -f 7c0e…)</span>
 <span class="p">$</span> manent logs -f 7c0e…
 <span class="dim">14:03:10</span> INFO  <span class="v">[secrets]</span>    secrets verified
 <span class="dim">14:03:12</span> INFO  <span class="v">[artifacts]</span>  sha256=2d27fbdf… verified

@@ -25,31 +25,31 @@ import (
 // policyCommands are the subcommands of "manent policy".
 func policyCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
-		{Name: "list", Short: "Elenca le revisioni e la policy in vigore", Cmd: &PolicyListCmd{global: g}},
-		{Name: "show", Short: "Mostra una revisione con i suoi file (current: quella in vigore)", Cmd: &PolicyShowCmd{global: g}},
-		{Name: "pull", Short: "Scrive in una directory i file di una revisione", Cmd: &PolicyPullCmd{global: g}},
-		{Name: "push", Short: "Carica come bozza una revisione da una directory (*.rego, data.json, data.yaml)", Cmd: &PolicyPushCmd{global: g}},
-		{Name: "diff", Short: "Mostra le differenze tra due revisioni", Cmd: &PolicyDiffCmd{global: g}},
-		{Name: "eval", Short: "Valuta una revisione su un descrittore", Cmd: &PolicyEvalCmd{global: g}},
-		{Name: "impact", Short: "Ricalcola con una revisione le decisioni dei deploy reali di un periodo", Cmd: &PolicyImpactCmd{global: g}},
-		{Name: "access", Short: "Simula i permessi di un'identità con una revisione (rbac.engine: opa)", Cmd: &PolicyAccessCmd{global: g}},
-		{Name: "approve", Short: "Approva e attiva una revisione in bozza", Cmd: &PolicyActivateCmd{global: g, draft: true}},
-		{Name: "activate", Short: "Torna a una revisione già attiva in passato", Cmd: &PolicyActivateCmd{global: g}},
+		{Name: "list", Short: "Lists the revisions and the policy in force", Cmd: &PolicyListCmd{global: g}},
+		{Name: "show", Short: "Shows a revision with its files (current: the one in force)", Cmd: &PolicyShowCmd{global: g}},
+		{Name: "pull", Short: "Writes the files of a revision to a directory", Cmd: &PolicyPullCmd{global: g}},
+		{Name: "push", Short: "Uploads a revision from a directory as a draft (*.rego, data.json, data.yaml)", Cmd: &PolicyPushCmd{global: g}},
+		{Name: "diff", Short: "Shows the differences between two revisions", Cmd: &PolicyDiffCmd{global: g}},
+		{Name: "eval", Short: "Evaluates a revision on a descriptor", Cmd: &PolicyEvalCmd{global: g}},
+		{Name: "impact", Short: "Recomputes with a revision the decisions of the real deploys of a period", Cmd: &PolicyImpactCmd{global: g}},
+		{Name: "access", Short: "Simulates the permissions of an identity with a revision (rbac.engine: opa)", Cmd: &PolicyAccessCmd{global: g}},
+		{Name: "approve", Short: "Approves and activates a draft revision", Cmd: &PolicyActivateCmd{global: g, draft: true}},
+		{Name: "activate", Short: "Goes back to a revision that was active in the past", Cmd: &PolicyActivateCmd{global: g}},
 	}
 }
 
 // freezeCommands are the subcommands of "manent freeze".
 func freezeCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
-		{Name: "add", Short: "Crea una finestra di freeze a runtime (permesso freeze.write)", Cmd: &FreezeAddCmd{global: g}},
-		{Name: "delete", Short: "Elimina una finestra di freeze creata a runtime", Cmd: &FreezeDeleteCmd{global: g}},
-		{Name: "list", Short: "Elenca le finestre di freeze attive e future", Cmd: &FreezesCmd{global: g}},
+		{Name: "add", Short: "Creates a freeze window at runtime (freeze.write permission)", Cmd: &FreezeAddCmd{global: g}},
+		{Name: "delete", Short: "Deletes a freeze window created at runtime", Cmd: &FreezeDeleteCmd{global: g}},
+		{Name: "list", Short: "Lists the active and future freeze windows", Cmd: &FreezesCmd{global: g}},
 	}
 }
 
 // revisionArg is the positional argument with a revision number or "current".
 type revisionArg struct {
-	Revision string `positional-arg-name:"revisione" required:"true"`
+	Revision string `positional-arg-name:"revision" required:"true"`
 }
 
 // parseRevision reads a revision number; "current" is 0.
@@ -104,7 +104,7 @@ func (c *PolicyShowCmd) Execute([]string) error {
 // PolicyPullCmd writes the files of a revision to a directory.
 type PolicyPullCmd struct {
 	global *GlobalOptions
-	Dir    string      `short:"d" long:"dir" required:"true" description:"directory in cui scrivere i file"`
+	Dir    string      `short:"d" long:"dir" required:"true" description:"directory to write the files to"`
 	Args   revisionArg `positional-args:"yes"`
 }
 
@@ -132,7 +132,7 @@ func (c *PolicyPullCmd) Execute([]string) error {
 				return err
 			}
 		}
-		fmt.Fprintf(os.Stderr, "revisione %d: %d file scritti in %s\n", p.Revision, len(p.Files), c.Dir)
+		fmt.Fprintf(os.Stderr, "revision %d: %d files written to %s\n", p.Revision, len(p.Files), c.Dir)
 		return nil
 	})
 }
@@ -181,8 +181,8 @@ func readPolicyDir(dir string) (map[string]string, error) {
 // PolicyPushCmd uploads a draft revision.
 type PolicyPushCmd struct {
 	global  *GlobalOptions
-	Dir     string `short:"d" long:"dir" required:"true" description:"directory con i moduli Rego e i dati"`
-	Comment string `short:"m" long:"message" description:"descrizione della modifica"`
+	Dir     string `short:"d" long:"dir" required:"true" description:"directory with the Rego modules and the data"`
+	Comment string `short:"m" long:"message" description:"description of the change"`
 }
 
 // Execute implements flags.Commander.
@@ -196,7 +196,7 @@ func (c *PolicyPushCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "revisione %d in bozza: per attivarla, manent policy approve %d (da un'altra identità se è richiesta la revisione)\n", p.Revision, p.Revision)
+		fmt.Fprintf(os.Stderr, "revision %d in draft: to activate it, manent policy approve %d (from another identity if the review is required)\n", p.Revision, p.Revision)
 		return cliutil.PrintJSON(p)
 	})
 }
@@ -205,8 +205,8 @@ func (c *PolicyPushCmd) Execute([]string) error {
 type PolicyDiffCmd struct {
 	global *GlobalOptions
 	Args   struct {
-		From string `positional-arg-name:"da" required:"true"`
-		To   string `positional-arg-name:"a" required:"true"`
+		From string `positional-arg-name:"from" required:"true"`
+		To   string `positional-arg-name:"to" required:"true"`
 	} `positional-args:"yes"`
 }
 
@@ -314,9 +314,9 @@ func diffLines(a, b []string) []string {
 // PolicyEvalCmd evaluates a revision on a descriptor.
 type PolicyEvalCmd struct {
 	global *GlobalOptions
-	File   string      `short:"f" long:"file" required:"true" description:"descrittore YAML"`
-	Phase  string      `long:"phase" choice:"submit" choice:"validate" choice:"start" choice:"stage" choice:"tick" description:"fase della valutazione (default submit)"`
-	Kind   string      `long:"kind" choice:"deploy" choice:"promotion" choice:"rollback" description:"tipo di deploy (default deploy)"`
+	File   string      `short:"f" long:"file" required:"true" description:"YAML descriptor"`
+	Phase  string      `long:"phase" choice:"submit" choice:"validate" choice:"start" choice:"stage" choice:"tick" description:"phase of the evaluation (default submit)"`
+	Kind   string      `long:"kind" choice:"deploy" choice:"promotion" choice:"rollback" description:"kind of deploy (default deploy)"`
 	Args   revisionArg `positional-args:"yes"`
 }
 
@@ -342,7 +342,7 @@ func (c *PolicyEvalCmd) Execute([]string) error {
 // PolicyImpactCmd recomputes the decisions of the deploys of a period.
 type PolicyImpactCmd struct {
 	global *GlobalOptions
-	Since  string      `long:"since" default:"7d" description:"periodo: durata (720h) o giorni (30d)"`
+	Since  string      `long:"since" default:"7d" description:"period: duration (720h) or days (30d)"`
 	Args   revisionArg `positional-args:"yes"`
 }
 
@@ -362,7 +362,7 @@ func (c *PolicyImpactCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "%d deploy valutati, %d con una decisione diversa\n", imp.Evaluated, len(imp.Changes))
+		fmt.Fprintf(os.Stderr, "%d deploys evaluated, %d with a different decision\n", imp.Evaluated, len(imp.Changes))
 		return cliutil.PrintJSON(imp)
 	})
 }
@@ -370,16 +370,16 @@ func (c *PolicyImpactCmd) Execute([]string) error {
 // PolicyAccessCmd simulates with a revision the permissions of an identity given by hand.
 type PolicyAccessCmd struct {
 	global      *GlobalOptions
-	Subject     string            `long:"subject" required:"true" description:"identità <metodo>:<nome> (es. oidc:alice)"`
-	Groups      []string          `long:"group" description:"gruppo dell'identità (ripetibile)"`
-	Claims      map[string]string `long:"claim" key-value-delimiter:"=" description:"claim dell'identità chiave=valore (ripetibile)"`
-	Compare     bool              `long:"compare" description:"mostra i permessi guadagnati e persi rispetto alla revisione attiva"`
-	Action      string            `long:"action" description:"azione di cui simulare l'esito (es. deployment.submit)"`
-	Tenant      string            `short:"t" long:"tenant" description:"tenant dell'applicazione dell'azione"`
-	Application string            `short:"a" long:"application" description:"applicazione dell'azione"`
-	Environment string            `short:"e" long:"environment" description:"ambiente dell'azione"`
-	Artifact    string            `short:"A" long:"artifact" description:"artefatto dell'azione (binding con artifacts)"`
-	File        string            `short:"f" long:"file" description:"descrittore YAML del deploy (artefatto per i divieti)"`
+	Subject     string            `long:"subject" required:"true" description:"identity <method>:<name> (e.g. oidc:alice)"`
+	Groups      []string          `long:"group" description:"group of the identity (repeatable)"`
+	Claims      map[string]string `long:"claim" key-value-delimiter:"=" description:"claim of the identity key=value (repeatable)"`
+	Compare     bool              `long:"compare" description:"shows the permissions gained and lost compared with the active revision"`
+	Action      string            `long:"action" description:"action whose outcome to simulate (e.g. deployment.submit)"`
+	Tenant      string            `short:"t" long:"tenant" description:"tenant of the application of the action"`
+	Application string            `short:"a" long:"application" description:"application of the action"`
+	Environment string            `short:"e" long:"environment" description:"environment of the action"`
+	Artifact    string            `short:"A" long:"artifact" description:"artifact of the action (bindings with artifacts)"`
+	File        string            `short:"f" long:"file" description:"YAML descriptor of the deploy (artifact for the denials)"`
 	JSON        bool              `long:"json" description:"output JSON"`
 	Args        revisionArg       `positional-args:"yes"`
 }
@@ -416,15 +416,15 @@ func (c *PolicyAccessCmd) Execute([]string) error {
 
 // printAccess prints the simulation as tables: grants, differences and outcome of the action.
 func printAccess(out io.Writer, acc *service.PolicyAccess) {
-	fmt.Fprintf(out, "Identità %s, revisione %s\n\n", acc.Subject, acc.Revision)
+	fmt.Fprintf(out, "Identity %s, revision %s\n\n", acc.Subject, acc.Revision)
 	printGrants(out, acc.Grants, "")
 	for _, w := range acc.Warnings {
-		fmt.Fprintf(out, "attenzione: permesso scartato: %s\n", w)
+		fmt.Fprintf(out, "warning: permission discarded: %s\n", w)
 	}
 	if acc.Compared != "" {
-		fmt.Fprintf(out, "\nRispetto alla revisione attiva %s:", acc.Compared)
+		fmt.Fprintf(out, "\nCompared with the active revision %s:", acc.Compared)
 		if len(acc.Gained)+len(acc.Lost) == 0 {
-			fmt.Fprintln(out, " nessuna differenza")
+			fmt.Fprintln(out, " no difference")
 		} else {
 			fmt.Fprintln(out)
 			printGrants(out, acc.Gained, "+ ")
@@ -435,26 +435,26 @@ func printAccess(out io.Writer, acc *service.PolicyAccess) {
 		fmt.Fprintln(out)
 		switch {
 		case ch.Allowed:
-			fmt.Fprintf(out, "Esito: consentito (permesso %s)\n", ch.GrantedBy)
+			fmt.Fprintf(out, "Outcome: allowed (permission %s)\n", ch.GrantedBy)
 		case len(ch.Denied) > 0:
-			fmt.Fprintf(out, "Esito: negato dalla policy (permesso %s)\n", ch.GrantedBy)
+			fmt.Fprintf(out, "Outcome: denied by the policy (permission %s)\n", ch.GrantedBy)
 			for _, d := range ch.Denied {
 				fmt.Fprintf(out, "  - %s\n", d)
 			}
 		default:
-			fmt.Fprintf(out, "Esito: negato: %s\n", ch.Reason)
+			fmt.Fprintf(out, "Outcome: denied: %s\n", ch.Reason)
 		}
 	}
 }
 
 func printGrants(out io.Writer, gs []service.Grant, prefix string) {
 	if len(gs) == 0 && prefix == "" {
-		fmt.Fprintln(out, "nessun permesso")
+		fmt.Fprintln(out, "no permission")
 		return
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	if prefix == "" {
-		fmt.Fprintln(tw, "PERMESSO\tAZIONI\tAPPLICAZIONI\tAMBIENTI\tTENANT\tFINO A")
+		fmt.Fprintln(tw, "PERMISSION\tACTIONS\tAPPLICATIONS\tENVIRONMENTS\tTENANT\tUNTIL")
 	}
 	for _, g := range gs {
 		acts := g.Role
@@ -495,7 +495,7 @@ func (c *PolicyActivateCmd) Execute([]string) error {
 		if err := op(ctx, rev); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "revisione %d attiva\n", rev)
+		fmt.Fprintf(os.Stderr, "revision %d active\n", rev)
 		return nil
 	})
 }
@@ -503,18 +503,18 @@ func (c *PolicyActivateCmd) Execute([]string) error {
 // FreezeAddCmd creates a freeze window at runtime.
 type FreezeAddCmd struct {
 	global       *GlobalOptions
-	Name         string   `long:"name" required:"true" description:"nome della finestra"`
-	Reason       string   `long:"reason" description:"motivo, mostrato a chi prova a rilasciare"`
-	Applications []string `short:"a" long:"application" description:"applicazioni (pattern con *, ripetibile; default *)"`
-	Environments []string `short:"e" long:"environment" required:"true" description:"ambienti (pattern con *, ripetibile)"`
-	Regions      []string `long:"region" description:"solo queste region (ripetibile)"`
-	Tenants      string   `long:"tenants" description:"solo i deploy dei tenant scelti dal selettore (es. name=acme, tier=gold)"`
-	Artifacts    []string `short:"A" long:"artifact" description:"solo questi artefatti (pattern con *, ripetibile)"`
-	Selector     string   `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. criticality=high)"`
-	From         string   `long:"from" description:"inizio, RFC 3339 (default adesso)"`
-	Until        string   `long:"until" description:"fine, RFC 3339"`
-	For          string   `long:"for" description:"durata dall'inizio, in alternativa a --until (es. 4h)"`
-	Hard         bool     `long:"hard" description:"non esentabile dalla policy né superabile con freezeOverride"`
+	Name         string   `long:"name" required:"true" description:"name of the window"`
+	Reason       string   `long:"reason" description:"reason, shown to whoever tries to release"`
+	Applications []string `short:"a" long:"application" description:"applications (patterns with *, repeatable; default *)"`
+	Environments []string `short:"e" long:"environment" required:"true" description:"environments (patterns with *, repeatable)"`
+	Regions      []string `long:"region" description:"only these regions (repeatable)"`
+	Tenants      string   `long:"tenants" description:"only the deploys of the tenants chosen by the selector (e.g. name=acme, tier=gold)"`
+	Artifacts    []string `short:"A" long:"artifact" description:"only these artifacts (patterns with *, repeatable)"`
+	Selector     string   `long:"selector" description:"only the applications chosen by the tag selector (e.g. criticality=high)"`
+	From         string   `long:"from" description:"start, RFC 3339 (default now)"`
+	Until        string   `long:"until" description:"end, RFC 3339"`
+	For          string   `long:"for" description:"duration from the start, as an alternative to --until (e.g. 4h)"`
+	Hard         bool     `long:"hard" description:"cannot be exempted by the policy nor bypassed with freezeOverride"`
 }
 
 // Execute implements flags.Commander.
@@ -562,7 +562,7 @@ func (c *FreezeAddCmd) Execute([]string) error {
 type FreezeDeleteCmd struct {
 	global *GlobalOptions
 	Args   struct {
-		Name string `positional-arg-name:"nome" required:"true"`
+		Name string `positional-arg-name:"name" required:"true"`
 	} `positional-args:"yes"`
 }
 
@@ -572,7 +572,7 @@ func (c *FreezeDeleteCmd) Execute([]string) error {
 		if err := svc.DeleteFreeze(ctx, c.Args.Name); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "freeze %s eliminato\n", c.Args.Name)
+		fmt.Fprintf(os.Stderr, "freeze %s deleted\n", c.Args.Name)
 		return nil
 	})
 }

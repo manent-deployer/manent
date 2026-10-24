@@ -101,7 +101,7 @@ func (a *Admin) Specs(_ context.Context, o SpecsOptions) (*SpecsReport, error) {
 	slices.SortFunc(rep.Uses, func(x, y SpecUse) int {
 		return cmp.Or(strings.Compare(x.Kind, y.Kind), strings.Compare(x.ID, y.ID), strings.Compare(x.Step, y.Step))
 	})
-	a.logger.Info("specifiche degli step personalizzati cercate", "hashes", len(o.Hashes), "all", o.All, "uses", len(rep.Uses), "unreadable", len(rep.Unreadable))
+	a.logger.Info("custom step specifications searched", "hashes", len(o.Hashes), "all", o.All, "uses", len(rep.Uses), "unreadable", len(rep.Unreadable))
 	return rep, nil
 }
 

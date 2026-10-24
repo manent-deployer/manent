@@ -438,7 +438,7 @@ func (a *app) createRevision(ctx context.Context, image, version, deployID, sfx 
 		if traffic != nil && a.ingress() != nil && a.mode() == modeMultiple {
 			props["configuration"] = a.withTraffic(traffic)["configuration"]
 		}
-		a.log.InfoContext(ctx, "nuova revisione richiesta", "revision", rev, "image", image)
+		a.log.InfoContext(ctx, "new revision requested", "revision", rev, "image", image)
 		if err := a.patch(ctx, props); err != nil {
 			return rev, err
 		}
@@ -473,7 +473,7 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 		if f := str(a.ingress(), "fqdn"); f != "" {
 			d["url"] = "https://" + f
 		}
-		a.log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "revision", rev)
+		a.log.InfoContext(ctx, "active release", "version", req.Artifact.Version, "revision", rev)
 		return d, nil
 	})
 }
@@ -506,7 +506,7 @@ func (a *app) traffic() []any {
 // traffic on every app; different versions are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
-	details := map[string]string{"source": "variabile " + EnvVersion + " della revisione che riceve il traffico"}
+	details := map[string]string{"source": "variable " + EnvVersion + " of the revision receiving the traffic"}
 	for _, t := range req.Targets {
 		a, err := p.open(ctx, req, t)
 		if err != nil {
@@ -584,7 +584,7 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 				return d, err
 			}
 		}
-		a.log.WarnContext(ctx, "release precedente ripristinata", "version", previous.Version, "revision", d[DetailRevision], "rollback", true)
+		a.log.WarnContext(ctx, "previous release restored", "version", previous.Version, "revision", d[DetailRevision], "rollback", true)
 		return d, nil
 	})
 }
@@ -648,7 +648,7 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 		}
 		d[DetailRevision], d["current"] = rev, v
 		if req.Traffic == nil && a.mode() != modeMultiple && a.ingress() != nil {
-			d["note"] = "activeRevisionsMode Single: il rollback crea una nuova revisione"
+			d["note"] = "activeRevisionsMode Single: the rollback creates a new revision"
 		}
 		return d, nil
 	})
@@ -741,7 +741,7 @@ func (p *Plugin) DeployCandidate(ctx context.Context, req *plugin.Request) (*plu
 				return d, err
 			}
 		}
-		a.log.InfoContext(ctx, "revisione candidata pronta, senza traffico", "revision", rev, "stable", stable)
+		a.log.InfoContext(ctx, "candidate revision ready, without traffic", "revision", rev, "stable", stable)
 		return d, nil
 	})
 }
@@ -775,7 +775,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 		if err := a.patch(ctx, a.withTraffic(split(req, stableOf(req, a.host), cand, percent))); err != nil {
 			return nil, err
 		}
-		a.log.InfoContext(ctx, "traffico dell'app aggiornato", "revision", cand, "percent", percent)
+		a.log.InfoContext(ctx, "app traffic updated", "revision", cand, "percent", percent)
 		return nil, nil
 	})
 	return err

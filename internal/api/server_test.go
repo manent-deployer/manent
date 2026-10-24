@@ -174,7 +174,7 @@ func (m *mockService) Freezes(context.Context, string, string) ([]governance.Win
 }
 
 func (m *mockService) ValidateEnvironment(_ context.Context, c engine.EnvironmentCheck) (*engine.Validation, error) {
-	return &engine.Validation{Valid: true, Config: map[string]string{"source": "configurazione candidata", "application": c.Application}}, nil
+	return &engine.Validation{Valid: true, Config: map[string]string{"source": "candidate configuration", "application": c.Application}}, nil
 }
 
 func (m *mockService) Validate(_ context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {

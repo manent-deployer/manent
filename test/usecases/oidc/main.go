@@ -56,10 +56,10 @@ type server struct {
 }
 
 func main() {
-	listen := flag.String("listen", ":9000", "indirizzo di ascolto")
-	issuer := flag.String("issuer", "http://oidc:9000", "issuer pubblicato nei token")
-	audience := flag.String("audience", "manent", "audience dei token")
-	clientID := flag.String("client-id", "manent-ui", "client OIDC pubblico ammesso")
+	listen := flag.String("listen", ":9000", "listen address")
+	issuer := flag.String("issuer", "http://oidc:9000", "issuer published in the tokens")
+	audience := flag.String("audience", "manent", "token audience")
+	clientID := flag.String("client-id", "manent-ui", "allowed public OIDC client")
 	flag.Parse()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -80,7 +80,7 @@ func main() {
 	mux.HandleFunc("/logout", s.logout)
 	mux.HandleFunc("/lab/token", s.labToken)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	log.Printf("identity provider di prova su %s, issuer %s", *listen, *issuer)
+	log.Printf("test identity provider on %s, issuer %s", *listen, *issuer)
 	srv := &http.Server{Addr: *listen, Handler: cors(mux), ReadHeaderTimeout: 10 * time.Second}
 	log.Fatal(srv.ListenAndServe())
 }
@@ -127,12 +127,12 @@ func (s *server) keys(w http.ResponseWriter, _ *http.Request) {
 }
 
 var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
-<html lang="it"><head><meta charset="utf-8"><title>Accesso al laboratorio</title>
+<html lang="en"><head><meta charset="utf-8"><title>Lab sign-in</title>
 <style>body{font-family:system-ui,sans-serif;background:#0a0e17;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;margin:0}
 main{background:#0f1626;border:1px solid #334155;border-radius:12px;padding:2rem;max-width:24rem}
 button{display:block;width:100%;margin:.5rem 0;padding:.7rem;border-radius:8px;border:1px solid #334155;background:#151e32;color:#e2e8f0;font-size:1rem;cursor:pointer}
 button:focus-visible{outline:2px solid #22d3ee;outline-offset:2px}</style></head>
-<body><main><h1>Identity provider di prova</h1><p>Scegli l'utente con cui entrare.</p>
+<body><main><h1>Test identity provider</h1><p>Choose the user to sign in with.</p>
 <form method="post" action="/authorize">
 {{range $k, $v := .Params}}<input type="hidden" name="{{$k}}" value="{{$v}}">{{end}}
 {{range .Users}}<button type="submit" name="user" value="{{.}}">{{.}}</button>{{end}}
@@ -157,12 +157,12 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.Form
 	if q.Get("client_id") != s.clientID || q.Get("response_type") != "code" || q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
-		http.Error(w, "richiesta di autorizzazione non valida (client_id, response_type=code e PKCE S256 obbligatori)", http.StatusBadRequest)
+		http.Error(w, "invalid authorization request (client_id, response_type=code and PKCE S256 required)", http.StatusBadRequest)
 		return
 	}
 	redirect, err := url.Parse(q.Get("redirect_uri"))
 	if err != nil || (redirect.Scheme != "http" && redirect.Scheme != "https") {
-		http.Error(w, "redirect_uri non valido", http.StatusBadRequest)
+		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
 		return
 	}
 	user := q.Get("user")
@@ -181,7 +181,7 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := users[user]; !ok {
-		http.Error(w, "utente sconosciuto", http.StatusBadRequest)
+		http.Error(w, "unknown user", http.StatusBadRequest)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: user, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
@@ -258,7 +258,7 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 func (s *server) labToken(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
 	if _, ok := users[user]; !ok {
-		http.Error(w, "utente sconosciuto", http.StatusBadRequest)
+		http.Error(w, "unknown user", http.StatusBadRequest)
 		return
 	}
 	now := time.Now()
@@ -281,7 +281,7 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
 	to := r.URL.Query().Get("post_logout_redirect_uri")
 	if u, err := url.Parse(to); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		_, _ = w.Write([]byte("uscito"))
+		_, _ = w.Write([]byte("signed out"))
 		return
 	}
 	http.Redirect(w, r, to, http.StatusFound)

@@ -26,7 +26,7 @@ func (e *Engine) applySchedule(req Request) (*Submission, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.logger.Info("schedule di deploy applicata", "schedule", name, "cron", d.Schedule.CronExpr(), "application", d.Application, "environment", d.Environment, "requested_by", req.RequestedBy)
+	e.logger.Info("deploy schedule applied", "schedule", name, "cron", d.Schedule.CronExpr(), "application", d.Application, "environment", d.Environment, "requested_by", req.RequestedBy)
 	return &Submission{State: StateScheduled, Schedule: name}, nil
 }
 
@@ -58,7 +58,7 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 			return "", err
 		}
 		if tp.Deny != "" {
-			w.logger.Warn("esecuzione della schedule rifiutata dalla policy di governance", "schedule", d.ScheduleName(), "deployment", id, "reason", tp.Deny)
+			w.logger.Warn("schedule run refused by the governance policy", "schedule", d.ScheduleName(), "deployment", id, "reason", tp.Deny)
 			return "", fmt.Errorf("run %s not enqueued: %s", id, tp.Deny)
 		}
 		req.Approval, req.Change, req.Policy = tp.Approval, tp.Change, tp.Policy
@@ -109,17 +109,17 @@ func (e *Engine) GetSchedule(ctx context.Context, name string) (*ScheduleInfo, e
 
 // PauseSchedule suspends the schedule's ticks.
 func (e *Engine) PauseSchedule(ctx context.Context, name string) error {
-	return e.scheduleOp(ctx, name, "sospesa", dbos.PauseSchedule)
+	return e.scheduleOp(ctx, name, "paused", dbos.PauseSchedule)
 }
 
 // ResumeSchedule reactivates a paused schedule.
 func (e *Engine) ResumeSchedule(ctx context.Context, name string) error {
-	return e.scheduleOp(ctx, name, "riattivata", dbos.ResumeSchedule)
+	return e.scheduleOp(ctx, name, "resumed", dbos.ResumeSchedule)
 }
 
 // DeleteSchedule deletes the schedule; deploys already enqueued are not touched.
 func (e *Engine) DeleteSchedule(ctx context.Context, name string) error {
-	return e.scheduleOp(ctx, name, "eliminata", dbos.DeleteSchedule)
+	return e.scheduleOp(ctx, name, "deleted", dbos.DeleteSchedule)
 }
 
 // scheduleOp checks that the schedule exists and runs the given operation.
@@ -130,7 +130,7 @@ func (e *Engine) scheduleOp(ctx context.Context, name, verb string, op func(dbos
 	if err := op(e.client, name); err != nil {
 		return err
 	}
-	e.logger.Info("schedule di deploy "+verb, "schedule", name)
+	e.logger.Info("deploy schedule "+verb, "schedule", name)
 	return nil
 }
 

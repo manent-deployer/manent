@@ -76,7 +76,7 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 		for _, name := range slices.Sorted(maps.Keys(st.Exports)) {
 			v := st.Exports[name]
 			if strings.ContainsAny(v, "\r\n") {
-				fmt.Fprintf(os.Stderr, "attenzione: export %s su più righe, non scritto in %s\n", name, r.outputs)
+				fmt.Fprintf(os.Stderr, "warning: multi-line export %s, not written to %s\n", name, r.outputs)
 				continue
 			}
 			lines = append(lines, "export_"+name+"="+v)
@@ -89,10 +89,10 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 			kind = "Dry-run"
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "### manent · %s di %s in %s\n\n| | |\n|---|---|\n", kind, d.Application, d.Environment)
-		fmt.Fprintf(&b, "| Versione | `%s` |\n| Deploy | `%s` |\n| Esito | **%s** |\n", d.Artifact.Version, sub.ID, st.State)
+		fmt.Fprintf(&b, "### manent · %s of %s to %s\n\n| | |\n|---|---|\n", kind, d.Application, d.Environment)
+		fmt.Fprintf(&b, "| Version | `%s` |\n| Deploy | `%s` |\n| Outcome | **%s** |\n", d.Artifact.Version, sub.ID, st.State)
 		if st.ConfigRevision != "" {
-			fmt.Fprintf(&b, "| Configurazione | `%s` |\n", st.ConfigRevision)
+			fmt.Fprintf(&b, "| Configuration | `%s` |\n", st.ConfigRevision)
 		}
 		if st.RolloutProgress != "" {
 			fmt.Fprintf(&b, "| Rollout | %s |\n", st.RolloutProgress)
@@ -101,7 +101,7 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 			fmt.Fprintf(&b, "| Rollback | %s |\n", st.Rollback)
 		}
 		if st.Error != "" {
-			fmt.Fprintf(&b, "| Errore | %s |\n", strings.ReplaceAll(strings.ReplaceAll(st.Error, "|", "\\|"), "\n", " "))
+			fmt.Fprintf(&b, "| Error | %s |\n", strings.ReplaceAll(strings.ReplaceAll(st.Error, "|", "\\|"), "\n", " "))
 		}
 		errs = append(errs, appendFile(r.summary, b.String()+"\n"))
 	}
@@ -122,12 +122,12 @@ func appendFile(path, text string) error {
 // applied (a change in the repository of the configurations, a Terraform plan).
 type EnvValidateCmd struct {
 	global      *GlobalOptions
-	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione, obbligatorio se più tenant hanno un'applicazione con questo nome"`
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto a cui si riferisce la configurazione (template con {artifact})"`
-	File        string `short:"f" long:"file" required:"true" description:"configurazione di ambiente YAML o JSON (com'è nel sistema di configurazione)"`
-	Descriptor  string `short:"d" long:"descriptor" description:"descrittore di esempio; default la richiesta del deploy in esercizio"`
+	Tenant      string `short:"t" long:"tenant" description:"tenant of the application, required if several tenants have an application with this name"`
+	Application string `short:"a" long:"application" required:"true" description:"application"`
+	Environment string `short:"e" long:"environment" required:"true" description:"environment"`
+	Artifact    string `short:"A" long:"artifact" description:"artifact the configuration is for (templates with {artifact})"`
+	File        string `short:"f" long:"file" required:"true" description:"environment configuration in YAML or JSON (as stored in the configuration system)"`
+	Descriptor  string `short:"d" long:"descriptor" description:"example descriptor; default the request of the deploy in service"`
 }
 
 // Execute implements flags.Commander.
@@ -148,7 +148,7 @@ func (c *EnvValidateCmd) Execute([]string) error {
 			return err
 		}
 		for _, w := range v.Warnings {
-			fmt.Fprintln(os.Stderr, "attenzione:", w)
+			fmt.Fprintln(os.Stderr, "warning:", w)
 		}
 		return cliutil.PrintJSON(v)
 	})

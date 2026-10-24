@@ -208,7 +208,7 @@ func (e *Engine) govern(ctx context.Context, req *Request, eff *descriptor.Descr
 		}
 	}
 	req.Approval, req.Change, req.Policy = dec.Approvals, dec.Change, dec.Snapshot()
-	e.logger.Info("decisione di governance", "application", d.Application, "environment", d.Environment, "phase", in.Phase,
+	e.logger.Info("governance decision", "application", d.Application, "environment", d.Environment, "phase", in.Phase,
 		"revision", dec.Revision, "rule", dec.Rule, "approvals", dec.Approvals.RequiredOrZero(), "change", dec.Change != nil,
 		"input_sha256", dec.InputSHA256, "requested_by", req.RequestedBy)
 	return nil
@@ -277,7 +277,7 @@ func (w *Worker) startPolicy(ctx context.Context, req Request, eff *descriptor.D
 		return err
 	}
 	meta["policy_revision"] = dec.Revision
-	w.logger.InfoContext(ctx, "decisione di governance all'avvio", "application", d.Application, "environment", d.Environment,
+	w.logger.InfoContext(ctx, "governance decision at start", "application", d.Application, "environment", d.Environment,
 		"revision", dec.Revision, "rule", dec.Rule, "denied", len(dec.Deny) > 0, "freeze", dec.Freeze != nil, "input_sha256", dec.InputSHA256)
 	if err := dec.Denied(); err != nil {
 		return pipeline.Permanent(err)
@@ -419,7 +419,7 @@ func (w *Worker) resumeAfterFreeze(ctx dbos.Context, rs *RolloutState) {
 // pauseForFreeze publishes the pause and sleeps (durably) until the end of the window or, with
 // recheck > 0, at most recheck before checking again.
 func (w *Worker) pauseForFreeze(ctx dbos.Context, stage rollout.Stage, win *governance.WindowStatus, region string, t time.Time, recheck time.Duration, rs *RolloutState) error {
-	paused := fmt.Sprintf("freeze %q fino a %s", win.Name, win.End.Format(time.RFC3339))
+	paused := fmt.Sprintf("freeze %q until %s", win.Name, win.End.Format(time.RFC3339))
 	if region != "" {
 		paused += " in " + region
 	}
@@ -427,7 +427,7 @@ func (w *Worker) pauseForFreeze(ctx dbos.Context, stage rollout.Stage, win *gove
 	if rs.Status != service.RolloutPausedFreeze || rs.Paused != paused {
 		rs.Status, rs.Paused = service.RolloutPausedFreeze, paused
 		w.publishRollout(ctx, rs)
-		w.logger.Info("rollout in pausa per un freeze", "stage", stage.Name, "freeze", win.Name, "until", win.End)
+		w.logger.Info("rollout paused by a freeze", "stage", stage.Name, "freeze", win.Name, "until", win.End)
 	}
 	d := max(win.End.Sub(t), time.Second)
 	if recheck > 0 {
@@ -499,7 +499,7 @@ func (e *Engine) CreateFreeze(ctx context.Context, r FreezeRequest) (*governance
 	if err := pa.CreateFreeze(ctx, w); err != nil {
 		return nil, err
 	}
-	e.logger.Warn("freeze creato", "freeze", w.Name, "applications", w.Applications, "environments", w.Environments,
+	e.logger.Warn("freeze created", "freeze", w.Name, "applications", w.Applications, "environments", w.Environments,
 		"from", w.From, "to", w.To, "hard", w.Hard, "created_by", w.CreatedBy)
 	for _, st := range governance.ListWindows([]governance.Window{w}, "", "", e.now()) {
 		return &st, nil
@@ -516,7 +516,7 @@ func (e *Engine) DeleteFreeze(ctx context.Context, name string) error {
 	if err := pa.DeleteFreeze(ctx, name); err != nil {
 		return err
 	}
-	e.logger.Warn("freeze eliminato", "freeze", name, "by", auth.FromContext(ctx).String())
+	e.logger.Warn("freeze deleted", "freeze", name, "by", auth.FromContext(ctx).String())
 	return nil
 }
 
@@ -548,7 +548,7 @@ func (e *Engine) PushPolicy(ctx context.Context, r PolicyPush) (*PolicyRevision,
 	if err != nil {
 		return nil, err
 	}
-	e.logger.Info("revisione della policy caricata", "revision", rev.Revision, "sha256", rev.SHA256, "author", rev.Author)
+	e.logger.Info("policy revision uploaded", "revision", rev.Revision, "sha256", rev.SHA256, "author", rev.Author)
 	return rev, nil
 }
 
@@ -571,7 +571,7 @@ func (e *Engine) activatePolicy(ctx context.Context, revision int64, draft bool)
 	if err := pa.Activate(ctx, revision, by, draft); err != nil {
 		return err
 	}
-	e.logger.Warn("revisione della policy attivata", "revision", revision, "by", by)
+	e.logger.Warn("policy revision activated", "revision", revision, "by", by)
 	return nil
 }
 

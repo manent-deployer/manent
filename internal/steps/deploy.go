@@ -74,7 +74,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	if err != nil {
 		return nil, err
 	}
-	log.InfoContext(ctx, "deploy avviato", "targets", len(req.Targets))
+	log.InfoContext(ctx, "deploy started", "targets", len(req.Targets))
 	deploy := dep.Deploy
 	if req.Traffic != nil {
 		// Percentage rollout: the new version goes next to the stable one, without traffic.
@@ -86,15 +86,15 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	}
 	res, err := deploy(ctx, req)
 	if err != nil {
-		log.ErrorContext(ctx, "deploy fallito", "error", err)
+		log.ErrorContext(ctx, "deploy failed", "error", err)
 		return nil, unsupported(dep, err)
 	}
 	out, err := deployOutput(dep.Name(), res)
 	if err != nil {
-		log.ErrorContext(ctx, "output del plugin non validi", "error", err)
+		log.ErrorContext(ctx, "invalid plugin outputs", "error", err)
 		return nil, err
 	}
-	log.InfoContext(ctx, "deploy completato", "outputs", len(res.Outputs))
+	log.InfoContext(ctx, "deploy completed", "outputs", len(res.Outputs))
 	return out, nil
 }
 
@@ -140,24 +140,24 @@ func (s Deploy) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output,
 	out := pipeline.Output{"plugin": dep.Name(), "dry_run": "validated"}
 	dr, ok := dep.(plugin.DryRunner)
 	if !ok {
-		log.InfoContext(ctx, "dry-run: richiesta valida, il plugin non supporta verifiche sui target", "targets", len(req.Targets))
+		log.InfoContext(ctx, "dry-run: valid request, the plugin does not support checks on the targets", "targets", len(req.Targets))
 		return out, nil
 	}
-	log.InfoContext(ctx, "dry-run avviato", "targets", len(req.Targets))
+	log.InfoContext(ctx, "dry-run started", "targets", len(req.Targets))
 	res, err := dr.DryRun(ctx, req)
 	if errors.Is(err, plugin.ErrDryRunUnsupported) {
-		log.InfoContext(ctx, "dry-run: richiesta valida, il plugin non supporta verifiche sui target", "targets", len(req.Targets))
+		log.InfoContext(ctx, "dry-run: valid request, the plugin does not support checks on the targets", "targets", len(req.Targets))
 		return out, nil
 	}
 	if err != nil {
-		log.ErrorContext(ctx, "dry-run fallito", "error", err)
+		log.ErrorContext(ctx, "dry-run failed", "error", err)
 		return nil, err
 	}
 	raw, err := json.Marshal(res)
 	if err != nil {
 		return nil, err
 	}
-	log.InfoContext(ctx, "dry-run completato")
+	log.InfoContext(ctx, "dry-run completed")
 	out["dry_run"] = "checked"
 	out["result"] = string(raw)
 	return out, nil
@@ -175,7 +175,7 @@ func (s Deploy) prepare(ctx context.Context, in pipeline.Input) (plugin.Deployer
 		return nil, nil, nil, err
 	}
 	if refetched {
-		log.WarnContext(ctx, "artefatto assente su questo worker, riscaricato", "path", localPath)
+		log.WarnContext(ctx, "artifact missing on this worker, downloaded again", "path", localPath)
 	}
 	req, err := s.request(dep, in, localPath)
 	if err != nil {
@@ -276,7 +276,7 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 		}
 		out[OutPreviousVersion], out[OutPrevious] = rel.Version, string(raw)
 	}
-	log.InfoContext(ctx, "release in esercizio registrata per il rollback", "locator", name, "previous_version", out[OutPreviousVersion])
+	log.InfoContext(ctx, "release in service recorded for the rollback", "locator", name, "previous_version", out[OutPreviousVersion])
 	return out, nil
 }
 
@@ -284,15 +284,15 @@ func (s Deploy) Checkpoint(ctx context.Context, in pipeline.Input) (pipeline.Out
 // previous release (first deploy) there is nothing to restore.
 func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.Output) (pipeline.Output, error) {
 	if cp["mode"] == "traffic" {
-		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "rilascio per percentuale: il traffico torna alla versione stabile"}, nil
+		return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "percentage rollout: the traffic goes back to the stable version"}, nil
 	}
 	dep, log, err := s.selectPlugin(in)
 	if err != nil {
 		return nil, err
 	}
 	if cp[OutPrevious] == "" {
-		log.WarnContext(ctx, "rollback: nessuna release precedente da ripristinare")
-		return pipeline.Output{"plugin": dep.Name(), pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "nessuna release precedente"}, nil
+		log.WarnContext(ctx, "rollback: no previous release to restore")
+		return pipeline.Output{"plugin": dep.Name(), pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "no previous release"}, nil
 	}
 	var prev plugin.Release
 	if err := json.Unmarshal([]byte(cp[OutPrevious]), &prev); err != nil {
@@ -306,16 +306,16 @@ func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.O
 	if err != nil {
 		return nil, err
 	}
-	log.WarnContext(ctx, "rollback avviato", "version", prev.Version, "targets", len(req.Targets))
+	log.WarnContext(ctx, "rollback started", "version", prev.Version, "targets", len(req.Targets))
 	res, err := rb.Rollback(ctx, req, prev)
 	if err != nil {
-		log.ErrorContext(ctx, "rollback fallito", "version", prev.Version, "error", err)
+		log.ErrorContext(ctx, "rollback failed", "version", prev.Version, "error", err)
 		return nil, err
 	}
 	raw, err := json.Marshal(res)
 	if err != nil {
 		return nil, err
 	}
-	log.WarnContext(ctx, "rollback completato", "version", prev.Version)
+	log.WarnContext(ctx, "rollback completed", "version", prev.Version)
 	return pipeline.Output{"plugin": dep.Name(), pipeline.OutRollback: pipeline.RollbackCompleted, "version": prev.Version, "result": string(raw)}, nil
 }

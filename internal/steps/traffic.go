@@ -154,16 +154,16 @@ func (s Drain) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, err
 			return nil, pipeline.Permanent(fmt.Errorf("members missing from the pool: %s (traffic.pool.member)", strings.Join(miss, ", ")))
 		}
 		if err := traffic.Capacity(all, members, cfg.MinHealthyFor(len(all))); err != nil {
-			log.WarnContext(ctx, "svuotamento rimandato", "members", members, "error", err)
+			log.WarnContext(ctx, "draining postponed", "members", members, "error", err)
 			return pipeline.Output{OutMembers: strings.Join(members, ","), OutCapacity: CapacityInsufficient, OutDetail: err.Error()}, nil
 		}
 	} else {
-		log.InfoContext(ctx, "controllo di capacità non disponibile per il provider", "members", members)
+		log.InfoContext(ctx, "capacity check unavailable for the provider", "members", members)
 	}
 	if err := pool.Drain(ctx, members); err != nil {
 		return nil, fmt.Errorf("draining %s: %w", strings.Join(members, ", "), err)
 	}
-	log.InfoContext(ctx, "target in svuotamento", "members", members)
+	log.InfoContext(ctx, "target draining", "members", members)
 	return pipeline.Output{OutMembers: strings.Join(members, ","), OutCapacity: "ok"}, nil
 }
 
@@ -234,7 +234,7 @@ func (p Pool) restore(ctx context.Context, in pipeline.Input, wait bool) error {
 	if err := pool.Restore(ctx, members); err != nil {
 		return fmt.Errorf("restoring %s: %w", strings.Join(members, ", "), err)
 	}
-	p.log(in).InfoContext(ctx, "target rimessi in servizio", "members", members)
+	p.log(in).InfoContext(ctx, "targets back in service", "members", members)
 	if !wait {
 		return nil
 	}
@@ -396,7 +396,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 		}
 		out := pipeline.Output{OutMode: ModeRouter, OutRouter: d.Traffic.Router.Provider, OutStable: stable, OutCandidate: cand,
 			OutHasStable: strconv.FormatBool(stable != ""), OutCandidates: strings.Join(hosts, ",")}
-		t.Logger.InfoContext(ctx, "rilascio affiancato preparato", "deployment", in.DeploymentID, "stable", stable, "candidate", cand, "weights", w)
+		t.Logger.InfoContext(ctx, "side-by-side release prepared", "deployment", in.DeploymentID, "stable", stable, "candidate", cand, "weights", w)
 		return out, nil
 	}
 	dep, req, log, err := t.pluginCall(in)
@@ -421,7 +421,7 @@ func (t Traffic) Prepare(ctx context.Context, in pipeline.Input) (pipeline.Outpu
 			out[k] = v
 		}
 	}
-	log.InfoContext(ctx, "rilascio affiancato preparato", "state", state)
+	log.InfoContext(ctx, "side-by-side release prepared", "state", state)
 	return out, nil
 }
 
@@ -455,7 +455,7 @@ func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) 
 		if err := r.SetWeights(ctx, w); err != nil {
 			return nil, err
 		}
-		t.Logger.InfoContext(ctx, "traffico spostato", "deployment", in.DeploymentID, "candidate", prep[OutCandidate], "percent", percent)
+		t.Logger.InfoContext(ctx, "traffic shifted", "deployment", in.DeploymentID, "candidate", prep[OutCandidate], "percent", percent)
 		return pipeline.Output{"weight": strconv.Itoa(percent)}, nil
 	}
 	dep, req, log, err := t.pluginCall(in)
@@ -469,7 +469,7 @@ func (t Traffic) SetWeight(ctx context.Context, in pipeline.Input, percent int) 
 	if err := tr.SetCandidateWeight(ctx, req, percent); err != nil {
 		return nil, unsupported(dep, err)
 	}
-	log.InfoContext(ctx, "traffico spostato", "percent", percent)
+	log.InfoContext(ctx, "traffic shifted", "percent", percent)
 	return pipeline.Output{"weight": strconv.Itoa(percent)}, nil
 }
 
@@ -578,7 +578,7 @@ func (t Traffic) Revert(ctx context.Context, in pipeline.Input) (pipeline.Output
 	prep := in.Outputs[TrafficOutput]
 	if prep[OutMode] == ModeRouter {
 		if prep[OutHasStable] != "true" {
-			return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "nessuna versione stabile"}, nil
+			return pipeline.Output{pipeline.OutRollback: pipeline.RollbackSkipped, "reason": "no stable version"}, nil
 		}
 		r, err := t.router(ctx, in)
 		if err != nil {
@@ -617,7 +617,7 @@ func (t Traffic) slotCall(ctx context.Context, in pipeline.Input, status string,
 	if err := fn(sd, ctx, req); err != nil {
 		return nil, unsupported(dep, err)
 	}
-	log.InfoContext(ctx, "rilascio affiancato: "+status)
+	log.InfoContext(ctx, "side-by-side release: "+status)
 	return pipeline.Output{"status": status}, nil
 }
 

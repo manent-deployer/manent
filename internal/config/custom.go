@@ -84,10 +84,10 @@ func (p Pipeline) securityWarnings() []string {
 	}
 	var w []string
 	if len(p.Custom.SpecKeyRefs) == 0 {
-		w = append(w, "pipeline.custom.spec_key_refs: le specifiche degli step personalizzati non sono firmate (chi scrive nel database DBOS può far eseguire comandi sui target)")
+		w = append(w, "pipeline.custom.spec_key_refs: the specifications of custom steps are not signed (whoever writes to the DBOS database can run commands on the targets)")
 	}
 	if p.Custom.InsecureIgnoreHostKey {
-		w = append(w, "pipeline.custom.insecure_ignore_host_key: i comandi via SSH non verificano la host key dei target")
+		w = append(w, "pipeline.custom.insecure_ignore_host_key: commands over SSH do not verify the host key of the targets")
 	}
 	return w
 }

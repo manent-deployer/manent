@@ -17,7 +17,7 @@ import (
 type WorkersCmd struct {
 	global *GlobalOptions
 	JSON   bool          `long:"json" description:"output JSON"`
-	Watch  time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
+	Watch  time.Duration `short:"w" long:"watch" description:"repeats the listing at this interval, e.g. 5s"`
 }
 
 // Execute implements flags.Commander.
@@ -40,7 +40,7 @@ func (c *WorkersCmd) Execute([]string) error {
 type QueuesCmd struct {
 	global *GlobalOptions
 	JSON   bool          `long:"json" description:"output JSON"`
-	Watch  time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
+	Watch  time.Duration `short:"w" long:"watch" description:"repeats the listing at this interval, e.g. 5s"`
 }
 
 // Execute implements flags.Commander.
@@ -62,11 +62,11 @@ func (c *QueuesCmd) Execute([]string) error {
 // ActivityCmd shows the deploys running, awaiting approval, queued and scheduled.
 type ActivityCmd struct {
 	global      *GlobalOptions
-	Application string        `short:"a" long:"application" description:"solo questa applicazione"`
-	Environment string        `short:"e" long:"environment" description:"solo questo ambiente"`
-	Tenant      string        `short:"t" long:"tenant" description:"solo questo tenant"`
+	Application string        `short:"a" long:"application" description:"only this application"`
+	Environment string        `short:"e" long:"environment" description:"only this environment"`
+	Tenant      string        `short:"t" long:"tenant" description:"only this tenant"`
 	JSON        bool          `long:"json" description:"output JSON"`
-	Watch       time.Duration `short:"w" long:"watch" description:"ripete l'elenco a questo intervallo, es. 5s"`
+	Watch       time.Duration `short:"w" long:"watch" description:"repeats the listing at this interval, e.g. 5s"`
 }
 
 // Execute implements flags.Commander.
@@ -108,15 +108,15 @@ func repeat(ctx context.Context, every time.Duration, fn func() error) error {
 
 func printWorkers(out io.Writer, ws []service.WorkerInfo, now time.Time) error {
 	if len(ws) == 0 {
-		_, err := fmt.Fprintln(out, "Nessun worker registrato.")
+		_, err := fmt.Fprintln(out, "No worker registered.")
 		return err
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "WORKER\tSTATO\tREGION\tHOST\tVERSIONE\tHEARTBEAT\tAVVIATO\tIN CORSO")
+	fmt.Fprintln(tw, "WORKER\tSTATE\tREGION\tHOST\tVERSION\tHEARTBEAT\tSTARTED\tRUNNING")
 	for _, w := range ws {
 		running := fmt.Sprint(len(w.Tasks))
 		if w.HiddenTasks > 0 {
-			running += fmt.Sprintf(" (+%d non visibili)", w.HiddenTasks)
+			running += fmt.Sprintf(" (+%d not visible)", w.HiddenTasks)
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w.ID, w.State, dash(w.Region), dash(w.Hostname),
 			dash(versionOf(w)), ago(w.HeartbeatAt, now), ago(w.StartedAt, now), running)
@@ -137,7 +137,7 @@ func printWorkers(out io.Writer, ws []service.WorkerInfo, now time.Time) error {
 	}
 	fmt.Fprintln(out)
 	tw = tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "WORKER\tTIPO\tDEPLOY\tAPPLICAZIONE/AMBIENTE\tREGION\tVERSIONE\tDA")
+	fmt.Fprintln(tw, "WORKER\tKIND\tDEPLOY\tAPPLICATION/ENVIRONMENT\tREGION\tVERSION\tSINCE")
 	for _, w := range ws {
 		for _, t := range w.Tasks {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w.ID, t.Kind, t.DeploymentID, appEnv(t.Application, t.Environment),
@@ -160,7 +160,7 @@ func printResources(out io.Writer, ws []service.WorkerInfo) error {
 	}
 	fmt.Fprintln(out)
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "WORKER\tCPU (USATE/DISPONIBILI)\tMEMORIA (PROCESSO/DISPONIBILE)\tCARICO\tDISCO WORKDIR\tDEPLOY INSIEME\tCODE")
+	fmt.Fprintln(tw, "WORKER\tCPU (USED/AVAILABLE)\tMEMORY (PROCESS/AVAILABLE)\tLOAD\tWORKDIR DISK\tCONCURRENT DEPLOYS\tQUEUES")
 	for _, w := range rows {
 		cpu, mem, load, disk, conc := "-", "-", "-", "-", "-"
 		if r := w.Resources; r != nil {
@@ -173,7 +173,7 @@ func printResources(out io.Writer, ws []service.WorkerInfo) error {
 				load = fmt.Sprintf("%.2f", r.Load1)
 			}
 			if r.WorkdirFree > 0 {
-				disk = bytesIEC(r.WorkdirFree) + " liberi"
+				disk = bytesIEC(r.WorkdirFree) + " free"
 			}
 			if r.Concurrency > 0 {
 				conc = fmt.Sprint(r.Concurrency)
@@ -211,11 +211,11 @@ func bytesIEC(n uint64) string {
 
 func printQueues(out io.Writer, qs []service.QueueInfo, now time.Time) error {
 	if len(qs) == 0 {
-		_, err := fmt.Fprintln(out, "Nessuna coda.")
+		_, err := fmt.Fprintln(out, "No queue.")
 		return err
 	}
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "CODA\tTIPO\tIN CODA\tIN CORSO\tPIANIFICATI\tATTESA MASSIMA\tLIMITI\tWORKER")
+	fmt.Fprintln(tw, "QUEUE\tKIND\tQUEUED\tRUNNING\tSCHEDULED\tLONGEST WAIT\tLIMITS\tWORKERS")
 	for _, q := range qs {
 		kind := q.Kind
 		if q.Region != "" {
@@ -241,13 +241,13 @@ func queueLimits(q service.QueueInfo) string {
 		parts = append(parts, fmt.Sprintf("%d per worker", q.WorkerConcurrency))
 	}
 	if q.PartitionConcurrency > 0 {
-		parts = append(parts, fmt.Sprintf("%d per ambiente", q.PartitionConcurrency))
+		parts = append(parts, fmt.Sprintf("%d per environment", q.PartitionConcurrency))
 	}
 	if q.GlobalConcurrency > 0 {
-		parts = append(parts, fmt.Sprintf("%d in totale", q.GlobalConcurrency))
+		parts = append(parts, fmt.Sprintf("%d in total", q.GlobalConcurrency))
 	}
 	if len(parts) == 0 {
-		return "nessuno"
+		return "none"
 	}
 	return strings.Join(parts, ", ")
 }
@@ -259,13 +259,13 @@ func printActivity(out io.Writer, a *service.Activity, now time.Time) error {
 		when  func(service.Status) string
 		extra func(service.Status) string
 	}{
-		{"In esecuzione", a.Running, func(s service.Status) string { return ago(s.StartedAt, now) }, func(s service.Status) string {
+		{"Running", a.Running, func(s service.Status) string { return ago(s.StartedAt, now) }, func(s service.Status) string {
 			return strings.TrimSpace(dash(s.Executor) + "  " + stepOf(s))
 		}},
-		{"In attesa di approvazione", a.AwaitingApproval, func(s service.Status) string { return ago(&s.CreatedAt, now) }, approvalOf},
-		{"In attesa delle dipendenze", a.WaitingDependency, func(s service.Status) string { return ago(&s.CreatedAt, now) }, dependenciesOf},
-		{"In coda", a.Queued, func(s service.Status) string { return ago(&s.CreatedAt, now) }, func(s service.Status) string { return dash(s.Queue) }},
-		{"Pianificati", a.Delayed, func(s service.Status) string { return at(s.ScheduledAt, now) }, func(service.Status) string { return "" }},
+		{"Awaiting approval", a.AwaitingApproval, func(s service.Status) string { return ago(&s.CreatedAt, now) }, approvalOf},
+		{"Waiting for dependencies", a.WaitingDependency, func(s service.Status) string { return ago(&s.CreatedAt, now) }, dependenciesOf},
+		{"Queued", a.Queued, func(s service.Status) string { return ago(&s.CreatedAt, now) }, func(s service.Status) string { return dash(s.Queue) }},
+		{"Scheduled", a.Delayed, func(s service.Status) string { return at(s.ScheduledAt, now) }, func(service.Status) string { return "" }},
 	}
 	empty := true
 	for _, sec := range sections {
@@ -291,10 +291,10 @@ func printActivity(out io.Writer, a *service.Activity, now time.Time) error {
 		}
 	}
 	if empty {
-		fmt.Fprintln(out, "Nessun deploy attivo.")
+		fmt.Fprintln(out, "No active deploy.")
 	}
 	if a.Truncated {
-		fmt.Fprintln(out, "\nElenco troncato: i deploy attivi sono più di quelli esaminati.")
+		fmt.Fprintln(out, "\nList truncated: there are more active deploys than those examined.")
 	}
 	return nil
 }
@@ -306,9 +306,9 @@ func stepOf(s service.Status) string {
 	}
 	switch {
 	case s.Rollout != nil && s.Rollout.Traffic != nil:
-		parts = append(parts, fmt.Sprintf("traffico alla candidata %d%%", s.Rollout.Traffic.Weight))
+		parts = append(parts, fmt.Sprintf("traffic to the candidate %d%%", s.Rollout.Traffic.Weight))
 	case s.RolloutProgress != "":
-		parts = append(parts, "ondate "+s.RolloutProgress)
+		parts = append(parts, "waves "+s.RolloutProgress)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -317,7 +317,7 @@ func approvalOf(s service.Status) string {
 	if s.Approval == nil {
 		return ""
 	}
-	r := fmt.Sprintf("%d/%d approvazioni", len(s.Approval.Decisions), s.Approval.Required)
+	r := fmt.Sprintf("%d/%d approvals", len(s.Approval.Decisions), s.Approval.Required)
 	if c := s.Approval.Change; c != nil {
 		r += fmt.Sprintf(", change %s %s", c.Number, c.Approval)
 	}
@@ -330,7 +330,7 @@ func approvalOf(s service.Status) string {
 			}
 		}
 		if last != "" {
-			r += ", dopo lo stadio " + last
+			r += ", after stage " + last
 		}
 	}
 	return r
@@ -350,7 +350,7 @@ func dependenciesOf(s service.Status) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return "attende " + strings.Join(parts, ", ")
+	return "waiting for " + strings.Join(parts, ", ")
 }
 
 func versionOf(w service.WorkerInfo) string {
@@ -379,7 +379,7 @@ func ago(t *time.Time, now time.Time) string {
 	if t == nil || t.IsZero() {
 		return "-"
 	}
-	return now.Sub(*t).Round(time.Second).String() + " fa"
+	return now.Sub(*t).Round(time.Second).String() + " ago"
 }
 
 // at describes a future time with the time left.
@@ -387,5 +387,5 @@ func at(t *time.Time, now time.Time) string {
 	if t == nil {
 		return "-"
 	}
-	return t.Local().Format("2006-01-02 15:04") + " (tra " + t.Sub(now).Round(time.Second).String() + ")"
+	return t.Local().Format("2006-01-02 15:04") + " (in " + t.Sub(now).Round(time.Second).String() + ")"
 }

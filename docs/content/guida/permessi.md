@@ -179,15 +179,15 @@ manent policy access 15 --subject oidc:carol --claim employee_type=contractor \
 ```
 
 ```text
-Identità oidc:carol, revisione 15:9be1c04d2f11
+Identity oidc:carol, revision 15:9be1c04d2f11
 
-PERMESSO          AZIONI    APPLICAZIONI  AMBIENTI  TENANT          FINO A
-owner team-shop   deployer  *             *         owner=team-shop -
+PERMISSION        ACTIONS   APPLICATIONS  ENVIRONMENTS  TENANT          UNTIL
+owner team-shop   deployer  *             *             owner=team-shop -
 
-Rispetto alla revisione attiva 14:3f2a9c1e5b7d:
-+ owner team-shop deployer  *             *         owner=team-shop -
+Compared with the active revision 14:3f2a9c1e5b7d:
++ owner team-shop deployer  *             *             owner=team-shop -
 
-Esito: negato dalla policy (permesso owner team-shop)
+Outcome: denied by the policy (permission owner team-shop)
   - contractors cannot change production
 ```
 

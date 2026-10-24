@@ -9,69 +9,69 @@
 #       descriptor: deploy/prod.yml
 #       version: ${{ github.ref_name }}
 name: manent deploy
-description: Rilascia un artefatto con manent (deploy, validazione del descrittore o della configurazione di ambiente)
+description: Releases an artifact with manent (deploy, validation of the descriptor or of the environment configuration)
 author: manent
 branding:
   icon: upload-cloud
   color: blue
 inputs:
   server:
-    description: URL del server manent
+    description: URL of the manent server
     required: true
   token:
-    description: Token dell'API (OIDC o statico); usare un secret
+    description: API token (OIDC or static); use a secret
     required: true
   command:
-    description: "deploy (default), validate (descrittore) o env-validate (configurazione di ambiente candidata)"
+    description: "deploy (default), validate (descriptor) or env-validate (candidate environment configuration)"
     default: deploy
   descriptor:
-    description: Descrittore di deploy YAML (obbligatorio per deploy e validate; per env-validate è il descrittore di esempio, facoltativo)
+    description: YAML deploy descriptor (required for deploy and validate; for env-validate it is the optional example descriptor)
     default: ""
   version:
-    description: Versione dell'artefatto, al posto di quella del descrittore
+    description: Artifact version, instead of the descriptor's
     default: ""
   source:
-    description: Sorgente dell'artefatto, al posto di quella del descrittore
+    description: Artifact source, instead of the descriptor's
     default: ""
   sha256:
-    description: sha256 atteso dell'artefatto
+    description: Expected sha256 of the artifact
     default: ""
   id:
-    description: ID del deploy (chiave di idempotenza), ad esempio gh-${{ github.run_id }}
+    description: Deploy ID (idempotency key), for example gh-${{ github.run_id }}
     default: ""
   dry-run:
-    description: Simula il deploy su un worker senza modificare i target
+    description: Simulates the deploy on a worker without changing the targets
     default: "false"
   wait:
-    description: Attende la conclusione del deploy e fallisce se non riesce
+    description: Waits for the deploy to end and fails if it does not succeed
     default: "true"
   timeout:
-    description: Tempo massimo di attesa (es. 30m); il deploy prosegue comunque
+    description: Maximum wait time (e.g. 30m); the deploy goes on anyway
     default: 30m
   after:
-    description: ID di deploy che devono riuscire prima di questo, separati da spazi
+    description: IDs of deploys that must succeed before this one, separated by spaces
     default: ""
   application:
-    description: Applicazione (env-validate)
+    description: Application (env-validate)
     default: ""
   environment:
-    description: Ambiente (env-validate)
+    description: Environment (env-validate)
     default: ""
   env-config:
-    description: File della configurazione di ambiente candidata (env-validate)
+    description: File of the candidate environment configuration (env-validate)
     default: ""
   ca-file:
-    description: Certificato della CA del server, se privata
+    description: CA certificate of the server, if private
     default: ""
 outputs:
   deployment-id:
-    description: ID del deploy
+    description: Deploy ID
     value: ${{ steps.run.outputs.deployment_id }}
   state:
-    description: Stato finale (SUCCESS, ERROR, ...) o iniziale senza attesa
+    description: Final state (SUCCESS, ERROR, ...) or initial state without waiting
     value: ${{ steps.run.outputs.state }}
   version:
-    description: Versione rilasciata
+    description: Released version
     value: ${{ steps.run.outputs.version }}
 runs:
   using: composite

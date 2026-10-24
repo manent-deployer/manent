@@ -114,7 +114,7 @@ rbac:
 
 ## 5. Production settings
 
-At startup `serve` and `worker` log `configurazione non adatta alla produzione` for every setting that is still permissive. Close them all:
+At startup `serve` and `worker` log `configuration not fit for production` for every setting that is still permissive. Close them all:
 
 ```yaml title="values-prod.yaml (config)"
 artifacts:

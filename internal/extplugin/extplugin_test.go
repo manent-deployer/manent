@@ -130,7 +130,7 @@ func TestDeploy(t *testing.T) {
 	}
 	// Plugin logs reach manent's logger, asynchronously with respect to the response.
 	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(logs.String(), `msg="deploy finto eseguito"`) {
+	for !strings.Contains(logs.String(), `msg="fake deploy done"`) {
 		if time.Now().After(deadline) {
 			t.Fatalf("log del plugin non inoltrato:\n%s", logs)
 		}

@@ -33,7 +33,7 @@ func URL(t testing.TB) string {
 	}
 	u, err := url.Parse(admin)
 	if err != nil {
-		t.Fatalf("%s non valido: %v", EnvURL, err)
+		t.Fatalf("invalid %s: %v", EnvURL, err)
 	}
 	db, err := sql.Open("pgx", admin)
 	if err != nil {
@@ -46,7 +46,7 @@ func URL(t testing.TB) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := db.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
-		t.Fatalf("creazione del database di test: %v", err)
+		t.Fatalf("creating the test database: %v", err)
 	}
 	t.Cleanup(func() {
 		db, err := sql.Open("pgx", admin)

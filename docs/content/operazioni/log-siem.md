@@ -34,7 +34,7 @@ Logs emitted during steps are also saved with the deploy and can be read with `m
 
 An unreachable SIEM does not block manent: the send error is written to the application log and the connection is reopened on the next send. With several destinations, an error on one does not prevent sending to the others.
 
-Over UDP and `/dev/log` each message is a datagram of at most 60 KB: a larger message is shortened, first the attribute values over 1 KB, then the text (which ends with `… [troncato]`), instead of being lost.
+Over UDP and `/dev/log` each message is a datagram of at most 60 KB: a larger message is shortened, first the attribute values over 1 KB, then the text (which ends with `… [truncated]`), instead of being lost.
 
 ## System log and journald { #log-di-sistema-e-journald }
 

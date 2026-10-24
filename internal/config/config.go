@@ -850,26 +850,26 @@ func (c *Config) applyDefaults() {
 func (c *Config) SecurityWarnings() []string {
 	var w []string
 	if c.Auth.Mode == AuthModeNone {
-		w = append(w, "auth.mode=none: API senza autenticazione e permessi")
+		w = append(w, "auth.mode=none: API without authentication and permissions")
 	}
 	dp := c.DescriptorPolicy
 	for _, ps := range dp.Params {
 		if slices.Contains(ps, "*") {
-			w = append(w, "descriptor_policy.params: il descrittore può impostare qualsiasi parametro (anche comandi come post_command)")
+			w = append(w, "descriptor_policy.params: the descriptor can set any parameter (commands such as post_command too)")
 			break
 		}
 	}
 	if slices.Contains(dp.SecretRefs, "*") {
-		w = append(w, "descriptor_policy.secret_refs: il descrittore può dichiarare qualsiasi segreto (anche variabili d'ambiente del worker)")
+		w = append(w, "descriptor_policy.secret_refs: the descriptor can declare any secret (the worker's environment variables too)")
 	}
 	if g := c.Governance; g.Engine == GovernanceOPA && g.OPA.Source == PolicySourceBundle && g.OPA.Bundle.InsecureSkipVerify {
-		w = append(w, "governance.opa.bundle.insecure_skip_verify: bundle della policy non firmati accettati")
+		w = append(w, "governance.opa.bundle.insecure_skip_verify: unsigned policy bundles accepted")
 	}
 	if g := c.Governance; g.Engine == GovernanceOPA && g.OPA.Source == PolicySourceStore && !g.OPA.Store.Review {
-		w = append(w, "governance.opa.store.review: false, chi carica una revisione della policy può attivarla da solo")
+		w = append(w, "governance.opa.store.review: false, whoever uploads a policy revision can activate it alone")
 	}
 	if c.Artifacts.AllowUnlisted != nil && *c.Artifacts.AllowUnlisted {
-		w = append(w, "artifacts.allow_unlisted: il worker scarica artefatti da qualsiasi sorgente, anche file locali")
+		w = append(w, "artifacts.allow_unlisted: the worker downloads artifacts from any source, local files too")
 	}
 	w = append(w, c.Pipeline.securityWarnings()...)
 	return w

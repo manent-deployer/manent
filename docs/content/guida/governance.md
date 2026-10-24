@@ -120,7 +120,7 @@ A reading counts only for the deploy it was made with: after a new deploy the in
 manent inventory --out-of-sync      # only environments with targets changed outside manent
 ```
 
-Every target that becomes `drifted` or `missing` produces a warning log (`target cambiato fuori da manent`, with host, expected and found version), also sent to the SIEM; coming back in sync an informational log. The `manent_targets` metric counts the targets per state (see [Observability](../operazioni/osservabilita.md)). In the web interface the inventory cell lists the changed targets.
+Every target that becomes `drifted` or `missing` produces a warning log (`target changed outside manent`, with host, expected and found version), also sent to the SIEM; coming back in sync an informational log. The `manent_targets` metric counts the targets per state (see [Observability](../operazioni/osservabilita.md)). In the web interface the inventory cell lists the changed targets.
 
 ## Promotion { #promozione }
 

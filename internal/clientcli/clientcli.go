@@ -28,10 +28,10 @@ const DefaultServer = "http://127.0.0.1:8080"
 // variables, which in turn take precedence over the client configuration file. The token is
 // read from MANENT_TOKEN or from a file, never from an option, which would stay in the shell history.
 type GlobalOptions struct {
-	Config    string `short:"c" long:"config" env:"MANENT_CLIENT_CONFIG" description:"file di configurazione del client (default ~/.config/manent/client.yml)"`
-	Server    string `long:"server" env:"MANENT_SERVER" description:"URL del server manent"`
-	TokenFile string `long:"token-file" env:"MANENT_TOKEN_FILE" description:"file con il token (in alternativa la variabile MANENT_TOKEN)"`
-	CAFile    string `long:"ca-file" env:"MANENT_CA_FILE" description:"certificato della CA del server, se non è tra quelle di sistema"`
+	Config    string `short:"c" long:"config" env:"MANENT_CLIENT_CONFIG" description:"client configuration file (default ~/.config/manent/client.yml)"`
+	Server    string `long:"server" env:"MANENT_SERVER" description:"URL of the manent server"`
+	TokenFile string `long:"token-file" env:"MANENT_TOKEN_FILE" description:"file with the token (or the MANENT_TOKEN variable)"`
+	CAFile    string `long:"ca-file" env:"MANENT_CA_FILE" description:"CA certificate of the server, if not among the system ones"`
 }
 
 // ClientConfig is the client configuration file.
@@ -47,7 +47,7 @@ func Run(args []string) error {
 	var global GlobalOptions
 	p := flags.NewParser(&global, flags.Default)
 	p.Name = "manent"
-	p.LongDescription = "manent: client del server di deploy as code (manent-server)"
+	p.LongDescription = "manent: client of the deploy as code server (manent-server)"
 
 	add := func(name, short string, cmd any) {
 		if _, err := p.AddCommand(name, short, short, cmd); err != nil {
@@ -55,63 +55,63 @@ func Run(args []string) error {
 		}
 	}
 	g := &global
-	add("deploy", "Esegue, pianifica o schedula un deploy da descrittore YAML", &DeployCmd{global: g})
-	add("validate", "Verifica un descrittore sul server e mostra il piano e il deploy effettivo", &ValidateCmd{global: g})
-	add("status", "Mostra lo stato di un deploy", &StatusCmd{global: g})
-	add("list", "Elenca i deploy più recenti", &ListCmd{global: g})
-	add("cancel", "Annulla un deploy in attesa o in esecuzione", &CancelCmd{global: g})
-	add("logs", "Mostra il log di un deploy", &LogsCmd{global: g})
-	add("steps", "Mostra la timeline degli step di un deploy", &StepsCmd{global: g})
-	add("approve", "Approva un deploy in attesa di approvazione", &DecideCmd{global: g, approve: true})
-	add("reject", "Respinge un deploy in attesa di approvazione", &DecideCmd{global: g})
-	add("promote", "Rilascia in un ambiente l'artefatto già rilasciato in un altro", &PromoteCmd{global: g})
-	add("rollback", "Torna a una versione rilasciata in precedenza", &RollbackCmd{global: g})
-	add("inventory", "Mostra la release in esercizio per applicazione e ambiente", &InventoryCmd{global: g})
-	add("approvals", "Elenca i deploy in attesa che puoi approvare", &ApprovalsCmd{global: g})
-	add("activity", "Mostra i deploy in esecuzione, in attesa di approvazione, in coda e pianificati", &ActivityCmd{global: g})
-	add("workers", "Elenca i worker con stato, heartbeat, risorse, code e deploy in esecuzione (permesso platform.read)", &WorkersCmd{global: g})
-	add("queues", "Elenca le code con limiti, deploy in coda, in corso e pianificati e worker in ascolto (permesso platform.read)", &QueuesCmd{global: g})
-	add("whoami", "Mostra la tua identità sul server e i tuoi permessi", &WhoamiCmd{global: g})
-	add("freezes", "Elenca le finestre di freeze attive e future", &FreezesCmd{global: g})
-	add("dora", "Calcola le metriche DORA dallo storico dei deploy", &DORACmd{global: g})
-	add("version", "Mostra la versione del client", &cliutil.VersionCmd{})
-	if err := cliutil.AddGroup(p, "schedule", "Gestisce le schedule dei deploy ricorrenti",
-		"Gestisce le schedule dei deploy ricorrenti (create con schedule.cron nel descrittore)", []cliutil.Command{
-			{Name: "list", Short: "Elenca le schedule", Cmd: &ScheduleListCmd{global: g}},
-			{Name: "show", Short: "Mostra una schedule", Cmd: &ScheduleCmd{global: g, op: opShow}},
-			{Name: "pause", Short: "Sospende una schedule", Cmd: &ScheduleCmd{global: g, op: opPause}},
-			{Name: "resume", Short: "Riattiva una schedule sospesa", Cmd: &ScheduleCmd{global: g, op: opResume}},
-			{Name: "delete", Short: "Elimina una schedule", Cmd: &ScheduleCmd{global: g, op: opDelete}},
+	add("deploy", "Runs, schedules or plans a deploy from a YAML descriptor", &DeployCmd{global: g})
+	add("validate", "Checks a descriptor on the server and shows the plan and the effective deploy", &ValidateCmd{global: g})
+	add("status", "Shows the state of a deploy", &StatusCmd{global: g})
+	add("list", "Lists the most recent deploys", &ListCmd{global: g})
+	add("cancel", "Cancels a waiting or running deploy", &CancelCmd{global: g})
+	add("logs", "Shows the log of a deploy", &LogsCmd{global: g})
+	add("steps", "Shows the timeline of the steps of a deploy", &StepsCmd{global: g})
+	add("approve", "Approves a deploy awaiting approval", &DecideCmd{global: g, approve: true})
+	add("reject", "Rejects a deploy awaiting approval", &DecideCmd{global: g})
+	add("promote", "Releases to an environment the artifact already released to another", &PromoteCmd{global: g})
+	add("rollback", "Goes back to a previously released version", &RollbackCmd{global: g})
+	add("inventory", "Shows the release in service per application and environment", &InventoryCmd{global: g})
+	add("approvals", "Lists the waiting deploys you can approve", &ApprovalsCmd{global: g})
+	add("activity", "Shows the deploys running, awaiting approval, queued and scheduled", &ActivityCmd{global: g})
+	add("workers", "Lists the workers with state, heartbeat, resources, queues and running deploys (platform.read permission)", &WorkersCmd{global: g})
+	add("queues", "Lists the queues with limits, queued, running and scheduled deploys and listening workers (platform.read permission)", &QueuesCmd{global: g})
+	add("whoami", "Shows your identity on the server and your permissions", &WhoamiCmd{global: g})
+	add("freezes", "Lists the active and future freeze windows", &FreezesCmd{global: g})
+	add("dora", "Computes the DORA metrics from the deploy history", &DORACmd{global: g})
+	add("version", "Shows the client version", &cliutil.VersionCmd{})
+	if err := cliutil.AddGroup(p, "schedule", "Manages the schedules of recurring deploys",
+		"Manages the schedules of recurring deploys (created with schedule.cron in the descriptor)", []cliutil.Command{
+			{Name: "list", Short: "Lists the schedules", Cmd: &ScheduleListCmd{global: g}},
+			{Name: "show", Short: "Shows a schedule", Cmd: &ScheduleCmd{global: g, op: opShow}},
+			{Name: "pause", Short: "Pauses a schedule", Cmd: &ScheduleCmd{global: g, op: opPause}},
+			{Name: "resume", Short: "Resumes a paused schedule", Cmd: &ScheduleCmd{global: g, op: opResume}},
+			{Name: "delete", Short: "Deletes a schedule", Cmd: &ScheduleCmd{global: g, op: opDelete}},
 		}); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "policy", "Gestisce le revisioni della policy di governance (Rego)",
-		"Gestisce le revisioni della policy di governance valutata da OPA: caricamento in bozza, test, impatto, approvazione e ritorno", policyCommands(g)); err != nil {
+	if err := cliutil.AddGroup(p, "policy", "Manages the revisions of the governance policy (Rego)",
+		"Manages the revisions of the governance policy evaluated by OPA: draft upload, tests, impact, approval and rollback", policyCommands(g)); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "tenants", "Elenca i tenant del registro",
-		"Elenca i tenant (clienti o istanze) del registro, con tag e ambienti collegati", []cliutil.Command{
-			{Name: "list", Short: "Elenca i tenant, filtrati per applicazione posseduta e selettore", Cmd: &TenantsListCmd{global: g}},
-			{Name: "show", Short: "Mostra un tenant con le applicazioni che possiede e i loro tag", Cmd: &TenantShowCmd{global: g}},
+	if err := cliutil.AddGroup(p, "tenants", "Lists the tenants of the registry",
+		"Lists the tenants of the registry, with tags and owned applications", []cliutil.Command{
+			{Name: "list", Short: "Lists the tenants, filtered by owned application and selector", Cmd: &TenantsListCmd{global: g}},
+			{Name: "show", Short: "Shows a tenant with the applications it owns and their tags", Cmd: &TenantShowCmd{global: g}},
 		}); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "freeze", "Crea ed elimina finestre di freeze a runtime",
-		"Crea ed elimina finestre di freeze senza modificare manent.yml né riavviare (es. un freeze d'emergenza)", freezeCommands(g)); err != nil {
+	if err := cliutil.AddGroup(p, "freeze", "Creates and deletes freeze windows at runtime",
+		"Creates and deletes freeze windows without changing manent.yml or restarting (e.g. an emergency freeze)", freezeCommands(g)); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "env", "Verifica le configurazioni di ambiente",
-		"Verifica sul server una configurazione di ambiente candidata, prima di applicarla", []cliutil.Command{
-			{Name: "validate", Short: "Verifica una configurazione di ambiente come la userebbe un deploy", Cmd: &EnvValidateCmd{global: g}},
+	if err := cliutil.AddGroup(p, "env", "Checks environment configurations",
+		"Checks on the server a candidate environment configuration, before applying it", []cliutil.Command{
+			{Name: "validate", Short: "Checks an environment configuration as a deploy would use it", Cmd: &EnvValidateCmd{global: g}},
 		}); err != nil {
 		return err
 	}
-	if err := cliutil.AddGroup(p, "release", "Gestisce le release composte (più deploy con dipendenze)",
-		"Gestisce le release composte: più deploy con dipendenze tra loro, in parallelo dove possibile", []cliutil.Command{
-			{Name: "submit", Short: "Accoda una release da un file YAML e ne segue l'avanzamento", Cmd: &ReleaseSubmitCmd{global: g}},
-			{Name: "status", Short: "Mostra lo stato di una release", Cmd: &ReleaseStatusCmd{global: g}},
-			{Name: "list", Short: "Elenca le release più recenti", Cmd: &ReleaseListCmd{global: g}},
-			{Name: "cancel", Short: "Annulla i deploy non conclusi di una release", Cmd: &ReleaseCancelCmd{global: g}},
+	if err := cliutil.AddGroup(p, "release", "Manages composite releases (several deploys with dependencies)",
+		"Manages composite releases: several deploys with dependencies between them, in parallel where possible", []cliutil.Command{
+			{Name: "submit", Short: "Enqueues a release from a YAML file and follows its progress", Cmd: &ReleaseSubmitCmd{global: g}},
+			{Name: "status", Short: "Shows the state of a release", Cmd: &ReleaseStatusCmd{global: g}},
+			{Name: "list", Short: "Lists the most recent releases", Cmd: &ReleaseListCmd{global: g}},
+			{Name: "cancel", Short: "Cancels the deploys of a release not yet ended", Cmd: &ReleaseCancelCmd{global: g}},
 		}); err != nil {
 		return err
 	}
@@ -210,20 +210,20 @@ func withService(g *GlobalOptions, fn func(context.Context, service.Service) err
 // It does not wait for scheduled deploys nor for those awaiting approval.
 func follow(ctx context.Context, svc service.Service, sub *service.Submission, noWait bool, timeout time.Duration) error {
 	if sub.State == service.StateAwaitingApproval {
-		fmt.Fprintln(os.Stderr, "deploy in attesa di approvazione: manent approve", sub.ID)
+		fmt.Fprintln(os.Stderr, "deploy awaiting approval: manent approve", sub.ID)
 		return cliutil.PrintJSON(sub)
 	}
 	if noWait || sub.ID == "" || sub.ScheduledAt != nil {
 		return cliutil.PrintJSON(sub)
 	}
 	if sub.State == service.StateWaitingDependency {
-		fmt.Fprintln(os.Stderr, "deploy in attesa delle dipendenze:", sub.ID)
+		fmt.Fprintln(os.Stderr, "deploy waiting for its dependencies:", sub.ID)
 	}
 	kind := "deploy"
 	if sub.DryRun {
 		kind = "dry-run"
 	}
-	fmt.Fprintln(os.Stderr, kind, "accodato:", sub.ID, "(manent logs -f", sub.ID+" per seguirlo)")
+	fmt.Fprintln(os.Stderr, kind, "enqueued:", sub.ID, "(manent logs -f", sub.ID+" to follow it)")
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)

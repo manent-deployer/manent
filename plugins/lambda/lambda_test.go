@@ -317,7 +317,7 @@ func TestDryRunEValidazione(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := res.Targets[0].Details; res.Targets[0].Status != plugin.StatusReady || d["alias_status"] != "da creare" || d["package_type"] != PackageImage {
+	if d := res.Targets[0].Details; res.Targets[0].Status != plugin.StatusReady || d["alias_status"] != "to be created" || d["package_type"] != PackageImage {
 		t.Errorf("dry-run: %+v", res.Targets[0])
 	}
 	if f.dryRuns != 1 || f.functions["shop"].updates != 0 || f.alias("shop") != "" {

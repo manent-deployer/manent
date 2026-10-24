@@ -15,10 +15,10 @@ import (
 // ReleaseSubmitCmd enqueues a composite release and, by default, follows its progress.
 type ReleaseSubmitCmd struct {
 	global   *GlobalOptions
-	File     string        `short:"f" long:"file" required:"true" description:"release YAML (kind: Release); i file dei deploy sono relativi a questo"`
-	NoWait   bool          `long:"no-wait" description:"non attendere la conclusione della release"`
-	Timeout  time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 2h (0 = nessun limite); la release prosegue comunque"`
-	Interval time.Duration `long:"interval" default:"3s" description:"intervallo di lettura dello stato"`
+	File     string        `short:"f" long:"file" required:"true" description:"release YAML (kind: Release); the deploy files are relative to it"`
+	NoWait   bool          `long:"no-wait" description:"do not wait for the release to end"`
+	Timeout  time.Duration `long:"timeout" description:"maximum time to wait, e.g. 2h (0 = no limit); the release goes on anyway"`
+	Interval time.Duration `long:"interval" default:"3s" description:"interval between state reads"`
 }
 
 // Execute implements flags.Commander.
@@ -35,7 +35,7 @@ func (c *ReleaseSubmitCmd) Execute([]string) error {
 		if c.NoWait {
 			return cliutil.PrintJSON(rs)
 		}
-		fmt.Fprintln(os.Stderr, "release accodata:", rs.ID, "(manent release status", rs.ID+")")
+		fmt.Fprintln(os.Stderr, "release enqueued:", rs.ID, "(manent release status", rs.ID+")")
 		if c.Timeout > 0 {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, c.Timeout)
@@ -108,7 +108,7 @@ func (c *ReleaseStatusCmd) Execute([]string) error {
 // ReleaseListCmd lists the most recent releases.
 type ReleaseListCmd struct {
 	global *GlobalOptions
-	Limit  int `short:"n" long:"limit" default:"20" description:"numero massimo di release"`
+	Limit  int `short:"n" long:"limit" default:"20" description:"maximum number of releases"`
 }
 
 // Execute implements flags.Commander.
@@ -134,7 +134,7 @@ func (c *ReleaseCancelCmd) Execute([]string) error {
 		if err := svc.CancelRelease(ctx, c.Args.ID); err != nil {
 			return err
 		}
-		fmt.Println("release annullata:", c.Args.ID)
+		fmt.Println("release cancelled:", c.Args.ID)
 		return nil
 	})
 }

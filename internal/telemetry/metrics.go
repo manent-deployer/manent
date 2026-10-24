@@ -63,31 +63,31 @@ func NewMetrics(b BuildInfo) *Metrics {
 		reg: prometheus.NewRegistry(),
 		deployments: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "manent_deployments_total",
-			Help: "Deploy conclusi da questo processo, per esito.",
+			Help: "Deploys ended by this process, by outcome.",
 		}, []string{"application", "environment", "kind", "outcome", "dry_run"}),
 		durations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "manent_deployment_duration_seconds",
-			Help:    "Durata dei deploy dalla richiesta alla conclusione (attese in coda e approvazioni escluse).",
+			Help:    "Duration of the deploys from the request to the end (queue waits and approvals excluded).",
 			Buckets: prometheus.ExponentialBuckets(5, 2, 12),
 		}, []string{"application", "environment", "outcome"}),
 		steps: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "manent_step_duration_seconds",
-			Help:    "Durata di ogni tentativo di esecuzione di uno step, per esito.",
+			Help:    "Duration of every attempt to run a step, by outcome.",
 			Buckets: prometheus.ExponentialBuckets(0.1, 3, 10),
 		}, []string{"step", "outcome"}),
 		http: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "manent_http_request_duration_seconds",
-			Help:    "Durata delle richieste all'API.",
+			Help:    "Duration of the API requests.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"method", "route", "code"}),
 		passes: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "manent_rollout_passes_total",
-			Help: "Passi dei rollout a ondate conclusi da questo processo, per region, AZ ed esito.",
+			Help: "Passes of wave rollouts ended by this process, by region, AZ and outcome.",
 		}, []string{"application", "environment", "region", "az", "outcome"}),
 	}
 	info := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name:        "manent_build_info",
-		Help:        "Versione di manent e dei workflow.",
+		Help:        "Version of manent and of the workflows.",
 		ConstLabels: prometheus.Labels{"version": b.Version, "commit": b.Commit, "workflow_version": b.WorkflowVersion},
 	})
 	info.Set(1)
@@ -157,15 +157,15 @@ type StateCollector struct {
 
 var (
 	descWorkflows = prometheus.NewDesc("manent_workflows",
-		"Workflow per tipo, stato e coda (globale).", []string{"workflow", "status", "queue"}, nil)
+		"Workflows by kind, state and queue (global).", []string{"workflow", "status", "queue"}, nil)
 	descHeartbeat = prometheus.NewDesc("manent_executor_heartbeat_timestamp_seconds",
-		"Ultimo heartbeat di ogni executor registrato (globale).", []string{"executor", "version"}, nil)
+		"Last heartbeat of every registered executor (global).", []string{"executor", "version"}, nil)
 	descUp = prometheus.NewDesc("manent_executor_up",
-		"1 se l'executor invia heartbeat, 0 se è perso o arrestato (globale).", []string{"executor", "version"}, nil)
+		"1 if the executor sends heartbeats, 0 if it is lost or stopped (global).", []string{"executor", "version"}, nil)
 	descTargets = prometheus.NewDesc("manent_targets",
-		"Target per stato letto dalla riconciliazione (in-sync, drifted, missing, standby, unknown; globale).", []string{"application", "environment", "state"}, nil)
+		"Targets by state read by the reconciliation (in-sync, drifted, missing, standby, unknown; global).", []string{"application", "environment", "state"}, nil)
 	descScrapeError = prometheus.NewDesc("manent_state_scrape_error",
-		"1 se l'ultima lettura dello stato dal database è fallita.", nil, nil)
+		"1 if the last read of the state from the database failed.", nil, nil)
 )
 
 // Describe implements prometheus.Collector.

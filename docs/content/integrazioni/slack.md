@@ -66,7 +66,7 @@ manent deploy -f deploy/test.yml --dry-run
 manent steps <id> | jq -r '.[] | select(.name | startswith("notify:")) | "\(.name) \(.error // "ok")"'
 ```
 
-Each delivery is a DBOS step named `notify:<destination>:<event>`. A failed delivery shows its error there and in the worker log (`notifica in chat non inviata`, also sent to the SIEM), but never fails the deploy.
+Each delivery is a DBOS step named `notify:<destination>:<event>`. A failed delivery shows its error there and in the worker log (`chat notification not sent`, also sent to the SIEM), but never fails the deploy.
 
 ## 4. Approvals from Slack
 

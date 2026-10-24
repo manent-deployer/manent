@@ -463,7 +463,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	details := map[string]string{"namespace": ns, "objects": strconv.Itoa(len(pr.objects)), DetailRelease: n.release(req.Artifact.Version)}
 	if len(pr.hooksSkipped) > 0 {
 		details[DetailHooksSkipped] = strings.Join(pr.hooksSkipped, ",")
-		log.WarnContext(ctx, "hook del chart non applicati", "hooks", pr.hooksSkipped)
+		log.WarnContext(ctx, "chart hooks not applied", "hooks", pr.hooksSkipped)
 	}
 	prev, err := readPointer(ctx, api, ns, n)
 	if err != nil {
@@ -493,7 +493,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 			return details, err
 		}
 	}
-	log.InfoContext(ctx, "manifest applicati", "objects", len(pr.objects), "namespace", ns, "version", req.Artifact.Version)
+	log.InfoContext(ctx, "manifests applied", "objects", len(pr.objects), "namespace", ns, "version", req.Artifact.Version)
 	if err := p.waitRollout(ctx, api, pr.objects, req, log); err != nil {
 		return details, err
 	}
@@ -504,14 +504,14 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		}
 		if len(removed) > 0 {
 			details["pruned"] = strings.Join(removed, ",")
-			log.InfoContext(ctx, "oggetti della release precedente eliminati", "objects", removed)
+			log.InfoContext(ctx, "objects of the previous release deleted", "objects", removed)
 		}
 	}
 	if err := writePointer(ctx, api, ns, n, req, req.Artifact.Version); err != nil {
 		return details, err
 	}
 	p.pruneHistory(ctx, api, ns, n, req, prev, log)
-	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version)
+	log.InfoContext(ctx, "active release", "version", req.Artifact.Version)
 	return details, nil
 }
 
@@ -538,11 +538,11 @@ func (p *Plugin) waitRollout(ctx context.Context, api API, objs []Object, req *p
 				return fmt.Errorf("%s: %w", o.Ref(), err)
 			}
 			if ok {
-				log.InfoContext(ctx, "rollout completato", "object", o.Ref())
+				log.InfoContext(ctx, "rollout completed", "object", o.Ref())
 				break
 			}
 			if state != last {
-				log.InfoContext(ctx, "rollout in corso", "object", o.Ref(), "state", state)
+				log.InfoContext(ctx, "rollout in progress", "object", o.Ref(), "state", state)
 				last = state
 			}
 			select {
@@ -580,7 +580,7 @@ func num(o Object, keys ...string) int {
 func ready(o Object) (bool, string, error) {
 	gen, observed := num(o, "metadata", "generation"), num(o, "status", "observedGeneration")
 	if observed < gen {
-		return false, "in attesa del controller", nil
+		return false, "waiting for the controller", nil
 	}
 	replicas := 1
 	if spec, _ := o["spec"].(map[string]any); spec != nil {
@@ -601,34 +601,34 @@ func ready(o Object) (bool, string, error) {
 		updated, total, available := num(o, "status", "updatedReplicas"), num(o, "status", "replicas"), num(o, "status", "availableReplicas")
 		switch {
 		case updated < replicas:
-			return false, fmt.Sprintf("%d/%d repliche aggiornate", updated, replicas), nil
+			return false, fmt.Sprintf("%d/%d replicas updated", updated, replicas), nil
 		case total > updated:
-			return false, fmt.Sprintf("%d repliche precedenti in terminazione", total-updated), nil
+			return false, fmt.Sprintf("%d previous replicas terminating", total-updated), nil
 		case available < updated:
-			return false, fmt.Sprintf("%d/%d repliche disponibili", available, replicas), nil
+			return false, fmt.Sprintf("%d/%d replicas available", available, replicas), nil
 		}
 	case "StatefulSet":
 		updated, readyN := num(o, "status", "updatedReplicas"), num(o, "status", "readyReplicas")
 		strategy := o.str("spec", "updateStrategy", "type")
 		if strategy != "OnDelete" && updated < replicas {
-			return false, fmt.Sprintf("%d/%d repliche aggiornate", updated, replicas), nil
+			return false, fmt.Sprintf("%d/%d replicas updated", updated, replicas), nil
 		}
 		if readyN < replicas {
-			return false, fmt.Sprintf("%d/%d repliche pronte", readyN, replicas), nil
+			return false, fmt.Sprintf("%d/%d replicas ready", readyN, replicas), nil
 		}
 		if cur, upd := o.str("status", "currentRevision"), o.str("status", "updateRevision"); strategy != "OnDelete" && upd != "" && cur != upd {
-			return false, "revisione in aggiornamento", nil
+			return false, "revision updating", nil
 		}
 	case "DaemonSet":
 		desired := num(o, "status", "desiredNumberScheduled")
 		if u := num(o, "status", "updatedNumberScheduled"); u < desired {
-			return false, fmt.Sprintf("%d/%d nodi aggiornati", u, desired), nil
+			return false, fmt.Sprintf("%d/%d nodes updated", u, desired), nil
 		}
 		if a := num(o, "status", "numberAvailable"); a < desired {
-			return false, fmt.Sprintf("%d/%d nodi disponibili", a, desired), nil
+			return false, fmt.Sprintf("%d/%d nodes available", a, desired), nil
 		}
 	}
-	return true, "completato", nil
+	return true, "complete", nil
 }
 
 // release is a release read from the history.
@@ -813,7 +813,7 @@ func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, 
 		LabelApplication + "=" + rl[LabelApplication] + "," + LabelEnvironment + "=" + rl[LabelEnvironment]
 	list, err := api.List(ctx, configMapAPIVersion, "ConfigMap", ns, sel)
 	if err != nil {
-		log.WarnContext(ctx, "pulizia dello storico fallita", "error", err)
+		log.WarnContext(ctx, "history cleanup failed", "error", err)
 		return
 	}
 	// Only this release's history: the other artifacts and tenants of the application have
@@ -847,7 +847,7 @@ func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, 
 			continue
 		}
 		if err := api.Delete(ctx, configMapAPIVersion, "ConfigMap", ns, cm.Name()); err != nil {
-			log.WarnContext(ctx, "pulizia dello storico fallita", "release", cm.Name(), "error", err)
+			log.WarnContext(ctx, "history cleanup failed", "release", cm.Name(), "error", err)
 		}
 	}
 }
@@ -876,7 +876,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	case 1:
 		for v, hosts := range found {
 			return &plugin.Release{Version: v, Details: map[string]string{
-				DetailRelease: n.release(v), "source": "storico nel cluster", "targets": strings.Join(hosts, ","),
+				DetailRelease: n.release(v), "source": "history in the cluster", "targets": strings.Join(hosts, ","),
 			}}, nil
 		}
 	}
@@ -948,7 +948,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	if err := writePointer(ctx, api, ns, n, req, version); err != nil {
 		return details, err
 	}
-	log.WarnContext(ctx, "release precedente ripristinata", "version", version)
+	log.WarnContext(ctx, "previous release restored", "version", version)
 	return details, nil
 }
 
@@ -1009,6 +1009,6 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 	if rel, err := readPointer(ctx, api, namespace(req), historyNames(req)); err == nil && rel != nil {
 		details["current"] = rel.version
 	}
-	p.logger.InfoContext(ctx, "cluster pronto per il deploy", "deployment", req.DeploymentID, "cluster", t.Host, "dry_run", true, "objects", checked)
+	p.logger.InfoContext(ctx, "cluster ready for the deploy", "deployment", req.DeploymentID, "cluster", t.Host, "dry_run", true, "objects", checked)
 	return details, nil
 }

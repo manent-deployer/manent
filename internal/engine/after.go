@@ -170,7 +170,7 @@ func (w *Worker) afterWorkflow(ctx dbos.Context, in afterInput) (AfterState, err
 		// The deploy will not run: whoever waits for it can end at once.
 		w.notifyWaiters(ctx, in.DeploymentID)
 	}
-	w.logger.Info("attesa delle dipendenze conclusa", "deployment", in.DeploymentID, "status", st.Status, "reason", st.Reason)
+	w.logger.Info("dependency wait ended", "deployment", in.DeploymentID, "status", st.Status, "reason", st.Reason)
 	w.recordAfter(ctx, in, st)
 	return st, nil
 }
@@ -190,7 +190,7 @@ func (w *Worker) readDependencies(_ context.Context, ids []string) afterCheck {
 	c := afterCheck{Done: true, Now: time.Now().UTC()}
 	states, err := w.reader.states(ids)
 	if err != nil {
-		w.logger.Warn("lettura dello stato delle dipendenze fallita", "dependencies", ids, "error", err)
+		w.logger.Warn("reading the state of the dependencies failed", "dependencies", ids, "error", err)
 	}
 	for _, id := range ids {
 		state := "UNKNOWN"
@@ -306,7 +306,7 @@ func (w *Worker) notifyWaiters(ctx dbos.Context, id string) {
 		err = dbos.SendBulk(ctx, wakeMessages(id, ids))
 	}
 	if err != nil {
-		w.logger.Warn("avviso a chi attende il deploy fallito", "deployment", id, "error", err)
+		w.logger.Warn("notifying whoever waits for the deploy failed", "deployment", id, "error", err)
 	}
 }
 
@@ -317,7 +317,7 @@ func (e *Engine) notifyWaiters(id string) {
 		err = dbos.SendBulk(e.client, wakeMessages(id, ids))
 	}
 	if err != nil {
-		e.logger.Warn("avviso a chi attende il deploy fallito", "deployment", id, "error", err)
+		e.logger.Warn("notifying whoever waits for the deploy failed", "deployment", id, "error", err)
 	}
 }
 
@@ -343,7 +343,7 @@ func (w *Worker) recordAfter(ctx dbos.Context, in afterInput, st AfterState) {
 		e.Time = time.Now().UTC()
 		return "", w.audit.Record(c, e)
 	}, dbos.WithStepName("audit")); err != nil {
-		w.logger.Error("registrazione dell'attesa nell'audit fallita", "deployment", in.DeploymentID, "error", err)
+		w.logger.Error("recording the wait in the audit failed", "deployment", in.DeploymentID, "error", err)
 	}
 }
 

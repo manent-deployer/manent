@@ -66,9 +66,9 @@ func (a *Admin) RenameArtifact(ctx context.Context, o RenameArtifactOptions) (*R
 	if err != nil {
 		return rep, err
 	}
-	a.logger.Info("artefatto rinominato nello storico", "tenant", tn, "application", o.Application, "from", o.From, "to", o.To,
+	a.logger.Info("artifact renamed in the history", "tenant", tn, "application", o.Application, "from", o.From, "to", o.To,
 		"renamed", rep.Renamed, "pending", len(rep.Pending), "dry_run", o.DryRun)
-	a.recordRewrite(ctx, ActionAdminRenameArtifact, o.By, o.Application, fmt.Sprintf("%s/%s: %s -> %s: rinominati=%d", tn, o.Application, o.From, o.To, rep.Renamed), rep)
+	a.recordRewrite(ctx, ActionAdminRenameArtifact, o.By, o.Application, fmt.Sprintf("%s/%s: %s -> %s: renamed=%d", tn, o.Application, o.From, o.To, rep.Renamed), rep)
 	return rep, nil
 }
 
@@ -92,9 +92,9 @@ func (a *Admin) MoveApplication(ctx context.Context, o MoveApplicationOptions) (
 	if err != nil {
 		return rep, err
 	}
-	a.logger.Info("applicazione spostata tra tenant nello storico", "application", o.Application, "from", o.From, "to", o.To,
+	a.logger.Info("application moved between tenants in the history", "application", o.Application, "from", o.From, "to", o.To,
 		"moved", rep.Renamed, "pending", len(rep.Pending), "dry_run", o.DryRun)
-	a.recordRewrite(ctx, ActionAdminMoveApplication, o.By, o.Application, fmt.Sprintf("%s: %s -> %s: spostati=%d", o.Application, o.From, o.To, rep.Renamed), rep)
+	a.recordRewrite(ctx, ActionAdminMoveApplication, o.By, o.Application, fmt.Sprintf("%s: %s -> %s: moved=%d", o.Application, o.From, o.To, rep.Renamed), rep)
 	return rep, nil
 }
 

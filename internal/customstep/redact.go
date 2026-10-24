@@ -130,7 +130,7 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		if w.budget.left <= 0 {
 			if !w.budget.truncated {
 				w.budget.truncated = true
-				w.log.WarnContext(w.ctx, "output del comando troncato nel log", w.attrs...)
+				w.log.WarnContext(w.ctx, "command output truncated in the log", w.attrs...)
 			}
 			w.buf = w.buf[:0]
 			return n, nil

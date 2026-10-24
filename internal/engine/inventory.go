@@ -33,7 +33,7 @@ func (e *Engine) Inventory(ctx context.Context, f InventoryFilter) ([]InventoryE
 	}
 	recs, err := e.targets.TargetStates(ctx)
 	if err != nil {
-		e.logger.Debug("stato dei target non disponibile", "error", err)
+		e.logger.Debug("target states unavailable", "error", err)
 		return out, nil
 	}
 	byEnv := map[string][]cluster.TargetsRecord{}

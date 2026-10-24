@@ -68,17 +68,17 @@ func localGovernance(cfg *config.Config, log *slog.Logger, sp secrets.Provider, 
 // policyCommands are the local commands on a directory of policies.
 func policyCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
-		{Name: "test", Short: "Compila una directory di policy ed esegue i suoi test, senza server", Cmd: &PolicyTestCmd{global: g}},
-		{Name: "eval", Short: "Valuta una directory di policy su un descrittore, senza server", Cmd: &PolicyEvalCmd{global: g}},
-		{Name: "export-rbac", Short: "Scrive i binding di rbac come dati di una revisione e un modulo authz.rego di partenza", Cmd: &PolicyExportRBACCmd{global: g}},
+		{Name: "test", Short: "Compiles a policy directory and runs its tests, without server", Cmd: &PolicyTestCmd{global: g}},
+		{Name: "eval", Short: "Evaluates a policy directory on a descriptor, without server", Cmd: &PolicyEvalCmd{global: g}},
+		{Name: "export-rbac", Short: "Writes the rbac bindings as data of a revision and a starting authz.rego module", Cmd: &PolicyExportRBACCmd{global: g}},
 	}
 }
 
 // adminPolicyCommands are the break-glass commands on the database.
 func adminPolicyCommands(g *GlobalOptions) []cliutil.Command {
 	return []cliutil.Command{
-		{Name: "policy-activate", Short: "Attiva una revisione della policy senza approvazione (break-glass, registrato nell'audit)", Cmd: &AdminPolicyActivateCmd{global: g}},
-		{Name: "freeze-delete", Short: "Elimina un freeze creato a runtime (break-glass, registrato nell'audit)", Cmd: &AdminFreezeDeleteCmd{global: g}},
+		{Name: "policy-activate", Short: "Activates a policy revision without approval (break-glass, recorded in the audit)", Cmd: &AdminPolicyActivateCmd{global: g}},
+		{Name: "freeze-delete", Short: "Deletes a freeze created at runtime (break-glass, recorded in the audit)", Cmd: &AdminFreezeDeleteCmd{global: g}},
 	}
 }
 
@@ -108,7 +108,7 @@ func compileDir(ctx context.Context, cfg *config.Config, dir string) (*policy.Co
 // PolicyTestCmd compiles a directory and runs its tests.
 type PolicyTestCmd struct {
 	global *GlobalOptions
-	Dir    string `short:"d" long:"dir" required:"true" description:"directory con i moduli Rego e i dati"`
+	Dir    string `short:"d" long:"dir" required:"true" description:"directory with the Rego modules and the data"`
 }
 
 // Execute implements flags.Commander.
@@ -132,8 +132,8 @@ func (c *PolicyTestCmd) Execute([]string) error {
 // a starting authz.rego, to move the bindings into a policy revision.
 type PolicyExportRBACCmd struct {
 	global *GlobalOptions
-	Dir    string `short:"d" long:"dir" required:"true" description:"directory della revisione"`
-	Force  bool   `long:"force" description:"sovrascrive i file esistenti"`
+	Dir    string `short:"d" long:"dir" required:"true" description:"directory of the revision"`
+	Force  bool   `long:"force" description:"overwrite existing files"`
 }
 
 // Execute implements flags.Commander.
@@ -163,9 +163,9 @@ func (c *PolicyExportRBACCmd) Execute([]string) error {
 		if err := os.WriteFile(p, []byte(files[name]), 0o644); err != nil {
 			return err
 		}
-		fmt.Println("scritto", p)
+		fmt.Println("written", p)
 	}
-	fmt.Fprintf(os.Stderr, "%d binding esportati: verifica la revisione con \"manent-server policy test -d %s\" e caricala con \"manent policy push -d %s\"\n",
+	fmt.Fprintf(os.Stderr, "%d bindings exported: check the revision with \"manent-server policy test -d %s\" and upload it with \"manent policy push -d %s\"\n",
 		len(cfg.RBAC.Bindings), c.Dir, c.Dir)
 	return nil
 }
@@ -173,11 +173,11 @@ func (c *PolicyExportRBACCmd) Execute([]string) error {
 // PolicyEvalCmd evaluates a directory of policies on a descriptor.
 type PolicyEvalCmd struct {
 	global *GlobalOptions
-	Dir    string `short:"d" long:"dir" required:"true" description:"directory con i moduli Rego e i dati"`
-	File   string `short:"f" long:"file" required:"true" description:"descrittore YAML"`
-	Phase  string `long:"phase" default:"submit" choice:"submit" choice:"validate" choice:"start" choice:"stage" choice:"tick" description:"fase della valutazione"`
-	Kind   string `long:"kind" default:"deploy" choice:"deploy" choice:"promotion" choice:"rollback" description:"tipo di deploy"`
-	Region string `long:"region" description:"region (fase stage)"`
+	Dir    string `short:"d" long:"dir" required:"true" description:"directory with the Rego modules and the data"`
+	File   string `short:"f" long:"file" required:"true" description:"YAML descriptor"`
+	Phase  string `long:"phase" default:"submit" choice:"submit" choice:"validate" choice:"start" choice:"stage" choice:"tick" description:"phase of the evaluation"`
+	Kind   string `long:"kind" default:"deploy" choice:"deploy" choice:"promotion" choice:"rollback" description:"kind of deploy"`
+	Region string `long:"region" description:"region (stage phase)"`
 }
 
 // Execute implements flags.Commander.
@@ -214,9 +214,9 @@ func (c *PolicyEvalCmd) Execute([]string) error {
 // AdminPolicyActivateCmd activates a revision without approval.
 type AdminPolicyActivateCmd struct {
 	global *GlobalOptions
-	Reason string `long:"reason" required:"true" description:"motivo, registrato nell'audit"`
+	Reason string `long:"reason" required:"true" description:"reason, recorded in the audit"`
 	Args   struct {
-		Revision int64 `positional-arg-name:"revisione" required:"true"`
+		Revision int64 `positional-arg-name:"revision" required:"true"`
 	} `positional-args:"yes"`
 }
 
@@ -228,7 +228,7 @@ func (c *AdminPolicyActivateCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		a.Logger.Warn("revisione della policy attivata in break-glass", "revision", c.Args.Revision, "by", adminActor(), "reason", c.Reason)
+		a.Logger.Warn("policy revision activated in break-glass", "revision", c.Args.Revision, "by", adminActor(), "reason", c.Reason)
 		return nil
 	})
 }
@@ -236,9 +236,9 @@ func (c *AdminPolicyActivateCmd) Execute([]string) error {
 // AdminFreezeDeleteCmd deletes a runtime freeze window outside the permissions.
 type AdminFreezeDeleteCmd struct {
 	global *GlobalOptions
-	Reason string `long:"reason" required:"true" description:"motivo, registrato nell'audit"`
+	Reason string `long:"reason" required:"true" description:"reason, recorded in the audit"`
 	Args   struct {
-		Name string `positional-arg-name:"nome" required:"true"`
+		Name string `positional-arg-name:"name" required:"true"`
 	} `positional-args:"yes"`
 }
 
@@ -250,7 +250,7 @@ func (c *AdminFreezeDeleteCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		a.Logger.Warn("freeze eliminato in break-glass", "freeze", c.Args.Name, "by", adminActor(), "reason", c.Reason)
+		a.Logger.Warn("freeze deleted in break-glass", "freeze", c.Args.Name, "by", adminActor(), "reason", c.Reason)
 		return nil
 	})
 }
@@ -266,6 +266,6 @@ func recordBreakGlass(ctx context.Context, a *app.App, action, comment string, e
 		e.Outcome, e.Reason = audit.OutcomeError, err.Error()
 	}
 	if rerr := rec.Record(ctx, e); rerr != nil {
-		a.Logger.Error("registrazione nell'audit fallita", "action", action, "error", rerr)
+		a.Logger.Error("audit recording failed", "action", action, "error", rerr)
 	}
 }

@@ -414,7 +414,7 @@ func (a *app) deployContent(ctx context.Context, slot string) error {
 		if runningImage(cfg) == image {
 			return nil
 		}
-		a.log.InfoContext(ctx, "immagine del container aggiornata", "where", where(slot), "image", image)
+		a.log.InfoContext(ctx, "container image updated", "where", where(slot), "image", image)
 		return a.patchWebConfig(ctx, slot, Object{fxField(cfg): "DOCKER|" + image})
 	}
 	return a.publish(ctx, slot)
@@ -457,7 +457,7 @@ func (a *app) publish(ctx context.Context, slot string) error {
 		return err
 	}
 	defer f.Close()
-	a.log.InfoContext(ctx, "pacchetto inviato a Kudu (OneDeploy)", "where", where(slot), "type", typ)
+	a.log.InfoContext(ctx, "package sent to Kudu (OneDeploy)", "where", where(slot), "type", typ)
 	if _, err := a.c.Raw(ctx, http.MethodPost, base+"/api/publish?type="+typ+"&async=true", f, "application/octet-stream", nil); err != nil {
 		return fmt.Errorf("OneDeploy on %s: %w", where(slot), err)
 	}
@@ -521,7 +521,7 @@ func (a *app) health(ctx context.Context, slot string) error {
 
 // swap exchanges the slot with production and waits for the operation.
 func (a *app) swap(ctx context.Context) error {
-	a.log.InfoContext(ctx, "swap dello slot con la produzione")
+	a.log.InfoContext(ctx, "slot swapped with production")
 	hdr, err := a.c.Do(ctx, http.MethodPost, a.res(a.slot)+"/slotsswap", apiVersion, Object{"targetSlot": "production", "preserveVnet": true}, nil)
 	if err == nil {
 		err = a.c.Wait(ctx, hdr)
@@ -606,7 +606,7 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 		if prod[SettingDeployment] != req.DeploymentID {
 			return d, fmt.Errorf("swap completed but production reports deploy %q: is %s a slot setting (sticky)?", prod[SettingDeployment], SettingDeployment)
 		}
-		a.log.InfoContext(ctx, "release in esercizio dopo lo swap", "version", req.Artifact.Version, "previous", prod[SettingVersion])
+		a.log.InfoContext(ctx, "release in service after the swap", "version", req.Artifact.Version, "previous", prod[SettingVersion])
 		return d, nil
 	})
 }
@@ -623,7 +623,7 @@ func (a *app) deployProduction(ctx context.Context) error {
 		return err
 	}
 	image, _ := plugin.ImageReference(a.req.Artifact)
-	a.log.InfoContext(ctx, "release in esercizio", "version", a.req.Artifact.Version)
+	a.log.InfoContext(ctx, "release live", "version", a.req.Artifact.Version)
 	return a.setTags(ctx, map[string]string{TagVersion: a.req.Artifact.Version, TagDeployment: a.req.DeploymentID, TagImage: image, TagPending: ""})
 }
 
@@ -638,7 +638,7 @@ func (a *app) releaseToSlot(ctx context.Context) error {
 	if err := a.health(ctx, a.slot); err != nil {
 		return err
 	}
-	a.log.InfoContext(ctx, "release pronta nello slot", "version", a.req.Artifact.Version)
+	a.log.InfoContext(ctx, "release ready in the slot", "version", a.req.Artifact.Version)
 	return nil
 }
 
@@ -738,7 +738,7 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 				return d, err
 			}
 		}
-		a.log.WarnContext(ctx, "immagine precedente ripristinata", "version", previous.Version, "image", image, "rollback", true)
+		a.log.WarnContext(ctx, "previous image restored", "version", previous.Version, "image", image, "rollback", true)
 		return d, a.setTags(ctx, map[string]string{TagVersion: previous.Version, TagDeployment: "", TagImage: image, TagPending: ""})
 	})
 }
@@ -766,7 +766,7 @@ func (a *app) swapBack(ctx context.Context, version string) error {
 	if err := a.swap(ctx); err != nil {
 		return err
 	}
-	a.log.WarnContext(ctx, "release precedente di nuovo in produzione (swap)", "version", version, "rollback", true)
+	a.log.WarnContext(ctx, "previous release in production again (swap)", "version", version, "rollback", true)
 	return nil
 }
 
@@ -912,7 +912,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 		if err := a.setRamp(ctx, percent); err != nil {
 			return nil, err
 		}
-		a.log.InfoContext(ctx, "quota di traffico verso lo slot aggiornata", "percent", percent)
+		a.log.InfoContext(ctx, "traffic share towards the slot updated", "percent", percent)
 		return nil, nil
 	})
 	return err

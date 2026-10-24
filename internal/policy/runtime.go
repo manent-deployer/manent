@@ -140,7 +140,7 @@ func New(o Options) (*Runtime, error) {
 // it and real deploys are refused.
 func (r *Runtime) Start(ctx context.Context) {
 	if err := r.Refresh(ctx); err != nil {
-		r.log.Error("policy di governance non caricata all'avvio", "error", err)
+		r.log.Error("governance policy not loaded at startup", "error", err)
 	}
 	if r.o.Store != nil {
 		go func() {
@@ -158,7 +158,7 @@ func (r *Runtime) Start(ctx context.Context) {
 			case <-r.refresh:
 			}
 			if err := r.Refresh(ctx); err != nil {
-				r.log.Warn("aggiornamento della policy di governance fallito", "error", err)
+				r.log.Warn("governance policy update failed", "error", err)
 			}
 		}
 	}()
@@ -362,7 +362,7 @@ func (r *Runtime) refreshPolicy(ctx context.Context, cur *state, next *state) er
 	}
 	c, err := r.compile(ctx, files, label)
 	if err != nil {
-		r.log.Error("revisione della policy rifiutata: resta in vigore la precedente", "source", r.o.SourceName,
+		r.log.Error("policy revision refused: the previous one stays in force", "source", r.o.SourceName,
 			"revision", label, "previous", revisionOf(cur.compiled), "error", err)
 		return fmt.Errorf("policy revision %s rejected: %w", label, err)
 	}
@@ -371,7 +371,7 @@ func (r *Runtime) refreshPolicy(ctx context.Context, cur *state, next *state) er
 		return nil
 	}
 	next.compiled, next.storeRev, next.origin, next.loadedAt = c, storeRev, origin, r.now()
-	r.log.Info("revisione della policy attiva", "source", r.o.SourceName, "revision", c.Revision, "sha256", c.SHA256,
+	r.log.Info("policy revision active", "source", r.o.SourceName, "revision", c.Revision, "sha256", c.SHA256,
 		"origin", origin, "previous", revisionOf(cur.compiled))
 	return nil
 }
@@ -431,7 +431,7 @@ func (r *Runtime) readFreezes(ctx context.Context) ([]governance.Window, error) 
 	for _, rec := range recs {
 		var sw storedWindow
 		if err := json.Unmarshal([]byte(rec.Data), &sw); err != nil {
-			r.log.Warn("freeze illeggibile ignorato", "freeze", rec.Name, "error", err)
+			r.log.Warn("unreadable freeze ignored", "freeze", rec.Name, "error", err)
 			continue
 		}
 		w := governance.Window{Name: rec.Name, Reason: sw.Reason, Applications: sw.Applications, Environments: sw.Environments,
@@ -495,10 +495,10 @@ func (r *Runtime) DeleteFreeze(ctx context.Context, name string) error {
 // changed notifies the other processes and refreshes this one at once.
 func (r *Runtime) changed(ctx context.Context) {
 	if err := r.o.Store.NotifyPolicy(ctx); err != nil {
-		r.log.Warn("notifica della modifica della policy fallita: gli altri processi la vedranno al prossimo aggiornamento", "error", err)
+		r.log.Warn("notification of the policy change failed: the other processes will see it at the next update", "error", err)
 	}
 	if err := r.Refresh(ctx); err != nil {
-		r.log.Warn("aggiornamento della policy di governance fallito", "error", err)
+		r.log.Warn("governance policy update failed", "error", err)
 	}
 }
 

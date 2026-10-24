@@ -168,7 +168,7 @@ manent deploy -f hello.yml
 ```
 
 ```text
-deploy accodato: 49bef919-2df2-47f3-bbec-3287a72de817 (manent logs -f 49bef919-… per seguirlo)
+deploy enqueued: 49bef919-2df2-47f3-bbec-3287a72de817 (manent logs -f 49bef919-… to follow it)
 ```
 
 Il comando attende la fine e stampa il risultato di ogni step; esce con codice `0` se riesce. Guarda cosa è successo:
@@ -178,13 +178,13 @@ manent logs <id>
 ```
 
 ```text
-19:26:30 INFO  [secrets] segreti verificati count=1
-19:26:30 INFO  [artifacts] artefatto recuperato sha256=45aae56d…
-19:26:30 INFO  [qa] QA superata
-19:26:31 INFO  [deploy] artefatto copiato remote_path=/opt/hello/releases/1.0.0/hello-1.0.0.tar.gz
-19:26:31 INFO  [deploy] release attivata previous= release=1.0.0
-19:26:31 INFO  [deploy] post_command eseguito output=hello from version 1.0.0
-19:26:31 INFO  [activation] rilascio attivato in esercizio version=1.0.0
+19:26:30 INFO  [secrets] secrets verified count=1
+19:26:30 INFO  [artifacts] artifact fetched sha256=45aae56d…
+19:26:30 INFO  [qa] QA passed
+19:26:31 INFO  [deploy] artifact copied remote_path=/opt/hello/releases/1.0.0/hello-1.0.0.tar.gz
+19:26:31 INFO  [deploy] release activated previous= release=1.0.0
+19:26:31 INFO  [deploy] post_command run output=hello from version 1.0.0
+19:26:31 INFO  [activation] release activated in service version=1.0.0
 ```
 
 E sul target:

@@ -3,13 +3,13 @@ info:
   title: manent API
   version: v1
   description: |
-    API di manent: deploy, rilasci a ondate, governance, log e metriche. Tutte le rotte sotto
-    /api/v1 richiedono un bearer token (OIDC o token statico) quando l'autenticazione è attiva;
-    i permessi sono quelli di RBAC per applicazione e ambiente. Le risposte di errore hanno la
-    forma {"error": "<messaggio>"}.
+    manent API: deploys, wave rollouts, governance, logs and metrics. Every route under /api/v1
+    requires a bearer token (OIDC or static token) when authentication is enabled; permissions
+    are those of RBAC per application and environment. Error responses have the form
+    {"error": "<message>"}.
 
-    Questa specifica è il contratto tra server, interfaccia web e client: un test confronta le
-    rotte registrate dal server con i percorsi qui sotto.
+    This specification is the contract between server, web interface and client: a test compares
+    the routes registered by the server with the paths below.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -34,7 +34,7 @@ paths:
   /api/v1/deployments:
     post:
       tags: [deployments]
-      summary: Accoda un deploy, lo pianifica o crea una schedule ricorrente
+      summary: Enqueues a deploy, schedules it or creates a recurring schedule
       operationId: submitDeployment
       parameters:
         - name: dry_run
@@ -46,31 +46,31 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Descriptor'}
       responses:
-        '202': {description: Deploy accodato, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
-        '201': {description: Schedule ricorrente creata o aggiornata, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '202': {description: Deploy enqueued, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '201': {description: Recurring schedule created or updated, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
     get:
       tags: [deployments]
-      summary: Elenca i deploy più recenti
+      summary: Lists the most recent deploys
       operationId: listDeployments
       parameters:
         - {name: schedule, in: query, schema: {type: string}}
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
-        - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
-        - {name: selector, in: query, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>), schema: {type: string}}
+        - {name: artifact, in: query, description: Artifact name (artifact.name), schema: {type: string}}
+        - {name: selector, in: query, description: Selector on the applications (tag, application, tenant, tenant.<tag>), schema: {type: string}}
         - {name: state, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, default: 50}}
         - name: cursor
           in: query
-          description: next_cursor della pagina precedente
+          description: next_cursor of the previous page
           schema: {type: string}
       responses:
         '200':
-          description: Deploy dal più recente
+          description: Deploys, most recent first
           content:
             application/json:
               schema:
@@ -78,12 +78,12 @@ paths:
                 required: [deployments]
                 properties:
                   deployments: {type: array, items: {$ref: '#/components/schemas/Status'}}
-                  next_cursor: {type: string, description: Presente se la pagina è piena}
+                  next_cursor: {type: string, description: Present if the page is full}
         '400': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/plan:
     post:
       tags: [deployments]
-      summary: Calcola gli step che verrebbero eseguiti
+      summary: Computes the steps that would run
       operationId: planDeployment
       requestBody:
         required: true
@@ -92,7 +92,7 @@ paths:
             schema: {$ref: '#/components/schemas/Descriptor'}
       responses:
         '200':
-          description: Piano
+          description: Plan
           content:
             application/json:
               schema:
@@ -103,7 +103,7 @@ paths:
   /api/v1/deployments/validate:
     post:
       tags: [deployments]
-      summary: Verifica il descrittore come all'accodamento, senza accodarlo
+      summary: Checks the descriptor as at enqueueing, without enqueueing it
       operationId: validateDeployment
       requestBody:
         required: true
@@ -111,18 +111,18 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Descriptor'}
       responses:
-        '200': {description: Deploy effettivo, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
+        '200': {description: Effective deploy, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/environments/validate:
     post:
       tags: [deployments]
-      summary: Verifica una configurazione di ambiente candidata, prima di applicarla
+      summary: Checks a candidate environment configuration, before applying it
       description: |
-        Fonde la configurazione (YAML o JSON, come nel sistema di configurazione) con il descrittore
-        di esempio (default: la richiesta del deploy in esercizio) e applica le verifiche
-        dell'accodamento: campi sconosciuti, policy sui descrittori, fusione, rollback, piano delle
-        ondate e del traffico. Non accoda e non scrive nulla.
+        Merges the configuration (YAML or JSON, as in the configuration system) with the example
+        descriptor (default: the request of the live deploy) and applies the enqueueing checks:
+        unknown fields, descriptor policy, merge, rollback, wave and traffic plan. It enqueues and
+        writes nothing.
       operationId: validateEnvironment
       requestBody:
         required: true
@@ -130,24 +130,24 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/EnvironmentCheck'}
       responses:
-        '200': {description: Deploy effettivo con la configurazione candidata, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
+        '200': {description: Effective deploy with the candidate configuration, content: {application/json: {schema: {$ref: '#/components/schemas/Validation'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}:
     get:
       tags: [deployments]
-      summary: Stato di un deploy
+      summary: State of a deploy
       operationId: getDeployment
       parameters: [{$ref: '#/components/parameters/id'}]
       responses:
-        '200': {description: Stato, content: {application/json: {schema: {$ref: '#/components/schemas/Status'}}}}
+        '200': {description: State, content: {application/json: {schema: {$ref: '#/components/schemas/Status'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}/steps:
     get:
       tags: [insight]
-      summary: Step registrati del deploy
+      summary: Recorded steps of the deploy
       operationId: getDeploymentSteps
       parameters: [{$ref: '#/components/parameters/id'}]
       responses:
@@ -164,22 +164,22 @@ paths:
   /api/v1/deployments/{id}/logs:
     get:
       tags: [insight]
-      summary: Righe di log del deploy a partire da offset
+      summary: Log lines of the deploy starting from offset
       operationId: getDeploymentLogs
       parameters:
         - {$ref: '#/components/parameters/id'}
         - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
       responses:
-        '200': {description: Pagina di log, content: {application/json: {schema: {$ref: '#/components/schemas/LogPage'}}}}
+        '200': {description: Log page, content: {application/json: {schema: {$ref: '#/components/schemas/LogPage'}}}}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}/events:
     get:
       tags: [insight]
-      summary: Stato e log del deploy come Server-Sent Events
+      summary: State and log of the deploy as Server-Sent Events
       description: |
-        Eventi "status" (Status in JSON, quando cambia), "log" (array di LogLine; id = offset
-        successivo, ripreso con Last-Event-ID), "end" alla conclusione, "error" se la lettura
-        fallisce. Commenti ": keep-alive" ogni 15 secondi senza eventi.
+        Events "status" (Status in JSON, when it changes), "log" (array of LogLine; id = next
+        offset, resumed with Last-Event-ID), "end" at the end, "error" if reading fails.
+        ": keep-alive" comments every 15 seconds without events.
       operationId: streamDeploymentEvents
       parameters:
         - {$ref: '#/components/parameters/id'}
@@ -187,7 +187,7 @@ paths:
         - {name: Last-Event-ID, in: header, schema: {type: string}}
       responses:
         '200':
-          description: Stream di eventi
+          description: Event stream
           content:
             text/event-stream:
               schema: {type: string}
@@ -195,45 +195,45 @@ paths:
   /api/v1/deployments/{id}/cancel:
     post:
       tags: [deployments]
-      summary: Annulla un deploy in attesa o in esecuzione
+      summary: Cancels a waiting or running deploy
       operationId: cancelDeployment
       parameters: [{$ref: '#/components/parameters/id'}]
       responses:
-        '204': {description: Annullato}
+        '204': {description: Cancelled}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}/approve:
     post:
       tags: [governance]
-      summary: Approva un deploy (prima del deploy o tra due ondate)
+      summary: Approves a deploy (before the deploy or between two waves)
       operationId: approveDeployment
       parameters: [{$ref: '#/components/parameters/id'}]
       requestBody: {$ref: '#/components/requestBodies/Decision'}
       responses:
-        '204': {description: Decisione registrata}
+        '204': {description: Decision recorded}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/deployments/{id}/reject:
     post:
       tags: [governance]
-      summary: Respinge un deploy
+      summary: Rejects a deploy
       operationId: rejectDeployment
       parameters: [{$ref: '#/components/parameters/id'}]
       requestBody: {$ref: '#/components/requestBodies/Decision'}
       responses:
-        '204': {description: Decisione registrata}
+        '204': {description: Decision recorded}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/approvals:
     get:
       tags: [governance]
-      summary: Deploy in attesa che l'utente può approvare
+      summary: Waiting deploys the user can approve
       operationId: listApprovals
       responses:
         '200':
-          description: Approvazioni in attesa
+          description: Pending approvals
           content:
             application/json:
               schema:
@@ -244,7 +244,7 @@ paths:
   /api/v1/promotions:
     post:
       tags: [governance]
-      summary: Rilascia in un ambiente l'artefatto già rilasciato in un altro
+      summary: Releases to an environment the artifact already released to another
       operationId: promote
       requestBody:
         required: true
@@ -252,13 +252,13 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/PromoteRequest'}
       responses:
-        '202': {description: Promozione accodata, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '202': {description: Promotion enqueued, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/rollbacks:
     post:
       tags: [governance]
-      summary: Rilascia di nuovo una versione precedente
+      summary: Releases a previous version again
       operationId: rollback
       requestBody:
         required: true
@@ -266,23 +266,23 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/RollbackRequest'}
       responses:
-        '202': {description: Rollback accodato, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
+        '202': {description: Rollback enqueued, content: {application/json: {schema: {$ref: '#/components/schemas/Submission'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/inventory:
     get:
       tags: [governance]
-      summary: Release in esercizio per applicazione e ambiente
+      summary: Live releases by application and environment
       operationId: getInventory
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
-        - {name: artifact, in: query, description: Nome dell'artefatto (artifact.name), schema: {type: string}}
-        - {name: selector, in: query, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>), schema: {type: string}}
+        - {name: artifact, in: query, description: Artifact name (artifact.name), schema: {type: string}}
+        - {name: selector, in: query, description: Selector on the applications (tag, application, tenant, tenant.<tag>), schema: {type: string}}
       responses:
         '200':
-          description: Inventario
+          description: Inventory
           content:
             application/json:
               schema:
@@ -293,14 +293,14 @@ paths:
   /api/v1/freezes:
     get:
       tags: [governance]
-      summary: Finestre di freeze attive e future
+      summary: Active and future freeze windows
       operationId: listFreezes
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
       responses:
         '200':
-          description: Finestre
+          description: Windows
           content:
             application/json:
               schema:
@@ -310,7 +310,7 @@ paths:
                   freezes: {type: array, items: {$ref: '#/components/schemas/WindowStatus'}}
     post:
       tags: [governance]
-      summary: Crea una finestra di freeze a runtime (freeze.write)
+      summary: Creates a freeze window at runtime (freeze.write)
       operationId: createFreeze
       requestBody:
         required: true
@@ -318,27 +318,27 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/FreezeRequest'}
       responses:
-        '201': {description: Finestra creata, content: {application/json: {schema: {$ref: '#/components/schemas/WindowStatus'}}}}
+        '201': {description: Window created, content: {application/json: {schema: {$ref: '#/components/schemas/WindowStatus'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/freezes/{name}:
     delete:
       tags: [governance]
-      summary: Elimina una finestra di freeze creata a runtime (freeze.write)
+      summary: Deletes a freeze window created at runtime (freeze.write)
       operationId: deleteFreeze
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
-        '204': {description: Eliminata}
+        '204': {description: Deleted}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/tenants:
     get:
       tags: [tenants]
-      summary: Tenant del registro, i team proprietari delle applicazioni (filtrati dai permessi)
+      summary: Tenants of the registry, the teams that own the applications (filtered by permissions)
       operationId: listTenants
       parameters:
-        - {name: application, in: query, description: Solo il proprietario di questa applicazione, schema: {type: string}}
-        - {name: selector, in: query, description: Selettore sui tag del tenant e sul nome, schema: {type: string}}
+        - {name: application, in: query, description: Only the owner of this application, schema: {type: string}}
+        - {name: selector, in: query, description: Selector on the tenant tags and name, schema: {type: string}}
       responses:
         '200':
           description: Tenant
@@ -352,7 +352,7 @@ paths:
   /api/v1/tenants/{name}:
     get:
       tags: [tenants]
-      summary: Un tenant
+      summary: A tenant
       operationId: getTenant
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
@@ -362,15 +362,15 @@ paths:
   /api/v1/policies:
     get:
       tags: [policies]
-      summary: Revisioni della policy di governance (policy.read)
+      summary: Revisions of the governance policy (policy.read)
       operationId: listPolicies
       responses:
-        '200': {description: Revisioni e policy in vigore, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyList'}}}}
+        '200': {description: Revisions and policy in force, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyList'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
     post:
       tags: [policies]
-      summary: Carica una revisione in bozza, dopo compilazione e test (policy.write)
+      summary: Uploads a draft revision, after compilation and tests (policy.write)
       operationId: pushPolicy
       requestBody:
         required: true
@@ -378,23 +378,23 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/PolicyPush'}
       responses:
-        '201': {description: Revisione in bozza, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
+        '201': {description: Draft revision, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}:
     get:
       tags: [policies]
-      summary: Una revisione con i suoi file (policy.read)
+      summary: A revision with its files (policy.read)
       operationId: getPolicy
       parameters: [{$ref: '#/components/parameters/revision'}]
       responses:
-        '200': {description: Revisione, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
+        '200': {description: Revision, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRevision'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}/evaluate:
     post:
       tags: [policies]
-      summary: Decisione di una revisione su un descrittore (policy.write)
+      summary: Decision of a revision on a descriptor (policy.write)
       operationId: evaluatePolicy
       parameters: [{$ref: '#/components/parameters/revision'}]
       requestBody:
@@ -403,14 +403,14 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/PolicyEvaluationRequest'}
       responses:
-        '200': {description: Input e decisione, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEvaluation'}}}}
+        '200': {description: Input and decision, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEvaluation'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}/access:
     post:
       tags: [policies]
-      summary: Permessi di un'identità indicata a mano con una revisione, confronto con quella attiva ed esito di un'azione (policy.write, rbac.engine opa)
+      summary: Permissions of a manually entered identity with a revision, comparison with the active one and outcome of an action (policy.write, rbac.engine opa)
       operationId: policyAccess
       parameters: [{$ref: '#/components/parameters/revision'}]
       requestBody:
@@ -419,7 +419,7 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/PolicyAccessRequest'}
       responses:
-        '200': {description: Permessi simulati, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyAccess'}}}}
+        '200': {description: Simulated permissions, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyAccess'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
@@ -428,62 +428,62 @@ paths:
   /api/v1/policies/{revision}/impact:
     get:
       tags: [policies]
-      summary: Decisioni dei deploy reali del periodo ricalcolate con la revisione (policy.write)
+      summary: Decisions of the period's real deploys recomputed with the revision (policy.write)
       operationId: policyImpact
       parameters:
         - {$ref: '#/components/parameters/revision'}
         - name: since
           in: query
-          description: Data RFC 3339, durata (720h) o giorni (30d); default 7 giorni
+          description: RFC 3339 date, duration (720h) or days (30d); default 7 days
           schema: {type: string}
       responses:
-        '200': {description: Deploy con una decisione diversa, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyImpact'}}}}
+        '200': {description: Deploys with a different decision, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyImpact'}}}}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}/approve:
     post:
       tags: [policies]
-      summary: Approva e attiva una revisione in bozza (policy.approve, un'identità diversa dall'autore)
+      summary: Approves and activates a draft revision (policy.approve, an identity other than the author)
       operationId: approvePolicy
       parameters: [{$ref: '#/components/parameters/revision'}]
       responses:
-        '204': {description: Attivata}
+        '204': {description: Activated}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/policies/{revision}/activate:
     post:
       tags: [policies]
-      summary: Torna a una revisione già attiva in passato (policy.approve)
+      summary: Goes back to a revision that was active in the past (policy.approve)
       operationId: activatePolicy
       parameters: [{$ref: '#/components/parameters/revision'}]
       responses:
-        '204': {description: Attivata}
+        '204': {description: Activated}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
   /api/v1/metrics/dora:
     get:
       tags: [insight]
-      summary: Metriche DORA
+      summary: DORA metrics
       operationId: getDORA
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
         - {name: artifact, in: query, schema: {type: string}}
-        - {name: by, in: query, description: "tenant: metriche anche per tenant", schema: {type: string, enum: [tenant]}}
+        - {name: by, in: query, description: "tenant: metrics per tenant too", schema: {type: string, enum: [tenant]}}
         - name: since
           in: query
-          description: Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni
+          description: RFC 3339 date, duration (720h) or days (30d); default 30 days
           schema: {type: string}
       responses:
-        '200': {description: Metriche, content: {application/json: {schema: {$ref: '#/components/schemas/DORAReport'}}}}
+        '200': {description: Metrics, content: {application/json: {schema: {$ref: '#/components/schemas/DORAReport'}}}}
         '400': {$ref: '#/components/responses/Error'}
   /api/v1/schedules:
     get:
       tags: [schedules]
-      summary: Schedule ricorrenti
+      summary: Recurring schedules
       operationId: listSchedules
       responses:
         '200':
@@ -498,7 +498,7 @@ paths:
   /api/v1/schedules/{name}:
     get:
       tags: [schedules]
-      summary: Una schedule
+      summary: A schedule
       operationId: getSchedule
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
@@ -506,45 +506,45 @@ paths:
         '404': {$ref: '#/components/responses/Error'}
     delete:
       tags: [schedules]
-      summary: Elimina una schedule
+      summary: Deletes a schedule
       operationId: deleteSchedule
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
-        '204': {description: Eliminata}
+        '204': {description: Deleted}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/schedules/{name}/pause:
     post:
       tags: [schedules]
-      summary: Sospende una schedule
+      summary: Pauses a schedule
       operationId: pauseSchedule
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
-        '204': {description: Sospesa}
+        '204': {description: Paused}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/schedules/{name}/resume:
     post:
       tags: [schedules]
-      summary: Riprende una schedule
+      summary: Resumes a schedule
       operationId: resumeSchedule
       parameters: [{$ref: '#/components/parameters/name'}]
       responses:
-        '204': {description: Ripresa}
+        '204': {description: Resumed}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/v1/me:
     get:
       tags: [access]
-      summary: Identità della richiesta e ruoli che le si applicano
+      summary: Identity of the request and the roles that apply to it
       operationId: getMe
       responses:
-        '200': {description: Identità, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
+        '200': {description: Identity, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
         '401': {$ref: '#/components/responses/Error'}
   /api/v1/workers:
     get:
       tags: [platform]
-      summary: Worker registrati con stato, heartbeat e workflow in esecuzione (permesso platform.read)
+      summary: Registered workers with state, heartbeat and running workflows (platform.read permission)
       operationId: listWorkers
       responses:
         '200':
@@ -561,11 +561,11 @@ paths:
   /api/v1/queues:
     get:
       tags: [platform]
-      summary: Code DBOS di manent con limiti, workflow in coda, in esecuzione e pianificati e worker in ascolto (permesso platform.read)
+      summary: manent's DBOS queues with limits, queued, running and scheduled workflows and listening workers (platform.read permission)
       operationId: listQueues
       responses:
         '200':
-          description: Code
+          description: Queues
           content:
             application/json:
               schema:
@@ -578,19 +578,19 @@ paths:
   /api/v1/activity:
     get:
       tags: [platform]
-      summary: Deploy non conclusi (in esecuzione, in attesa di approvazione, in coda, pianificati)
+      summary: Unfinished deploys (running, awaiting approval, queued, scheduled)
       operationId: getActivity
       parameters:
         - {name: application, in: query, schema: {type: string}}
         - {name: environment, in: query, schema: {type: string}}
         - {name: tenant, in: query, schema: {type: string}}
       responses:
-        '200': {description: Attività, content: {application/json: {schema: {$ref: '#/components/schemas/Activity'}}}}
+        '200': {description: Activity, content: {application/json: {schema: {$ref: '#/components/schemas/Activity'}}}}
         '401': {$ref: '#/components/responses/Error'}
   /api/v1/releases:
     post:
       tags: [releases]
-      summary: Accoda una release composta (più deploy con dipendenze)
+      summary: Enqueues a composite release (several deploys with dependencies)
       operationId: submitRelease
       requestBody:
         required: true
@@ -598,13 +598,13 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Release'}
       responses:
-        '202': {description: Release accodata, content: {application/json: {schema: {$ref: '#/components/schemas/ReleaseStatus'}}}}
+        '202': {description: Release enqueued, content: {application/json: {schema: {$ref: '#/components/schemas/ReleaseStatus'}}}}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
     get:
       tags: [releases]
-      summary: Release più recenti
+      summary: Most recent releases
       operationId: listReleases
       parameters:
         - {name: limit, in: query, schema: {type: integer, minimum: 1}}
@@ -621,7 +621,7 @@ paths:
   /api/v1/releases/{id}:
     get:
       tags: [releases]
-      summary: Stato di una release e dei suoi deploy
+      summary: State of a release and its deploys
       operationId: getRelease
       parameters: [{$ref: '#/components/parameters/id'}]
       responses:
@@ -631,29 +631,29 @@ paths:
   /api/v1/releases/{id}/cancel:
     post:
       tags: [releases]
-      summary: Annulla i deploy non conclusi della release e la release
+      summary: Cancels the unfinished deploys of the release and the release
       operationId: cancelRelease
       parameters: [{$ref: '#/components/parameters/id'}]
       responses:
-        '204': {description: Annullata}
+        '204': {description: Cancelled}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /ui/config.json:
     get:
       tags: [ui]
-      summary: Configurazione pubblica dell'interfaccia web
+      summary: Public configuration of the web interface
       operationId: getUIConfig
       security: []
       responses:
-        '200': {description: Configurazione, content: {application/json: {schema: {$ref: '#/components/schemas/UIConfig'}}}}
+        '200': {description: Configuration, content: {application/json: {schema: {$ref: '#/components/schemas/UIConfig'}}}}
   /integrations/slack/interactions:
     post:
       tags: [integrations]
-      summary: Clic sui pulsanti di approvazione dei messaggi Slack (Interactivity Request URL dell'app)
+      summary: Clicks on the approval buttons of Slack messages (the app's Interactivity Request URL)
       description: >-
-        Autenticata dalla firma di Slack (X-Slack-Signature, X-Slack-Request-Timestamp), non da un bearer.
-        La decisione è registrata con l'identità di manent associata all'utente Slack; l'esito arriva
-        all'utente con un messaggio effimero.
+        Authenticated by the Slack signature (X-Slack-Signature, X-Slack-Request-Timestamp), not by a bearer.
+        The decision is recorded with the manent identity linked to the Slack user; the outcome reaches
+        the user as an ephemeral message.
       operationId: slackInteractions
       security: []
       requestBody:
@@ -664,15 +664,15 @@ paths:
               type: object
               required: [payload]
               properties:
-                payload: {type: string, description: Payload JSON dell'interazione (block_actions)}
+                payload: {type: string, description: JSON payload of the interaction (block_actions)}
       responses:
-        '200': {description: Ricevuta}
-        '401': {description: Firma non valida o richiesta scaduta}
-        '503': {description: Integrazione non disponibile}
+        '200': {description: Received}
+        '401': {description: Invalid signature or expired request}
+        '503': {description: Integration not available}
   /healthz:
     get:
       tags: [probes]
-      summary: Il processo risponde
+      summary: The process responds
       operationId: healthz
       security: []
       responses:
@@ -680,12 +680,12 @@ paths:
   /readyz:
     get:
       tags: [probes]
-      summary: Il processo è pronto (database raggiungibile, non in drain)
+      summary: The process is ready (database reachable, not draining)
       operationId: readyz
       security: []
       responses:
-        '200': {description: Pronto}
-        '503': {description: Non pronto}
+        '200': {description: Ready}
+        '503': {description: Not ready}
 
 components:
   securitySchemes:
@@ -707,7 +707,7 @@ components:
       name: revision
       in: path
       required: true
-      description: Numero della revisione, oppure current per quella in vigore
+      description: Revision number, or current for the one in force
       schema: {type: string}
   requestBodies:
     Decision:
@@ -720,7 +720,7 @@ components:
               comment: {type: string}
   responses:
     Error:
-      description: Errore
+      description: Error
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -732,30 +732,30 @@ components:
         error: {type: string}
     Descriptor:
       type: object
-      description: Descrittore di deploy (vedi la guida "Il descrittore" della documentazione).
+      description: Deploy descriptor (see the "Descriptor" guide in the documentation).
       additionalProperties: true
       required: [apiVersion, application, environment, artifact]
       properties:
         apiVersion: {type: string, examples: [manent/v1]}
         id: {type: string}
-        tenant: {type: string, description: "Tenant dell'applicazione: sceglie tra i tenant che la elencano, obbligatorio solo se più di uno; untenanted per le applicazioni senza tenant"}
+        tenant: {type: string, description: "Tenant of the application: chooses among the tenants that list it, required only if more than one; untenanted for applications without a tenant"}
         application: {type: string}
         environment: {type: string}
         dryRun: {type: boolean}
-        after: {type: array, items: {type: string}, description: ID dei deploy che devono riuscire prima di questo}
-        afterTimeout: {type: string, description: Attesa massima delle dipendenze (default 24h)}
+        after: {type: array, items: {type: string}, description: IDs of the deploys that must succeed before this one}
+        afterTimeout: {type: string, description: Maximum wait for the dependencies (default 24h)}
         config:
           type: object
-          description: Revisione della configurazione di ambiente (provider git), entro descriptor_policy.config_ref
+          description: Revision of the environment configuration (git provider), within descriptor_policy.config_ref
           properties:
-            ref: {type: string, description: Nome di un ref (refs/tags/env-1) o SHA di un commit}
+            ref: {type: string, description: Name of a ref (refs/tags/env-1) or SHA of a commit}
         imports:
           type: object
-          description: Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom)
+          description: Deploys whose exports are read at start (deploy.targetsFrom, deploy.paramsFrom)
           additionalProperties: {$ref: '#/components/schemas/Import'}
         exports:
           type: object
-          description: Output del deploy che altri deploy possono importare
+          description: Deploy outputs that other deploys can import
           additionalProperties: {$ref: '#/components/schemas/Export'}
         artifact:
           type: object
@@ -768,7 +768,7 @@ components:
             sha256: {type: string}
     Import:
       type: object
-      description: Un deploy dato (deployment, tra le dipendenze after) o la release in esercizio di un'applicazione (current)
+      description: A given deploy (deployment, among the after dependencies) or the live release of an application (current)
       properties:
         deployment: {type: string}
         current:
@@ -777,18 +777,18 @@ components:
           properties:
             tenant: {type: string}
             application: {type: string}
-            environment: {type: string, description: Default l'ambiente del deploy che importa}
-            artifact: {type: string, description: "Artefatto dell'applicazione; obbligatorio se l'ambiente ne ha più di uno"}
+            environment: {type: string, description: Default the environment of the importing deploy}
+            artifact: {type: string, description: "Artifact of the application; required if the environment has more than one"}
     Export:
       type: object
       required: [from]
       properties:
-        from: {type: string, description: '"<step>.<chiave>": output del plugin (step deploy) o di uno step personalizzato'}
+        from: {type: string, description: '"<step>.<key>": output of the plugin (deploy step) or of a custom step'}
         format: {type: string, enum: [string, targets]}
-        pattern: {type: string, description: Espressione regolare ancorata (obbligatoria con format string)}
+        pattern: {type: string, description: Anchored regular expression (required with format string)}
     DeployTargets:
       type: object
-      description: Sezione deploy di un descrittore (plugin, target, parametri).
+      description: Deploy section of a descriptor (plugin, targets, parameters).
       additionalProperties: true
     PlannedStep:
       type: object
@@ -798,10 +798,10 @@ components:
         max_retries: {type: integer}
         type:
           type: string
-          description: Tipo dello step personalizzato (command, http); assente per gli step standard.
+          description: Kind of the custom step (command, http); absent for the standard steps.
         spec_hash:
           type: string
-          description: Sha256 della specifica dello step personalizzato, come in pipeline.custom.revoked_specs. Comandi e URL non sono esposti.
+          description: Sha256 of the custom step's specification, as in pipeline.custom.revoked_specs. Commands and URLs are not exposed.
     Submission:
       type: object
       required: [state]
@@ -832,11 +832,11 @@ components:
         change: {$ref: '#/components/schemas/ChangeTicket'}
     ChangeTicket:
       type: object
-      description: Ticket di change management (ServiceNow, Jira) del deploy
+      description: Change management ticket (ServiceNow, Jira) of the deploy
       required: [number]
       properties:
-        id: {type: string, description: Identificativo tecnico nel sistema ITSM}
-        number: {type: string, description: Riferimento leggibile, es. CHG0031337}
+        id: {type: string, description: Technical identifier in the ITSM system}
+        number: {type: string, description: Readable reference, e.g. CHG0031337}
         url: {type: string}
         approval: {type: string, enum: [pending, approved, rejected]}
     RolloutPass:
@@ -847,7 +847,7 @@ components:
         region: {type: string}
         az: {type: string}
         hosts: {type: array, items: {type: string}}
-        drained: {type: array, items: {type: string}, description: Membri del pool fuori dal load balancer in questo momento}
+        drained: {type: array, items: {type: string}, description: Pool members out of the load balancer right now}
     RolloutStage:
       type: object
       required: [name, wave, state, passes]
@@ -856,14 +856,14 @@ components:
         wave: {type: string}
         state: {type: string, enum: [pending, running, baking, succeeded, failed, rolled-back]}
         passes: {type: array, items: {$ref: '#/components/schemas/RolloutPass'}}
-        gate: {type: string, description: Ultimo controllo rosso dell'health gate}
-        score: {type: number, description: Punteggio dell'analisi canary (0-100) all'ultima lettura del gate}
+        gate: {type: string, description: Last red check of the health gate}
+        score: {type: number, description: Canary analysis score (0-100) at the last gate reading}
         error: {type: string}
     RolloutState:
       type: object
       required: [status, stages, on_failure]
       properties:
-        strategy: {type: string, enum: [waves, traffic], description: Vuoto per i rilasci a ondate}
+        strategy: {type: string, enum: [waves, traffic], description: Empty for wave rollouts}
         status: {type: string, enum: [planned, running, paused-approval, paused-freeze, paused-drift, succeeded, failed]}
         stage: {type: string}
         paused: {type: string}
@@ -874,14 +874,14 @@ components:
         traffic: {$ref: '#/components/schemas/TrafficState'}
     TrafficState:
       type: object
-      description: Rilascio per percentuale (strategy traffic); gli stadi sono i gradini
+      description: Percentage rollout (strategy traffic); the stages are the steps
       required: [weight, steps]
       properties:
-        pass: {type: string, description: Passo in corso nei rilasci a ondate}
+        pass: {type: string, description: Pass in progress in wave rollouts}
         router: {type: string}
-        stable: {type: string, description: Slot della versione stabile}
-        candidate: {type: string, description: Slot della versione candidata}
-        weight: {type: integer, description: Quota di traffico corrente della candidata}
+        stable: {type: string, description: Slot of the stable version}
+        candidate: {type: string, description: Slot of the candidate version}
+        weight: {type: integer, description: Current traffic share of the candidate}
         steps: {type: array, items: {type: integer}}
         testers: {type: boolean}
         promoted: {type: boolean}
@@ -900,7 +900,7 @@ components:
         steps: {type: array, items: {$ref: '#/components/schemas/StepResult'}}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         change: {$ref: '#/components/schemas/ChangeTicket'}
-        exports: {type: object, additionalProperties: {type: string}, description: Export del deploy riuscito}
+        exports: {type: object, additionalProperties: {type: string}, description: Exports of the successful deploy}
     Status:
       type: object
       required: [id, state, created_at, updated_at]
@@ -915,27 +915,27 @@ components:
         artifact: {type: string}
         version: {type: string}
         sha256: {type: string}
-        config_revision: {type: string, description: SHA del commit della configurazione di ambiente (provider git)}
+        config_revision: {type: string, description: Commit SHA of the environment configuration (git provider)}
         kind: {type: string, enum: [deploy, promotion, rollback]}
-        source: {type: string, description: Deploy di origine di una promozione o di un rollback}
+        source: {type: string, description: Source deploy of a promotion or a rollback}
         dry_run: {type: boolean}
-        rollback: {type: string, description: Esito del rollback automatico}
+        rollback: {type: string, description: Outcome of the automatic rollback}
         requested_by: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
         scheduled_at: {type: string, format: date-time}
-        started_at: {type: string, format: date-time, description: Inizio dell'esecuzione sul worker}
-        executor: {type: string, description: Worker che esegue o ha eseguito il deploy}
+        started_at: {type: string, format: date-time, description: Start of the execution on the worker}
+        executor: {type: string, description: Worker that runs or ran the deploy}
         queue: {type: string}
-        last_step: {type: string, description: Ultimo step registrato di un deploy in corso (solo in /activity)}
+        last_step: {type: string, description: Last recorded step of a running deploy (only in /activity)}
         approval: {$ref: '#/components/schemas/ApprovalState'}
         change: {$ref: '#/components/schemas/ChangeTicket'}
         after: {$ref: '#/components/schemas/AfterState'}
-        release: {type: string, description: Release composta a cui appartiene il deploy}
+        release: {type: string, description: Composite release the deploy belongs to}
         policy: {$ref: '#/components/schemas/PolicySnapshot'}
         rollout: {$ref: '#/components/schemas/RolloutState'}
         rollout_progress: {type: string, description: '"stadi superati/stadi totali"'}
-        exports: {type: object, additionalProperties: {type: string}, description: Export del deploy riuscito, importabili da altri deploy}
+        exports: {type: object, additionalProperties: {type: string}, description: Exports of the successful deploy, importable by other deploys}
         result: {$ref: '#/components/schemas/Result'}
         error: {type: string}
     AfterState:
@@ -969,7 +969,7 @@ components:
             properties:
               name: {type: string}
               descriptor: {$ref: '#/components/schemas/Descriptor'}
-              after: {type: array, items: {type: string}, description: Nomi di altri deploy della release}
+              after: {type: array, items: {type: string}, description: Names of other deploys of the release}
     ReleaseStatus:
       type: object
       required: [id, state, on_failure, created_at, updated_at, deploys]
@@ -1003,10 +1003,10 @@ components:
       type: object
       required: [id, state, tasks]
       properties:
-        id: {type: string, description: Executor ID DBOS}
+        id: {type: string, description: DBOS executor ID}
         state: {type: string, enum: [alive, stale, stopped, unregistered]}
-        version: {type: string, description: Versione dei workflow (app.version)}
-        build: {type: string, description: Versione del binario}
+        version: {type: string, description: Workflow version (app.version)}
+        build: {type: string, description: Binary version}
         hostname: {type: string}
         region: {type: string}
         started_at: {type: string, format: date-time}
@@ -1014,31 +1014,31 @@ components:
         stopped_at: {type: string, format: date-time}
         recovered_by: {type: string}
         recovered_at: {type: string, format: date-time}
-        pending: {type: object, additionalProperties: {type: integer}, description: Workflow in sospeso per versione dei workflow}
-        queues: {type: array, items: {type: string}, description: Code DBOS da cui il worker preleva}
+        pending: {type: object, additionalProperties: {type: integer}, description: Pending workflows by workflow version}
+        queues: {type: array, items: {type: string}, description: DBOS queues the worker dequeues from}
         resources: {$ref: '#/components/schemas/WorkerResources'}
         tasks: {type: array, items: {$ref: '#/components/schemas/WorkerTask'}}
-        hidden_tasks: {type: integer, description: Workflow in esecuzione di applicazioni/ambienti non leggibili}
+        hidden_tasks: {type: integer, description: Running workflows of applications/environments not readable}
     WorkerResources:
       type: object
-      description: Ultimo campione delle risorse del worker, inviato a ogni heartbeat. I valori che il sistema operativo non fornisce mancano.
+      description: Last sample of the worker's resources, sent at every heartbeat. Values the operating system does not provide are missing.
       required: [os, arch, cpus, cpu_limit, process_cpu_cores, goroutines, sampled_at]
       properties:
         os: {type: string}
         arch: {type: string}
-        cpus: {type: integer, description: CPU logiche dell'host}
-        cpu_limit: {type: integer, description: CPU utilizzabili dal processo (GOMAXPROCS, segue la quota del container)}
-        memory_total_bytes: {type: integer, format: int64, description: Memoria dell'host}
-        memory_available_bytes: {type: integer, format: int64, description: Memoria ancora disponibile sull'host}
-        memory_limit_bytes: {type: integer, format: int64, description: Limite di memoria del container (cgroup)}
-        process_memory_bytes: {type: integer, format: int64, description: Memoria residente del processo}
-        process_cpu_cores: {type: number, description: CPU usata dal processo dal campione precedente, in core}
+        cpus: {type: integer, description: Logical CPUs of the host}
+        cpu_limit: {type: integer, description: CPUs usable by the process (GOMAXPROCS, follows the container quota)}
+        memory_total_bytes: {type: integer, format: int64, description: Memory of the host}
+        memory_available_bytes: {type: integer, format: int64, description: Memory still available on the host}
+        memory_limit_bytes: {type: integer, format: int64, description: Memory limit of the container (cgroup)}
+        process_memory_bytes: {type: integer, format: int64, description: Resident memory of the process}
+        process_cpu_cores: {type: number, description: CPU used by the process since the previous sample, in cores}
         load1: {type: number}
         load5: {type: number}
         load15: {type: number}
         goroutines: {type: integer}
-        workdir_free_bytes: {type: integer, format: int64, description: Spazio libero del file system della workdir}
-        concurrency: {type: integer, description: Deploy eseguiti insieme dal worker (dbos.concurrency)}
+        workdir_free_bytes: {type: integer, format: int64, description: Free space on the workdir file system}
+        concurrency: {type: integer, description: Deploys run together by the worker (dbos.concurrency)}
         sampled_at: {type: string, format: date-time}
     Queue:
       type: object
@@ -1047,14 +1047,14 @@ components:
         name: {type: string}
         kind: {type: string, enum: [deployments, approvals, region, other]}
         region: {type: string}
-        worker_concurrency: {type: integer, description: Workflow eseguiti insieme da un worker (assente = nessun limite)}
-        global_concurrency: {type: integer, description: Workflow eseguiti insieme su tutti i worker}
-        partition_concurrency: {type: integer, description: Workflow eseguiti insieme per applicazione/ambiente}
-        enqueued: {type: integer, format: int64, description: Workflow in attesa di uno slot}
+        worker_concurrency: {type: integer, description: Workflows run together by one worker (absent = no limit)}
+        global_concurrency: {type: integer, description: Workflows run together across all workers}
+        partition_concurrency: {type: integer, description: Workflows run together per application/environment}
+        enqueued: {type: integer, format: int64, description: Workflows waiting for a slot}
         running: {type: integer, format: int64}
-        delayed: {type: integer, format: int64, description: Workflow pianificati (schedule.at)}
-        oldest_enqueued: {type: string, format: date-time, description: Creazione del workflow in attesa da più tempo}
-        workers: {type: array, items: {type: string}, description: Worker attivi in ascolto sulla coda}
+        delayed: {type: integer, format: int64, description: Scheduled workflows (schedule.at)}
+        oldest_enqueued: {type: string, format: date-time, description: Creation of the workflow waiting the longest}
+        workers: {type: array, items: {type: string}, description: Active workers listening on the queue}
     WorkerTask:
       type: object
       required: [id, deployment_id, kind]
@@ -1138,16 +1138,16 @@ components:
       properties:
         tenant: {type: string}
         application: {type: string}
-        artifact: {type: string, description: "Artefatto a cui si riferisce la configurazione (template con {artifact})"}
+        artifact: {type: string, description: "Artifact the configuration refers to (template with {artifact})"}
         environment: {type: string}
-        config: {type: string, description: Configurazione di ambiente in YAML o JSON}
+        config: {type: string, description: Environment configuration in YAML or JSON}
         descriptor: {$ref: '#/components/schemas/Descriptor'}
     InventoryEntry:
       type: object
       required: [application, artifact, environment]
       properties:
         application: {type: string}
-        artifact: {type: string, description: "Artefatto (artifact.name) della voce"}
+        artifact: {type: string, description: "Artifact (artifact.name) of the entry"}
         environment: {type: string}
         tenant: {type: string}
         current: {$ref: '#/components/schemas/Status'}
@@ -1156,10 +1156,10 @@ components:
         targets: {$ref: '#/components/schemas/TargetsState'}
         out_of_sync:
           type: boolean
-          description: Almeno un target non è sulla versione di current (drifted o missing).
+          description: At least one target is not on the version of current (drifted or missing).
     TargetsState:
       type: object
-      description: Stato letto dai target dall'ultima riconciliazione (reconcile.interval).
+      description: State read from the targets by the last reconciliation (reconcile.interval).
       required: [checked_at, deployment, version]
       properties:
         checked_at: {type: string, format: date-time}
@@ -1194,25 +1194,25 @@ components:
         tenants: {type: string}
         artifacts: {type: array, items: {type: string}}
         selector: {type: string}
-        hard: {type: boolean, description: Non esentabile dalla policy né superabile con freezeOverride}
-        dynamic: {type: boolean, description: Creata a runtime}
+        hard: {type: boolean, description: Cannot be exempted by the policy nor bypassed with freezeOverride}
+        dynamic: {type: boolean, description: Created at runtime}
         created_by: {type: string}
     TenantInfo:
       type: object
       required: [name]
-      description: Un tenant, il team proprietario delle applicazioni
+      description: A tenant, the team that owns the applications
       properties:
         name: {type: string}
         description: {type: string}
         tags: {type: object, additionalProperties: {type: string}}
         applications:
           type: object
-          description: Applicazioni possedute, con i loro tag
+          description: Owned applications, with their tags
           additionalProperties:
             type: object
             properties:
               tags: {type: object, additionalProperties: {type: string}}
-        queue: {type: string, description: Coda dei deploy del tenant; assente per la coda di default}
+        queue: {type: string, description: Deploy queue of the tenant; absent for the default queue}
         concurrency: {type: integer}
         disabled: {type: boolean}
         source: {type: string}
@@ -1227,10 +1227,10 @@ components:
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
         regions: {type: array, items: {type: string}}
-        tenants: {type: string, description: Selettore dei tenant}
-        artifacts: {type: array, items: {type: string}, description: Pattern sui nomi degli artefatti}
-        selector: {type: string, description: Selettore sulle applicazioni (tag, application, tenant, tenant.<tag>)}
-        from: {type: string, format: date-time, description: Default adesso}
+        tenants: {type: string, description: Tenant selector}
+        artifacts: {type: array, items: {type: string}, description: Patterns on the artifact names}
+        selector: {type: string, description: Selector on the applications (tag, application, tenant, tenant.<tag>)}
+        from: {type: string, format: date-time, description: Default now}
         to: {type: string, format: date-time}
         hard: {type: boolean}
     Approvers:
@@ -1242,7 +1242,7 @@ components:
       type: object
       properties:
         approval: {type: boolean}
-        timeout: {type: integer, description: Nanosecondi}
+        timeout: {type: integer, description: Nanoseconds}
     Denial:
       type: object
       required: [code, message]
@@ -1284,7 +1284,7 @@ components:
       properties:
         engine: {type: string, enum: [builtin, opa]}
         source: {type: string}
-        current: {type: string, description: Revisione in vigore nel processo che ha risposto}
+        current: {type: string, description: Revision in force in the process that responded}
         loaded_at: {type: string, format: date-time}
         revisions: {type: array, items: {$ref: '#/components/schemas/PolicyRevision'}}
     PolicyPush:
@@ -1292,7 +1292,7 @@ components:
       additionalProperties: false
       required: [files]
       properties:
-        files: {type: object, additionalProperties: {type: string}, description: Moduli *.rego e file data.json/data.yaml per percorso}
+        files: {type: object, additionalProperties: {type: string}, description: Rego modules (*.rego) and data.json/data.yaml files by path}
         comment: {type: string}
     PolicyEvaluationRequest:
       type: object
@@ -1319,7 +1319,7 @@ components:
       type: object
       required: [input, decision]
       properties:
-        input: {type: object, additionalProperties: true, description: Documento input della policy (schema 1)}
+        input: {type: object, additionalProperties: true, description: Policy input document (schema 1)}
         decision: {$ref: '#/components/schemas/GovernanceDecision'}
     PolicyChange:
       type: object
@@ -1381,7 +1381,7 @@ components:
       properties:
         id: {type: string}
         dry_run: {type: boolean}
-        freeze_override: {type: string, description: Motivo della deroga al freeze}
+        freeze_override: {type: string, description: Reason for the freeze override}
     PromoteRequest:
       allOf:
         - $ref: '#/components/schemas/Redeploy'
@@ -1392,10 +1392,10 @@ components:
             application: {type: string}
             from: {type: string}
             to: {type: string}
-            artifact: {type: string, description: "Artefatto da promuovere; obbligatorio se from ne ha più di uno"}
+            artifact: {type: string, description: "Artifact to promote; required if from has more than one"}
             version: {type: string}
             deploy: {$ref: '#/components/schemas/DeployTargets'}
-            config_ref: {type: string, description: "Revisione della configurazione dell'ambiente di destinazione (provider git); default il ref di default"}
+            config_ref: {type: string, description: "Revision of the destination environment's configuration (git provider); default the default ref"}
     RollbackRequest:
       allOf:
         - $ref: '#/components/schemas/Redeploy'
@@ -1405,29 +1405,29 @@ components:
             tenant: {type: string}
             application: {type: string}
             environment: {type: string}
-            artifact: {type: string, description: "Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno"}
+            artifact: {type: string, description: "Artifact to roll back; required if the environment has more than one"}
             version: {type: string}
     Grant:
       type: object
       required: [actions, applications, environments]
       properties:
-        name: {type: string, description: Etichetta del permesso (posizione del binding o nome dato dalla policy)}
-        role: {type: string, description: Ruolo da cui vengono le azioni, se il permesso ne nomina uno}
+        name: {type: string, description: Permission label (position of the binding or name given by the policy)}
+        role: {type: string, description: Role the actions come from, if the permission names one}
         actions: {type: array, items: {type: string}}
         applications: {type: array, items: {type: string}}
         environments: {type: array, items: {type: string}}
-        tenants: {type: string, description: Selettore dei tenant a cui il permesso è limitato}
-        selector: {type: string, description: Selettore sulle applicazioni a cui il permesso è limitato}
-        artifacts: {type: array, items: {type: string}, description: Pattern degli artefatti a cui il permesso è limitato}
-        until: {type: string, format: date-time, description: Istante in cui il permesso smette di valere}
+        tenants: {type: string, description: Selector of the tenants the permission is limited to}
+        selector: {type: string, description: Selector on the applications the permission is limited to}
+        artifacts: {type: array, items: {type: string}, description: Patterns of the artifacts the permission is limited to}
+        until: {type: string, format: date-time, description: Time at which the permission stops applying}
     PolicyAccessRequest:
       type: object
       required: [subject]
       properties:
-        subject: {type: string, description: "<metodo>:<nome> (es. oidc:alice); senza metodo vale oidc"}
+        subject: {type: string, description: "<method>:<name> (e.g. oidc:alice); without a method, oidc"}
         groups: {type: array, items: {type: string}}
         claims: {type: object, additionalProperties: {type: string}}
-        compare: {type: boolean, description: Calcola anche i permessi guadagnati e persi rispetto alla revisione attiva}
+        compare: {type: boolean, description: Also computes the permissions gained and lost compared with the active revision}
         check: {$ref: '#/components/schemas/AccessCheck'}
     AccessCheck:
       type: object
@@ -1446,8 +1446,8 @@ components:
         revision: {type: string}
         subject: {type: string}
         grants: {type: array, items: {$ref: '#/components/schemas/Grant'}}
-        warnings: {type: array, items: {type: string}, description: Permessi della revisione scartati perché non validi o con azioni policy.*}
-        compared: {type: string, description: Revisione attiva usata per il confronto}
+        warnings: {type: array, items: {type: string}, description: Permissions of the revision discarded because invalid or with policy.* actions}
+        compared: {type: string, description: Active revision used for the comparison}
         gained: {type: array, items: {$ref: '#/components/schemas/Grant'}}
         lost: {type: array, items: {$ref: '#/components/schemas/Grant'}}
         check: {$ref: '#/components/schemas/AccessOutcome'}
@@ -1456,9 +1456,9 @@ components:
       required: [allowed]
       properties:
         allowed: {type: boolean}
-        granted_by: {type: string, description: Nome del permesso che consente l'azione}
-        denied: {type: array, items: {type: string}, description: Motivi dei divieti (deny) della revisione}
-        reason: {type: string, description: Motivo di un rifiuto senza divieti}
+        granted_by: {type: string, description: Name of the permission that allows the action}
+        denied: {type: array, items: {type: string}, description: Reasons of the revision's denials (deny)}
+        reason: {type: string, description: Reason of a refusal without denials}
     Identity:
       type: object
       required: [subject, name, method, auth_enabled, grants]
@@ -1469,8 +1469,8 @@ components:
         groups: {type: array, items: {type: string}}
         auth_enabled: {type: boolean}
         grants: {type: array, items: {$ref: '#/components/schemas/Grant'}}
-        authz_engine: {type: string, description: Motore dei permessi (opa); assente con il motore builtin}
-        authz_revision: {type: string, description: Revisione della policy dei permessi in vigore}
+        authz_engine: {type: string, description: Permission engine (opa); absent with the builtin engine}
+        authz_revision: {type: string, description: Revision of the permission policy in force}
     UIConfig:
       type: object
       required: [auth_mode, version]

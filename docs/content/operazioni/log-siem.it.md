@@ -34,7 +34,7 @@ I log emessi durante gli step sono salvati anche con il deploy e si leggono con 
 
 Un SIEM irraggiungibile non blocca manent: l'errore di invio viene scritto sul log applicativo e la connessione viene riaperta all'invio successivo. Con più destinazioni, l'errore di una non impedisce l'invio alle altre.
 
-Via UDP e `/dev/log` ogni messaggio è un datagramma di al più 60 KB: un messaggio più grande viene accorciato, prima i valori degli attributi oltre 1 KB, poi il testo (che termina con `… [troncato]`), invece di andare perso.
+Via UDP e `/dev/log` ogni messaggio è un datagramma di al più 60 KB: un messaggio più grande viene accorciato, prima i valori degli attributi oltre 1 KB, poi il testo (che termina con `… [truncated]`), invece di andare perso.
 
 ## Log di sistema e journald { #log-di-sistema-e-journald }
 

@@ -119,7 +119,7 @@ manent promote -a hello --from test --to prod --no-wait
 ```
 
 ```text
-deploy in attesa di approvazione: manent approve 7d817406-dae3-4a37-a382-5a078f2ea912
+deploy awaiting approval: manent approve 7d817406-dae3-4a37-a382-5a078f2ea912
 ```
 
 A promotion takes the request of the last successful deploy in `test`, changes the environment and pins `artifact.sha256` to the hash actually released: the `qa` step will refuse any other file. Targets and parameters come from the `prod` configuration, never from `test`.

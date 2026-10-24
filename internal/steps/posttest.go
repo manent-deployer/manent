@@ -46,6 +46,6 @@ func (p PostTest) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, 
 		}
 		out[c.URL] = "passed"
 	}
-	p.Logger.InfoContext(ctx, "post-test superati", "deployment", in.DeploymentID, "checks", len(out))
+	p.Logger.InfoContext(ctx, "post-tests passed", "deployment", in.DeploymentID, "checks", len(out))
 	return out, nil
 }

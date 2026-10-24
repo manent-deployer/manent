@@ -65,7 +65,7 @@ terraform plan -var shop_version=1.4.0
 | Nulla è cambiato | Nessuna modifica. |
 | `shop_version` è cambiata | `version: "1.3.2" -> "1.4.0"`: l'apply esegue un deploy e lo attende, approvazioni comprese, fino a `timeout`. |
 | Qualcuno ha rilasciato o riportato indietro un'altra versione fuori da Terraform | La differenza letta dall'[inventario](../guida/governance.md#inventario); l'apply rilascia di nuovo quella configurata. |
-| Target cambiati fuori da manent (con la [riconciliazione](../guida/governance.md#stato-reale) e `redeploy_out_of_sync`) | `"1.4.0 (target fuori sincronia)" -> "1.4.0"`: l'apply la rilascia di nuovo. |
+| Target cambiati fuori da manent (con la [riconciliazione](../guida/governance.md#stato-reale) e `redeploy_out_of_sync`) | `"1.4.0 (targets out of sync)" -> "1.4.0"`: l'apply la rilascia di nuovo. |
 
 - Un deploy fallito fa fallire l'apply. Con il rollback automatico l'ambiente è tornato alla versione precedente, e il plan successivo ci riprova.
 - `terraform destroy` non tocca i target: manent non disinstalla le release, la risorsa esce solo dallo state.

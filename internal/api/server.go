@@ -561,7 +561,7 @@ func (s *Server) authenticate() gin.HandlerFunc {
 			p, err = s.authn.Authenticate(c.Request.Context(), token)
 		}
 		if err != nil {
-			s.logger.Warn("autenticazione fallita", "path", c.FullPath(), "client_ip", c.ClientIP(), "error", err)
+			s.logger.Warn("authentication failed", "path", c.FullPath(), "client_ip", c.ClientIP(), "error", err)
 			c.Header("WWW-Authenticate", `Bearer realm="manent"`)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": auth.ErrUnauthenticated.Error()})
 			return
@@ -595,7 +595,7 @@ func (s *Server) trace() gin.HandlerFunc {
 		ctx := telemetry.Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
 		route := c.FullPath()
 		if route == "" {
-			route = "non trovato"
+			route = "not found"
 		}
 		ctx, span := telemetry.Tracer().Start(ctx, c.Request.Method+" "+route, trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(attribute.String("http.request.method", c.Request.Method), attribute.String("http.route", route)))
@@ -616,7 +616,7 @@ func (s *Server) accessLog() gin.HandlerFunc {
 		if route := c.FullPath(); route != "" {
 			s.metrics.HTTPRequest(c.Request.Method, route, c.Writer.Status(), time.Since(start))
 		}
-		s.logger.Info("richiesta HTTP",
+		s.logger.Info("HTTP request",
 			"method", c.Request.Method,
 			"path", c.FullPath(),
 			"status", c.Writer.Status(),

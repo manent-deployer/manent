@@ -114,7 +114,7 @@ func (f *TokenFile) current() Tokens {
 	if err != nil {
 		// A removed file revokes all its tokens.
 		if f.tokens != nil {
-			f.Logger.Warn("file dei token non leggibile: token revocati", "path", f.Path, "error", err)
+			f.Logger.Warn("token file unreadable: tokens revoked", "path", f.Path, "error", err)
 		}
 		f.tokens, f.modTime, f.size = nil, time.Time{}, 0
 		return nil
@@ -125,10 +125,10 @@ func (f *TokenFile) current() Tokens {
 	ts, err := ParseTokenFile(f.Path)
 	f.modTime, f.size = st.ModTime(), st.Size()
 	if err != nil {
-		f.Logger.Error("file dei token non valido: restano in uso i token precedenti", "path", f.Path, "error", err)
+		f.Logger.Error("token file invalid: the previous tokens stay in use", "path", f.Path, "error", err)
 		return f.tokens
 	}
 	f.tokens = ts
-	f.Logger.Info("file dei token riletto", "path", f.Path, "tokens", len(ts))
+	f.Logger.Info("token file reloaded", "path", f.Path, "tokens", len(ts))
 	return ts
 }

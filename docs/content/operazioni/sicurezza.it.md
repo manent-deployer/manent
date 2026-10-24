@@ -2,7 +2,7 @@
 
 ## Checklist per la produzione
 
-La configurazione di default è pensata per lo sviluppo. All'avvio, `serve` e `worker` registrano un avviso (`configurazione non adatta alla produzione`) per ogni impostazione ancora permissiva. In produzione:
+La configurazione di default è pensata per lo sviluppo. All'avvio, `serve` e `worker` registrano un avviso (`configuration not fit for production`) per ogni impostazione ancora permissiva. In produzione:
 
 - [ ] `auth.mode: enabled`, con OIDC per gli utenti e token statici per la CI, questi in `auth.tokens_file` e con `expires_at`. Vedi [Autenticazione, permessi e audit](accesso.md).
 - [ ] Utenti e CI usano l'API o il client `manent`; `manent-server` e le credenziali del database solo ai processi del server e agli operatori della piattaforma.

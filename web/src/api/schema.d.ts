@@ -11,10 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Elenca i deploy più recenti */
+        /** Lists the most recent deploys */
         get: operations["listDeployments"];
         put?: never;
-        /** Accoda un deploy, lo pianifica o crea una schedule ricorrente */
+        /** Enqueues a deploy, schedules it or creates a recurring schedule */
         post: operations["submitDeployment"];
         delete?: never;
         options?: never;
@@ -31,7 +31,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Calcola gli step che verrebbero eseguiti */
+        /** Computes the steps that would run */
         post: operations["planDeployment"];
         delete?: never;
         options?: never;
@@ -48,7 +48,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verifica il descrittore come all'accodamento, senza accodarlo */
+        /** Checks the descriptor as at enqueueing, without enqueueing it */
         post: operations["validateDeployment"];
         delete?: never;
         options?: never;
@@ -66,11 +66,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Verifica una configurazione di ambiente candidata, prima di applicarla
-         * @description Fonde la configurazione (YAML o JSON, come nel sistema di configurazione) con il descrittore
-         *     di esempio (default: la richiesta del deploy in esercizio) e applica le verifiche
-         *     dell'accodamento: campi sconosciuti, policy sui descrittori, fusione, rollback, piano delle
-         *     ondate e del traffico. Non accoda e non scrive nulla.
+         * Checks a candidate environment configuration, before applying it
+         * @description Merges the configuration (YAML or JSON, as in the configuration system) with the example
+         *     descriptor (default: the request of the live deploy) and applies the enqueueing checks:
+         *     unknown fields, descriptor policy, merge, rollback, wave and traffic plan. It enqueues and
+         *     writes nothing.
          *
          */
         post: operations["validateEnvironment"];
@@ -87,7 +87,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stato di un deploy */
+        /** State of a deploy */
         get: operations["getDeployment"];
         put?: never;
         post?: never;
@@ -104,7 +104,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Step registrati del deploy */
+        /** Recorded steps of the deploy */
         get: operations["getDeploymentSteps"];
         put?: never;
         post?: never;
@@ -121,7 +121,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Righe di log del deploy a partire da offset */
+        /** Log lines of the deploy starting from offset */
         get: operations["getDeploymentLogs"];
         put?: never;
         post?: never;
@@ -139,10 +139,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Stato e log del deploy come Server-Sent Events
-         * @description Eventi "status" (Status in JSON, quando cambia), "log" (array di LogLine; id = offset
-         *     successivo, ripreso con Last-Event-ID), "end" alla conclusione, "error" se la lettura
-         *     fallisce. Commenti ": keep-alive" ogni 15 secondi senza eventi.
+         * State and log of the deploy as Server-Sent Events
+         * @description Events "status" (Status in JSON, when it changes), "log" (array of LogLine; id = next
+         *     offset, resumed with Last-Event-ID), "end" at the end, "error" if reading fails.
+         *     ": keep-alive" comments every 15 seconds without events.
          *
          */
         get: operations["streamDeploymentEvents"];
@@ -163,7 +163,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Annulla un deploy in attesa o in esecuzione */
+        /** Cancels a waiting or running deploy */
         post: operations["cancelDeployment"];
         delete?: never;
         options?: never;
@@ -180,7 +180,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approva un deploy (prima del deploy o tra due ondate) */
+        /** Approves a deploy (before the deploy or between two waves) */
         post: operations["approveDeployment"];
         delete?: never;
         options?: never;
@@ -197,7 +197,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Respinge un deploy */
+        /** Rejects a deploy */
         post: operations["rejectDeployment"];
         delete?: never;
         options?: never;
@@ -212,7 +212,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deploy in attesa che l'utente può approvare */
+        /** Waiting deploys the user can approve */
         get: operations["listApprovals"];
         put?: never;
         post?: never;
@@ -231,7 +231,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rilascia in un ambiente l'artefatto già rilasciato in un altro */
+        /** Releases to an environment the artifact already released to another */
         post: operations["promote"];
         delete?: never;
         options?: never;
@@ -248,7 +248,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rilascia di nuovo una versione precedente */
+        /** Releases a previous version again */
         post: operations["rollback"];
         delete?: never;
         options?: never;
@@ -263,7 +263,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Release in esercizio per applicazione e ambiente */
+        /** Live releases by application and environment */
         get: operations["getInventory"];
         put?: never;
         post?: never;
@@ -280,10 +280,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Finestre di freeze attive e future */
+        /** Active and future freeze windows */
         get: operations["listFreezes"];
         put?: never;
-        /** Crea una finestra di freeze a runtime (freeze.write) */
+        /** Creates a freeze window at runtime (freeze.write) */
         post: operations["createFreeze"];
         delete?: never;
         options?: never;
@@ -301,7 +301,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Elimina una finestra di freeze creata a runtime (freeze.write) */
+        /** Deletes a freeze window created at runtime (freeze.write) */
         delete: operations["deleteFreeze"];
         options?: never;
         head?: never;
@@ -315,7 +315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Tenant del registro, i team proprietari delle applicazioni (filtrati dai permessi) */
+        /** Tenants of the registry, the teams that own the applications (filtered by permissions) */
         get: operations["listTenants"];
         put?: never;
         post?: never;
@@ -332,7 +332,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Un tenant */
+        /** A tenant */
         get: operations["getTenant"];
         put?: never;
         post?: never;
@@ -349,10 +349,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Revisioni della policy di governance (policy.read) */
+        /** Revisions of the governance policy (policy.read) */
         get: operations["listPolicies"];
         put?: never;
-        /** Carica una revisione in bozza, dopo compilazione e test (policy.write) */
+        /** Uploads a draft revision, after compilation and tests (policy.write) */
         post: operations["pushPolicy"];
         delete?: never;
         options?: never;
@@ -367,7 +367,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Una revisione con i suoi file (policy.read) */
+        /** A revision with its files (policy.read) */
         get: operations["getPolicy"];
         put?: never;
         post?: never;
@@ -386,7 +386,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Decisione di una revisione su un descrittore (policy.write) */
+        /** Decision of a revision on a descriptor (policy.write) */
         post: operations["evaluatePolicy"];
         delete?: never;
         options?: never;
@@ -403,7 +403,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Permessi di un'identità indicata a mano con una revisione, confronto con quella attiva ed esito di un'azione (policy.write, rbac.engine opa) */
+        /** Permissions of a manually entered identity with a revision, comparison with the active one and outcome of an action (policy.write, rbac.engine opa) */
         post: operations["policyAccess"];
         delete?: never;
         options?: never;
@@ -418,7 +418,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Decisioni dei deploy reali del periodo ricalcolate con la revisione (policy.write) */
+        /** Decisions of the period's real deploys recomputed with the revision (policy.write) */
         get: operations["policyImpact"];
         put?: never;
         post?: never;
@@ -437,7 +437,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approva e attiva una revisione in bozza (policy.approve, un'identità diversa dall'autore) */
+        /** Approves and activates a draft revision (policy.approve, an identity other than the author) */
         post: operations["approvePolicy"];
         delete?: never;
         options?: never;
@@ -454,7 +454,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Torna a una revisione già attiva in passato (policy.approve) */
+        /** Goes back to a revision that was active in the past (policy.approve) */
         post: operations["activatePolicy"];
         delete?: never;
         options?: never;
@@ -469,7 +469,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metriche DORA */
+        /** DORA metrics */
         get: operations["getDORA"];
         put?: never;
         post?: never;
@@ -486,7 +486,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Schedule ricorrenti */
+        /** Recurring schedules */
         get: operations["listSchedules"];
         put?: never;
         post?: never;
@@ -503,11 +503,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Una schedule */
+        /** A schedule */
         get: operations["getSchedule"];
         put?: never;
         post?: never;
-        /** Elimina una schedule */
+        /** Deletes a schedule */
         delete: operations["deleteSchedule"];
         options?: never;
         head?: never;
@@ -523,7 +523,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sospende una schedule */
+        /** Pauses a schedule */
         post: operations["pauseSchedule"];
         delete?: never;
         options?: never;
@@ -540,7 +540,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Riprende una schedule */
+        /** Resumes a schedule */
         post: operations["resumeSchedule"];
         delete?: never;
         options?: never;
@@ -555,7 +555,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Identità della richiesta e ruoli che le si applicano */
+        /** Identity of the request and the roles that apply to it */
         get: operations["getMe"];
         put?: never;
         post?: never;
@@ -572,7 +572,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Worker registrati con stato, heartbeat e workflow in esecuzione (permesso platform.read) */
+        /** Registered workers with state, heartbeat and running workflows (platform.read permission) */
         get: operations["listWorkers"];
         put?: never;
         post?: never;
@@ -589,7 +589,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Code DBOS di manent con limiti, workflow in coda, in esecuzione e pianificati e worker in ascolto (permesso platform.read) */
+        /** manent's DBOS queues with limits, queued, running and scheduled workflows and listening workers (platform.read permission) */
         get: operations["listQueues"];
         put?: never;
         post?: never;
@@ -606,7 +606,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Deploy non conclusi (in esecuzione, in attesa di approvazione, in coda, pianificati) */
+        /** Unfinished deploys (running, awaiting approval, queued, scheduled) */
         get: operations["getActivity"];
         put?: never;
         post?: never;
@@ -623,10 +623,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Release più recenti */
+        /** Most recent releases */
         get: operations["listReleases"];
         put?: never;
-        /** Accoda una release composta (più deploy con dipendenze) */
+        /** Enqueues a composite release (several deploys with dependencies) */
         post: operations["submitRelease"];
         delete?: never;
         options?: never;
@@ -641,7 +641,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stato di una release e dei suoi deploy */
+        /** State of a release and its deploys */
         get: operations["getRelease"];
         put?: never;
         post?: never;
@@ -660,7 +660,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Annulla i deploy non conclusi della release e la release */
+        /** Cancels the unfinished deploys of the release and the release */
         post: operations["cancelRelease"];
         delete?: never;
         options?: never;
@@ -675,7 +675,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Configurazione pubblica dell'interfaccia web */
+        /** Public configuration of the web interface */
         get: operations["getUIConfig"];
         put?: never;
         post?: never;
@@ -695,8 +695,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Clic sui pulsanti di approvazione dei messaggi Slack (Interactivity Request URL dell'app)
-         * @description Autenticata dalla firma di Slack (X-Slack-Signature, X-Slack-Request-Timestamp), non da un bearer. La decisione è registrata con l'identità di manent associata all'utente Slack; l'esito arriva all'utente con un messaggio effimero.
+         * Clicks on the approval buttons of Slack messages (the app's Interactivity Request URL)
+         * @description Authenticated by the Slack signature (X-Slack-Signature, X-Slack-Request-Timestamp), not by a bearer. The decision is recorded with the manent identity linked to the Slack user; the outcome reaches the user as an ephemeral message.
          */
         post: operations["slackInteractions"];
         delete?: never;
@@ -712,7 +712,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Il processo risponde */
+        /** The process responds */
         get: operations["healthz"];
         put?: never;
         post?: never;
@@ -729,7 +729,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Il processo è pronto (database raggiungibile, non in drain) */
+        /** The process is ready (database reachable, not draining) */
         get: operations["readyz"];
         put?: never;
         post?: never;
@@ -746,29 +746,29 @@ export interface components {
         Error: {
             error: string;
         };
-        /** @description Descrittore di deploy (vedi la guida "Il descrittore" della documentazione). */
+        /** @description Deploy descriptor (see the "Descriptor" guide in the documentation). */
         Descriptor: {
             apiVersion: string;
             id?: string;
-            /** @description Tenant dell'applicazione: sceglie tra i tenant che la elencano, obbligatorio solo se più di uno; untenanted per le applicazioni senza tenant */
+            /** @description Tenant of the application: chooses among the tenants that list it, required only if more than one; untenanted for applications without a tenant */
             tenant?: string;
             application: string;
             environment: string;
             dryRun?: boolean;
-            /** @description ID dei deploy che devono riuscire prima di questo */
+            /** @description IDs of the deploys that must succeed before this one */
             after?: string[];
-            /** @description Attesa massima delle dipendenze (default 24h) */
+            /** @description Maximum wait for the dependencies (default 24h) */
             afterTimeout?: string;
-            /** @description Revisione della configurazione di ambiente (provider git), entro descriptor_policy.config_ref */
+            /** @description Revision of the environment configuration (git provider), within descriptor_policy.config_ref */
             config?: {
-                /** @description Nome di un ref (refs/tags/env-1) o SHA di un commit */
+                /** @description Name of a ref (refs/tags/env-1) or SHA of a commit */
                 ref?: string;
             };
-            /** @description Deploy di cui leggere gli export all'avvio (deploy.targetsFrom, deploy.paramsFrom) */
+            /** @description Deploys whose exports are read at start (deploy.targetsFrom, deploy.paramsFrom) */
             imports?: {
                 [key: string]: components["schemas"]["Import"];
             };
-            /** @description Output del deploy che altri deploy possono importare */
+            /** @description Deploy outputs that other deploys can import */
             exports?: {
                 [key: string]: components["schemas"]["Export"];
             };
@@ -782,36 +782,36 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description Un deploy dato (deployment, tra le dipendenze after) o la release in esercizio di un'applicazione (current) */
+        /** @description A given deploy (deployment, among the after dependencies) or the live release of an application (current) */
         Import: {
             deployment?: string;
             current?: {
                 tenant?: string;
                 application: string;
-                /** @description Default l'ambiente del deploy che importa */
+                /** @description Default the environment of the importing deploy */
                 environment?: string;
-                /** @description Artefatto dell'applicazione; obbligatorio se l'ambiente ne ha più di uno */
+                /** @description Artifact of the application; required if the environment has more than one */
                 artifact?: string;
             };
         };
         Export: {
-            /** @description "<step>.<chiave>": output del plugin (step deploy) o di uno step personalizzato */
+            /** @description "<step>.<key>": output of the plugin (deploy step) or of a custom step */
             from: string;
             /** @enum {string} */
             format?: "string" | "targets";
-            /** @description Espressione regolare ancorata (obbligatoria con format string) */
+            /** @description Anchored regular expression (required with format string) */
             pattern?: string;
         };
-        /** @description Sezione deploy di un descrittore (plugin, target, parametri). */
+        /** @description Deploy section of a descriptor (plugin, targets, parameters). */
         DeployTargets: {
             [key: string]: unknown;
         };
         PlannedStep: {
             name?: string;
             max_retries?: number;
-            /** @description Tipo dello step personalizzato (command, http); assente per gli step standard. */
+            /** @description Kind of the custom step (command, http); absent for the standard steps. */
             type?: string;
-            /** @description Sha256 della specifica dello step personalizzato, come in pipeline.custom.revoked_specs. Comandi e URL non sono esposti. */
+            /** @description Sha256 of the custom step's specification, as in pipeline.custom.revoked_specs. Commands and URLs are not exposed. */
             spec_hash?: string;
         } & {
             [key: string]: unknown;
@@ -842,11 +842,11 @@ export interface components {
             decisions?: components["schemas"]["Decision"][];
             change?: components["schemas"]["ChangeTicket"];
         };
-        /** @description Ticket di change management (ServiceNow, Jira) del deploy */
+        /** @description Change management ticket (ServiceNow, Jira) of the deploy */
         ChangeTicket: {
-            /** @description Identificativo tecnico nel sistema ITSM */
+            /** @description Technical identifier in the ITSM system */
             id?: string;
-            /** @description Riferimento leggibile */
+            /** @description Readable reference */
             number: string;
             url?: string;
             /** @enum {string} */
@@ -857,7 +857,7 @@ export interface components {
             region?: string;
             az?: string;
             hosts: string[];
-            /** @description Membri del pool fuori dal load balancer in questo momento */
+            /** @description Pool members out of the load balancer right now */
             drained?: string[];
         };
         RolloutStage: {
@@ -866,15 +866,15 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "running" | "baking" | "succeeded" | "failed" | "rolled-back";
             passes: components["schemas"]["RolloutPass"][];
-            /** @description Ultimo controllo rosso dell'health gate */
+            /** @description Last red check of the health gate */
             gate?: string;
-            /** @description Punteggio dell'analisi canary (0-100) all'ultima lettura del gate */
+            /** @description Canary analysis score (0-100) at the last gate reading */
             score?: number;
             error?: string;
         };
         RolloutState: {
             /**
-             * @description Vuoto per i rilasci a ondate
+             * @description Empty for wave rollouts
              * @enum {string}
              */
             strategy?: "waves" | "traffic";
@@ -888,16 +888,16 @@ export interface components {
             rollback?: string;
             traffic?: components["schemas"]["TrafficState"];
         };
-        /** @description Rilascio per percentuale (strategy traffic); gli stadi sono i gradini */
+        /** @description Percentage rollout (strategy traffic); the stages are the steps */
         TrafficState: {
-            /** @description Passo in corso nei rilasci a ondate */
+            /** @description Pass in progress in wave rollouts */
             pass?: string;
             router?: string;
-            /** @description Slot della versione stabile */
+            /** @description Slot of the stable version */
             stable?: string;
-            /** @description Slot della versione candidata */
+            /** @description Slot of the candidate version */
             candidate?: string;
-            /** @description Quota di traffico corrente della candidata */
+            /** @description Current traffic share of the candidate */
             weight: number;
             steps: number[];
             testers?: boolean;
@@ -915,7 +915,7 @@ export interface components {
             steps: components["schemas"]["StepResult"][];
             rollout?: components["schemas"]["RolloutState"];
             change?: components["schemas"]["ChangeTicket"];
-            /** @description Export del deploy riuscito */
+            /** @description Exports of the successful deploy */
             exports?: {
                 [key: string]: string;
             };
@@ -930,14 +930,14 @@ export interface components {
             artifact?: string;
             version?: string;
             sha256?: string;
-            /** @description SHA del commit della configurazione di ambiente (provider git) */
+            /** @description Commit SHA of the environment configuration (git provider) */
             config_revision?: string;
             /** @enum {string} */
             kind?: "deploy" | "promotion" | "rollback";
-            /** @description Deploy di origine di una promozione o di un rollback */
+            /** @description Source deploy of a promotion or a rollback */
             source?: string;
             dry_run?: boolean;
-            /** @description Esito del rollback automatico */
+            /** @description Outcome of the automatic rollback */
             rollback?: string;
             requested_by?: string;
             /** Format: date-time */
@@ -948,24 +948,24 @@ export interface components {
             scheduled_at?: string;
             /**
              * Format: date-time
-             * @description Inizio dell'esecuzione sul worker
+             * @description Start of the execution on the worker
              */
             started_at?: string;
-            /** @description Worker che esegue o ha eseguito il deploy */
+            /** @description Worker that runs or ran the deploy */
             executor?: string;
             queue?: string;
-            /** @description Ultimo step registrato di un deploy in corso (solo in /activity) */
+            /** @description Last recorded step of a running deploy (only in /activity) */
             last_step?: string;
             approval?: components["schemas"]["ApprovalState"];
             change?: components["schemas"]["ChangeTicket"];
             after?: components["schemas"]["AfterState"];
-            /** @description Release composta a cui appartiene il deploy */
+            /** @description Composite release the deploy belongs to */
             release?: string;
             policy?: components["schemas"]["PolicySnapshot"];
             rollout?: components["schemas"]["RolloutState"];
             /** @description "stadi superati/stadi totali" */
             rollout_progress?: string;
-            /** @description Export del deploy riuscito */
+            /** @description Exports of the successful deploy */
             exports?: {
                 [key: string]: string;
             };
@@ -993,7 +993,7 @@ export interface components {
             deploys: {
                 name: string;
                 descriptor: components["schemas"]["Descriptor"];
-                /** @description Nomi di altri deploy della release */
+                /** @description Names of other deploys of the release */
                 after?: string[];
             }[];
         };
@@ -1025,13 +1025,13 @@ export interface components {
             }[];
         };
         Worker: {
-            /** @description Executor ID DBOS */
+            /** @description DBOS executor ID */
             id: string;
             /** @enum {string} */
             state: "alive" | "stale" | "stopped" | "unregistered";
-            /** @description Versione dei workflow (app.version) */
+            /** @description Workflow version (app.version) */
             version?: string;
-            /** @description Versione del binario */
+            /** @description Binary version */
             build?: string;
             hostname?: string;
             region?: string;
@@ -1044,46 +1044,46 @@ export interface components {
             recovered_by?: string;
             /** Format: date-time */
             recovered_at?: string;
-            /** @description Workflow in sospeso per versione dei workflow */
+            /** @description Pending workflows by workflow version */
             pending?: {
                 [key: string]: number;
             };
-            /** @description Code DBOS da cui il worker preleva */
+            /** @description DBOS queues the worker dequeues from */
             queues?: string[];
             resources?: components["schemas"]["WorkerResources"];
             tasks: components["schemas"]["WorkerTask"][];
-            /** @description Workflow in esecuzione di applicazioni/ambienti non leggibili */
+            /** @description Running workflows of applications/environments not readable */
             hidden_tasks?: number;
         };
-        /** @description Ultimo campione delle risorse del worker, inviato a ogni heartbeat. I valori che il sistema operativo non fornisce mancano. */
+        /** @description Last sample of the worker's resources, sent at every heartbeat. Values the operating system does not provide are missing. */
         WorkerResources: {
             os: string;
             arch: string;
-            /** @description CPU logiche dell'host */
+            /** @description Logical CPUs of the host */
             cpus: number;
-            /** @description CPU utilizzabili dal processo (GOMAXPROCS */
+            /** @description CPUs usable by the process (GOMAXPROCS */
             cpu_limit: number;
             /**
              * Format: int64
-             * @description Memoria dell'host
+             * @description Memory of the host
              */
             memory_total_bytes?: number;
             /**
              * Format: int64
-             * @description Memoria ancora disponibile sull'host
+             * @description Memory still available on the host
              */
             memory_available_bytes?: number;
             /**
              * Format: int64
-             * @description Limite di memoria del container (cgroup)
+             * @description Memory limit of the container (cgroup)
              */
             memory_limit_bytes?: number;
             /**
              * Format: int64
-             * @description Memoria residente del processo
+             * @description Resident memory of the process
              */
             process_memory_bytes?: number;
-            /** @description CPU usata dal processo dal campione precedente */
+            /** @description CPU used by the process since the previous sample */
             process_cpu_cores: number;
             load1?: number;
             load5?: number;
@@ -1091,10 +1091,10 @@ export interface components {
             goroutines: number;
             /**
              * Format: int64
-             * @description Spazio libero del file system della workdir
+             * @description Free space on the workdir file system
              */
             workdir_free_bytes?: number;
-            /** @description Deploy eseguiti insieme dal worker (dbos.concurrency) */
+            /** @description Deploys run together by the worker (dbos.concurrency) */
             concurrency?: number;
             /** Format: date-time */
             sampled_at: string;
@@ -1104,30 +1104,30 @@ export interface components {
             /** @enum {string} */
             kind: "deployments" | "approvals" | "region" | "other";
             region?: string;
-            /** @description Workflow eseguiti insieme da un worker (assente = nessun limite) */
+            /** @description Workflows run together by one worker (absent = no limit) */
             worker_concurrency?: number;
-            /** @description Workflow eseguiti insieme su tutti i worker */
+            /** @description Workflows run together across all workers */
             global_concurrency?: number;
-            /** @description Workflow eseguiti insieme per applicazione/ambiente */
+            /** @description Workflows run together per application/environment */
             partition_concurrency?: number;
             /**
              * Format: int64
-             * @description Workflow in attesa di uno slot
+             * @description Workflows waiting for a slot
              */
             enqueued: number;
             /** Format: int64 */
             running: number;
             /**
              * Format: int64
-             * @description Workflow pianificati (schedule.at)
+             * @description Scheduled workflows (schedule.at)
              */
             delayed: number;
             /**
              * Format: date-time
-             * @description Creazione del workflow in attesa da più tempo
+             * @description Creation of the workflow waiting the longest
              */
             oldest_enqueued?: string;
-            /** @description Worker attivi in ascolto sulla coda */
+            /** @description Active workers listening on the queue */
             workers: string[];
         };
         WorkerTask: {
@@ -1208,16 +1208,16 @@ export interface components {
         EnvironmentCheck: {
             tenant?: string;
             application: string;
-            /** @description Artefatto a cui si riferisce la configurazione (template con {artifact}) */
+            /** @description Artifact the configuration refers to (template with {artifact}) */
             artifact?: string;
             environment: string;
-            /** @description Configurazione di ambiente in YAML o JSON */
+            /** @description Environment configuration in YAML or JSON */
             config: string;
             descriptor?: components["schemas"]["Descriptor"];
         };
         InventoryEntry: {
             application: string;
-            /** @description Artefatto (artifact.name) della voce */
+            /** @description Artifact (artifact.name) of the entry */
             artifact: string;
             environment: string;
             tenant?: string;
@@ -1225,10 +1225,10 @@ export interface components {
             last_failure?: components["schemas"]["Status"];
             drift?: boolean;
             targets?: components["schemas"]["TargetsState"];
-            /** @description Almeno un target non è sulla versione di current (drifted o missing). */
+            /** @description At least one target is not on the version of current (drifted or missing). */
             out_of_sync?: boolean;
         };
-        /** @description Stato letto dai target dall'ultima riconciliazione (reconcile.interval). */
+        /** @description State read from the targets by the last reconciliation (reconcile.interval). */
         TargetsState: {
             /** Format: date-time */
             checked_at: string;
@@ -1262,20 +1262,20 @@ export interface components {
             tenants?: string;
             artifacts?: string[];
             selector?: string;
-            /** @description Non esentabile dalla policy né superabile con freezeOverride */
+            /** @description Cannot be exempted by the policy nor bypassed with freezeOverride */
             hard?: boolean;
-            /** @description Creata a runtime */
+            /** @description Created at runtime */
             dynamic?: boolean;
             created_by?: string;
         };
-        /** @description Un tenant, il team proprietario delle applicazioni */
+        /** @description A tenant, the team that owns the applications */
         TenantInfo: {
             name: string;
             description?: string;
             tags?: {
                 [key: string]: string;
             };
-            /** @description Applicazioni possedute, con i loro tag */
+            /** @description Owned applications, with their tags */
             applications?: {
                 [key: string]: {
                     tags?: {
@@ -1283,7 +1283,7 @@ export interface components {
                     };
                 };
             };
-            /** @description Coda dei deploy del tenant; assente per la coda di default */
+            /** @description Deploy queue of the tenant; absent for the default queue */
             queue?: string;
             concurrency?: number;
             disabled?: boolean;
@@ -1296,15 +1296,15 @@ export interface components {
             applications: string[];
             environments: string[];
             regions?: string[];
-            /** @description Selettore dei tenant */
+            /** @description Tenant selector */
             tenants?: string;
-            /** @description Pattern sui nomi degli artefatti */
+            /** @description Patterns on the artifact names */
             artifacts?: string[];
-            /** @description Selettore sulle applicazioni (tag */
+            /** @description Selector on the applications (tag */
             selector?: string;
             /**
              * Format: date-time
-             * @description Default adesso
+             * @description Default now
              */
             from?: string;
             /** Format: date-time */
@@ -1317,7 +1317,7 @@ export interface components {
         };
         ChangeRule: {
             approval?: boolean;
-            /** @description Nanosecondi */
+            /** @description Nanoseconds */
             timeout?: number;
         };
         Denial: {
@@ -1356,14 +1356,14 @@ export interface components {
             /** @enum {string} */
             engine: "builtin" | "opa";
             source?: string;
-            /** @description Revisione in vigore nel processo che ha risposto */
+            /** @description Revision in force in the process that responded */
             current: string;
             /** Format: date-time */
             loaded_at?: string;
             revisions: components["schemas"]["PolicyRevision"][];
         };
         PolicyPush: {
-            /** @description Moduli *.rego e file data.json/data.yaml per percorso */
+            /** @description Rego modules (*.rego) and data.json/data.yaml files by path */
             files: {
                 [key: string]: string;
             };
@@ -1391,7 +1391,7 @@ export interface components {
             input_sha256?: string;
         };
         PolicyEvaluation: {
-            /** @description Documento input della policy (schema 1) */
+            /** @description Policy input document (schema 1) */
             input: {
                 [key: string]: unknown;
             };
@@ -1450,7 +1450,7 @@ export interface components {
         Redeploy: {
             id?: string;
             dry_run?: boolean;
-            /** @description Motivo della deroga al freeze */
+            /** @description Reason for the freeze override */
             freeze_override?: string;
         };
         PromoteRequest: components["schemas"]["Redeploy"] & {
@@ -1458,49 +1458,49 @@ export interface components {
             application: string;
             from: string;
             to: string;
-            /** @description Artefatto da promuovere; obbligatorio se from ne ha più di uno */
+            /** @description Artifact to promote; required if from has more than one */
             artifact?: string;
             version?: string;
             deploy?: components["schemas"]["DeployTargets"];
-            /** @description Revisione della configurazione dell'ambiente di destinazione (provider git); default il ref di default */
+            /** @description Revision of the destination environment's configuration (git provider); default the default ref */
             config_ref?: string;
         };
         RollbackRequest: components["schemas"]["Redeploy"] & {
             tenant?: string;
             application: string;
             environment: string;
-            /** @description Artefatto da riportare indietro; obbligatorio se l'ambiente ne ha più di uno */
+            /** @description Artifact to roll back; required if the environment has more than one */
             artifact?: string;
             version?: string;
         };
         Grant: {
-            /** @description Etichetta del permesso (posizione del binding o nome dato dalla policy) */
+            /** @description Permission label (position of the binding or name given by the policy) */
             name?: string;
-            /** @description Ruolo da cui vengono le azioni */
+            /** @description Role the actions come from */
             role?: string;
             actions: string[];
             applications: string[];
             environments: string[];
-            /** @description Selettore dei tenant a cui il permesso è limitato */
+            /** @description Selector of the tenants the permission is limited to */
             tenants?: string;
-            /** @description Selettore sulle applicazioni a cui il permesso è limitato */
+            /** @description Selector on the applications the permission is limited to */
             selector?: string;
-            /** @description Pattern degli artefatti a cui il permesso è limitato */
+            /** @description Patterns of the artifacts the permission is limited to */
             artifacts?: string[];
             /**
              * Format: date-time
-             * @description Istante in cui il permesso smette di valere
+             * @description Time at which the permission stops applying
              */
             until?: string;
         };
         PolicyAccessRequest: {
-            /** @description <metodo>:<nome> (es. oidc:alice); senza metodo vale oidc */
+            /** @description <method>:<name> (e.g. oidc:alice); without a method, oidc */
             subject: string;
             groups?: string[];
             claims?: {
                 [key: string]: string;
             };
-            /** @description Calcola anche i permessi guadagnati e persi rispetto alla revisione attiva */
+            /** @description Also computes the permissions gained and lost compared with the active revision */
             compare?: boolean;
             check?: components["schemas"]["AccessCheck"];
         };
@@ -1516,9 +1516,9 @@ export interface components {
             revision: string;
             subject: string;
             grants: components["schemas"]["Grant"][];
-            /** @description Permessi della revisione scartati perché non validi o con azioni policy.* */
+            /** @description Permissions of the revision discarded because invalid or with policy.* actions */
             warnings?: string[];
-            /** @description Revisione attiva usata per il confronto */
+            /** @description Active revision used for the comparison */
             compared?: string;
             gained?: components["schemas"]["Grant"][];
             lost?: components["schemas"]["Grant"][];
@@ -1526,11 +1526,11 @@ export interface components {
         };
         AccessOutcome: {
             allowed: boolean;
-            /** @description Nome del permesso che consente l'azione */
+            /** @description Name of the permission that allows the action */
             granted_by?: string;
-            /** @description Motivi dei divieti (deny) della revisione */
+            /** @description Reasons of the revision's denials (deny) */
             denied?: string[];
-            /** @description Motivo di un rifiuto senza divieti */
+            /** @description Reason of a refusal without denials */
             reason?: string;
         };
         Identity: {
@@ -1540,9 +1540,9 @@ export interface components {
             groups?: string[];
             auth_enabled: boolean;
             grants: components["schemas"]["Grant"][];
-            /** @description Motore dei permessi (opa); assente con il motore builtin */
+            /** @description Permission engine (opa); absent with the builtin engine */
             authz_engine?: string;
-            /** @description Revisione della policy dei permessi in vigore */
+            /** @description Revision of the permission policy in force */
             authz_revision?: string;
         };
         UIConfig: {
@@ -1556,7 +1556,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description Errore */
+        /** @description Error */
         Error: {
             headers: {
                 [name: string]: unknown;
@@ -1569,7 +1569,7 @@ export interface components {
     parameters: {
         id: string;
         name: string;
-        /** @description Numero della revisione, oppure current per quella in vigore */
+        /** @description Revision number, or current for the one in force */
         revision: string;
     };
     requestBodies: {
@@ -1593,13 +1593,13 @@ export interface operations {
                 application?: string;
                 environment?: string;
                 tenant?: string;
-                /** @description Nome dell'artefatto (artifact.name) */
+                /** @description Artifact name (artifact.name) */
                 artifact?: string;
-                /** @description Selettore sulle applicazioni (tag */
+                /** @description Selector on the applications (tag */
                 selector?: string;
                 state?: string;
                 limit?: number;
-                /** @description next_cursor della pagina precedente */
+                /** @description next_cursor of the previous page */
                 cursor?: string;
             };
             header?: never;
@@ -1608,7 +1608,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deploy dal più recente */
+            /** @description Deploys, most recent first */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1616,7 +1616,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         deployments: components["schemas"]["Status"][];
-                        /** @description Presente se la pagina è piena */
+                        /** @description Present if the page is full */
                         next_cursor?: string;
                     };
                 };
@@ -1639,7 +1639,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Schedule ricorrente creata o aggiornata */
+            /** @description Recurring schedule created or updated */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1648,7 +1648,7 @@ export interface operations {
                     "application/json": components["schemas"]["Submission"];
                 };
             };
-            /** @description Deploy accodato */
+            /** @description Deploy enqueued */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1675,7 +1675,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Piano */
+            /** @description Plan */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1702,7 +1702,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Deploy effettivo */
+            /** @description Effective deploy */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1728,7 +1728,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Deploy effettivo con la configurazione candidata */
+            /** @description Effective deploy with the candidate configuration */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1753,7 +1753,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Stato */
+            /** @description State */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1804,7 +1804,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pagina di log */
+            /** @description Log page */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1831,7 +1831,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Stream di eventi */
+            /** @description Event stream */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1854,7 +1854,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Annullato */
+            /** @description Cancelled */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1876,7 +1876,7 @@ export interface operations {
         };
         requestBody?: components["requestBodies"]["Decision"];
         responses: {
-            /** @description Decisione registrata */
+            /** @description Decision recorded */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1899,7 +1899,7 @@ export interface operations {
         };
         requestBody?: components["requestBodies"]["Decision"];
         responses: {
-            /** @description Decisione registrata */
+            /** @description Decision recorded */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1920,7 +1920,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Approvazioni in attesa */
+            /** @description Pending approvals */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1946,7 +1946,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Promozione accodata */
+            /** @description Promotion enqueued */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1972,7 +1972,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Rollback accodato */
+            /** @description Rollback enqueued */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1991,9 +1991,9 @@ export interface operations {
                 application?: string;
                 environment?: string;
                 tenant?: string;
-                /** @description Nome dell'artefatto (artifact.name) */
+                /** @description Artifact name (artifact.name) */
                 artifact?: string;
-                /** @description Selettore sulle applicazioni (tag */
+                /** @description Selector on the applications (tag */
                 selector?: string;
             };
             header?: never;
@@ -2002,7 +2002,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Inventario */
+            /** @description Inventory */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2027,7 +2027,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Finestre */
+            /** @description Windows */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2053,7 +2053,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Finestra creata */
+            /** @description Window created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2077,7 +2077,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Eliminata */
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2091,9 +2091,9 @@ export interface operations {
     listTenants: {
         parameters: {
             query?: {
-                /** @description Solo il proprietario di questa applicazione */
+                /** @description Only the owner of this application */
                 application?: string;
-                /** @description Selettore sui tag del tenant e sul nome */
+                /** @description Selector on the tenant tags and name */
                 selector?: string;
             };
             header?: never;
@@ -2148,7 +2148,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Revisioni e policy in vigore */
+            /** @description Revisions and policy in force */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2174,7 +2174,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Revisione in bozza */
+            /** @description Draft revision */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2192,14 +2192,14 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Revisione */
+            /** @description Revision */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2217,7 +2217,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
@@ -2228,7 +2228,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Input e decisione */
+            /** @description Input and decision */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2247,7 +2247,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
@@ -2258,7 +2258,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Permessi simulati */
+            /** @description Simulated permissions */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2277,19 +2277,19 @@ export interface operations {
     policyImpact: {
         parameters: {
             query?: {
-                /** @description Data RFC 3339, durata (720h) o giorni (30d); default 7 giorni */
+                /** @description RFC 3339 date, duration (720h) or days (30d); default 7 days */
                 since?: string;
             };
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Deploy con una decisione diversa */
+            /** @description Deploys with a different decision */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2307,14 +2307,14 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Attivata */
+            /** @description Activated */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2331,14 +2331,14 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Numero della revisione, oppure current per quella in vigore */
+                /** @description Revision number, or current for the one in force */
                 revision: components["parameters"]["revision"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Attivata */
+            /** @description Activated */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2357,9 +2357,9 @@ export interface operations {
                 environment?: string;
                 tenant?: string;
                 artifact?: string;
-                /** @description tenant: metriche anche per tenant */
+                /** @description tenant: metrics per tenant too */
                 by?: "tenant";
-                /** @description Data RFC 3339, durata (720h) o giorni (30d); default 30 giorni */
+                /** @description RFC 3339 date, duration (720h) or days (30d); default 30 days */
                 since?: string;
             };
             header?: never;
@@ -2368,7 +2368,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Metriche */
+            /** @description Metrics */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2436,7 +2436,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Eliminata */
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2458,7 +2458,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Sospesa */
+            /** @description Paused */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2480,7 +2480,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Ripresa */
+            /** @description Resumed */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2500,7 +2500,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Identità */
+            /** @description Identity */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2545,7 +2545,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Code */
+            /** @description Queues */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2573,7 +2573,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Attività */
+            /** @description Activity */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2622,7 +2622,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Release accodata */
+            /** @description Release enqueued */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2671,7 +2671,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Annullata */
+            /** @description Cancelled */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2691,7 +2691,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configurazione */
+            /** @description Configuration */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2712,27 +2712,27 @@ export interface operations {
         requestBody: {
             content: {
                 "application/x-www-form-urlencoded": {
-                    /** @description Payload JSON dell'interazione (block_actions) */
+                    /** @description JSON payload of the interaction (block_actions) */
                     payload: string;
                 };
             };
         };
         responses: {
-            /** @description Ricevuta */
+            /** @description Received */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Firma non valida o richiesta scaduta */
+            /** @description Invalid signature or expired request */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Integrazione non disponibile */
+            /** @description Integration not available */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2768,14 +2768,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Pronto */
+            /** @description Ready */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Non pronto */
+            /** @description Not ready */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -163,7 +163,7 @@ Flusso: client `manent` (`internal/clientcli`, YAML → JSON via `internal/apicl
 
 - Ogni servizio va definito tramite interfacce, per facilitare mock e test.
 - Ogni componente deve loggare sia a livello applicativo sia inviando i log al SIEM come `rfc5424.Message`.
-- Commenti nel codice **in inglese**, concisi ma completi (Go, TypeScript, script, YAML, Makefile). Messaggi di errore **in inglese** (`errors.New`/`fmt.Errorf`, risposte `{"error": ...}` dell'API, `throw` degli script, diagnostiche del provider Terraform, motivi del gate): i test che ne verificano il testo cercano frammenti in inglese. Log, output dei comandi e testi dell'interfaccia restano in italiano.
+- Commenti nel codice **in inglese**, concisi ma completi (Go, TypeScript, script, YAML, Makefile). Messaggi di errore **in inglese** (`errors.New`/`fmt.Errorf`, risposte `{"error": ...}` dell'API, `throw` degli script, diagnostiche del provider Terraform, motivi del gate): i test che ne verificano il testo cercano frammenti in inglese. Anche log, output e help dei comandi, output degli step, descrizioni delle metriche, della specifica OpenAPI e del provider Terraform sono **in inglese**. Fanno eccezione solo i testi localizzati: interfaccia web (`web/src/i18n/en.ts` e `it.ts`) e messaggi di chat con `lang: it` (`internal/chat/format.go`).
 
 ## Comandi
 

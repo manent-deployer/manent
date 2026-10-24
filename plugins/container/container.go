@@ -237,11 +237,11 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 		if cur.Image == image && cur.Version == version && cur.Status == "running" {
 			// Already on the requested release (e.g. retry or recovery): not restarted if ready.
 			if state, err := p.wait(ctx, sess, rt, name, req); err == nil {
-				log.InfoContext(ctx, "container già sulla release richiesta", "container", name, "version", version)
+				log.InfoContext(ctx, "container already on the requested release", "container", name, "version", version)
 				details["unchanged"], details["state"] = "true", state
 				return details, nil
 			}
-			log.WarnContext(ctx, "container sulla release richiesta ma non pronto: viene ricreato", "container", name)
+			log.WarnContext(ctx, "container on the requested release but not ready: it is recreated", "container", name)
 		}
 	}
 	if err := p.login(ctx, sess, rt, req, image); err != nil {
@@ -251,7 +251,7 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	if err != nil {
 		return details, fmt.Errorf("pulling %s: %w", image, err)
 	}
-	log.InfoContext(ctx, "immagine scaricata", "image", image, "output", lastLine(out))
+	log.InfoContext(ctx, "image pulled", "image", image, "output", lastLine(out))
 	run := []string{rt, "run", "-d", "--name", q(name), "--restart", "unless-stopped",
 		"--label", q(LabelApplication + "=" + req.Application),
 		"--label", q(LabelEnvironment + "=" + req.Environment),
@@ -268,16 +268,16 @@ func (p *Plugin) release(ctx context.Context, t plugin.Target, auth remotecopy.A
 	if _, err := sess.Run(ctx, rt+" rm -f "+q(name)+" >/dev/null 2>&1; "+strings.Join(run, " ")); err != nil {
 		return details, fmt.Errorf("starting container %s: %w", name, err)
 	}
-	log.InfoContext(ctx, "container avviato", "container", name, "image", image, "version", version)
+	log.InfoContext(ctx, "container started", "container", name, "image", image, "version", version)
 	state, err := p.wait(ctx, sess, rt, name, req)
 	details["state"] = state
 	if err != nil {
 		if logs, lerr := sess.Run(ctx, rt+" logs --tail 20 "+q(name)+" 2>&1"); lerr == nil && strings.TrimSpace(logs) != "" {
-			log.WarnContext(ctx, "ultime righe del log del container", "container", name, "logs", strings.TrimSpace(logs))
+			log.WarnContext(ctx, "last lines of the container log", "container", name, "logs", strings.TrimSpace(logs))
 		}
 		return details, err
 	}
-	log.InfoContext(ctx, "container pronto", "container", name, "state", state)
+	log.InfoContext(ctx, "container ready", "container", name, "state", state)
 	return details, nil
 }
 
@@ -379,7 +379,7 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 	case 1:
 		for r, hosts := range found {
 			return &plugin.Release{Version: r.version, Details: map[string]string{
-				DetailImage: r.image, "source": "etichette del container", "targets": strings.Join(hosts, ","),
+				DetailImage: r.image, "source": "container labels", "targets": strings.Join(hosts, ","),
 			}}, nil
 		}
 	}
@@ -475,7 +475,7 @@ func (p *Plugin) check(ctx context.Context, t plugin.Target, auth remotecopy.Aut
 		details[DetailImage] = image
 	}
 	details["pull"] = "skipped"
-	p.logger.InfoContext(ctx, "target pronto per il deploy", "deployment", req.DeploymentID, "host", t.Host, "dry_run", true)
+	p.logger.InfoContext(ctx, "target ready for the deploy", "deployment", req.DeploymentID, "host", t.Host, "dry_run", true)
 	return details, nil
 }
 

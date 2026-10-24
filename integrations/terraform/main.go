@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	debug := flag.Bool("debug", false, "avvia il provider in modalità debug (per debugger come delve)")
+	debug := flag.Bool("debug", false, "starts the provider in debug mode (for debuggers such as delve)")
 	flag.Parse()
 	err := providerserver.Serve(context.Background(), provider.New(version.Version), providerserver.ServeOpts{
 		Address: "registry.terraform.io/joeg-ita/manent",

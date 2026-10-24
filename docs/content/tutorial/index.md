@@ -82,5 +82,5 @@ Once the basics are in place, the [Integrations](../integrazioni/index.md) secti
 ## Conventions
 
 - Commands are run from the tutorial directory, with `manent` and `manent-server` on the `PATH`.
-- Command output and logs are shown as manent prints them: logs and messages in Italian, error messages in English.
+- Command output and logs are shown as manent prints them: in English.
 - Values to replace are written in angle brackets, for example `<your-cluster>`.

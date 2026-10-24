@@ -66,7 +66,7 @@ manent deploy -f deploy/test.yml --dry-run
 manent steps <id> | jq -r '.[] | select(.name | startswith("notify:")) | "\(.name) \(.error // "ok")"'
 ```
 
-Ogni invio è uno step DBOS con nome `notify:<destinazione>:<evento>`. Un invio fallito riporta lì il suo errore e nel log del worker (`notifica in chat non inviata`, inviato anche al SIEM), ma non fa mai fallire il deploy.
+Ogni invio è uno step DBOS con nome `notify:<destinazione>:<evento>`. Un invio fallito riporta lì il suo errore e nel log del worker (`chat notification not sent`, inviato anche al SIEM), ma non fa mai fallire il deploy.
 
 ## 4. Approvazioni da Slack
 

@@ -39,7 +39,7 @@ func (a Artifacts) Run(ctx context.Context, in pipeline.Input) (pipeline.Output,
 	if err != nil {
 		return nil, err
 	}
-	a.Logger.InfoContext(ctx, "artefatto recuperato", "deployment", in.DeploymentID, "path", f.LocalPath, "sha256", f.SHA256)
+	a.Logger.InfoContext(ctx, "artifact fetched", "deployment", in.DeploymentID, "path", f.LocalPath, "sha256", f.SHA256)
 	return pipeline.Output{
 		OutLocalPath: f.LocalPath,
 		OutSHA256:    f.SHA256,

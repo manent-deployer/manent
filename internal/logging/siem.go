@@ -192,7 +192,7 @@ func marshalDatagram(msg rfc5424.Message, limit int) ([]byte, error) {
 	if b, err = msg.MarshalBinary(); err != nil || len(b) <= limit {
 		return b, err
 	}
-	const mark = "… [troncato]"
+	const mark = "… [truncated]"
 	keep := len(msg.Message) - (len(b) - limit) - len(mark)
 	if keep < 0 {
 		return nil, fmt.Errorf("message of %d bytes over the datagram limit (%d)", len(b), limit)

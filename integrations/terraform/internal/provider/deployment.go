@@ -23,7 +23,7 @@ import (
 
 // outOfSyncSuffix marks in the state a version whose targets were changed outside manent: the
 // difference from the configuration makes Terraform plan a new deploy.
-const outOfSyncSuffix = " (target fuori sincronia)"
+const outOfSyncSuffix = " (targets out of sync)"
 
 // NewDeploymentResource returns the manent_deployment resource.
 func NewDeploymentResource() resource.Resource { return &deploymentResource{} }
@@ -59,37 +59,37 @@ func (r *deploymentResource) Metadata(_ context.Context, req resource.MetadataRe
 func (r *deploymentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
-		Description: "Release in esercizio di un'applicazione in un ambiente. Crearla o cambiarla esegue un deploy e ne attende la fine " +
-			"(approvazioni comprese, entro timeout); eliminarla non tocca i target.",
+		Description: "Release in service of an application in an environment. Creating or changing it runs a deploy and waits for it to end " +
+			"(approvals included, within timeout); deleting it does not touch the targets.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "ID del deploy in esercizio.",
+				Description: "ID of the deploy in service.",
 			},
 			"tenant": schema.StringAttribute{
 				Optional: true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIfConfigured(), stringplanmodifier.UseStateForUnknown()},
-				Description:   "Tenant dell'applicazione: obbligatorio solo se più tenant hanno un'applicazione con questo nome (untenanted per quelle senza tenant).",
+				Description:   "Tenant of the application: required only if several tenants have an application with this name (untenanted for those without tenant).",
 			},
-			"application": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Applicazione."},
-			"environment": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Ambiente."},
+			"application": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Application."},
+			"environment": schema.StringAttribute{Required: true, PlanModifiers: replace, Description: "Environment."},
 			"descriptor": schema.StringAttribute{
 				Required:    true,
-				Description: "Descrittore di deploy YAML (es. file(\"deploy/prod.yml\")); version, source e sha256 lo sovrascrivono.",
+				Description: "Deploy descriptor in YAML (e.g. file(\"deploy/prod.yml\")); version, source and sha256 override it.",
 			},
-			"version": schema.StringAttribute{Required: true, Description: "Versione dell'artefatto da tenere in esercizio."},
-			"source":  schema.StringAttribute{Optional: true, Description: "Sorgente dell'artefatto, al posto di quella del descrittore."},
-			"sha256":  schema.StringAttribute{Optional: true, Description: "sha256 atteso dell'artefatto."},
+			"version": schema.StringAttribute{Required: true, Description: "Version of the artifact to keep in service."},
+			"source":  schema.StringAttribute{Optional: true, Description: "Source of the artifact, instead of the descriptor's."},
+			"sha256":  schema.StringAttribute{Optional: true, Description: "Expected sha256 of the artifact."},
 			"timeout": schema.StringAttribute{
 				Optional: true, Computed: true, Default: stringdefault.StaticString("30m"),
-				Description: "Tempo massimo di attesa del deploy (es. 30m).",
+				Description: "Maximum time to wait for the deploy (e.g. 30m).",
 			},
 			"redeploy_out_of_sync": schema.BoolAttribute{
 				Optional: true, Computed: true, Default: booldefault.StaticBool(false),
-				Description: "Se true, un ambiente con target cambiati fuori da manent (riconciliazione) viene rilasciato di nuovo al prossimo apply.",
+				Description: "If true, an environment with targets changed outside manent (reconciliation) is released again at the next apply.",
 			},
-			"state":       schema.StringAttribute{Computed: true, Description: "Stato del deploy in esercizio."},
-			"out_of_sync": schema.BoolAttribute{Computed: true, Description: "Target cambiati fuori da manent secondo l'ultima riconciliazione."},
+			"state":       schema.StringAttribute{Computed: true, Description: "State of the deploy in service."},
+			"out_of_sync": schema.BoolAttribute{Computed: true, Description: "Targets changed outside manent according to the last reconciliation."},
 		},
 	}
 }
@@ -184,8 +184,8 @@ func readInventory(m *deploymentModel, e service.InventoryEntry) {
 
 // Delete implements resource.Resource: manent does not remove releases from the targets.
 func (r *deploymentResource) Delete(_ context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	resp.Diagnostics.AddWarning("release lasciata in esercizio",
-		"manent non rimuove le release dai target: la risorsa esce dallo stato di Terraform, i target restano invariati.")
+	resp.Diagnostics.AddWarning("release left live",
+		"manent does not remove releases from the targets: the resource leaves the Terraform state, the targets stay unchanged.")
 }
 
 // ImportState implements resource.ResourceWithImportState: the ID is
@@ -222,7 +222,7 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 	}
 	sub, err := r.svc.Submit(ctx, d)
 	if err != nil {
-		diags.AddError("deploy rifiutato", err.Error())
+		diags.AddError("deploy refused", err.Error())
 		return diags
 	}
 	m.ID = types.StringValue(sub.ID)
@@ -235,7 +235,7 @@ func (r *deploymentResource) deploy(ctx context.Context, m *deploymentModel) dia
 	_, werr := r.svc.Wait(wctx, sub.ID)
 	st, err := r.svc.Status(ctx, sub.ID)
 	if err != nil {
-		diags.AddError("stato del deploy "+sub.ID, err.Error())
+		diags.AddError("state of deploy "+sub.ID, err.Error())
 		return diags
 	}
 	m.State, m.OutOfSync = types.StringValue(st.State), types.BoolValue(false)

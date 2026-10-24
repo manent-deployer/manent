@@ -151,16 +151,16 @@ func (n HTTPNotifier) Notify(ctx context.Context, d *descriptor.Descriptor, cb d
 	log := n.Logger.With("deployment", ev.DeploymentID, "callback", target, "event", ev.Type, "delivery", ev.ID)
 	resp, err := n.Client.Do(req)
 	if err != nil {
-		log.WarnContext(ctx, "invio callback fallito", "error", err)
+		log.WarnContext(ctx, "callback send failed", "error", err)
 		return fmt.Errorf("callback %s: %w", target, err)
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		log.WarnContext(ctx, "callback rifiutato", "status", resp.StatusCode)
+		log.WarnContext(ctx, "callback refused", "status", resp.StatusCode)
 		return fmt.Errorf("callback %s: status %d", target, resp.StatusCode)
 	}
-	log.InfoContext(ctx, "callback inviato", "status", ev.Status, "step", ev.Step)
+	log.InfoContext(ctx, "callback sent", "status", ev.Status, "step", ev.Step)
 	return nil
 }
 

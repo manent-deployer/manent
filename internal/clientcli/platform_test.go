@@ -25,8 +25,8 @@ func TestStampaWorkerEAttivita(t *testing.T) {
 	if err := printWorkers(&out, ws, now); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"w1", "alive", "eu", "node-1", "1 (v0.9.0)", "3s fa", "1 (+1 non visibili)", "w2", "stale", "deploy", "api/prod",
-		"0.35/2 (host 8)", "64.0 MiB/1.0 GiB", "10.0 GiB liberi", "deployments, deployments-approvals"} {
+	for _, want := range []string{"w1", "alive", "eu", "node-1", "1 (v0.9.0)", "3s ago", "1 (+1 not visible)", "w2", "stale", "deploy", "api/prod",
+		"0.35/2 (host 8)", "64.0 MiB/1.0 GiB", "10.0 GiB free", "deployments, deployments-approvals"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("manca %q in\n%s", want, out.String())
 		}
@@ -44,17 +44,17 @@ func TestStampaWorkerEAttivita(t *testing.T) {
 	if err := printActivity(&out, a, now); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"In attesa delle dipendenze (1)", "attende d1 (PENDING)", "In esecuzione (1)", "step deploy, ondate 1/3", "In coda (1)", "deployments", "Pianificati (1)", "d3 (dry-run)", "tra 1h0m0s"} {
+	for _, want := range []string{"Waiting for dependencies (1)", "waiting for d1 (PENDING)", "Running (1)", "step deploy, waves 1/3", "Queued (1)", "deployments", "Scheduled (1)", "d3 (dry-run)", "in 1h0m0s"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("manca %q in\n%s", want, out.String())
 		}
 	}
-	if strings.Contains(out.String(), "approvazione") {
+	if strings.Contains(out.String(), "approval") {
 		t.Errorf("sezione vuota stampata:\n%s", out.String())
 	}
 	out.Reset()
 	_ = printActivity(&out, &service.Activity{}, now)
-	if !strings.Contains(out.String(), "Nessun deploy attivo") {
+	if !strings.Contains(out.String(), "No active deploy") {
 		t.Errorf("attività vuota: %s", out.String())
 	}
 }
@@ -71,7 +71,7 @@ func TestStampaCode(t *testing.T) {
 	if err := printQueues(&out, qs, now); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"deployments", "1m30s", "4 per worker, 1 per ambiente", "2 (w1, w2)", "region eu", "nessuno"} {
+	for _, want := range []string{"deployments", "1m30s", "4 per worker, 1 per environment", "2 (w1, w2)", "region eu", "none"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("manca %q in\n%s", want, out.String())
 		}

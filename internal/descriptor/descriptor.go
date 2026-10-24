@@ -485,7 +485,7 @@ const maxCallbacks = 5
 // nameRe limits IDs and schedule names, also used as directory names on the worker.
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
-const nameRule = "ammessi lettere, cifre, '.', '_', ':', '-' (max 128, iniziale alfanumerica)"
+const nameRule = "allowed letters, digits, '.', '_', ':', '-' (max 128, alphanumeric first character)"
 
 func validName(s string) bool { return nameRe.MatchString(s) }
 

@@ -332,7 +332,7 @@ curl -H "Authorization: Bearer $TOKEN" "https://manent.example.com/api/v1/deploy
 ```json
 {
   "lines": [
-    {"time": "2026-10-10T12:03:12Z", "level": "INFO", "step": "artifacts", "message": "artefatto recuperato",
+    {"time": "2026-10-10T12:03:12Z", "level": "INFO", "step": "artifacts", "message": "artifact fetched",
      "attrs": {"sha256": "2d27…"}}
   ],
   "next": 1,

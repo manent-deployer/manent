@@ -123,7 +123,7 @@ func (s *step) exec(ctx context.Context, in pipeline.Input, dry bool) (pipeline.
 		s.b.Frozen(d.Application, d.Environment, s.now()) {
 		// Dry-runs are not subject to governance, but the commands run on production targets: they
 		// do not run during a freeze.
-		log.InfoContext(ctx, "dry-run: comando saltato per il freeze in corso")
+		log.InfoContext(ctx, "dry-run: command skipped for the freeze in progress")
 		return pipeline.Output{OutDryRun: "skipped", OutReason: "freeze"}, nil
 	}
 	r, err := s.prepare(ctx, in, dry, log)
@@ -152,7 +152,7 @@ func (s *step) exec(ctx context.Context, in pipeline.Input, dry bool) (pipeline.
 	if err != nil {
 		return nil, err
 	}
-	log.InfoContext(ctx, "step personalizzato completato", "type", s.doc.Type, "dry_run", dry, "outputs", len(out))
+	log.InfoContext(ctx, "custom step completed", "type", s.doc.Type, "dry_run", dry, "outputs", len(out))
 	return out, nil
 }
 
@@ -267,7 +267,7 @@ func (r *run) audit(ctx context.Context, err error) {
 		e.Outcome, e.Reason = audit.OutcomeFailed, err.Error()
 	}
 	if aerr := r.s.b.Audit.Record(ctx, e); aerr != nil {
-		r.log.ErrorContext(ctx, "registrazione nell'audit fallita", "error", aerr)
+		r.log.ErrorContext(ctx, "audit recording failed", "error", aerr)
 	}
 }
 

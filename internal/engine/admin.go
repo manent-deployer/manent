@@ -214,7 +214,7 @@ func (a *Admin) Recover(ctx context.Context, o RecoverOptions) (*RecoverReport, 
 	}
 	if claimed {
 		if err := a.registry.ClaimDone(ctx, o.Executor); err != nil {
-			a.logger.Warn("recovery: chiusura della rivendicazione fallita", "executor", o.Executor, "error", err)
+			a.logger.Warn("recovery: closing the claim failed", "executor", o.Executor, "error", err)
 		}
 	}
 	if !o.DryRun {
@@ -282,10 +282,10 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 	sameVersion := w.ApplicationVersion == o.ToVersion
 	switch {
 	case !sameVersion && o.SameVersionOnly:
-		r.Action, r.Note = RecoverSkipped, "versione diversa: va migrato con manent admin recover --from-version"
+		r.Action, r.Note = RecoverSkipped, "different version: migrate it with manent admin recover --from-version"
 		return r
 	case sameVersion && w.Status == dbos.WorkflowStatusEnqueued:
-		r.Action, r.Note = RecoverSkipped, "già in coda per la versione corrente"
+		r.Action, r.Note = RecoverSkipped, "already queued for the current version"
 		return r
 	case sameVersion && !o.FromStart:
 		r.Action = RecoverResumed
@@ -299,10 +299,10 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 		}
 		if _, err := dbos.ResumeWorkflow[any](a.client, w.ID, opts...); err != nil {
 			r.Action, r.Note = RecoverFailed, err.Error()
-			log.Error("recovery: ripresa del workflow fallita", "error", err)
+			log.Error("recovery: resuming the workflow failed", "error", err)
 			return r
 		}
-		log.Info("recovery: workflow ripreso")
+		log.Info("recovery: workflow resumed")
 		return r
 	}
 	r.Action = RecoverRewound
@@ -317,14 +317,14 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 		}
 	}
 	if w.Name == approvalWorkflowName {
-		r.Note = "le decisioni inviate dopo la perdita del nodo, non ancora elaborate, vanno ripetute"
+		r.Note = "the decisions sent after the node was lost, not yet processed, must be repeated"
 	}
 	if o.DryRun {
 		return r
 	}
 	if err := dbos.CancelWorkflow(a.client, w.ID); err != nil {
 		r.Action, r.Note = RecoverFailed, err.Error()
-		log.Error("recovery: annullamento prima della migrazione fallito", "error", err)
+		log.Error("recovery: cancellation before the migration failed", "error", err)
 		return r
 	}
 	opts := []dbos.RewindWorkflowOption{
@@ -338,11 +338,11 @@ func (a *Admin) recoverOne(w dbos.WorkflowStatus, o RecoverOptions) RecoveredWor
 		}
 	}
 	if _, err := dbos.RewindWorkflow[any](a.client, w.ID, opts...); err != nil {
-		r.Action, r.Note = RecoverFailed, "annullato ma non riportato alla nuova versione: "+err.Error()
-		log.Error("recovery: migrazione del workflow fallita: il workflow è annullato", "error", err)
+		r.Action, r.Note = RecoverFailed, "cancelled but not moved to the new version: "+err.Error()
+		log.Error("recovery: migration of the workflow failed: the workflow is cancelled", "error", err)
 		return r
 	}
-	log.Info("recovery: workflow migrato", "to_version", o.ToVersion, "from_step", r.FromStep)
+	log.Info("recovery: workflow migrated", "to_version", o.ToVersion, "from_step", r.FromStep)
 	return r
 }
 
@@ -359,13 +359,13 @@ func (a *Admin) recordRecover(ctx context.Context, o RecoverOptions, rep *Recove
 	if counts[RecoverFailed] > 0 {
 		outcome = audit.OutcomeFailed
 	}
-	a.logger.Warn("recovery eseguita", "executor", o.Executor, "from_version", o.FromVersion, "to_version", rep.ToVersion, "by", o.By, "result", counts)
+	a.logger.Warn("recovery done", "executor", o.Executor, "from_version", o.FromVersion, "to_version", rep.ToVersion, "by", o.By, "result", counts)
 	if a.audit == nil {
 		return
 	}
 	_ = a.audit.Record(ctx, audit.Entry{
 		Time: a.now().UTC(), Actor: o.By, Action: ActionAdminRecover, Outcome: outcome,
-		Comment: fmt.Sprintf("executor=%s from_version=%s to_version=%s force=%v ripresi=%d migrati=%d saltati=%d falliti=%d",
+		Comment: fmt.Sprintf("executor=%s from_version=%s to_version=%s force=%v resumed=%d migrated=%d skipped=%d failed=%d",
 			o.Executor, o.FromVersion, rep.ToVersion, o.Force, counts[RecoverResumed], counts[RecoverRewound], counts[RecoverSkipped], counts[RecoverFailed]),
 	})
 }

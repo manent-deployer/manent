@@ -10,8 +10,8 @@ import (
 // TenantsListCmd lists the tenants.
 type TenantsListCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" description:"solo il tenant proprietario di questa applicazione"`
-	Selector    string `long:"selector" description:"selettore sui tag del tenant e sul nome, es. division=commerce"`
+	Application string `short:"a" long:"application" description:"only the tenant that owns this application"`
+	Selector    string `long:"selector" description:"selector on the tenant tags and name, e.g. division=commerce"`
 }
 
 // Execute implements flags.Commander.

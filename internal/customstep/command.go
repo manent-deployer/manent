@@ -135,17 +135,17 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 		c, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 		if code, err := conn.Exec(c, "rm -rf -- "+Quote(base), nil, io.Discard, io.Discard); err != nil || code != 0 {
-			r.log.WarnContext(ctx, "pulizia della directory dei segreti fallita: verrà ripetuta al prossimo tentativo", "target", t.Host, "code", code, "error", err)
+			r.log.WarnContext(ctx, "cleanup of the secrets directory failed: it will be repeated at the next attempt", "target", t.Host, "code", code, "error", err)
 		}
 	}()
 	if err := r.exec(ctx, conn, "umask 077 && rm -rf -- "+Quote(base)+" && mkdir -p -- "+Quote(path.Join(dir, "secrets")), nil, "preparing the directory"); err != nil {
 		return nil, err
 	}
-	if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "env")), strings.NewReader(r.envFile(t, dir)), "scrittura dell'ambiente"); err != nil {
+	if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "env")), strings.NewReader(r.envFile(t, dir)), "writing the environment"); err != nil {
 		return nil, err
 	}
 	for _, name := range slices.Sorted(maps.Keys(r.secrets)) {
-		if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "secrets", name)), strings.NewReader(r.secrets[name]), "scrittura dei segreti"); err != nil {
+		if err := r.exec(ctx, conn, "umask 077 && cat > "+Quote(path.Join(dir, "secrets", name)), strings.NewReader(r.secrets[name]), "writing the secrets"); err != nil {
 			return nil, err
 		}
 	}
@@ -166,7 +166,7 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	attrs := []any{"target", t.Host}
 	stdout := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stdout")}
 	stderr := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stderr")}
-	r.log.InfoContext(ctx, "comando avviato", "target", t.Host, "command", args[0], "args", len(args)-1, "dry_run", r.dry)
+	r.log.InfoContext(ctx, "command started", "target", t.Host, "command", args[0], "args", len(args)-1, "dry_run", r.dry)
 	code, err := conn.Exec(ctx, cmd, nil, stdout, stderr)
 	stdout.flush()
 	stderr.flush()
@@ -182,7 +182,7 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	case code != 0:
 		return nil, permanent("the command exited with code %d", code)
 	}
-	r.log.InfoContext(ctx, "comando completato", "target", t.Host)
+	r.log.InfoContext(ctx, "command completed", "target", t.Host)
 	if len(r.s.doc.Outputs) == 0 {
 		return nil, nil
 	}

@@ -333,7 +333,7 @@ func newContextWithRetry(cfg dbos.Config, log *slog.Logger) (dbos.Context, error
 		if err == nil || attempt == len(initBackoff) {
 			return ctx, err
 		}
-		log.Warn("inizializzazione DBOS fallita, nuovo tentativo", "attempt", attempt+1, "error", err)
+		log.Warn("DBOS initialization failed, retrying", "attempt", attempt+1, "error", err)
 		time.Sleep(initBackoff[attempt])
 	}
 }
@@ -347,7 +347,7 @@ func Migrate(databaseURL string, log *slog.Logger) error {
 		if err == nil || attempt == len(initBackoff) {
 			return err
 		}
-		log.Warn("migrazione dello schema DBOS fallita, nuovo tentativo", "attempt", attempt+1, "error", err)
+		log.Warn("migration of the DBOS schema failed, retrying", "attempt", attempt+1, "error", err)
 		time.Sleep(initBackoff[attempt])
 	}
 }
@@ -392,7 +392,7 @@ func (w *Worker) Launch() error {
 			go w.reconcileLoop()
 		}
 	}
-	w.logger.Info("worker avviato", "queue", w.queue.GetName(), "version", w.version)
+	w.logger.Info("worker started", "queue", w.queue.GetName(), "version", w.version)
 	return nil
 }
 
@@ -438,7 +438,7 @@ func (w *Worker) register() error {
 				return fmt.Errorf("worker registration: %w", err)
 			}
 			if !warned {
-				w.logger.Warn("executor_id registrato da un altro processo non arrestato: attesa che risulti perso (se è ancora attivo, assegnare un dbos.executor_id diverso)",
+				w.logger.Warn("executor_id registered by another process not stopped: waiting until it counts as lost (if it is still running, assign a different dbos.executor_id)",
 					"executor", w.id, "host", inUse.Hostname, "heartbeat_at", inUse.HeartbeatAt)
 				warned = true
 			}
@@ -449,7 +449,7 @@ func (w *Worker) register() error {
 		case time.Now().After(deadline):
 			return errors.New("worker registration: recovery of its workflows still in progress")
 		default:
-			w.logger.Warn("recovery dei workflow di questo executor in corso su un altro worker: attesa")
+			w.logger.Warn("recovery of this executor's workflows in progress on another worker: waiting")
 		}
 		time.Sleep(min(2*time.Second, w.maintenance.HeartbeatInterval))
 	}
@@ -472,16 +472,16 @@ func (w *Worker) Drain(timeout time.Duration) {
 			dbos.WithFilterStatus(dbos.WorkflowStatusPending), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 		switch {
 		case err != nil:
-			w.logger.Warn("drain: lettura dei deploy in corso fallita", "error", err)
+			w.logger.Warn("drain: reading the running deploys failed", "error", err)
 			return
 		case len(wfs) == 0:
-			w.logger.Info("drain completato: nessun deploy in corso")
+			w.logger.Info("drain completed: no running deploy")
 			return
 		case time.Now().After(deadline):
-			w.logger.Warn("drain: timeout, i deploy in corso riprenderanno al riavvio o con la recovery", "running", len(wfs))
+			w.logger.Warn("drain: timeout, the running deploys will resume at restart or with the recovery", "running", len(wfs))
 			return
 		}
-		w.logger.Info("drain: attesa dei deploy in corso", "running", len(wfs))
+		w.logger.Info("drain: waiting for the running deploys", "running", len(wfs))
 		time.Sleep(time.Second)
 	}
 }
@@ -497,7 +497,7 @@ func (w *Worker) Shutdown(timeout time.Duration) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if serr := w.registry.Stopped(ctx, w.id, w.startedAt); serr != nil {
-			w.logger.Warn("registrazione dell'arresto fallita", "error", serr)
+			w.logger.Warn("recording the shutdown failed", "error", serr)
 		}
 	}
 	return err
@@ -530,7 +530,7 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 		if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 			return "", w.cleaner.Cleanup(c, id)
 		}, dbos.WithStepName("cleanup")); err != nil {
-			w.logger.Warn("pulizia del deploy fallita", "deployment", id, "error", err)
+			w.logger.Warn("cleanup of the deploy failed", "deployment", id, "error", err)
 		}
 	}
 	final := callback.Event{Type: descriptor.CallbackEventDeployment, Status: callback.StatusSucceeded}
@@ -608,7 +608,7 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 		}
 	}
 	if err := dbos.SetWorkflowAttributes(ctx, id, attrs); err != nil {
-		w.logger.Error("aggiornamento degli attributi del deploy fallito", "deployment", id, "error", err)
+		w.logger.Error("updating the deploy attributes failed", "deployment", id, "error", err)
 	}
 }
 
@@ -639,7 +639,7 @@ func (w *Worker) recordOutcome(ctx dbos.Context, id, requestedBy string, d *desc
 		e.Time = time.Now().UTC()
 		return "", w.audit.Record(c, e)
 	}, dbos.WithStepName("audit")); err != nil {
-		w.logger.Error("registrazione dell'esito nell'audit fallita", "deployment", id, "error", err)
+		w.logger.Error("recording the outcome in the audit failed", "deployment", id, "error", err)
 	}
 }
 
@@ -684,7 +684,7 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 			return "", e.w.notifier.Notify(c, d, cb, out)
 		}, dbos.WithStepName(fmt.Sprintf("callback:%s:%d", ev.Type, i)), dbos.WithStepMaxRetries(e.w.callbackRetries))
 		if err != nil {
-			e.w.logger.Warn("callback non consegnato", "deployment", e.id, "delivery", ev.ID, "callback", i, "error", err)
+			e.w.logger.Warn("callback not delivered", "deployment", e.id, "delivery", ev.ID, "callback", i, "error", err)
 		}
 	}
 }
@@ -788,7 +788,7 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 	if d.DryRun {
 		dr, ok := step.(pipeline.DryRunner)
 		if !ok {
-			w.logger.Info("dry-run: step saltato", "deployment", id, "step", label)
+			w.logger.Info("dry-run: step skipped", "deployment", id, "step", label)
 			out := pipeline.Output{"dry_run": "skipped"}
 			res.Steps = append(res.Steps, StepResult{Name: label, Output: out})
 			ev.send(d, callback.Event{Type: descriptor.CallbackEventStep, Step: label, Status: callback.StatusSkipped, Output: out})
@@ -907,7 +907,7 @@ func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig
 		}
 		meta["rollout"] = strconv.Itoa(len(p.Stages)) + " stadi, " + strconv.Itoa(p.TotalPasses()) + " passi"
 		if d.Rollout.IsTraffic() {
-			meta["rollout"] = "traffico per gradini: " + fmt.Sprint(d.Rollout.Traffic.Steps)
+			meta["rollout"] = "traffic by steps: " + fmt.Sprint(d.Rollout.Traffic.Steps)
 		}
 	} else if d.Traffic != nil && w.traffic != nil {
 		if err := w.traffic.Check(&d); err != nil {
@@ -1006,10 +1006,10 @@ func (w *Worker) undo(ctx dbos.Context, id string, ev *events, d *descriptor.Des
 	log := w.logger.With("deployment", id)
 	if ctx.Err() != nil {
 		// Deploy cancelled or worker stopping: compensations cannot run.
-		log.Error("rollback non eseguito: deploy interrotto", "error", ctx.Err())
+		log.Error("rollback not run: deploy interrupted", "error", ctx.Err())
 		return stepErr
 	}
-	log.Warn("rollback avviato", "steps", len(started))
+	log.Warn("rollback started", "steps", len(started))
 	rbErr := &RollbackError{Err: stepErr, Status: RollbackSkipped}
 	for i := len(started) - 1; i >= 0; i-- {
 		s := started[i]
@@ -1031,7 +1031,7 @@ func (w *Worker) undo(ctx dbos.Context, id string, ev *events, d *descriptor.Des
 		ev.send(d, stepEvent(name, out, err))
 		if err != nil {
 			rbErr.Status, rbErr.Cause = RollbackFailed, fmt.Errorf("step %q: %w", name, err)
-			log.Error("rollback fallito: serve un intervento manuale", "step", name, "error", err)
+			log.Error("rollback failed: manual intervention needed", "step", name, "error", err)
 			return rbErr
 		}
 		res.Steps = append(res.Steps, StepResult{Name: name, Output: out})
@@ -1039,6 +1039,6 @@ func (w *Worker) undo(ctx dbos.Context, id string, ev *events, d *descriptor.Des
 			rbErr.Status = RollbackCompleted
 		}
 	}
-	log.Warn("rollback terminato", "status", rbErr.Status)
+	log.Warn("rollback ended", "status", rbErr.Status)
 	return rbErr
 }

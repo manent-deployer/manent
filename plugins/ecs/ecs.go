@@ -375,7 +375,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		if td, err = s.api.RegisterRevision(ctx, s.current, s.container, image, tags); err != nil {
 			return details, fmt.Errorf("registering the task definition: %w", err)
 		}
-		log.InfoContext(ctx, "task definition registrata", "task_definition", td.ARN, "image", image)
+		log.InfoContext(ctx, "task definition registered", "task_definition", td.ARN, "image", image)
 		if err := s.api.UpdateService(ctx, s.target.cluster, serviceName(req), td.ARN); err != nil {
 			return details, fmt.Errorf("updating the service: %w", err)
 		}
@@ -385,12 +385,12 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 		// Delegated mode: ECS handles steps, bake and the return on CloudWatch alarms. manent waits
 		// for the end with a time covering the expected duration.
 		details["strategy"] = s.service.Strategy
-		log.InfoContext(ctx, "strategia nativa di ECS: lo spostamento del traffico è delegato al servizio", "strategy", s.service.Strategy, "expected", s.service.nativeDuration())
+		log.InfoContext(ctx, "native ECS strategy: the traffic shift is delegated to the service", "strategy", s.service.Strategy, "expected", s.service.nativeDuration())
 	}
 	if err := p.wait(ctx, s, td.ARN, req, log); err != nil {
 		return details, err
 	}
-	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "task_definition", td.ARN)
+	log.InfoContext(ctx, "active release", "version", req.Artifact.Version, "task_definition", td.ARN)
 	return details, nil
 }
 
@@ -417,11 +417,11 @@ func (p *Plugin) wait(ctx context.Context, s *state, arn string, req *plugin.Req
 			return err
 		}
 		if done {
-			log.InfoContext(ctx, "deployment completato", "task_definition", arn, "running", svc.RunningCount)
+			log.InfoContext(ctx, "deployment completed", "task_definition", arn, "running", svc.RunningCount)
 			return nil
 		}
 		if st != last {
-			log.InfoContext(ctx, "deployment in corso", "state", st)
+			log.InfoContext(ctx, "deployment in progress", "state", st)
 			last = st
 		}
 		select {
@@ -444,9 +444,9 @@ func completed(svc *Service, arn string) (bool, string, error) {
 		if svc.TaskDefinition != arn {
 			return false, "", fmt.Errorf("the service now uses %s: deployment replaced by another update", svc.TaskDefinition)
 		}
-		return false, "in attesa del deployment", nil
+		return false, "waiting for the deployment", nil
 	}
-	progress := fmt.Sprintf("%d/%d task in esecuzione, %d in avvio, %d falliti", d.Running, d.Desired, d.Pending, d.Failed)
+	progress := fmt.Sprintf("%d/%d tasks running, %d starting, %d failed", d.Running, d.Desired, d.Pending, d.Failed)
 	switch d.RolloutState {
 	case "FAILED":
 		return false, "", fmt.Errorf("deployment failed: %s (%s)", d.RolloutReason, progress)
@@ -460,7 +460,7 @@ func completed(svc *Service, arn string) (bool, string, error) {
 		}
 	}
 	if old := len(svc.Deployments) - 1; old > 0 {
-		progress += fmt.Sprintf(", %d deployment precedenti in arresto", old)
+		progress += fmt.Sprintf(", %d previous deployments stopping", old)
 	}
 	return false, progress, nil
 }
@@ -470,7 +470,7 @@ func completed(svc *Service, arn string) (bool, string, error) {
 // release; different versions across targets are an error.
 func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plugin.Release, error) {
 	found := map[string][]string{}
-	details := map[string]string{"source": "tag della task definition"}
+	details := map[string]string{"source": "task definition tags"}
 	for _, t := range req.Targets {
 		s, err := p.read(ctx, t, req)
 		if err != nil {
@@ -542,7 +542,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 	if err := p.wait(ctx, s, arn, req, log); err != nil {
 		return details, err
 	}
-	log.WarnContext(ctx, "release precedente ripristinata", "version", previous.Version, "task_definition", arn)
+	log.WarnContext(ctx, "previous release restored", "version", previous.Version, "task_definition", arn)
 	return details, nil
 }
 
@@ -583,7 +583,7 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 			details["image"] = image
 		}
 		details["running"] = fmt.Sprintf("%d/%d", s.service.RunningCount, s.service.DesiredCount)
-		p.logger.InfoContext(ctx, "servizio pronto per il deploy", "deployment", req.DeploymentID, "region", s.target.region, "service", serviceName(req), "dry_run", true)
+		p.logger.InfoContext(ctx, "service ready for the deploy", "deployment", req.DeploymentID, "region", s.target.region, "service", serviceName(req), "dry_run", true)
 		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusReady, Details: details})
 	}
 	return res, errors.Join(errs...)

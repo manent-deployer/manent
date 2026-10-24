@@ -114,7 +114,7 @@ rbac:
 
 ## 5. Impostazioni di produzione
 
-All'avvio `serve` e `worker` registrano `configurazione non adatta alla produzione` per ogni impostazione ancora permissiva. Chiudile tutte:
+All'avvio `serve` e `worker` registrano `configuration not fit for production` per ogni impostazione ancora permissiva. Chiudile tutte:
 
 ```yaml title="values-prod.yaml (config)"
 artifacts:

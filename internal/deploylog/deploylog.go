@@ -91,7 +91,7 @@ func (h *Handler) write(si *stepInfo, r slog.Record) {
 	}
 	line := Line{Time: r.Time.UTC(), Level: r.Level.String(), Step: si.step, Message: truncate(r.Message, maxMessage)}
 	if n == maxLinesPerStep {
-		line.Message, line.Level = fmt.Sprintf("limite di %d righe per step raggiunto: le successive sono solo nel log applicativo", maxLinesPerStep), slog.LevelWarn.String()
+		line.Message, line.Level = fmt.Sprintf("limit of %d lines per step reached: the next ones are only in the application log", maxLinesPerStep), slog.LevelWarn.String()
 	}
 	attrs := map[string]string{}
 	add := func(prefix string, a slog.Attr) {

@@ -359,7 +359,7 @@ func TestRilascioPerPercentualeDerivaEApprovazioni(t *testing.T) {
 	}
 	// First pause: approval after the tests at weight 0.
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
-	if st.Rollout.Paused != "approvazione dopo i test a peso 0" {
+	if st.Rollout.Paused != "approval after the tests at weight 0" {
 		t.Fatalf("pausa: %+v", st.Rollout)
 	}
 	if err := env.e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {
@@ -446,7 +446,7 @@ func TestRilascioPerPercentualeAOndate(t *testing.T) {
 	}
 	// After the eu wave the rollout waits for approval before the next cluster.
 	st := waitDeployState(t, env.e, sub.ID, StateAwaitingApproval)
-	if st.Rollout.Paused != "approvazione dopo l'ondata eu" || st.Rollout.Traffic.Pass != "eu" || !st.Rollout.Traffic.Promoted {
+	if st.Rollout.Paused != "approval after the wave eu" || st.Rollout.Traffic.Pass != "eu" || !st.Rollout.Traffic.Promoted {
 		t.Fatalf("pausa: %+v %+v", st.Rollout, st.Rollout.Traffic)
 	}
 	if err := env.e.Decide(bob, sub.ID, DecisionRequest{Approve: true}); err != nil {

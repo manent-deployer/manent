@@ -65,7 +65,7 @@ func TestMessaggioDatagrammaAccorciato(t *testing.T) {
 		t.Fatalf("messaggio accorciato non valido: %v", err)
 	}
 	params := got.StructuredData[0].Parameters
-	if params[0].Value != "d1" || len(params[1].Value) > maxDatagramParam+4 || !strings.HasSuffix(string(got.Message), "[troncato]") {
+	if params[0].Value != "d1" || len(params[1].Value) > maxDatagramParam+4 || !strings.HasSuffix(string(got.Message), "[truncated]") {
 		t.Errorf("accorciamento inatteso: %d %q", len(params[1].Value), got.Message[len(got.Message)-20:])
 	}
 	// A small message stays identical.

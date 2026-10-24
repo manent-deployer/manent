@@ -328,7 +328,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 			return nil, err
 		}
 		sub.ID, sub.State = id, StateWaitingDependency
-		e.logger.Info("deploy in attesa delle dipendenze", "deployment", id, "application", d.Application, "environment", d.Environment, "after", d.After, "requested_by", req.RequestedBy)
+		e.logger.Info("deploy waiting for its dependencies", "deployment", id, "application", d.Application, "environment", d.Environment, "after", d.After, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
 	if needsApproval(req) {
@@ -340,7 +340,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 			return nil, err
 		}
 		sub.ID, sub.State = id, StateAwaitingApproval
-		e.logger.Info("deploy in attesa di approvazione", "deployment", id, "application", d.Application, "environment", d.Environment,
+		e.logger.Info("deploy awaiting approval", "deployment", id, "application", d.Application, "environment", d.Environment,
 			"required", req.Approval.RequiredOrZero(), "change_approval", req.Change != nil && req.Change.Approval, "requested_by", req.RequestedBy)
 		return sub, nil
 	}
@@ -353,7 +353,7 @@ func (e *Engine) enqueue(ctx context.Context, req Request) (*Submission, error) 
 		return nil, err
 	}
 	sub.ID = h.GetWorkflowID()
-	e.logger.Info("deploy accodato", "deployment", sub.ID, "application", d.Application, "environment", d.Environment, "state", sub.State, "dry_run", d.DryRun, "kind", meta.kind, "requested_by", req.RequestedBy)
+	e.logger.Info("deploy enqueued", "deployment", sub.ID, "application", d.Application, "environment", d.Environment, "state", sub.State, "dry_run", d.DryRun, "kind", meta.kind, "requested_by", req.RequestedBy)
 	return sub, nil
 }
 
@@ -520,7 +520,7 @@ func (e *Engine) inspectWith(ctx context.Context, d *descriptor.Descriptor,
 		case errors.Is(err, pipeline.ErrPermanent):
 			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 		case err != nil:
-			v.Warnings = append(v.Warnings, "configurazione di ambiente non verificabile all'accodamento: la verifica resta al worker ("+err.Error()+")")
+			v.Warnings = append(v.Warnings, "environment configuration not verifiable at enqueue time: the check is left to the worker ("+err.Error()+")")
 		default:
 			eff, v.Config = r, meta
 		}
@@ -999,7 +999,7 @@ func (e *Engine) Cancel(ctx context.Context, id string) error {
 		return err
 	}
 	e.notifyWaiters(id)
-	e.logger.Info("deploy annullato", "deployment", id)
+	e.logger.Info("deploy cancelled", "deployment", id)
 	return nil
 }
 

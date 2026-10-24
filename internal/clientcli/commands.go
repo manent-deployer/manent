@@ -23,30 +23,30 @@ import (
 // Scheduled deploys (schedule in the descriptor) are not waited for.
 type DeployCmd struct {
 	global  *GlobalOptions
-	File    string        `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
-	NoWait  bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
-	Timeout time.Duration `long:"timeout" description:"tempo massimo di attesa, es. 30m (0 = nessun limite); il deploy prosegue comunque"`
-	DryRun  bool          `long:"dry-run" description:"simula il deploy su un worker: verifica configurazione, segreti, artefatto e target senza modificarli"`
-	After   []string      `long:"after" description:"ID di un deploy che deve riuscire prima di questo (ripetibile); si aggiunge ad after del descrittore"`
-	Import  []string      `long:"import" value-name:"NOME=ID" description:"legge gli export del deploy ID come import NOME del descrittore (ripetibile); aggiunge ID ad after"`
+	File    string        `short:"f" long:"file" required:"true" description:"YAML deploy descriptor"`
+	NoWait  bool          `long:"no-wait" description:"do not wait for the deploy to end"`
+	Timeout time.Duration `long:"timeout" description:"maximum time to wait, e.g. 30m (0 = no limit); the deploy goes on anyway"`
+	DryRun  bool          `long:"dry-run" description:"simulates the deploy on a worker: checks configuration, secrets, artifact and targets without changing them"`
+	After   []string      `long:"after" description:"ID of a deploy that must succeed before this one (repeatable); added to the descriptor's after"`
+	Import  []string      `long:"import" value-name:"NAME=ID" description:"reads the exports of deploy ID as import NAME of the descriptor (repeatable); adds ID to after"`
 	ArtifactOverrides
-	Outputs string `long:"outputs" description:"file a cui aggiungere gli esiti come righe chiave=valore (deployment_id, state, ...): $GITHUB_OUTPUT o un report dotenv di GitLab"`
-	Summary string `long:"summary" description:"file a cui aggiungere il riepilogo del deploy in Markdown ($GITHUB_STEP_SUMMARY)"`
-	CI      bool   `long:"ci" description:"riconosce GitHub Actions (esiti in $GITHUB_OUTPUT, riepilogo in $GITHUB_STEP_SUMMARY) o GitLab CI (esiti in manent.env, o $MANENT_DOTENV)"`
+	Outputs string `long:"outputs" description:"file to append the outcome to as key=value lines (deployment_id, state, ...): $GITHUB_OUTPUT or a GitLab dotenv report"`
+	Summary string `long:"summary" description:"file to append the deploy summary to, in Markdown ($GITHUB_STEP_SUMMARY)"`
+	CI      bool   `long:"ci" description:"detect GitHub Actions (outcomes in $GITHUB_OUTPUT, summary in $GITHUB_STEP_SUMMARY) or GitLab CI (outcomes in manent.env, or $MANENT_DOTENV)"`
 }
 
 // ArtifactOverrides replace fields of the descriptor from the command line: in CI the
 // descriptor stays in the repository and the build gives the version.
 type ArtifactOverrides struct {
-	ID      string `long:"id" description:"ID del deploy (chiave di idempotenza), al posto di quello del descrittore"`
-	Version string `long:"version" description:"versione dell'artefatto, al posto di quella del descrittore"`
-	Source  string `long:"source" description:"sorgente dell'artefatto, al posto di quella del descrittore"`
-	SHA256  string `long:"sha256" description:"sha256 atteso dell'artefatto"`
+	ID      string `long:"id" description:"deploy ID (idempotency key), instead of the descriptor's"`
+	Version string `long:"version" description:"artifact version, instead of the descriptor's"`
+	Source  string `long:"source" description:"artifact source, instead of the descriptor's"`
+	SHA256  string `long:"sha256" description:"expected sha256 of the artifact"`
 	// ConfigRef sets config.ref: in CI the commit of the configuration repository tested with
 	// the artifact.
-	ConfigRef string `long:"config-ref" description:"revisione della configurazione di ambiente (ref o SHA, provider git), entro descriptor_policy.config_ref"`
+	ConfigRef string `long:"config-ref" description:"revision of the environment configuration (ref or SHA, git provider), within descriptor_policy.config_ref"`
 	// Tenant sets the tenant field: it chooses among the tenants that list the application.
-	Tenant string `short:"t" long:"tenant" description:"tenant dell'applicazione, obbligatorio se più tenant hanno un'applicazione con questo nome"`
+	Tenant string `short:"t" long:"tenant" description:"tenant of the application, required if several tenants have an application with this name"`
 }
 
 // apply writes the overrides into the descriptor and validates it again.
@@ -141,7 +141,7 @@ func applyImports(d *descriptor.Descriptor, specs []string) error {
 // rollback and governance rules. Unlike "deploy --dry-run" it touches no secrets, artifact or targets.
 type ValidateCmd struct {
 	global *GlobalOptions
-	File   string `short:"f" long:"file" required:"true" description:"descrittore di deploy YAML"`
+	File   string `short:"f" long:"file" required:"true" description:"YAML deploy descriptor"`
 }
 
 // Execute implements flags.Commander.
@@ -156,7 +156,7 @@ func (c *ValidateCmd) Execute([]string) error {
 			return err
 		}
 		for _, w := range v.Warnings {
-			fmt.Fprintln(os.Stderr, "attenzione:", w)
+			fmt.Fprintln(os.Stderr, "warning:", w)
 		}
 		return cliutil.PrintJSON(v)
 	})
@@ -187,14 +187,14 @@ func (c *StatusCmd) Execute([]string) error {
 // ListCmd lists deploys, with filters on schedule, application, environment and state.
 type ListCmd struct {
 	global      *GlobalOptions
-	Schedule    string `short:"s" long:"schedule" description:"solo i deploy generati da questa schedule"`
-	Application string `short:"a" long:"application" description:"solo i deploy di questa applicazione"`
-	Environment string `short:"e" long:"environment" description:"solo i deploy in questo ambiente"`
-	Tenant      string `short:"t" long:"tenant" description:"solo i deploy delle applicazioni di questo tenant"`
-	Artifact    string `short:"A" long:"artifact" description:"solo i deploy di questo artefatto (artifact.name)"`
-	Selector    string `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. criticality=high, tenant=payments)"`
-	State       string `long:"state" description:"solo i deploy in questo stato (es. SUCCESS, ERROR, AWAITING_APPROVAL)"`
-	Limit       int    `short:"n" long:"limit" default:"20" description:"numero massimo di deploy"`
+	Schedule    string `short:"s" long:"schedule" description:"only the deploys generated by this schedule"`
+	Application string `short:"a" long:"application" description:"only the deploys of this application"`
+	Environment string `short:"e" long:"environment" description:"only the deploys in this environment"`
+	Tenant      string `short:"t" long:"tenant" description:"only the deploys of the applications of this tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"only the deploys of this artifact (artifact.name)"`
+	Selector    string `long:"selector" description:"only the applications chosen by the tag selector (e.g. criticality=high, tenant=payments)"`
+	State       string `long:"state" description:"only the deploys in this state (e.g. SUCCESS, ERROR, AWAITING_APPROVAL)"`
+	Limit       int    `short:"n" long:"limit" default:"20" description:"maximum number of deploys"`
 }
 
 // Execute implements flags.Commander.
@@ -220,7 +220,7 @@ func (c *CancelCmd) Execute([]string) error {
 		if err := svc.Cancel(ctx, c.Args.ID); err != nil {
 			return err
 		}
-		fmt.Println("deploy annullato:", c.Args.ID)
+		fmt.Println("deploy cancelled:", c.Args.ID)
 		return nil
 	})
 }
@@ -254,7 +254,7 @@ type ScheduleCmd struct {
 	global *GlobalOptions
 	op     int
 	Args   struct {
-		Name string `positional-arg-name:"nome" required:"true"`
+		Name string `positional-arg-name:"name" required:"true"`
 	} `positional-args:"yes"`
 }
 
@@ -283,7 +283,7 @@ func (c *ScheduleCmd) Execute([]string) error {
 type DecideCmd struct {
 	global  *GlobalOptions
 	approve bool
-	Comment string `short:"m" long:"comment" description:"commento registrato con la decisione"`
+	Comment string `short:"m" long:"comment" description:"comment recorded with the decision"`
 	Args    idArgs `positional-args:"yes"`
 }
 
@@ -297,22 +297,22 @@ func (c *DecideCmd) Execute([]string) error {
 			return err
 		}
 		// The decision is processed by the approval workflow: the status updates right after.
-		msg := "approvazione registrata:"
+		msg := "approval recorded:"
 		if !c.approve {
-			msg = "rifiuto registrato:"
+			msg = "rejection recorded:"
 		}
-		fmt.Println(msg, c.Args.ID, "(manent status per lo stato)")
+		fmt.Println(msg, c.Args.ID, "(manent status for the state)")
 		return nil
 	})
 }
 
 // redeployOptions are the options shared by promote and rollback.
 type redeployOptions struct {
-	ID             string        `long:"id" description:"ID del nuovo deploy (chiave di idempotenza)"`
-	DryRun         bool          `long:"dry-run" description:"simula il deploy"`
-	FreezeOverride string        `long:"freeze-override" description:"motivo della deroga a un freeze attivo (richiede il permesso deployment.freeze-override)"`
-	NoWait         bool          `long:"no-wait" description:"non attendere la conclusione del deploy"`
-	Timeout        time.Duration `long:"timeout" description:"tempo massimo di attesa (0 = nessun limite)"`
+	ID             string        `long:"id" description:"ID of the new deploy (idempotency key)"`
+	DryRun         bool          `long:"dry-run" description:"simulates the deploy"`
+	FreezeOverride string        `long:"freeze-override" description:"reason to override an active freeze (requires the deployment.freeze-override permission)"`
+	NoWait         bool          `long:"no-wait" description:"do not wait for the deploy to end"`
+	Timeout        time.Duration `long:"timeout" description:"maximum time to wait (0 = no limit)"`
 }
 
 func (o redeployOptions) redeploy() service.Redeploy {
@@ -322,14 +322,14 @@ func (o redeployOptions) redeploy() service.Redeploy {
 // PromoteCmd releases to an environment the artifact already released to another one.
 type PromoteCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	From        string `long:"from" required:"true" description:"ambiente di origine"`
-	To          string `long:"to" required:"true" description:"ambiente di destinazione"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto da promuovere (obbligatorio se l'ambiente di origine ne ha più di uno)"`
-	Version     string `long:"version" description:"versione da promuovere (default: quella in esercizio nell'ambiente di origine)"`
-	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione, obbligatorio se più tenant hanno un'applicazione con questo nome"`
-	DeployFile  string `long:"deploy-file" description:"file YAML con la sezione deploy (policy, plugin, targets, params) per l'ambiente di destinazione"`
-	ConfigRef   string `long:"config-ref" description:"revisione della configurazione dell'ambiente di destinazione (ref o SHA, provider git); default: il ref di default"`
+	Application string `short:"a" long:"application" required:"true" description:"application"`
+	From        string `long:"from" required:"true" description:"source environment"`
+	To          string `long:"to" required:"true" description:"destination environment"`
+	Artifact    string `short:"A" long:"artifact" description:"artifact to promote (required if the source environment has more than one)"`
+	Version     string `long:"version" description:"version to promote (default: the one in service in the source environment)"`
+	Tenant      string `short:"t" long:"tenant" description:"tenant of the application, required if several tenants have an application with this name"`
+	DeployFile  string `long:"deploy-file" description:"YAML file with the deploy section (policy, plugin, targets, params) for the destination environment"`
+	ConfigRef   string `long:"config-ref" description:"revision of the destination environment's configuration (ref or SHA, git provider); default: the default ref"`
 	redeployOptions
 }
 
@@ -361,11 +361,11 @@ func (c *PromoteCmd) Execute([]string) error {
 // RollbackCmd goes back to a version previously released in the environment.
 type RollbackCmd struct {
 	global      *GlobalOptions
-	Tenant      string `short:"t" long:"tenant" description:"tenant dell'applicazione, obbligatorio se più tenant hanno un'applicazione con questo nome"`
-	Application string `short:"a" long:"application" required:"true" description:"applicazione"`
-	Environment string `short:"e" long:"environment" required:"true" description:"ambiente"`
-	Artifact    string `short:"A" long:"artifact" description:"artefatto da riportare indietro (obbligatorio se l'ambiente ne ha più di uno)"`
-	Version     string `long:"to" description:"versione a cui tornare (default: la precedente a quella in esercizio)"`
+	Tenant      string `short:"t" long:"tenant" description:"tenant of the application, required if several tenants have an application with this name"`
+	Application string `short:"a" long:"application" required:"true" description:"application"`
+	Environment string `short:"e" long:"environment" required:"true" description:"environment"`
+	Artifact    string `short:"A" long:"artifact" description:"artifact to roll back (required if the environment has more than one)"`
+	Version     string `long:"to" description:"version to go back to (default: the one before the version in service)"`
 	redeployOptions
 }
 
@@ -384,12 +384,12 @@ func (c *RollbackCmd) Execute([]string) error {
 // InventoryCmd shows the release in service per application and environment.
 type InventoryCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" description:"solo questa applicazione"`
-	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
-	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
-	Artifact    string `short:"A" long:"artifact" description:"solo questo artefatto (artifact.name)"`
-	Selector    string `long:"selector" description:"solo le applicazioni scelte dal selettore sui tag (es. product=checkout)"`
-	OutOfSync   bool   `long:"out-of-sync" description:"solo gli ambienti con target cambiati fuori da manent (riconciliazione)"`
+	Application string `short:"a" long:"application" description:"only this application"`
+	Environment string `short:"e" long:"environment" description:"only this environment"`
+	Tenant      string `short:"t" long:"tenant" description:"only this tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"only this artifact (artifact.name)"`
+	Selector    string `long:"selector" description:"only the applications chosen by the tag selector (e.g. product=checkout)"`
+	OutOfSync   bool   `long:"out-of-sync" description:"only the environments with targets changed outside manent (reconciliation)"`
 }
 
 // Execute implements flags.Commander.
@@ -409,8 +409,8 @@ func (c *InventoryCmd) Execute([]string) error {
 // FreezesCmd lists the active and future freeze windows.
 type FreezesCmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" description:"solo le finestre di questa applicazione"`
-	Environment string `short:"e" long:"environment" description:"solo le finestre di questo ambiente"`
+	Application string `short:"a" long:"application" description:"only the windows of this application"`
+	Environment string `short:"e" long:"environment" description:"only the windows of this environment"`
 }
 
 // Execute implements flags.Commander.
@@ -476,9 +476,9 @@ func (c *StepsCmd) Execute([]string) error {
 // LogsCmd shows the log of a deploy and, with --follow, waits for new lines until the end.
 type LogsCmd struct {
 	global   *GlobalOptions
-	Follow   bool          `short:"f" long:"follow" description:"attende le righe nuove fino alla conclusione del deploy"`
-	JSON     bool          `long:"json" description:"una riga JSON per voce"`
-	Interval time.Duration `long:"interval" default:"2s" description:"intervallo di lettura con --follow"`
+	Follow   bool          `short:"f" long:"follow" description:"waits for new lines until the deploy ends"`
+	JSON     bool          `long:"json" description:"one JSON line per entry"`
+	Interval time.Duration `long:"interval" default:"2s" description:"read interval with --follow"`
 	Args     idArgs        `positional-args:"yes"`
 }
 
@@ -530,12 +530,12 @@ func (c *LogsCmd) print(l service.LogLine) {
 // DORACmd shows the DORA metrics.
 type DORACmd struct {
 	global      *GlobalOptions
-	Application string `short:"a" long:"application" description:"solo questa applicazione"`
-	Environment string `short:"e" long:"environment" description:"solo questo ambiente"`
-	Since       string `long:"since" default:"30d" description:"inizio del periodo: giorni (30d), durata (720h) o data RFC 3339"`
-	Tenant      string `short:"t" long:"tenant" description:"solo questo tenant"`
-	Artifact    string `short:"A" long:"artifact" description:"solo questo artefatto (artifact.name)"`
-	ByTenant    bool   `long:"by-tenant" description:"metriche anche per tenant"`
+	Application string `short:"a" long:"application" description:"only this application"`
+	Environment string `short:"e" long:"environment" description:"only this environment"`
+	Since       string `long:"since" default:"30d" description:"start of the period: days (30d), duration (720h) or RFC 3339 date"`
+	Tenant      string `short:"t" long:"tenant" description:"only this tenant"`
+	Artifact    string `short:"A" long:"artifact" description:"only this artifact (artifact.name)"`
+	ByTenant    bool   `long:"by-tenant" description:"metrics per tenant too"`
 }
 
 // Execute implements flags.Commander.

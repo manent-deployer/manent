@@ -317,7 +317,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	if s.alias != nil {
 		if _, dep := parseDescription(s.alias.Description); dep == req.DeploymentID {
 			details[DetailFunctionVersion] = s.alias.FunctionVersion
-			log.InfoContext(ctx, "alias già sulla versione di questo deploy", "alias", aliasName(req), "function_version", s.alias.FunctionVersion)
+			log.InfoContext(ctx, "alias already on the version of this deploy", "alias", aliasName(req), "function_version", s.alias.FunctionVersion)
 			return details, nil
 		}
 	}
@@ -331,7 +331,7 @@ func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.
 	if err := s.api.PutAlias(ctx, name, aliasName(req), v, description(req.Artifact.Version, req.DeploymentID), s.alias == nil); err != nil {
 		return details, fmt.Errorf("updating alias %s: %w", aliasName(req), err)
 	}
-	log.InfoContext(ctx, "release attiva", "version", req.Artifact.Version, "alias", aliasName(req), "function_version", v)
+	log.InfoContext(ctx, "active release", "version", req.Artifact.Version, "alias", aliasName(req), "function_version", v)
 	return details, nil
 }
 
@@ -390,9 +390,9 @@ func hexToBase64(h string) (string, error) {
 // waitFunction waits until the function (or version qualifier) is active and without updates
 // in progress. With strict, a failed update is an immediate error.
 func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier string, timeout time.Duration, strict bool, log *slog.Logger) (*Function, error) {
-	what := "funzione " + name
+	what := "function " + name
 	if qualifier != "" {
-		what += " versione " + qualifier
+		what += " version " + qualifier
 	}
 	last := ""
 	for {
@@ -413,7 +413,7 @@ func (p *Plugin) waitFunction(ctx context.Context, api API, name, qualifier stri
 		}
 		st := fn.State + "/" + fn.LastUpdateStatus
 		if st != last {
-			log.InfoContext(ctx, "in attesa della funzione", "function_version", qualifier, "state", fn.State, "last_update", fn.LastUpdateStatus)
+			log.InfoContext(ctx, "waiting for the function", "function_version", qualifier, "state", fn.State, "last_update", fn.LastUpdateStatus)
 			last = st
 		}
 		select {
@@ -510,7 +510,7 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 			return details, fmt.Errorf("updating alias %s: %w", aliasName(req), err)
 		}
 	}
-	p.logger.WarnContext(ctx, "release precedente ripristinata", "deployment", req.DeploymentID, "region", s.region,
+	p.logger.WarnContext(ctx, "previous release restored", "deployment", req.DeploymentID, "region", s.region,
 		"function", name, "version", previous.Version, "function_version", fv, "rollback", true)
 	return details, nil
 }
@@ -561,7 +561,7 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 	details := s.details(req)
 	details["package_type"] = s.fn.PackageType
 	if s.alias == nil {
-		details["alias_status"] = "da creare"
+		details["alias_status"] = "to be created"
 	}
 	c, err := code(req.Artifact, s.region)
 	if err != nil {
@@ -573,6 +573,6 @@ func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.R
 	if _, err := s.api.UpdateCode(ctx, functionName(req), c, true); err != nil {
 		return details, fmt.Errorf("checking the code update: %w", err)
 	}
-	p.logger.InfoContext(ctx, "funzione pronta per il deploy", "deployment", req.DeploymentID, "region", s.region, "function", functionName(req), "dry_run", true)
+	p.logger.InfoContext(ctx, "function ready for the deploy", "deployment", req.DeploymentID, "region", s.region, "function", functionName(req), "dry_run", true)
 	return details, nil
 }

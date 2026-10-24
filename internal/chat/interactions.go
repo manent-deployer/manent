@@ -81,7 +81,7 @@ func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	secret, err := h.Secrets.Resolve(r.Context(), h.SigningSecretRef)
 	if err != nil {
-		h.Logger.Error("signing secret di Slack non disponibile", "error", err)
+		h.Logger.Error("Slack signing secret unavailable", "error", err)
 		http.Error(w, "configuration not available", http.StatusServiceUnavailable)
 		return
 	}
@@ -90,7 +90,7 @@ func (h *Interactions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		now = h.Now
 	}
 	if err := VerifySlackSignature(strings.TrimSpace(secret), r.Header, body, now()); err != nil {
-		h.Logger.Warn("interazione Slack rifiutata", "error", err, "remote", r.RemoteAddr)
+		h.Logger.Warn("Slack interaction refused", "error", err, "remote", r.RemoteAddr)
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -123,18 +123,18 @@ func (h *Interactions) decide(ctx context.Context, p slackPayload, approve bool,
 	log := h.Logger.With("deployment", id, "slack_user", p.User.ID)
 	reply := func(msg string) {
 		if err := h.respond(ctx, p.ResponseURL, msg); err != nil {
-			log.Warn("risposta a Slack non inviata", "error", err)
+			log.Warn("reply to Slack not sent", "error", err)
 		}
 	}
 	ident, err := h.identity(ctx, p.User.ID)
 	if err != nil {
-		log.Warn("decisione da Slack rifiutata: utente senza identità di manent", "error", err)
+		log.Warn("decision from Slack refused: user without a manent identity", "error", err)
 		reply(fmt.Sprintf(t.noIdentity(), p.User.ID))
 		return
 	}
 	method, subject, ok := strings.Cut(ident.Principal, ":")
 	if !ok || method == "" || subject == "" {
-		log.Error("identità di manent non valida per l'utente Slack", "identity", ident.Principal)
+		log.Error("manent identity not valid for the Slack user", "identity", ident.Principal)
 		reply(fmt.Sprintf(t.noIdentity(), p.User.ID))
 		return
 	}
@@ -142,11 +142,11 @@ func (h *Interactions) decide(ctx context.Context, p slackPayload, approve bool,
 	ctx = auth.WithPrincipal(ctx, pr)
 	comment := "Slack @" + p.User.Username
 	if err := h.Decider.Decide(ctx, id, service.DecisionRequest{Approve: approve, Comment: comment}); err != nil {
-		log.Warn("decisione da Slack non registrata", "principal", pr.String(), "error", err)
+		log.Warn("decision from Slack not recorded", "principal", pr.String(), "error", err)
 		reply(t.decisionFailed(id, err))
 		return
 	}
-	log.Info("decisione da Slack registrata", "principal", pr.String(), "approve", approve)
+	log.Info("decision from Slack recorded", "principal", pr.String(), "approve", approve)
 	reply(t.decisionDone(id, approve))
 }
 

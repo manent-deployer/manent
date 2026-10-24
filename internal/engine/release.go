@@ -124,7 +124,7 @@ func (e *Engine) SubmitRelease(ctx context.Context, r *descriptor.Release) (*Rel
 	if _, err := dbos.Enqueue[ReleaseStatus](e.client, approvalQueue(e.queueName), releaseWorkflowName, releaseInput{Release: *rs, Descriptors: descs}, opts...); err != nil {
 		return nil, err
 	}
-	e.logger.Info("release accodata", "release", r.ID, "deploys", len(rs.Deploys), "on_failure", rs.OnFailure, "requested_by", rs.RequestedBy)
+	e.logger.Info("release enqueued", "release", r.ID, "deploys", len(rs.Deploys), "on_failure", rs.OnFailure, "requested_by", rs.RequestedBy)
 	return rs, nil
 }
 
@@ -154,14 +154,14 @@ func (w *Worker) submitDeploys(ctx context.Context, rs ReleaseStatus, descs []de
 				continue
 			}
 		}
-		w.logger.Error("release: deploy non accodato, la release si ferma", "release", rs.ID, "deploy", out[i].Name, "error", err)
+		w.logger.Error("release: deploy not enqueued, the release stops", "release", rs.ID, "deploy", out[i].Name, "error", err)
 		out[i].State, out[i].Error = string(dbos.WorkflowStatusError), "deploy not enqueued: "+err.Error()
 		for j := i + 1; j < len(out); j++ {
 			out[j].State = string(dbos.WorkflowStatusCancelled)
 		}
 		for _, id := range submitted {
 			if err := eng.Cancel(context.WithoutCancel(pc), id); err != nil && !errors.Is(err, ErrNotFound) {
-				w.logger.Warn("release: annullamento di un deploy già accodato fallito", "release", rs.ID, "deployment", id, "error", err)
+				w.logger.Warn("release: cancelling a deploy already enqueued failed", "release", rs.ID, "deployment", id, "error", err)
 			}
 		}
 		break
@@ -204,11 +204,11 @@ func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStat
 		rs.Deploys = check.Deploys
 		failed := releaseFailed(rs.Deploys)
 		if failed && rs.OnFailure != descriptor.ReleaseOnFailureContinue && !stopped && len(check.Pending) > 0 {
-			log.Warn("release: un deploy non è riuscito, i deploy non ancora partiti vengono annullati", "deploys", check.Pending)
+			log.Warn("release: a deploy did not succeed, the deploys not yet started are cancelled", "deploys", check.Pending)
 			if _, err := dbos.RunAsStep(ctx, func(c context.Context) (string, error) {
 				for _, id := range check.Pending {
 					if err := w.reader.Cancel(c, id); err != nil && !errors.Is(err, ErrNotFound) {
-						log.Warn("release: annullamento fallito", "deployment", id, "error", err)
+						log.Warn("release: cancellation failed", "deployment", id, "error", err)
 					}
 				}
 				return "", nil
@@ -248,7 +248,7 @@ func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStat
 	if err := dbos.SetEvent(ctx, releaseEvent, rs); err != nil {
 		return rs, err
 	}
-	log.Info("release conclusa", "state", rs.State, "error", rs.Error)
+	log.Info("release finished", "state", rs.State, "error", rs.Error)
 	w.recordRelease(ctx, rs)
 	return rs, nil
 }
@@ -260,7 +260,7 @@ func (w *Worker) readRelease(ctx context.Context, deploys []ReleaseDeployState) 
 	c := releaseCheck{Deploys: slices.Clone(deploys)}
 	states, err := w.reader.states(releaseIDs(deploys))
 	if err != nil {
-		w.logger.Warn("release: lettura dello stato dei deploy fallita", "error", err)
+		w.logger.Warn("release: reading the state of the deploys failed", "error", err)
 		return c
 	}
 	for i := range c.Deploys {
@@ -357,7 +357,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 		}, dbos.WithStepName("rollback:"+d.Name))
 		if err != nil {
 			d.RollbackState, d.Error = string(dbos.WorkflowStatusError), "rollback not started: "+err.Error()
-			log.Error("release: rollback non avviato", "deploy", d.Name, "error", err)
+			log.Error("release: rollback not started", "deploy", d.Name, "error", err)
 			return nil
 		}
 		d.RollbackState = string(dbos.WorkflowStatusEnqueued)
@@ -380,7 +380,7 @@ func (w *Worker) rollbackRelease(ctx dbos.Context, rs *ReleaseStatus) error {
 			}
 			d.RollbackState = state
 		}
-		log.Info("release: rollback concluso", "deploy", d.Name, "state", d.RollbackState)
+		log.Info("release: rollback finished", "deploy", d.Name, "state", d.RollbackState)
 		if d.RollbackState != StateSuccess {
 			return nil
 		}
@@ -398,7 +398,7 @@ func (w *Worker) recordRelease(ctx dbos.Context, rs ReleaseStatus) {
 		e.Time = time.Now().UTC()
 		return "", w.audit.Record(c, e)
 	}, dbos.WithStepName("audit")); err != nil {
-		w.logger.Error("registrazione della release nell'audit fallita", "release", rs.ID, "error", err)
+		w.logger.Error("recording the release in the audit failed", "release", rs.ID, "error", err)
 	}
 }
 
@@ -460,7 +460,7 @@ func (e *Engine) ListReleases(_ context.Context, limit int) ([]ReleaseStatus, er
 	for _, w := range ws {
 		rs, err := e.releaseStatus(w)
 		if err != nil {
-			e.logger.Warn("release non leggibile", "release", w.ID, "error", err)
+			e.logger.Warn("release unreadable", "release", w.ID, "error", err)
 			continue
 		}
 		out = append(out, *rs)
@@ -491,7 +491,7 @@ func (e *Engine) CancelRelease(ctx context.Context, id string) error {
 			}
 		}
 	}
-	e.logger.Info("release annullata", "release", id)
+	e.logger.Info("release cancelled", "release", id)
 	return nil
 }
 

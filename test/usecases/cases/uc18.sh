@@ -47,8 +47,8 @@ expect_eq "lo step dell'action riesce" "$code" 0
 expect_eq "output deployment_id" "$(out gh_output deployment_id)" gh-1001
 expect_eq "output state" "$(out gh_output state)" SUCCESS
 expect_eq "output version (dalla pipeline, non dal descrittore)" "$(out gh_output version)" 1.0.0
-expect_match "riepilogo del job: titolo" "$(cat "$WORK/ci/gh_summary.md")" "### manent · Deploy di uc18-shop in prod"
-expect_match "riepilogo del job: esito" "$(cat "$WORK/ci/gh_summary.md")" "Esito \| \*\*SUCCESS\*\*"
+expect_match "riepilogo del job: titolo" "$(cat "$WORK/ci/gh_summary.md")" "### manent · Deploy of uc18-shop to prod"
+expect_match "riepilogo del job: esito" "$(cat "$WORK/ci/gh_summary.md")" "Outcome \| \*\*SUCCESS\*\*"
 expect_eq "eu1-c sulla 1.0.0" "$(current eu1-c $APP)" 1.0.0
 expect_eq "una esecuzione sul target" "$(runs eu1-c $APP)" 1
 
@@ -66,7 +66,7 @@ expect_eq "release difettosa: lo step fallisce" "$([ "$code" -ne 0 ] && echo fal
 expect_eq "output state anche sul fallimento" "$(out gh_output state)" ERROR
 sum=$(tail -12 "$WORK/ci/gh_summary.md")
 expect_match "il riepilogo riporta il rollback" "$sum" "Rollback \| completed"
-expect_match "il riepilogo riporta l'errore" "$sum" "Errore \|.*post-test"
+expect_match "il riepilogo riporta l'errore" "$sum" "Error \|.*post-test"
 expect_eq "eu1-c tornato alla 1.0.0" "$(current eu1-c $APP)" 1.0.0
 
 code=$(gh INPUT_COMMAND=validate INPUT_DESCRIPTOR=/uc/uc18.yml)
@@ -77,7 +77,7 @@ cp config/envconfig/untenanted/$APP/$APP/prod.yml "$WORK/uc/uc18-env-ok.yml"
 sed 's/^targets:/targetz:/' config/envconfig/untenanted/$APP/$APP/prod.yml >"$WORK/uc/uc18-env-bad.yml"
 code=$(gh INPUT_COMMAND=env-validate INPUT_APPLICATION=$APP INPUT_ENVIRONMENT=prod INPUT_ENV_CONFIG=/uc/uc18-env-ok.yml)
 expect_eq "env-validate: configurazione candidata valida" "$code" 0
-expect_match "env-validate usa il deploy in esercizio come esempio" "$(cat "$WORK/ci/gh.log")" '"source": "configurazione candidata"'
+expect_match "env-validate usa il deploy in esercizio come esempio" "$(cat "$WORK/ci/gh.log")" '"source": "candidate configuration"'
 code=$(gh INPUT_COMMAND=env-validate INPUT_APPLICATION=$APP INPUT_ENVIRONMENT=prod INPUT_ENV_CONFIG=/uc/uc18-env-bad.yml)
 expect_eq "env-validate: configurazione con un campo sconosciuto respinta" "$([ "$code" -ne 0 ] && echo respinta || echo accettata)" respinta
 expect_match "l'errore indica il campo" "$(cat "$WORK/ci/gh.log")" "targetz"

@@ -75,7 +75,7 @@ func newPolicySource(cfg *config.Config, sp secrets.Provider, log *slog.Logger) 
 	case config.PolicySourceFile:
 		src := &policy.FileSource{Dir: o.File.Dir}
 		for _, p := range src.Permissions() {
-			log.Warn("file della policy scrivibile da tutti: chiunque sull'host può cambiare la governance", "path", p)
+			log.Warn("policy file writable by everyone: anyone on the host can change the governance", "path", p)
 		}
 		return src, nil
 	case config.PolicySourceBundle:

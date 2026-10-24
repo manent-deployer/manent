@@ -273,7 +273,7 @@ func (p *Plugin) deployCandidate(ctx context.Context, t plugin.Target, req *plug
 			return details, err
 		}
 	}
-	log.InfoContext(ctx, "versione candidata applicata nello slot, senza traffico", "objects", len(pr.objects), "version", req.Artifact.Version)
+	log.InfoContext(ctx, "candidate version applied in the slot, without traffic", "objects", len(pr.objects), "version", req.Artifact.Version)
 	if err := p.waitRollout(ctx, api, pr.objects, req, log); err != nil {
 		return details, err
 	}
@@ -294,7 +294,7 @@ func (p *Plugin) SetCandidateWeight(ctx context.Context, req *plugin.Request, pe
 		if err := p.setWeights(ctx, api, req, stable, cand, percent); err != nil {
 			return fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
-		p.logger.InfoContext(ctx, "pesi della route aggiornati", "deployment", req.DeploymentID, "cluster", t.Host, "candidate", cand, "percent", percent)
+		p.logger.InfoContext(ctx, "route weights updated", "deployment", req.DeploymentID, "cluster", t.Host, "candidate", cand, "percent", percent)
 	}
 	return nil
 }
@@ -393,7 +393,7 @@ func (p *Plugin) PromoteCandidate(ctx context.Context, req *plugin.Request) erro
 			return fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
 		p.pruneHistory(ctx, api, ns, n, req, prev, p.logger)
-		p.logger.InfoContext(ctx, "versione candidata promossa", "deployment", req.DeploymentID, "cluster", t.Host, "slot", cand, "version", req.Artifact.Version)
+		p.logger.InfoContext(ctx, "candidate version promoted", "deployment", req.DeploymentID, "cluster", t.Host, "slot", cand, "version", req.Artifact.Version)
 	}
 	return nil
 }
@@ -409,7 +409,7 @@ func (p *Plugin) RevertCandidate(ctx context.Context, req *plugin.Request) error
 			return err
 		}
 		if stable == "" {
-			p.logger.WarnContext(ctx, "nessuna versione stabile a cui tornare", "deployment", req.DeploymentID, "cluster", t.Host)
+			p.logger.WarnContext(ctx, "no stable version to go back to", "deployment", req.DeploymentID, "cluster", t.Host)
 			continue
 		}
 		if err := p.revertTarget(ctx, t, req, stable, cand); err != nil {
@@ -446,7 +446,7 @@ func (p *Plugin) revertTarget(ctx context.Context, t plugin.Target, req *plugin.
 	if err := p.scaleRelease(ctx, api, req, req.Artifact.Version, cand); err != nil {
 		return err
 	}
-	p.logger.WarnContext(ctx, "traffico tornato alla versione stabile, candidata ridimensionata", "deployment", req.DeploymentID, "cluster", t.Host, "slot", stable)
+	p.logger.WarnContext(ctx, "traffic back on the stable version, candidate scaled down", "deployment", req.DeploymentID, "cluster", t.Host, "slot", stable)
 	return nil
 }
 
@@ -470,13 +470,13 @@ func (p *Plugin) RetirePrevious(ctx context.Context, req *plugin.Request) error 
 			return fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
 		if cur == nil || cur.slot != cand || cur.version != req.Artifact.Version {
-			p.logger.InfoContext(ctx, "slot sostituito non ridimensionato: la release in esercizio è cambiata", "deployment", req.DeploymentID, "cluster", t.Host)
+			p.logger.InfoContext(ctx, "replaced slot not scaled down: the release in service changed", "deployment", req.DeploymentID, "cluster", t.Host)
 			continue
 		}
 		if err := p.scaleRelease(ctx, api, req, req.Traffic.State[stateKey(stateStableVersion, t)], stable); err != nil {
 			return fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
-		p.logger.InfoContext(ctx, "slot sostituito ridimensionato", "deployment", req.DeploymentID, "cluster", t.Host, "slot", stable)
+		p.logger.InfoContext(ctx, "replaced slot scaled down", "deployment", req.DeploymentID, "cluster", t.Host, "slot", stable)
 	}
 	return nil
 }
@@ -570,7 +570,7 @@ func (p *Plugin) scaleCandidate(ctx context.Context, t plugin.Target, req *plugi
 			return err
 		}
 		scaled = append(scaled, o)
-		p.logger.InfoContext(ctx, "candidata dimensionata", "deployment", req.DeploymentID, "cluster", t.Host, "object", o.Ref(), "replicas", n, "percent", percent)
+		p.logger.InfoContext(ctx, "candidate scaled", "deployment", req.DeploymentID, "cluster", t.Host, "object", o.Ref(), "replicas", n, "percent", percent)
 	}
 	return p.waitRollout(ctx, api, scaled, req, p.logger.With("deployment", req.DeploymentID, "cluster", t.Host))
 }

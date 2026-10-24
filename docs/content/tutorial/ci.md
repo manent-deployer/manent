@@ -88,13 +88,13 @@ environment=test
 version=1.1.0
 dry_run=false
 tenant=untenanted
-### manent · Deploy di hello in test
+### manent · Deploy of hello to test
 
 | | |
 |---|---|
-| Versione | `1.1.0` |
+| Version | `1.1.0` |
 | Deploy | `ci-1001` |
-| Esito | **SUCCESS** |
+| Outcome | **SUCCESS** |
 ```
 
 Run the same command again: it returns deploy `ci-1001` with its outcome instead of releasing again. The `--id` is the **idempotency key** that makes a retried job safe. The command exits non-zero if the deploy does not succeed, so the job fails with it.

@@ -43,24 +43,24 @@ func (p *manentProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 // Schema implements provider.Provider.
 func (p *manentProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Rilasci, inventario e verifica della configurazione di ambiente di manent, tramite la sua API.",
+		Description: "Releases, inventory and environment configuration checks of manent, through its API.",
 		Attributes: map[string]schema.Attribute{
 			"server": schema.StringAttribute{
 				Optional:    true,
-				Description: "URL del server manent; default MANENT_SERVER.",
+				Description: "URL of the manent server; default MANENT_SERVER.",
 			},
 			"token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Token dell'API; default MANENT_TOKEN, poi token_file.",
+				Description: "API token; default MANENT_TOKEN, then token_file.",
 			},
 			"token_file": schema.StringAttribute{
 				Optional:    true,
-				Description: "File con il token dell'API; default MANENT_TOKEN_FILE.",
+				Description: "File with the API token; default MANENT_TOKEN_FILE.",
 			},
 			"ca_file": schema.StringAttribute{
 				Optional:    true,
-				Description: "Certificato della CA del server, se privata; default MANENT_CA_FILE.",
+				Description: "CA certificate of the server, if private; default MANENT_CA_FILE.",
 			},
 		},
 	}

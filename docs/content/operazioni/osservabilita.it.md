@@ -99,8 +99,8 @@ manent logs --json 7c0e…     # una riga JSON per voce
 ```
 
 ```text
-2026-10-10 14:03:12 INFO  [artifacts] artefatto recuperato path=work/7c0e…/app.tar.gz sha256=2d27…
-2026-10-10 14:03:15 INFO  [deploy] deploy completato su target host=10.0.0.5
+2026-10-10 14:03:12 INFO  [artifacts] artifact fetched path=work/7c0e…/app.tar.gz sha256=2d27…
+2026-10-10 14:03:15 INFO  [deploy] deploy completed outputs=0
 ```
 
 La timeline riporta ogni step registrato con orari, durata, output ed errore:

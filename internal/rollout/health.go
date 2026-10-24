@@ -307,7 +307,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 	}
 	if in.StableTrack == "" {
 		// First release: there is no stable version to compare with.
-		r.OK, r.Detail = true, "nessuna versione stabile da confrontare"
+		r.OK, r.Detail = true, "no stable version to compare with"
 		return r
 	}
 	base, err := src.Value(ctx, expand(m.Query, in.StableTrack), now)
@@ -338,7 +338,7 @@ func (c *HTTPChecker) metric(ctx context.Context, m descriptor.MetricGate, in Ga
 func (c *HTTPChecker) mannWhitney(ctx context.Context, src MetricSource, m descriptor.MetricGate, in GateInput, r CheckResult,
 	expand func(string, string) string, now time.Time) CheckResult {
 	if in.StableTrack == "" {
-		r.OK, r.Detail = true, "nessuna versione stabile da confrontare"
+		r.OK, r.Detail = true, "no stable version to compare with"
 		return r
 	}
 	step := m.StepDuration()

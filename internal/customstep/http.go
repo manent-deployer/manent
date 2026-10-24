@@ -115,7 +115,7 @@ func (r *run) do(req *http.Request, expect []int, parse bool) (any, error) {
 	if err != nil {
 		return nil, temporary("%s %s: reading the response: %w", req.Method, target, err)
 	}
-	r.log.InfoContext(req.Context(), "richiesta HTTP", "method", req.Method, "url", target, "status", resp.StatusCode)
+	r.log.InfoContext(req.Context(), "HTTP request", "method", req.Method, "url", target, "status", resp.StatusCode)
 	if !accepted(resp.StatusCode, expect) {
 		switch c := resp.StatusCode; {
 		case c >= 500 || c == http.StatusRequestTimeout || c == http.StatusTooManyRequests:
@@ -176,7 +176,7 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 			return nil, err
 		case err != nil:
 			// A temporary error during the wait does not stop it.
-			r.log.WarnContext(ctx, "lettura dello stato fallita, nuovo tentativo", "error", r.red.apply(err.Error()))
+			r.log.WarnContext(ctx, "state read failed, retrying", "error", r.red.apply(err.Error()))
 			continue
 		}
 		if f := p.Fail; f != nil {

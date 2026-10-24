@@ -64,20 +64,20 @@ func (w *Worker) maintain() {
 			if !replaced {
 				// Another process registered with the same ID after this one was declared lost: both can
 				// resume the same deploys.
-				w.logger.Error("un altro processo si è registrato con lo stesso executor_id: questo worker va arrestato", "executor", w.id)
+				w.logger.Error("another process registered with the same executor_id: this worker must be stopped", "executor", w.id)
 				replaced = true
 			}
 		case err != nil:
-			w.logger.Warn("heartbeat non registrato", "error", err)
+			w.logger.Warn("heartbeat not recorded", "error", err)
 		case by != "" && !warned:
 			// The worker was declared lost (e.g. database unreachable) and its workflows resumed
 			// elsewhere: those still running here run twice.
-			w.logger.Error("i workflow di questo worker sono stati recuperati da un altro: va riavviato", "recovered_by", by)
+			w.logger.Error("the workflows of this worker were recovered by another one: it must be restarted", "recovered_by", by)
 			warned = true
 		}
 		if err == nil {
 			if rerr := w.registry.Report(ctx, w.id, w.startedAt, w.resources.sampleJSON()); rerr != nil {
-				w.logger.Debug("risorse del worker non registrate", "error", rerr)
+				w.logger.Debug("worker resources not recorded", "error", rerr)
 			}
 		}
 		cancel()
@@ -104,7 +104,7 @@ func (w *Worker) autoRecover() {
 	}
 	es, err := w.registry.List(ctx)
 	if err != nil {
-		w.logger.Warn("recovery automatica: lettura del registro fallita", "error", err)
+		w.logger.Warn("automatic recovery: reading the registry failed", "error", err)
 		return
 	}
 	now := time.Now()
@@ -116,10 +116,10 @@ func (w *Worker) autoRecover() {
 			Executor: e.ID, StaleAfter: o.RecoverAfter, SameVersionOnly: true, By: "executor:" + w.id,
 		})
 		if err != nil {
-			w.logger.Debug("recovery automatica non eseguita", "executor", e.ID, "error", err)
+			w.logger.Debug("automatic recovery not run", "executor", e.ID, "error", err)
 			continue
 		}
-		w.logger.Warn("recovery automatica dei workflow di un worker perso", "executor", e.ID, "workflows", len(rep.Workflows))
+		w.logger.Warn("automatic recovery of the workflows of a lost worker", "executor", e.ID, "workflows", len(rep.Workflows))
 	}
 }
 
@@ -134,7 +134,7 @@ func (w *Worker) prune() bool {
 	ro := o.Retention
 	ro.By = "executor:" + w.id
 	if _, err := w.admin.Prune(ctx, ro); err != nil {
-		w.logger.Error("retention dello storico fallita", "error", err)
+		w.logger.Error("history retention failed", "error", err)
 	}
 	return true
 }

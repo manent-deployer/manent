@@ -39,7 +39,7 @@ const (
 func main() {
 	user, pass := env("WINRM_USER", "deploy"), os.Getenv("WINRM_PASSWORD")
 	if pass == "" {
-		log.Fatal("WINRM_PASSWORD obbligatoria")
+		log.Fatal("WINRM_PASSWORD required")
 	}
 	w := &endpoint{user: user, pass: pass, shells: map[string]*shell{}}
 	go func() {
@@ -211,7 +211,7 @@ func (w *endpoint) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	case strings.HasSuffix(r.action, "/shell/Receive"):
 		c := w.find(r.shellID, r.commandID)
 		if c == nil {
-			http.Error(rw, "comando sconosciuto", http.StatusBadRequest)
+			http.Error(rw, "unknown command", http.StatusBadRequest)
 			return
 		}
 		action, content = nsShell+"/ReceiveResponse", c.receive(r.commandID)
@@ -226,7 +226,7 @@ func (w *endpoint) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		w.mu.Unlock()
 		action, content = "http://schemas.xmlsoap.org/ws/2004/09/transfer/DeleteResponse", ""
 	default:
-		http.Error(rw, "azione non supportata: "+r.action, http.StatusBadRequest)
+		http.Error(rw, "unsupported action: "+r.action, http.StatusBadRequest)
 		return
 	}
 	rw.Header().Set("Content-Type", "application/soap+xml;charset=UTF-8")
@@ -333,7 +333,7 @@ func (s iis) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	raw, err := os.ReadFile(filepath.Join(s.state, "iis.json"))
 	var st iisState
 	if err != nil || json.Unmarshal(raw, &st) != nil {
-		http.Error(rw, "configurazione IIS non leggibile", http.StatusInternalServerError)
+		http.Error(rw, "IIS configuration unreadable", http.StatusInternalServerError)
 		return
 	}
 	first, rest, _ := strings.Cut(strings.TrimPrefix(req.URL.Path, "/"), "/")

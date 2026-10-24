@@ -267,7 +267,7 @@ rollback:
 1. **Decisione.** La policy viene applicata nello step `config`, dopo la fusione con la configurazione di ambiente, e resta registrata con il deploy.
 2. **Checkpoint.** Prima di `deploy` lo step `checkpoint:deploy` verifica che il plugin supporti il rollback e chiede al **locator** la release in esercizio. Essendo uno step DBOS separato, i retry del deploy non lo ripetono.
 3. **Compensazione.** Se fallisce uno step elencato in `on`, il worker esegue `rollback:<step>` per gli step già avviati che sanno annullarsi (`deploy`, `activation`), in ordine inverso, compreso quello fallito.
-4. **Esito.** Il deploy resta `ERROR` e l'errore termina con `rollback completato`, `rollback: nessuna release da ripristinare` (primo deploy) oppure `rollback fallito: ...`. Una compensazione fallita ferma il rollback e viene loggata in `ERROR`, anche al SIEM.
+4. **Esito.** Il deploy resta `ERROR` e l'errore termina con `rollback completed`, `rollback: no release to restore` (primo deploy) oppure `rollback failed: ...`. Una compensazione fallita ferma il rollback e viene loggata in `ERROR`, anche al SIEM.
 
 **Locator.** Il locator individua la release precedente (`plugin.ReleaseLocator`):
 

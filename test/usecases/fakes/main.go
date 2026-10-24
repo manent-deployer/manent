@@ -138,7 +138,7 @@ func (f *fakes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(p, "/cloudwatch/"):
 		f.cloudwatch(w, r, body)
 	default:
-		reply(w, 404, map[string]string{"error": "percorso sconosciuto " + p})
+		reply(w, 404, map[string]string{"error": "unknown path " + p})
 	}
 }
 
@@ -203,7 +203,7 @@ func (f *fakes) servicenow(w http.ResponseWriter, r *http.Request, body []byte) 
 		}
 		reply(w, 200, map[string]any{"result": c})
 	default:
-		reply(w, 400, map[string]string{"error": "richiesta non valida"})
+		reply(w, 400, map[string]string{"error": "invalid request"})
 	}
 }
 
@@ -214,7 +214,7 @@ func (f *fakes) hook(w http.ResponseWriter, r *http.Request, body []byte) {
 	f.add("hook", r, body)
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/hooks/"), "/")
 	if strings.HasPrefix(parts[0], "fail") {
-		reply(w, 500, map[string]string{"error": "guasto simulato"})
+		reply(w, 500, map[string]string{"error": "simulated failure"})
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -239,10 +239,10 @@ func main() {
 	flag.Parse()
 	f := &fakes{changes: map[string]map[string]any{}, polls: map[string]int{}}
 	go func() {
-		log.Printf("Azure emulato in ascolto su %s", *azureListen)
+		log.Printf("emulated Azure listening on %s", *azureListen)
 		log.Fatal(http.ListenAndServe(*azureListen, newAzure().Handler()))
 	}()
-	log.Printf("fakes in ascolto su %s", *listen)
+	log.Printf("fakes listening on %s", *listen)
 	log.Fatal(http.ListenAndServe(*listen, f))
 }
 
@@ -343,7 +343,7 @@ func (f *fakes) cloudwatch(w http.ResponseWriter, r *http.Request, body []byte) 
 		w.Header().Set("Smithy-Protocol", "rpc-v2-cbor")
 		w.Header().Set("Content-Type", "application/cbor")
 		w.WriteHeader(403)
-		_, _ = w.Write(cbor.Encode(cbor.Map{"__type": cbor.String("AccessDeniedException"), "message": cbor.String("firma assente")}))
+		_, _ = w.Write(cbor.Encode(cbor.Map{"__type": cbor.String("AccessDeniedException"), "message": cbor.String("missing signature")}))
 		return
 	}
 	results := cbor.List{}

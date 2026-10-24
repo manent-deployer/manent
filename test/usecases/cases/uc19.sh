@@ -115,7 +115,7 @@ t=0
 until [ "$(manent inventory -a $APP -e prod | jq -r '.[0].out_of_sync // false')" = true ] || [ "$t" -ge 90 ]; do sleep 3; t=$((t + 3)); done
 tf plan -detailed-exitcode -input=false -var app_version=1.1.0
 expect_eq "con redeploy_out_of_sync il plan prevede un nuovo deploy" "$(code)" 2
-expect_match "il plan dice perché" "$(cat "$TF/last.log")" "target fuori sincronia"
+expect_match "il plan dice perché" "$(cat "$TF/last.log")" "targets out of sync"
 tf apply -auto-approve -input=false -var app_version=1.1.0
 expect_eq "apply riallinea il target" "$(current eu1-b $APP)" 1.1.0
 
@@ -143,5 +143,5 @@ expect_eq "il plan successivo ritenta la 1.2.0" "$(code)" 2
 info "-- destroy"
 tf destroy -auto-approve -input=false -var app_version=1.1.0
 expect_eq "destroy riesce" "$(code)" 0
-expect_match "avviso: la release resta in esercizio" "$(cat "$TF/last.log")" "release lasciata in esercizio"
+expect_match "avviso: la release resta in esercizio" "$(cat "$TF/last.log")" "release left live"
 expect_eq "eu1-b resta sulla 1.1.0" "$(current eu1-b $APP)" 1.1.0

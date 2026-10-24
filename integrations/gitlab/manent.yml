@@ -13,21 +13,21 @@ spec:
   inputs:
     job:
       default: manent-deploy
-      description: Nome del job
+      description: Job name
     stage:
       default: deploy
     descriptor:
-      description: Descrittore di deploy YAML nel repository
+      description: YAML deploy descriptor in the repository
     version:
       default: ""
-      description: Versione dell'artefatto, al posto di quella del descrittore (es. $CI_COMMIT_TAG)
+      description: Artifact version, instead of the descriptor's (e.g. $CI_COMMIT_TAG)
     source:
       default: ""
     sha256:
       default: ""
     id:
       default: ""
-      description: ID del deploy (chiave di idempotenza), es. gl-$CI_PIPELINE_ID
+      description: Deploy ID (idempotency key), e.g. gl-$CI_PIPELINE_ID
     dry_run:
       type: boolean
       default: false
@@ -35,10 +35,10 @@ spec:
       default: 30m
     image:
       default: golang:1.27-alpine
-      description: Immagine del job; il client manent viene installato se non è già presente
+      description: Job image; the manent client is installed if not already present
     manent_ref:
       default: main
-      description: Versione del client da installare (tag o commit di manent)
+      description: Client version to install (manent tag or commit)
 ---
 "$[[ inputs.job ]]":
   stage: $[[ inputs.stage ]]

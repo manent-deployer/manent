@@ -186,8 +186,8 @@ manent deploy -f motd.yml --import infra=$INFRA
 ```
 
 ```text
-deploy in attesa delle dipendenze: 4d3857e0-7933-4bcc-9659-7d69d82f6cb4
-deploy accodato: 4d3857e0-7933-4bcc-9659-7d69d82f6cb4 (manent logs -f 4d3857e0-… per seguirlo)
+deploy waiting for its dependencies: 4d3857e0-7933-4bcc-9659-7d69d82f6cb4
+deploy enqueued: 4d3857e0-7933-4bcc-9659-7d69d82f6cb4 (manent logs -f 4d3857e0-… to follow it)
 ```
 
 `--import infra=<id>` declares the import and adds the infrastructure deploy to `after`: `motd` waits (`WAITING_DEPENDENCY`, without taking a slot) until `infra-web` has succeeded, then starts. Look at what each one recorded:

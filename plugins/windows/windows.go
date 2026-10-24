@@ -382,14 +382,14 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 		if err != nil {
 			return err
 		}
-		log.InfoContext(ctx, "copia della release sul target")
+		log.InfoContext(ctx, "copying the release to the target")
 		_, err = tr.Run(ctx, uploadScript(s, version, sha), f)
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("copy and extraction: %w", err)
 		}
 	} else {
-		log.InfoContext(ctx, "release già presente sul target, copia saltata")
+		log.InfoContext(ctx, "release already on the target, copy skipped")
 	}
 	pw, err := p.taskPassword(ctx, req, s)
 	if err != nil {
@@ -400,12 +400,12 @@ func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings,
 		return fmt.Errorf("activation: %w", err)
 	}
 	if results(out)["reboot"] == "required" {
-		log.WarnContext(ctx, "il pacchetto MSI richiede un riavvio del target, non eseguito da manent")
+		log.WarnContext(ctx, "the MSI package requires a restart of the target, not done by manent")
 	}
-	log.InfoContext(ctx, "release in esercizio", "previous", prev)
+	log.InfoContext(ctx, "release live", "previous", prev)
 	if _, err := tr.Run(ctx, cleanupScript(s, s.Keep, version, prev), nil); err != nil {
 		// The release is in service: a failed cleanup does not fail the deploy.
-		log.WarnContext(ctx, "pulizia delle release fallita", "error", err)
+		log.WarnContext(ctx, "cleanup of the releases failed", "error", err)
 	}
 	return nil
 }
@@ -570,7 +570,7 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 			continue
 		}
 		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusRolledBack, Details: d})
-		p.logger.WarnContext(ctx, "rollback completato sul target", "target", t.Host, "version", previous.Version)
+		p.logger.WarnContext(ctx, "rollback completed on the target", "target", t.Host, "version", previous.Version)
 	}
 	return res, errors.Join(errs...)
 }
