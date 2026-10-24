@@ -5,7 +5,7 @@ site_url: https://manent-deployer.github.io/manent/
 repo_url: https://github.com/manent-deployer/manent
 repo_name: manent-deployer/manent
 edit_uri: edit/main/docs/content/
-copyright: Distributed under the license in the repository's LICENSE file
+copyright: 'Project by Giuseppe Gambino (<a href="https://github.com/joeg-ita">joeg-ita</a>) · Distributed under the license in the repository''s LICENSE file'
 
 docs_dir: content
 site_dir: site
@@ -78,7 +78,7 @@ plugins:
           name: Italiano
           build: true
           site_description: Deploy as code su workflow durevoli DBOS
-          copyright: Distribuito con la licenza indicata nel file LICENSE del repository
+          copyright: 'Progetto di Giuseppe Gambino (<a href="https://github.com/joeg-ita">joeg-ita</a>) · Distribuito con la licenza indicata nel file LICENSE del repository'
           theme:
             palette:
               - scheme: slate

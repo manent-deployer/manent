@@ -1,206 +1,208 @@
 # manent
 
-> Il nome **manent** viene dal latino *manere*, "rimanere, restare saldo": vuole esprimere l'immutabilità dell'artefatto, che resta così com'è stato testato, validato e portato in esercizio.
+> The name **manent** comes from the Latin *manere*, "to remain, to stand firm": it expresses the immutability of the artifact, which stays exactly as it was tested, validated and put into service.
 
-Strumento di **deploy as code** basato su workflow durevoli [DBOS](https://github.com/dbos-inc/dbos-transact-golang).
-Un descrittore di deploy (YAML da CLI, JSON da API) attiva una pipeline di step configurabili: segreti, artefatti, QA, deploy tramite plugin, test post deploy e attivazione in esercizio.
-Se il processo si interrompe, il deploy riprende dall'ultimo step completato.
+A **deploy as code** tool built on [DBOS](https://github.com/dbos-inc/dbos-transact-golang) durable workflows.
+A deploy descriptor (YAML from the CLI, JSON from the API) starts a pipeline of configurable steps: secrets, artifacts, QA, deploy through a plugin, post-deploy tests and activation.
+If the process stops, the deploy resumes from the last completed step.
 
-La documentazione completa è in [`docs/`](docs): `make docs` genera il sito statico in `docs/site`.
+The full documentation is in [`docs/`](docs): `make docs` builds the static site in `docs/site`.
 
-## Avvio rapido
+## Quick start
 
 ```sh
 make build
-bin/manent-server -c configs/manent.yml validate -f examples/descriptor.yml   # mostra il piano
-bin/manent-server -c configs/manent.yml serve                                 # API su :8080 + worker
-bin/manent deploy -f examples/descriptor.yml     # in un altro terminale
+bin/manent-server -c configs/manent.yml validate -f examples/descriptor.yml   # shows the plan
+bin/manent-server -c configs/manent.yml serve                                 # API on :8080 + worker
+bin/manent deploy -f examples/descriptor.yml     # in another terminal
 ```
 
-manent ha due binari:
+manent has two binaries:
 
-- **`manent`**, il client per sviluppatori e CI: legge descrittori YAML e parla solo con l'API (`--server`, `MANENT_SERVER` o `~/.config/manent/client.yml`; default `http://127.0.0.1:8080`; token in `MANENT_TOKEN` o in un file). Non contiene il motore, i plugin né i driver di database, quindi valgono sempre i permessi e l'audit del server.
-- **`manent-server`**: `serve` (API e worker), `api`, `worker`, le operazioni di piattaforma `admin` e `audit verify` e `validate` di una configurazione in locale.
+- **`manent`**, the client for developers and CI: it reads YAML descriptors and talks only to the API (`--server`, `MANENT_SERVER` or `~/.config/manent/client.yml`; default `http://127.0.0.1:8080`; token in `MANENT_TOKEN` or in a file). It contains neither the engine, the plugins nor the database drivers, so the server's permissions and audit always apply.
+- **`manent-server`**: `serve` (API and worker), `api`, `worker`, the platform operations `admin` and `audit verify`, and `validate` of a configuration locally.
 
-I deploy li esegue un **worker** (`serve` o `worker`).
-Di default DBOS usa SQLite (`sqlite:manent.db`); in produzione impostare `DBOS_SYSTEM_DATABASE_URL=postgres://...`.
+Deploys are run by a **worker** (`serve` or `worker`).
+By default DBOS uses SQLite (`sqlite:manent.db`); in production set `DBOS_SYSTEM_DATABASE_URL=postgres://...`.
 
-## Scalabilità orizzontale
+## Horizontal scaling
 
-Più istanze condividono lo stesso Postgres e prelevano i deploy dalla stessa coda:
+Several instances share the same Postgres and take deploys from the same queue:
 
 ```sh
-manent-server api              # N istanze API dietro un load balancer
-manent-server worker                  # M worker, ciascuno con un executor_id diverso
+manent-server api              # N API instances behind a load balancer
+manent-server worker           # M workers, each with a different executor_id
 ```
 
-- `dbos.executor_id` (default: hostname) deve essere **univoco e stabile**: un worker che si riavvia riprende i deploy interrotti con il proprio ID, dallo step in cui si erano fermati. In Kubernetes usare uno StatefulSet.
-- `dbos.environment_concurrency` (default 1) impedisce deploy contemporanei della stessa application/environment su tutti i worker. `concurrency` limita i deploy per worker, `global_concurrency` il totale.
-- La `workdir` resta locale: se un deploy riprende su un worker che non ha l'artefatto, questo viene riscaricato e ne viene verificato lo sha256.
+- `dbos.executor_id` (default: hostname) must be **unique and stable**: a restarted worker resumes its interrupted deploys with its own ID, from the step where they stopped. On Kubernetes use a StatefulSet.
+- `dbos.environment_concurrency` (default 1) prevents concurrent deploys of the same application/environment across all workers. `concurrency` limits deploys per worker, `global_concurrency` the total.
+- The `workdir` stays local: if a deploy resumes on a worker that does not have the artifact, it is downloaded again and its sha256 is verified.
 
-## Rilasci a ondate
+## Wave rollouts
 
-Con target in più region e AZ, la configurazione di ambiente può definire una strategia `rollout`: i target portano le etichette `region` e `az`, le ondate li selezionano (`select: "region=eu-1, canary!=true"`) e li dividono in passi per AZ o region, con `maxUnavailable` dentro il passo, tempo di osservazione (`bake`) e health gate (sonde HTTP, query Prometheus, allarmi Alertmanager) tra uno stadio e il successivo. Un passo fallito ferma il rollout; `onFailure` decide se riportare indietro lo stadio (`rollback-wave`) o tutto (`rollback-all`). `approvalsBetween` mette in pausa per approvazione, i freeze con `regions` bloccano solo quelle region. Con `dbos.region_routing` ogni passo gira come workflow figlio sui worker della sua region (`dbos.region`). `manent status` mostra stadi, passi e gate; l'inventario segnala gli ambienti disallineati (`drift`). Dettagli in [docs/content/guida/ondate.md](docs/content/guida/ondate.md).
+With targets in several regions and AZs, the environment configuration can define a `rollout` strategy: targets carry the `region` and `az` labels, waves select them (`select: "region=eu-1, canary!=true"`) and split them into passes by AZ or region, with `maxUnavailable` within the pass, an observation time (`bake`) and a health gate (HTTP probes, Prometheus queries, Alertmanager alerts) between one stage and the next. A failed pass stops the rollout; `onFailure` decides whether to roll back the stage (`rollback-wave`) or everything (`rollback-all`). `approvalsBetween` pauses for approval, and freezes with `regions` block only those regions. With `dbos.region_routing` each pass runs as a child workflow on the workers of its region (`dbos.region`). `manent status` shows stages, passes and gates; the inventory reports environments out of alignment (`drift`). Details in [docs/content/guida/ondate.md](docs/content/guida/ondate.md).
 
-## Load balancer e traffico
+## Load balancers and traffic
 
-- **Svuotamento:** con `traffic.pool` nella configurazione di ambiente (`haproxy` con la Data Plane API, `aws-elb` con target group o standby dell'Auto Scaling group, `f5` BIG-IP, `nginx-plus`, `nginx` open source via SSH, `iis-arr` e `nlb` per IIS ARR e Windows NLB, `health-flag` per qualunque load balancer) ogni lotto di un rilascio a ondate esce dal load balancer prima del deploy e rientra solo quando è sano. Un controllo di capacità (`min_healthy`) rimanda lo svuotamento se il pool resterebbe sotto il minimo; le attese sono durevoli. Dettagli in [docs/content/guida/svuotamento.md](docs/content/guida/svuotamento.md).
-- **Canary per percentuale e blue/green:** con `rollout.strategy: traffic` la nuova versione va accanto alla stabile, senza traffico, e i gradini (`steps: [1, 5, 25, 50, 100]`, `[100]` per un blue/green) spostano il traffico con bake, gate comparativi (`compare: stable`, `{track}`), approvazioni e controllo dei pesi cambiati da altri. Il ritorno è un cambio di peso. Router: Gateway API o Istio nel plugin `kubernetes` (slot `-a`/`-b`, anche per i chart Helm), alias pesati di `lambda`, revisioni di `cloudrun` e `containerapps`, slot di `appservice` con le `rampUpRules` e lo swap, plugin esterni; per i target in place un router dell'ambiente (`aws-alb`) con target etichettati per slot. Per i target in place anche HAProxy, F5 e NGINX Plus fanno da router con i pesi dei server. Con `rollout.waves` il rilascio procede un cluster o una region alla volta; con `replicas: proportional` la candidata cresce insieme alla sua quota. I servizi ECS con strategia nativa (blue/green, lineare, canary) la usano in modalità delegata. Dettagli in [docs/content/guida/traffico.md](docs/content/guida/traffico.md).
+- **Draining:** with `traffic.pool` in the environment configuration (`haproxy` with the Data Plane API, `aws-elb` with target groups or Auto Scaling group standby, `f5` BIG-IP, `nginx-plus`, open source `nginx` over SSH, `iis-arr` and `nlb` for IIS ARR and Windows NLB, `health-flag` for any load balancer) each batch of a wave rollout leaves the load balancer before the deploy and comes back only when healthy. A capacity check (`min_healthy`) postpones draining if the pool would fall below the minimum; waits are durable. Details in [docs/content/guida/svuotamento.md](docs/content/guida/svuotamento.md).
+- **Percentage canary and blue/green:** with `rollout.strategy: traffic` the new version goes next to the stable one, without traffic, and the steps (`steps: [1, 5, 25, 50, 100]`, `[100]` for blue/green) shift traffic with bake, comparative gates (`compare: stable`, `{track}`), approvals and a check for weights changed by others. Going back is a weight change. Routers: Gateway API or Istio in the `kubernetes` plugin (slots `-a`/`-b`, Helm charts too), weighted `lambda` aliases, `cloudrun` and `containerapps` revisions, `appservice` slots with `rampUpRules` and swap, external plugins; for in-place targets an environment router (`aws-alb`) with targets labelled by slot. For in-place targets HAProxy, F5 and NGINX Plus also act as routers through server weights. With `rollout.waves` the rollout proceeds one cluster or region at a time; with `replicas: proportional` the candidate grows with its share. ECS services with a native strategy (blue/green, linear, canary) use it in delegated mode. Details in [docs/content/guida/traffico.md](docs/content/guida/traffico.md).
 
-## Operatività
+## Operations
 
-- **Worker persi:** ogni worker si registra con un heartbeat (`manent-server admin executors`). I deploy in sospeso di un worker che non torna si riprendono su un altro worker con `manent-server admin recover --executor <id>`, o da soli con `recovery.auto_recover_after`. Rivendicazione e riavvio del nodo si escludono a vicenda, così nessun deploy viene ripreso due volte.
-- **Aggiornamenti:** all'arresto il worker smette di prelevare deploy e attende quelli in corso (`dbos.drain_timeout`). `app.version` è la versione dei workflow, non del binario; dopo un cambio incompatibile i workflow rimasti si migrano con `manent-server admin recover --from-version <v>`.
-- **Retention:** `retention.max_age` elimina lo storico concluso conservando le ultime `keep_releases` release di ogni ambiente (`manent-server admin prune`).
-- **Osservabilità:** metriche Prometheus su `/metrics` (worker: `observability.listen`), sonde `/healthz` e `/readyz`, tracing OpenTelemetry dall'API agli step, log di ogni deploy (`manent logs -f <id>`), timeline (`manent steps <id>`) e metriche DORA (`manent dora`).
-- **Packaging:** `Dockerfile` (distroless, non root), chart Helm in `deploy/helm/manent` (worker in StatefulSet), unità systemd in `deploy/systemd`, rilasci con GoReleaser (checksum firmati con cosign, SBOM), CI in `.github/workflows`, [CHANGELOG](CHANGELOG.md).
-- **Test:** `make test-postgres` (gli stessi test su Postgres), `make test-e2e` (SSH reale in Docker), `make test-load` (carico e caos).
+- **Lost workers:** every worker registers with a heartbeat (`manent-server admin executors`). The pending deploys of a worker that does not come back are resumed on another worker with `manent-server admin recover --executor <id>`, or automatically with `recovery.auto_recover_after`. Claiming and restarting the node exclude each other, so no deploy is resumed twice.
+- **Upgrades:** on shutdown the worker stops taking deploys and waits for the running ones (`dbos.drain_timeout`). `app.version` is the workflow version, not the binary's; after an incompatible change the remaining workflows are migrated with `manent-server admin recover --from-version <v>`.
+- **Retention:** `retention.max_age` deletes the finished history while keeping the last `keep_releases` releases of each environment (`manent-server admin prune`).
+- **Observability:** Prometheus metrics on `/metrics` (worker: `observability.listen`), `/healthz` and `/readyz` probes, OpenTelemetry tracing from the API to the steps, the log of every deploy (`manent logs -f <id>`), the timeline (`manent steps <id>`) and DORA metrics (`manent dora`).
+- **Packaging:** `Dockerfile` (distroless, non-root), Helm chart in `deploy/helm/manent` (workers in a StatefulSet), systemd units in `deploy/systemd`, releases with GoReleaser (checksums signed with cosign, SBOM), CI in `.github/workflows`, [CHANGELOG](CHANGELOG.md).
+- **Tests:** `make test-postgres` (the same tests on Postgres), `make test-e2e` (real SSH in Docker), `make test-load` (load and chaos).
 
-Dettagli in [installazione](docs/content/operazioni/installazione.md), [recovery e retention](docs/content/operazioni/affidabilita.md), [aggiornamenti](docs/content/operazioni/aggiornamenti.md) e [osservabilità](docs/content/operazioni/osservabilita.md).
+Details in [installation](docs/content/operazioni/installazione.md), [recovery and retention](docs/content/operazioni/affidabilita.md), [upgrades](docs/content/operazioni/aggiornamenti.md) and [observability](docs/content/operazioni/osservabilita.md).
 
 ## API
 
-| Metodo | Percorso | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/deployments` | accoda un deploy (body: descrittore JSON), risponde `202` con l'`id`; con `schedule.cron` risponde `201`; con `?dry_run=true` accoda un dry-run |
-| `GET` | `/api/v1/deployments?schedule=&application=&environment=&state=&limit=` | elenca i deploy più recenti, con filtri |
-| `POST` | `/api/v1/deployments/plan` | restituisce gli step che verrebbero eseguiti |
-| `GET` | `/api/v1/deployments/{id}` | stato e risultato del deploy |
-| `GET` | `/api/v1/deployments/{id}/steps` · `/logs?offset=` | timeline degli step e log del deploy |
-| `POST` | `/api/v1/deployments/{id}/cancel` | annulla un deploy in attesa o in esecuzione |
-| `POST` | `/api/v1/deployments/{id}/approve` · `/reject` | approva o respinge un deploy in attesa di approvazione |
-| `POST` | `/api/v1/promotions` | promuove un artefatto da un ambiente a un altro |
-| `POST` | `/api/v1/rollbacks` | torna a una versione precedente |
-| `GET` | `/api/v1/inventory` | release in esercizio per applicazione e ambiente |
-| `GET` | `/api/v1/freezes` | finestre di freeze attive e future |
-| `GET` | `/api/v1/metrics/dora?application=&environment=&since=` | metriche DORA |
-| `GET` | `/api/v1/schedules` · `/api/v1/schedules/{nome}` | schedule ricorrenti |
-| `POST` | `/api/v1/schedules/{nome}/pause` · `/resume` | sospende o riattiva una schedule |
-| `DELETE` | `/api/v1/schedules/{nome}` | elimina una schedule |
-| `GET` | `/healthz` · `/readyz` · `/metrics` | sonde e metriche Prometheus, senza autenticazione |
+| `POST` | `/api/v1/deployments` | enqueues a deploy (body: JSON descriptor) and answers `202` with the `id`; with `schedule.cron` it answers `201`; with `?dry_run=true` it enqueues a dry-run |
+| `GET` | `/api/v1/deployments?schedule=&application=&environment=&state=&limit=` | lists the most recent deploys, with filters |
+| `POST` | `/api/v1/deployments/plan` | returns the steps that would run |
+| `GET` | `/api/v1/deployments/{id}` | state and result of the deploy |
+| `GET` | `/api/v1/deployments/{id}/steps` · `/logs?offset=` | step timeline and deploy log |
+| `POST` | `/api/v1/deployments/{id}/cancel` | cancels a waiting or running deploy |
+| `POST` | `/api/v1/deployments/{id}/approve` · `/reject` | approves or rejects a deploy awaiting approval |
+| `POST` | `/api/v1/promotions` | promotes an artifact from one environment to another |
+| `POST` | `/api/v1/rollbacks` | goes back to a previous version |
+| `GET` | `/api/v1/inventory` | live releases by application and environment |
+| `GET` | `/api/v1/freezes` | active and future freeze windows |
+| `GET` | `/api/v1/metrics/dora?application=&environment=&since=` | DORA metrics |
+| `GET` | `/api/v1/schedules` · `/api/v1/schedules/{name}` | recurring schedules |
+| `POST` | `/api/v1/schedules/{name}/pause` · `/resume` | pauses or resumes a schedule |
+| `DELETE` | `/api/v1/schedules/{name}` | deletes a schedule |
+| `GET` | `/healthz` · `/readyz` · `/metrics` | probes and Prometheus metrics, without authentication |
 
-Con `auth.mode: enabled` le rotte `/api/v1` richiedono `Authorization: Bearer <token>` (OIDC o token statico): `401` senza token valido, `403` se i permessi non consentono l'azione.
+With `auth.mode: enabled` the `/api/v1` routes require `Authorization: Bearer <token>` (OIDC or static token): `401` without a valid token, `403` if the permissions do not allow the action.
 
-## Sicurezza
+The full API contract is [`api/openapi.yaml`](api/openapi.yaml).
 
-La configurazione di default è per lo sviluppo: `serve` e `worker` segnalano all'avvio ogni impostazione non adatta alla produzione. La checklist completa è in [docs/content/operazioni/sicurezza.md](docs/content/operazioni/sicurezza.md).
+## Security
 
-**Autenticazione** (`auth`):
+The default configuration is meant for development: at startup `serve` and `worker` report every setting not fit for production. The full checklist is in [docs/content/operazioni/sicurezza.md](docs/content/operazioni/sicurezza.md).
 
-- **utenti:** token JWT di un identity provider OIDC (Keycloak, Entra ID, Okta), verificati con issuer, audience e chiavi JWKS;
-- **pipeline CI:** token statici, di cui in configurazione c'è solo lo sha256, con scadenza opzionale; in `auth.tokens_file` si aggiungono e revocano senza riavvio;
-- **CLI:** il client `manent` usa un token come qualsiasi chiamata all'API; solo `manent-server admin`, riservato agli operatori della piattaforma, lavora sul database e registra nell'audit l'utente del sistema operativo (`cli:<utente>`).
+**Authentication** (`auth`):
 
-**Permessi** (`rbac`). I ruoli si assegnano a utenti o gruppi per applicazione e ambiente, con pattern `*`:
+- **users:** JWTs from an OIDC identity provider (Keycloak, Entra ID, Okta), verified with issuer, audience and JWKS keys;
+- **CI pipelines:** static tokens, of which the configuration holds only the sha256, with an optional expiry; in `auth.tokens_file` they are added and revoked without a restart;
+- **CLI:** the `manent` client uses a token like any API call; only `manent-server admin`, reserved to platform operators, works on the database and records the operating system user in the audit log (`cli:<user>`).
 
-- ruoli predefiniti: `viewer`, `tester` (+ dry-run), `approver` (+ approvazioni), `deployer` (+ deploy, annullamento e rollback manuale), `operator` (+ schedule), `admin` (anche deroghe al freeze);
-- valgono per API e CLI, perché li applica il servizio comune;
-- gli elenchi mostrano solo ciò che si può leggere, fino al limite richiesto.
+**Permissions** (`rbac`). Roles are assigned to users or groups per application and environment, with `*` patterns:
+
+- built-in roles: `viewer`, `tester` (+ dry-run), `approver` (+ approvals), `deployer` (+ deploy, cancel and manual rollback), `operator` (+ schedules), `admin` (freeze overrides too);
+- they apply to API and CLI alike, because the shared service enforces them;
+- listings show only what can be read, up to the requested limit.
 
 ```yaml
 auth:
   mode: enabled
   oidc: {issuer: https://sso.example.com/realms/corp, audience: manent}
-  tokens: [{name: ci-pipeline, sha256: "<sha256 del token>", groups: [ci]}]
+  tokens: [{name: ci-pipeline, sha256: "<sha256 of the token>", groups: [ci]}]
 rbac:
   bindings:
     - {groups: [team-a], role: deployer, applications: ["team-a-*"], environments: [dev, test]}
     - {groups: [release-managers], role: operator, applications: ["*"], environments: [prod]}
 ```
 
-**Audit.** Si registrano:
+**Audit.** The following are recorded:
 
-- richieste, promozioni, rollback manuali, annullamenti e operazioni sulle schedule;
-- approvazioni, rifiuti e deroghe al freeze, con il commento;
-- gli accessi negati;
-- l'esito finale di ogni deploy e di ogni approvazione.
+- requests, promotions, manual rollbacks, cancellations and schedule operations;
+- approvals, rejections and freeze overrides, with the comment;
+- denied access;
+- the final outcome of every deploy and every approval.
 
-Le voci vanno al log e al SIEM e, con `audit.file`, a un file JSON Lines con catena di hash (HMAC con `hmac_key_ref`) e rotazione (`max_size_mb`), verificabile con `manent-server audit verify`. Chi ha richiesto il deploy è salvato nel workflow DBOS e compare in stato, elenchi e callback (`requested_by`).
+Entries go to the log and to the SIEM and, with `audit.file`, to a JSON Lines file with a hash chain (HMAC with `hmac_key_ref`) and rotation (`max_size_mb`), verifiable with `manent-server audit verify`. Whoever requested the deploy is stored in the DBOS workflow and shows up in status, listings and callbacks (`requested_by`).
 
-**Policy sui descrittori** (`descriptor_policy`). Limita ciò che un descrittore può aggiungere alla configurazione di ambiente:
+**Descriptor policy** (`descriptor_policy`). It limits what a descriptor can add to the environment configuration:
 
-- parametri per plugin (ad esempio mai `post_command`);
-- pattern dei riferimenti ai segreti (es. `vault:secret/data/{application}/*`);
-- target.
+- parameters per plugin (for example never `post_command`);
+- patterns of secret references (e.g. `vault:secret/data/{application}/*`);
+- targets.
 
-Una violazione viene rifiutata all'accodamento (`422`) e, se sfugge (es. Consul non raggiungibile in quel momento), fa fallire il deploy nello step `config`, senza retry.
+A violation is rejected at enqueueing (`422`) and, if it slips through (e.g. Consul unreachable at that moment), it fails the deploy in the `config` step, without retries.
 
-**Segreti da Vault** (`secrets.vault`):
+**Secrets from Vault** (`secrets.vault`):
 
-- riferimenti `vault:<percorso>#<campo>`, KV v1 e v2;
-- login con token, AppRole o Kubernetes.
+- references `vault:<path>#<field>`, KV v1 and v2;
+- login with token, AppRole or Kubernetes.
 
-**Sorgenti degli artefatti** (`artifacts`):
+**Artifact sources** (`artifacts`):
 
-- credenziali per prefisso dell'URL (basic, bearer, header, lette dal secret provider) e CA dedicate;
-- con `allow_unlisted: false` solo le sorgenti elencate, verificate all'accodamento e al download.
+- credentials by URL prefix (basic, bearer, header, read from the secret provider) and dedicated CAs;
+- with `allow_unlisted: false` only the listed sources, checked at enqueueing and at download.
 
-## Deploy pianificati
+## Scheduled deploys
 
-Tutti i deploy, anche quelli pianificati, passano dalla coda DBOS `deployments` e ne rispettano la concorrenza.
+Every deploy, scheduled ones included, goes through the DBOS `deployments` queue and respects its concurrency.
 
 ```yaml
-# Deploy singolo a un orario: resta DELAYED fino ad allora, annullabile con `manent cancel <id>`
+# One deploy at a given time: it stays DELAYED until then, cancellable with `manent cancel <id>`
 schedule:
   at: 2026-10-10T02:00:00+02:00
 ```
 
 ```yaml
-# Deploy ricorrente: ri-applicare il descrittore aggiorna la schedule con lo stesso nome
+# Recurring deploy: applying the descriptor again updates the schedule with the same name
 schedule:
-  cron: "0 2 * * *"        # 5 o 6 campi (con secondi), oppure @daily, @hourly, ...
+  cron: "0 2 * * *"        # 5 or 6 fields (with seconds), or @daily, @hourly, ...
   timezone: Europe/Rome
   name: myapp-nightly      # default: <application>-<environment>
 ```
 
-Ogni esecuzione ricorrente riceve l'ID `<nome>@<orario UTC>`. Per elencarle: `manent list --schedule myapp-nightly`. Per gestire le schedule: `manent schedule list|show|pause|resume|delete`.
+Every recurring run gets the ID `<name>@<UTC time>`. To list them: `manent list --schedule myapp-nightly`. To manage schedules: `manent schedule list|show|pause|resume|delete`.
 
-## Configurazione di ambiente (Consul)
+## Environment configuration (Consul)
 
-Plugin, target, parametri del plugin e riferimenti ai segreti di ogni ambiente possono essere gestiti in un sistema di configurazione invece che nel descrittore. Il descrittore indica solo applicazione, ambiente e artefatto ([esempio](examples/descriptor-envconfig.yml)).
+Plugin, targets, plugin parameters and secret references of each environment can be managed in a configuration system instead of the descriptor. The descriptor then states only application, environment and artifact ([example](examples/descriptor-envconfig.yml)).
 
 ```yaml
 # configs/manent.yml
 envconfig:
-  provider: consul                          # none | consul | file
+  provider: consul                          # none | consul | git | file
   required: true
   consul:
     address: http://consul:8500             # default: CONSUL_HTTP_ADDR
     key: "manent/{application}/{artifact}/{environment}"
-    # token ACL: CONSUL_HTTP_TOKEN oppure token_file
+    # ACL token: CONSUL_HTTP_TOKEN or token_file
 ```
 
-Il valore della chiave Consul è YAML o JSON ([esempio](examples/envconfig/myapp/myapp/test.yml)):
+The value of the Consul key is YAML or JSON ([example](examples/envconfig/myapp/myapp/test.yml)):
 
 ```sh
 consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
-manent-server -c configs/manent.yml validate -f examples/descriptor-envconfig.yml   # mostra il deploy effettivo
+manent-server -c configs/manent.yml validate -f examples/descriptor-envconfig.yml   # shows the effective deploy
 ```
 
-- **Quando viene letta:** all'inizio di ogni deploy, quindi un deploy pianificato usa la configurazione valida al momento dell'esecuzione. Una volta letta resta la stessa anche se il deploy viene ripreso dopo un crash. Il risultato riporta la chiave e il `ModifyIndex` usati.
-- **Chi prevale:** la configurazione di ambiente. Il descrittore può aggiungere parametri e segreti non definiti, ma un valore in conflitto fa fallire il deploy.
-- **Segreti:** la configurazione deve contenere solo **riferimenti** ai segreti (es. `env:DEPLOY_SSH_KEY`, `vault:secret/data/myapp/prod#ssh_key`), perché viene salvata nello storico del deploy.
+- **When it is read:** at the start of every deploy, so a scheduled deploy uses the configuration valid at run time. Once read it stays the same even if the deploy is resumed after a crash. The result reports the key and the `ModifyIndex` used.
+- **What wins:** the environment configuration. The descriptor can add parameters and secrets that are not defined, but a conflicting value fails the deploy.
+- **Secrets:** the configuration must hold only **references** to secrets (e.g. `env:DEPLOY_SSH_KEY`, `vault:secret/data/myapp/prod#ssh_key`), because it is stored in the deploy history.
 
 ## Dry-run
 
-Il dry-run esegue la pipeline su un worker, come un deploy reale, ma senza modificare gli ambienti:
+A dry-run runs the pipeline on a worker, like a real deploy, but without changing the environments:
 
 ```sh
 manent deploy -f examples/descriptor.yml --dry-run
 curl -X POST 'localhost:8080/api/v1/deployments?dry_run=true' -d @examples/descriptor.json
 ```
 
-In alternativa si può usare `dryRun: true` nel descrittore. Rispetto a `validate`, che calcola il piano in locale, il dry-run legge la configurazione di ambiente, verifica i segreti, scarica l'artefatto ed esegue la QA. Poi chiede al plugin di controllare i target:
+Alternatively, use `dryRun: true` in the descriptor. Unlike `validate`, which computes the plan locally, a dry-run reads the environment configuration, checks the secrets, downloads the artifact and runs QA. Then it asks the plugin to check the targets:
 
-- in dry-run uno step viene eseguito solo se implementa `pipeline.DryRunner`, altrimenti viene saltato e riportato come `"dry_run": "skipped"`. `secrets`, `artifacts` e `qa` girano normalmente, `post-test` e `activation` vengono saltati;
-- lo step `deploy` seleziona e valida il plugin come in un deploy reale, poi chiama `DryRun` se il plugin implementa `plugin.DryRunner`. In caso contrario si ferma alla validazione (`"dry_run": "validated"`);
-- `remote-copy` si connette a ogni target, verifica che `dest_dir` sia scrivibile (o creabile) e che `sha256sum` sia disponibile. Non copia nulla e non esegue `post_command`;
-- con un `id` nel descrittore, il workflow del dry-run usa l'ID `<id>.dry-run`, così il deploy reale con lo stesso `id` resta eseguibile;
-- il dry-run usa la stessa coda dei deploy e quindi rispetta `environment_concurrency`. Non è ammesso insieme a `schedule`.
+- in a dry-run a step runs only if it implements `pipeline.DryRunner`, otherwise it is skipped and reported as `"dry_run": "skipped"`. `secrets`, `artifacts` and `qa` run normally, `post-test` and `activation` are skipped;
+- the `deploy` step selects and validates the plugin as in a real deploy, then calls `DryRun` if the plugin implements `plugin.DryRunner`. Otherwise it stops at validation (`"dry_run": "validated"`);
+- `remote-copy` connects to every target and checks that `dest_dir` is writable (or can be created) and that `sha256sum` is available. It copies nothing and does not run `post_command`;
+- with an `id` in the descriptor, the dry-run workflow uses the ID `<id>.dry-run`, so the real deploy with the same `id` can still run;
+- the dry-run uses the same queue as deploys and therefore respects `environment_concurrency`. It is not allowed together with `schedule`.
 
-## Callback
+## Callbacks
 
-Nel descrittore si possono indicare fino a 5 endpoint che ricevono in `POST` (JSON) l'esito degli step intermedi e quello finale:
+The descriptor can name up to 5 endpoints that receive, as a JSON `POST`, the outcome of the intermediate steps and the final one:
 
 ```yaml
 secrets:
@@ -208,18 +210,18 @@ secrets:
     ref: env:MANENT_CALLBACK_KEY
 callbacks:
   - url: https://ci.example.com/hooks/manent
-    events: [step, deployment]      # opzionale, default: tutti
+    events: [step, deployment]      # optional, default: all
     auth:
       type: hmac                    # bearer | basic (+ username) | header (+ header) | hmac
-      secret: callback-key          # nome di un segreto di secrets, mai il valore
+      secret: callback-key          # name of a secret in secrets, never the value
 ```
 
-Eventi, nell'ordine:
+Events, in order:
 
-- `deployment` con stato `started`;
-- `step` per `config` e per ogni step del piano, con stato `succeeded`, `failed` o, in dry-run, `skipped`. L'evento riporta l'`output` dello step o l'`error`;
-- `step` per i checkpoint e le compensazioni del rollback (`checkpoint:deploy`, `rollback:deploy`, ...), se attivo;
-- `deployment` finale con stato `succeeded` o `failed`, inviato dopo la pulizia. Se è stato eseguito il rollback, il campo `rollback` ne riporta l'esito (`completed`, `skipped`, `failed`).
+- `deployment` with state `started`;
+- `step` for `config` and for every step of the plan, with state `succeeded`, `failed` or, in a dry-run, `skipped`. The event carries the step's `output` or `error`;
+- `step` for the rollback checkpoints and compensations (`checkpoint:deploy`, `rollback:deploy`, ...), if enabled;
+- the final `deployment` with state `succeeded` or `failed`, sent after cleanup. If a rollback ran, the `rollback` field reports its outcome (`completed`, `skipped`, `failed`).
 
 ```json
 {"id": "myapp-1.2.3-test:4", "event": "step", "sequence": 4, "deployment_id": "myapp-1.2.3-test",
@@ -227,34 +229,34 @@ Eventi, nell'ordine:
  "output": {"sha256": "...", "size": "1024", "local_path": "..."}, "timestamp": "2026-10-09T10:00:00Z"}
 ```
 
-Comportamento:
+Behaviour:
 
-- **consegna:** ogni invio è uno step DBOS, ritentato fino a `callbacks.max_retries`. Un callback non consegnato viene registrato a log ma non fa fallire il deploy. Dopo una recovery un evento può arrivare due volte: il destinatario lo deduplica su `id` (anche nell'header `X-Manent-Delivery`);
-- **risposta:** solo i codici `2xx` contano come consegna. I redirect non vengono seguiti;
-- **firma `hmac`:** la richiesta porta `X-Manent-Timestamp` e `X-Manent-Signature: sha256=<hex>`, cioè l'HMAC-SHA256 di `<timestamp>.<body>` calcolato con il segreto;
-- **limiti sugli URL:** di default sono ammessi solo URL `https`, con `callbacks.allow_http` e `callbacks.allowed_hosts` in configurazione. Gli URL fuori policy vengono rifiutati già all'accodamento (`422`);
-- **deploy annullati:** per un deploy annullato con `cancel` non viene inviato l'evento finale.
+- **delivery:** every send is a DBOS step, retried up to `callbacks.max_retries`. An undelivered callback is logged but never fails the deploy. After a recovery an event can arrive twice: the receiver deduplicates it on `id` (also in the `X-Manent-Delivery` header);
+- **response:** only `2xx` codes count as delivered. Redirects are not followed;
+- **`hmac` signature:** the request carries `X-Manent-Timestamp` and `X-Manent-Signature: sha256=<hex>`, the HMAC-SHA256 of `<timestamp>.<body>` computed with the secret;
+- **URL limits:** by default only `https` URLs are allowed, with `callbacks.allow_http` and `callbacks.allowed_hosts` in the configuration. URLs outside the policy are rejected at enqueueing (`422`);
+- **cancelled deploys:** no final event is sent for a deploy cancelled with `cancel`.
 
 ## Rollback
 
-Se un deploy fallisce dopo aver modificato i target, manent può riportare l'ambiente alla release che era in esercizio prima del deploy, nello stesso workflow DBOS.
+If a deploy fails after changing the targets, manent can bring the environment back to the release that was live before the deploy, in the same DBOS workflow.
 
-**Policy.** In configurazione si stabilisce per quali tipi di artefatto il rollback è possibile. I tipi non elencati non lo ammettono, e le migration di database sono escluse di default:
+**Policy.** The configuration states for which artifact types rollback is possible. Unlisted types do not allow it, and database migrations are excluded by default:
 
 ```yaml
 # configs/manent.yml
 rollback:
-  locator: plugin                 # come individuare la release a cui tornare
+  locator: plugin                 # how to find the release to go back to
   artifact_types:
     application:
       allowed: true
-      enabled: true               # default per i deploy del tipo
-      on: [deploy, post-test, activation]   # step il cui fallimento avvia il rollback
+      enabled: true               # default for deploys of the type
+      on: [deploy, post-test, activation]   # steps whose failure starts the rollback
     migration:
       allowed: false
 ```
 
-Descrittore e configurazione di ambiente possono attivarlo, disattivarlo o restringere `on` entro `allowed`, con le solite regole di fusione: l'ambiente è autorevole, quindi la produzione può imporlo. Un rollback non ammesso viene rifiutato all'accodamento (`422`) e da `validate`.
+Descriptor and environment configuration can enable it, disable it or narrow `on` within `allowed`, with the usual merge rules: the environment is authoritative, so production can enforce it. A rollback that is not allowed is rejected at enqueueing (`422`) and by `validate`.
 
 ```yaml
 rollback:
@@ -262,91 +264,91 @@ rollback:
   on: [deploy, post-test]
 ```
 
-**Funzionamento:**
+**How it works:**
 
-1. **Decisione.** La policy viene applicata nello step `config`, dopo la fusione con la configurazione di ambiente, e resta registrata con il deploy.
-2. **Checkpoint.** Prima di `deploy` lo step `checkpoint:deploy` verifica che il plugin supporti il rollback e chiede al **locator** la release in esercizio. Essendo uno step DBOS separato, i retry del deploy non lo ripetono.
-3. **Compensazione.** Se fallisce uno step elencato in `on`, il worker esegue `rollback:<step>` per gli step già avviati che sanno annullarsi (`deploy`, `activation`), in ordine inverso, compreso quello fallito.
-4. **Esito.** Il deploy resta `ERROR` e l'errore termina con `rollback completed`, `rollback: no release to restore` (primo deploy) oppure `rollback failed: ...`. Una compensazione fallita ferma il rollback e viene loggata in `ERROR`, anche al SIEM.
+1. **Decision.** The policy is applied in the `config` step, after the merge with the environment configuration, and stays recorded with the deploy.
+2. **Checkpoint.** Before `deploy`, the `checkpoint:deploy` step checks that the plugin supports rollback and asks the **locator** for the live release. Being a separate DBOS step, the deploy's retries do not repeat it.
+3. **Compensation.** If a step listed in `on` fails, the worker runs `rollback:<step>` for the steps already started that can undo themselves (`deploy`, `activation`), in reverse order, the failed one included.
+4. **Outcome.** The deploy stays `ERROR` and the error ends with `rollback completed`, `rollback: no release to restore` (first deploy) or `rollback failed: ...`. A failed compensation stops the rollback and is logged at `ERROR`, to the SIEM too.
 
-**Locator.** Il locator individua la release precedente (`plugin.ReleaseLocator`):
+**Locator.** The locator finds the previous release (`plugin.ReleaseLocator`):
 
-- `plugin` (default) la legge dai target tramite `plugin.ReleaseInspector`;
-- altre strategie, ad esempio un sistema aziendale che registra le release in esercizio, si aggiungono in `app.NewLocators`.
+- `plugin` (default) reads it from the targets through `plugin.ReleaseInspector`;
+- other strategies, for example a company system that records live releases, are added in `app.NewLocators`.
 
-**Plugin.** Il plugin implementa `plugin.Rollbacker`. `remote-copy` lo supporta con `layout: releases`:
+**Plugin.** The plugin implements `plugin.Rollbacker`. `remote-copy` supports it with `layout: releases`:
 
-- ogni versione va in `<dest_dir>/releases/<versione>`, con il symlink `current` sulla release attiva e scambio atomico del link;
-- il rollback riporta `current` alla release precedente ed esegue `rollback_command` (default `post_command`);
-- `keep_releases` (default 5) limita le release conservate;
-- `prepare_command` viene eseguito prima dello switch.
+- every version goes to `<dest_dir>/releases/<version>`, with the `current` symlink on the active release and an atomic swap of the link;
+- the rollback points `current` back to the previous release and runs `rollback_command` (default `post_command`);
+- `keep_releases` (default 5) limits the releases kept;
+- `prepare_command` runs before the switch.
 
-**Altri casi.**
+**Other cases.**
 
-- **Dry-run:** esegue i checkpoint ma mai le compensazioni.
-- **Deploy annullato:** con `cancel` non viene compensato.
-- **Rollback manuale:** `manent rollback -a <app> -e <ambiente> [--to <versione>]` rilascia di nuovo una versione precedente (vedi [Governance](#governance-dei-rilasci)).
+- **Dry-run:** runs the checkpoints but never the compensations.
+- **Cancelled deploy:** a deploy cancelled with `cancel` is not compensated.
+- **Manual rollback:** `manent rollback -a <app> -e <environment> [--to <version>]` releases a previous version again (see [Governance](#release-governance)).
 
-Dettagli nella [documentazione](docs/content/guida/rollback.md).
+Details in the [documentation](docs/content/guida/rollback.md).
 
-## Governance dei rilasci
+## Release governance
 
 ```yaml
 # configs/manent.yml
 governance:
-  rules:                                  # vale la prima che corrisponde
-    - name: produzione
+  rules:                                  # the first matching rule applies
+    - name: production
       applications: ["*"]
       environments: [prod]
-      requires: [preprod]                 # stesso artefatto già rilasciato in preprod
+      requires: [preprod]                 # same artifact already released to preprod
       approvals: {required: 1, timeout: 72h}
   freezes:
     - {name: weekend, applications: ["*"], environments: [prod], cron: "0 18 * * FRI", duration: 62h, timezone: Europe/Rome}
 ```
 
 ```sh
-manent inventory -e prod                                     # release in esercizio, con sha256 e richiedente
-manent promote -a myapp --from preprod --to prod             # stesso artefatto, target dell'ambiente di destinazione
-manent approve <id> -m "CHG-1234"                            # ruolo approver; chi ha richiesto il deploy non può approvarlo
-manent rollback -a myapp -e prod [--to 1.3.2]                # torna a una versione precedente (non per le migration)
-manent freezes -e prod                                       # finestre di freeze attive e future
+manent inventory -e prod                                     # live releases, with sha256 and requester
+manent promote -a myapp --from preprod --to prod             # same artifact, targets of the destination environment
+manent approve <id> -m "CHG-1234"                            # approver role; the requester cannot approve their own deploy
+manent rollback -a myapp -e prod [--to 1.3.2]                # back to a previous version (not for migrations)
+manent freezes -e prod                                       # active and future freeze windows
 ```
 
-- **Inventario:** ricostruito dallo storico dei deploy riusciti; segnala i deploy falliti successivi.
-- **Promozione:** con `requires` un deploy di un artefatto mai rilasciato negli ambienti indicati è rifiutato (`422`). `promote` riusa il descrittore di origine e ne fissa lo `sha256`, ma non i target.
-- **Approvazioni:** il deploy resta `AWAITING_APPROVAL` su una coda separata, che non occupa i worker, e parte con lo stesso ID dopo le approvazioni. Può essere respinto, scadere o essere annullato.
-- **Freeze:** blocca i deploy all'accodamento, all'avvio sul worker e prima di ogni stadio del rollout; `freezeOverride: "<motivo>"` nel descrittore deroga, con il permesso `deployment.freeze-override`, salvo le finestre `hard`. `manent freeze add --name incidente -e prod --for 4h` crea un freeze d'emergenza a runtime, senza riavvii.
-- **Dry-run:** non soggetti alle regole.
+- **Inventory:** rebuilt from the history of successful deploys; it reports later failed deploys.
+- **Promotion:** with `requires`, a deploy of an artifact never released to the listed environments is rejected (`422`). `promote` reuses the source descriptor and pins its `sha256`, but not its targets.
+- **Approvals:** the deploy stays `AWAITING_APPROVAL` on a separate queue that does not occupy the workers, and starts with the same ID after the approvals. It can be rejected, expire or be cancelled.
+- **Freezes:** block deploys at enqueueing, at start on the worker and before every rollout stage; `freezeOverride: "<reason>"` in the descriptor overrides them, with the `deployment.freeze-override` permission, except for `hard` windows. `manent freeze add --name incident -e prod --for 4h` creates an emergency freeze at runtime, without restarts.
+- **Dry-runs:** not subject to the rules.
 
-Dettagli nella [documentazione](docs/content/guida/governance.md).
+Details in the [documentation](docs/content/guida/governance.md).
 
-### Tenant
+### Tenants
 
-Un tenant è un team interno proprietario di applicazioni: il registro (`tenants.yml`) elenca per ogni tenant le sue applicazioni con i loro tag, membri e amministratori (ruoli impliciti), coda dei deploy e restrizioni su segreti, sorgenti degli artefatti e callback. L'identità di una release è tenant/applicazione/artefatto/ambiente: due team possono avere un'applicazione con lo stesso nome, e quelle che nessun tenant elenca sono del tenant `untenanted`. ID, dipendenze e release non attraversano i tenant.
+A tenant is an internal team that owns applications: the registry (`tenants.yml`) lists for every tenant its applications with their tags, members and administrators (implicit roles), deploy queue and restrictions on secrets, artifact sources and callbacks. The identity of a release is tenant/application/artifact/environment: two teams can have an application with the same name, and those that no tenant lists belong to the `untenanted` tenant. IDs, dependencies and releases do not cross tenants.
 
 ```sh
-manent deploy -f deploy.yml --tenant retail                         # solo se più tenant hanno l'applicazione
+manent deploy -f deploy.yml --tenant retail                         # only if several tenants have the application
 manent tenants list [--selector division=commerce]
-manent inventory --selector "criticality=high"                     # tag delle applicazioni e del tenant (tenant.<tag>)
-manent freeze add --name incidente -a 'payments/*' -e prod --for 2h
+manent inventory --selector "criticality=high"                     # tags of the applications and of the tenant (tenant.<tag>)
+manent freeze add --name incident -a 'payments/*' -e prod --for 2h
 ```
 
-I pattern delle applicazioni sono qualificati (`shop` solo untenanted, `payments/*`, `*/*`); regole, freeze, policy Rego e binding RBAC accettano anche i selettori `tenants` (proprietario) e `selector` (applicazioni). Dettagli in [Tenant](docs/content/guida/tenant.md).
+Application patterns are qualified (`shop` only untenanted, `payments/*`, `*/*`); rules, freezes, Rego policies and RBAC bindings also accept the `tenants` (owner) and `selector` (applications) selectors. Details in [Tenants](docs/content/guida/tenant.md).
 
-### Policy in Rego
+### Policies in Rego
 
-Con `governance.engine: opa` le regole si scrivono in Rego e le valuta OPA incorporato nel processo. Le revisioni si cambiano a runtime: vengono caricate in bozza, testate, misurate sui deploy reali e approvate da un'altra persona. Senza revisioni, la policy predefinita applica le regole di `manent.yml`.
+With `governance.engine: opa` rules are written in Rego and evaluated by OPA embedded in the process. Revisions change at runtime: they are uploaded as drafts, tested, measured on real deploys and approved by another person. Without revisions, the default policy applies the rules of `manent.yml`.
 
 ```sh
-manent policy push -d policies/ -m "approvazione dei DBA per le migrazioni"   # compilata e testata dal server
-manent policy impact 13 --since 30d                                         # decisioni dei deploy reali ricalcolate
-manent policy approve 13                                                    # da un'identità diversa dall'autore
-manent-server policy test -d policies/                                      # in locale, senza server
+manent policy push -d policies/ -m "DBA approval for migrations"   # compiled and tested by the server
+manent policy impact 13 --since 30d                                # decisions of real deploys recomputed
+manent policy approve 13                                           # by an identity other than the author
+manent-server policy test -d policies/                             # locally, without a server
 ```
 
-La policy restituisce divieti e obblighi (`requires`, `approvals` con gli `approvers`, `change`, esenzioni dai freeze); manent li fa rispettare. Le decisioni sono registrate negli step DBOS con la revisione, così una recovery non rivaluta mai. Le sorgenti possibili sono lo store di manent, una directory, un bundle OPA firmato o Consul. Dettagli in [Policy in Rego](docs/content/guida/policy.md).
+The policy returns denials and obligations (`requires`, `approvals` with the `approvers`, `change`, freeze exemptions); manent enforces them. Decisions are recorded in DBOS steps with the revision, so a recovery never re-evaluates. Possible sources are manent's store, a directory, a signed OPA bundle or Consul. Details in [Policies in Rego](docs/content/guida/policy.md).
 
-## Chat e change management
+## Chat and change management
 
 ```yaml
 integrations:
@@ -356,23 +358,23 @@ integrations:
     - {name: prod, applications: ["*"], environments: [prod], slack: {channel: C0123456789}}
     - {name: cab, applications: ["*"], environments: ["prod*"], events: [approval], teams: {webhook_ref: "vault:…#teams"}}
   change:
-    provider: servicenow                  # o jira
+    provider: servicenow                  # or jira
     servicenow: {url: https://acme.service-now.com, username: manent, password_ref: "vault:…#password"}
 governance:
   rules:
-    - {name: produzione, applications: ["*"], environments: [prod], change: {approval: true}}
+    - {name: production, applications: ["*"], environments: [prod], change: {approval: true}}
 ```
 
-- **Notifiche:** avvio ed esito dei deploy, richieste ed esiti delle approvazioni, in Slack (bot con messaggi aggiornati, o incoming webhook) e Teams (Adaptive Card via Workflows). Le destinazioni si scelgono all'accodamento; ogni invio è uno step DBOS e non fa mai fallire il deploy.
-- **Approvazioni da Slack:** pulsanti Approva e Respingi verso `/integrations/slack/interactions`, verificati con la firma di Slack; la decisione vale come quella dell'identità di manent associata all'utente, con gli stessi permessi e il divieto di auto-approvazione. In Teams un link al deploy nell'interfaccia web.
-- **Change management:** con `change` nella regola di governance, un ticket in ServiceNow o Jira per ogni deploy, aperto all'avvio e chiuso con l'esito; con `approval: true` il deploy attende anche l'approvazione del change nell'ITSM.
+- **Notifications:** start and outcome of deploys, approval requests and outcomes, in Slack (bot with updated messages, or incoming webhook) and Teams (Adaptive Cards via Workflows). Destinations are chosen at enqueueing; every send is a DBOS step and never fails the deploy.
+- **Approvals from Slack:** Approve and Reject buttons pointing to `/integrations/slack/interactions`, verified with Slack's signature; the decision counts as that of the manent identity linked to the user, with the same permissions and the ban on self-approval. In Teams, a link to the deploy in the web interface.
+- **Change management:** with `change` in the governance rule, a ticket in ServiceNow or Jira for every deploy, opened at start and closed with the outcome; with `approval: true` the deploy also waits for the change approval in the ITSM.
 
-Dettagli nella [documentazione](docs/content/guida/integrazioni.md).
+Details in the [documentation](docs/content/guida/integrazioni.md).
 
 ## Pipeline
 
-Gli step e il loro ordine si definiscono in `configs/manent.yml` (`pipeline.steps`).
-Gli step `mandatory` vengono sempre eseguiti. Quelli `optional` hanno un default in configurazione che il descrittore può sovrascrivere:
+Steps and their order are defined in `configs/manent.yml` (`pipeline.steps`).
+`mandatory` steps always run. `optional` ones have a default in the configuration that the descriptor can override:
 
 ```yaml
 steps:
@@ -380,14 +382,14 @@ steps:
   post-test: true
 ```
 
-### Step personalizzati
+### Custom steps
 
-Uno step con `type` in `pipeline.steps` aggiunge una fase senza scrivere codice: un comando sui target via SSH (`command`) o una richiesta HTTP con attesa dell'esito (`http`). Comandi e URL si scrivono solo in `manent.yml`; la configurazione di ambiente fornisce i parametri (`step_params`), dichiarati con un pattern, e il descrittore può impostare solo quelli ammessi da `descriptor_policy.step_params`.
+A step with `type` in `pipeline.steps` adds a phase without writing code: a command on the targets over SSH (`command`) or an HTTP request that waits for the outcome (`http`). Commands and URLs are written only in `manent.yml`; the environment configuration provides the parameters (`step_params`), declared with a pattern, and the descriptor can set only those allowed by `descriptor_policy.step_params`.
 
-- I valori sostituiti nei segnaposto non sono fidati: non diventano opzioni dei comandi, sono codificati negli URL e non alterano il corpo JSON.
-- I segreti arrivano sul target come file in una directory su tmpfs, rimossa alla fine e a ogni nuovo tentativo; nel log sono sostituiti da `***`.
-- La specifica è registrata nel piano e firmata (`pipeline.custom.spec_key_refs`); una specifica difettosa si blocca con `pipeline.custom.revoked_specs`, anche nelle schedule già create; `manent-server admin specs` elenca i deploy in attesa e le schedule che la contengono.
-- Ogni esecuzione è registrata nell'audit; gli output dichiarati restano nello stato del deploy e non vanno ai callback.
+- Values substituted into placeholders are not trusted: they never become command options, they are encoded in URLs and they do not alter the JSON body.
+- Secrets reach the target as files in a directory on tmpfs, removed at the end and at every new attempt; in the log they are replaced by `***`.
+- The specification is recorded in the plan and signed (`pipeline.custom.spec_key_refs`); a faulty specification is blocked with `pipeline.custom.revoked_specs`, in already created schedules too; `manent-server admin specs` lists the waiting deploys and the schedules that contain it.
+- Every run is recorded in the audit log; declared outputs stay in the deploy state and do not go to callbacks.
 
 ```yaml
 - name: db-migrate
@@ -400,37 +402,37 @@ Uno step con `type` in `pipeline.steps` aggiunge una fase senza scrivere codice:
     command: ["/opt/tools/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
 ```
 
-Vedi [Step personalizzati](docs/content/guida/step-personalizzati.it.md).
+See [Custom steps](docs/content/guida/step-personalizzati.md).
 
-## Interfaccia web
+## Web interface
 
-`manent-server` serve un'interfaccia web su `/`, allo stesso indirizzo dell'API: deploy con ondate e log in tempo reale, approvazioni, inventario con promozioni e rollback (sempre dopo un dry-run), freeze, schedule e metriche DORA. Usa il login OIDC (Authorization Code + PKCE, `auth.oidc.ui`) e gli stessi permessi dell'API, è accessibile (WCAG 2.1 AA, verificata con axe) e disponibile in inglese e italiano. Il codice è in `web/` (React, TypeScript, Vite), incorporato nel binario da `internal/webui`; il contratto dell'API è `api/openapi.yaml`.
+`manent-server` serves a web interface on `/`, at the same address as the API: deploys with live waves and logs, approvals, inventory with promotions and rollbacks (always after a dry-run), freezes, schedules and DORA metrics. It uses OIDC sign-in (Authorization Code + PKCE, `auth.oidc.ui`) and the same permissions as the API, is accessible (WCAG 2.1 AA, checked with axe) and available in English and Italian. The code is in `web/` (React, TypeScript, Vite), embedded in the binary by `internal/webui`; the API contract is `api/openapi.yaml`.
 
 ```sh
-make web        # costruisce la UI (Node >= 20 o un container node:22)
-make web-dev    # server di sviluppo su http://127.0.0.1:5173
+make web        # builds the UI (Node >= 20 or a node:22 container)
+make web-dev    # development server on http://127.0.0.1:5173
 ```
 
-## Plugin disponibili
+## Available plugins
 
-| Plugin | Artefatto | Target |
+| Plugin | Artifact | Targets |
 |---|---|---|
-| `remote-copy` | file (`application`), copiato via SSH/SFTP con layout `releases` e symlink `current` | server e VM |
-| `container` | immagine di un registry (`oci://registry/repo:tag`), avviata per digest con Docker o Podman via SSH | server e VM |
-| `kubernetes` | manifest YAML/JSON, archivio `.tar.gz` o chart Helm (`helm package`, renderizzato con `helm template`), applicati con server-side apply e attesa del rollout | cluster Kubernetes |
-| `ecs` | immagine di un registry: nuova revisione della task definition, aggiornamento del servizio e attesa del deployment | servizi Amazon ECS (Fargate o EC2), una region per target |
-| `lambda` | immagine ECR o pacchetto `.zip`: aggiornamento del codice, versione pubblicata e alias spostato | funzioni AWS Lambda, una region per target |
-| `cloudrun` | immagine di un registry: nuova revisione e traffico sull'ultima revisione pronta | servizi Google Cloud Run, una region per target |
-| `jboss` | archivio `war`/`ear` caricato con l'API HTTP di management, una versione per deployment con cambio atomico; `suspend`, `reload` e `restart` booleani | JBoss EAP e WildFly, standalone o domain |
-| `appservice` | pacchetto `.zip`/`.war`/`.jar`/`.ear` via Kudu (OneDeploy) o immagine di un registry, nello slot di staging e poi swap, o direttamente in produzione | web app di Azure App Service |
-| `containerapps` | immagine di un registry: nuova revisione con suffisso derivato dal deploy, traffico sull'ultima revisione sana | app di Azure Container Apps |
-| `windows` | archivio `.zip` estratto in una directory per versione o pacchetto `.msi`, via WinRM o OpenSSH, con PowerShell: `physicalPath` IIS, `binPath` del servizio, azione dell'attività pianificata, installazione MSI | IIS, servizi Windows, attività pianificate e pacchetti MSI (Windows Server 2016+) |
+| `remote-copy` | file (`application`), copied over SSH/SFTP with the `releases` layout and the `current` symlink | servers and VMs |
+| `container` | registry image (`oci://registry/repo:tag`), started by digest with Docker or Podman over SSH | servers and VMs |
+| `kubernetes` | YAML/JSON manifests, `.tar.gz` archive or Helm chart (`helm package`, rendered with `helm template`), applied with server-side apply and waiting for the rollout | Kubernetes clusters |
+| `ecs` | registry image: new task definition revision, service update and wait for the deployment | Amazon ECS services (Fargate or EC2), one region per target |
+| `lambda` | ECR image or `.zip` package: code update, published version and alias moved | AWS Lambda functions, one region per target |
+| `cloudrun` | registry image: new revision and traffic on the latest ready revision | Google Cloud Run services, one region per target |
+| `jboss` | `war`/`ear` archive uploaded with the HTTP management API, one deployment per version with an atomic switch; boolean `suspend`, `reload` and `restart` | JBoss EAP and WildFly, standalone or domain |
+| `appservice` | `.zip`/`.war`/`.jar`/`.ear` package via Kudu (OneDeploy) or registry image, into the staging slot and then swapped, or straight into production | Azure App Service web apps |
+| `containerapps` | registry image: new revision with a suffix derived from the deploy, traffic on the latest healthy revision | Azure Container Apps apps |
+| `windows` | `.zip` archive extracted into a directory per version or `.msi` package, over WinRM or OpenSSH, with PowerShell: IIS `physicalPath`, service `binPath`, scheduled task action, MSI installation | IIS, Windows services, scheduled tasks and MSI packages (Windows Server 2016+) |
 
-Tutti supportano dry-run, lettura della release in esercizio e rollback. Per le immagini, il digest del manifest diventa lo sha256 dell'artefatto: promozioni e rollback rilasciano esattamente l'immagine verificata.
+All of them support dry-run, reading the live release and rollback. For images, the manifest digest becomes the artifact's sha256: promotions and rollbacks release exactly the verified image.
 
-## Scrivere un plugin di deploy
+## Writing a deploy plugin
 
-Un plugin implementa `plugin.Deployer` del package `github.com/manent-deployer/manent/pkg/plugin`:
+A plugin implements `plugin.Deployer` from the `github.com/manent-deployer/manent/pkg/plugin` package:
 
 ```go
 type Deployer interface {
@@ -441,35 +443,35 @@ type Deployer interface {
 }
 ```
 
-Per il dry-run il plugin può implementare anche `plugin.DryRunner` (`DryRun(ctx, req) (*plugin.Result, error)`): deve solo verificare i target, senza modificarli, e riportare `plugin.StatusReady` per quelli pronti.
+For dry-runs the plugin can also implement `plugin.DryRunner` (`DryRun(ctx, req) (*plugin.Result, error)`): it must only check the targets, without changing them, and report `plugin.StatusReady` for those that are ready.
 
-Per il rollback implementa `plugin.Rollbacker` (`Rollback(ctx, req, previous plugin.Release)`, idempotente e applicato a tutti i target) e, per il locator `plugin`, `plugin.ReleaseInspector` (`CurrentRelease(ctx, req)`, senza modifiche ai target).
+For rollback it implements `plugin.Rollbacker` (`Rollback(ctx, req, previous plugin.Release)`, idempotent and applied to all targets) and, for the `plugin` locator, `plugin.ReleaseInspector` (`CurrentRelease(ctx, req)`, without changing the targets).
 
-Va poi registrato con una `plugin.Factory` in `internal/app` (`NewPlugins`) e attivato nella sezione `plugins:` della configurazione.
-`Deploy` deve essere idempotente: DBOS può rieseguirlo in caso di retry o recovery.
-I segreti si leggono con `req.Secrets.Secret(ctx, nome)` solo quando servono e non vanno mai inseriti nel `Result`.
+It is then registered with a `plugin.Factory` in `internal/app` (`NewPlugins`) and enabled in the `plugins:` section of the configuration.
+`Deploy` must be idempotent: DBOS can run it again on a retry or a recovery.
+Secrets are read with `req.Secrets.Secret(ctx, name)` only when needed and must never be put in the `Result`.
 
-Il plugin di riferimento è [`plugins/remotecopy`](plugins/remotecopy): copia l'artefatto via SSH/SFTP, verifica lo sha256 remoto ed esegue un eventuale `post_command`; con `layout: releases` supporta il rollback.
+The reference plugin is [`plugins/remotecopy`](plugins/remotecopy): it copies the artifact over SSH/SFTP, verifies the remote sha256 and runs an optional `post_command`; with `layout: releases` it supports rollback.
 
-### Plugin esterni
+### External plugins
 
-Un plugin può anche essere distribuito come binario separato, senza ricompilare manent. Usa la stessa `plugin.Factory`:
+A plugin can also be shipped as a separate binary, without recompiling manent. It uses the same `plugin.Factory`:
 
 ```go
-func main() { external.Serve(mioplugin.Factory) }   // github.com/manent-deployer/manent/pkg/plugin/external
+func main() { external.Serve(myplugin.Factory) }   // github.com/manent-deployer/manent/pkg/plugin/external
 ```
 
 ```yaml
 plugins:
-  mio-plugin:
+  my-plugin:
     external:
-      command: /opt/manent/plugins/mio-plugin
-      sha256: "<sha256 del binario>"
+      command: /opt/manent/plugins/my-plugin
+      sha256: "<sha256 of the binary>"
     artifact_types: [application]
 ```
 
-manent avvia il processo al primo deploy e comunica con lui via gRPC ([hashicorp/go-plugin](https://github.com/hashicorp/go-plugin)). Il plugin non eredita le variabili d'ambiente del worker e riceve i segreti solo tramite `req.Secrets`. Dettagli nella [documentazione](docs/content/plugins/esterni.md).
+manent starts the process at the first deploy and talks to it over gRPC ([hashicorp/go-plugin](https://github.com/hashicorp/go-plugin)). The plugin does not inherit the worker's environment variables and receives secrets only through `req.Secrets`. Details in the [documentation](docs/content/plugins/esterni.md).
 
-## Licenza
+## License
 
-Apache-2.0, vedi [LICENSE](LICENSE).
+Apache-2.0, see [LICENSE](LICENSE).
