@@ -19,7 +19,7 @@ Describe a deployment in YAML, submit it through a CLI or API, and let Manent co
 
 Manent focuses on the deployment process itself: coordinating execution, preserving state, enforcing release policies and making outcomes observable.
 
-Explore the project: https://github.com/manent-deployer/manent
+Explore the documentation: https://manent-deployer.github.io/manent/
 
 ## How it works
 
@@ -43,7 +43,7 @@ flowchart LR
 3. A **worker** picks it up, reads the environment configuration and runs the steps in order, saving each result before the next one.
 4. The `deploy` step hands the release to a **plugin**. If a step fails and the policy allows it, the worker rolls back the steps already started.
 
-More in the [architecture](docs/content/concetti/architettura.md) page.
+More in the [architecture](https://manent-deployer.github.io/manent/concetti/architettura/) page.
 
 ## Screenshots
 
@@ -55,7 +55,7 @@ The same server also serves a [web interface](#web-interface) for following depl
 | ![Automatic rollback](docs/content/assets/screenshots/deployment-rollback.png)<br/>**Automatic rollback**: a failed health check in eu-central-1 rolls every wave back. | ![Inventory](docs/content/assets/screenshots/inventory.png)<br/>**Inventory**: the release running in each application and environment, with promote and roll back. |
 | ![Activity](docs/content/assets/screenshots/activity.png)<br/>**Activity**: running, waiting, queued and scheduled deploys and the workers running them. | ![Metrics](docs/content/assets/screenshots/metrics.png)<br/>**Metrics**: DORA metrics computed from the deployment history. |
 
-The full documentation is in [`docs/`](docs): `make docs` builds the static site in `docs/site`.
+The full documentation is at [manent-deployer.github.io/manent](https://manent-deployer.github.io/manent/); its sources are in [`docs/`](docs) (`make docs` builds the site locally).
 
 ## Quick start
 
@@ -89,12 +89,12 @@ manent-server worker           # M workers, each with a different executor_id
 
 ## Wave rollouts
 
-With targets in several regions and AZs, the environment configuration can define a `rollout` strategy: targets carry the `region` and `az` labels, waves select them (`select: "region=eu-1, canary!=true"`) and split them into passes by AZ or region, with `maxUnavailable` within the pass, an observation time (`bake`) and a health gate (HTTP probes, Prometheus queries, Alertmanager alerts) between one stage and the next. A failed pass stops the rollout; `onFailure` decides whether to roll back the stage (`rollback-wave`) or everything (`rollback-all`). `approvalsBetween` pauses for approval, and freezes with `regions` block only those regions. With `dbos.region_routing` each pass runs as a child workflow on the workers of its region (`dbos.region`). `manent status` shows stages, passes and gates; the inventory reports environments out of alignment (`drift`). Details in [docs/content/guida/ondate.md](docs/content/guida/ondate.md).
+With targets in several regions and AZs, the environment configuration can define a `rollout` strategy: targets carry the `region` and `az` labels, waves select them (`select: "region=eu-1, canary!=true"`) and split them into passes by AZ or region, with `maxUnavailable` within the pass, an observation time (`bake`) and a health gate (HTTP probes, Prometheus queries, Alertmanager alerts) between one stage and the next. A failed pass stops the rollout; `onFailure` decides whether to roll back the stage (`rollback-wave`) or everything (`rollback-all`). `approvalsBetween` pauses for approval, and freezes with `regions` block only those regions. With `dbos.region_routing` each pass runs as a child workflow on the workers of its region (`dbos.region`). `manent status` shows stages, passes and gates; the inventory reports environments out of alignment (`drift`). Details in [Wave rollouts](https://manent-deployer.github.io/manent/guida/ondate/).
 
 ## Load balancers and traffic
 
-- **Draining:** with `traffic.pool` in the environment configuration (`haproxy` with the Data Plane API, `aws-elb` with target groups or Auto Scaling group standby, `f5` BIG-IP, `nginx-plus`, open source `nginx` over SSH, `iis-arr` and `nlb` for IIS ARR and Windows NLB, `health-flag` for any load balancer) each batch of a wave rollout leaves the load balancer before the deploy and comes back only when healthy. A capacity check (`min_healthy`) postpones draining if the pool would fall below the minimum; waits are durable. Details in [docs/content/guida/svuotamento.md](docs/content/guida/svuotamento.md).
-- **Percentage canary and blue/green:** with `rollout.strategy: traffic` the new version goes next to the stable one, without traffic, and the steps (`steps: [1, 5, 25, 50, 100]`, `[100]` for blue/green) shift traffic with bake, comparative gates (`compare: stable`, `{track}`), approvals and a check for weights changed by others. Going back is a weight change. Routers: Gateway API or Istio in the `kubernetes` plugin (slots `-a`/`-b`, Helm charts too), weighted `lambda` aliases, `cloudrun` and `containerapps` revisions, `appservice` slots with `rampUpRules` and swap, external plugins; for in-place targets an environment router (`aws-alb`) with targets labelled by slot. For in-place targets HAProxy, F5 and NGINX Plus also act as routers through server weights. With `rollout.waves` the rollout proceeds one cluster or region at a time; with `replicas: proportional` the candidate grows with its share. ECS services with a native strategy (blue/green, linear, canary) use it in delegated mode. Details in [docs/content/guida/traffico.md](docs/content/guida/traffico.md).
+- **Draining:** with `traffic.pool` in the environment configuration (`haproxy` with the Data Plane API, `aws-elb` with target groups or Auto Scaling group standby, `f5` BIG-IP, `nginx-plus`, open source `nginx` over SSH, `iis-arr` and `nlb` for IIS ARR and Windows NLB, `health-flag` for any load balancer) each batch of a wave rollout leaves the load balancer before the deploy and comes back only when healthy. A capacity check (`min_healthy`) postpones draining if the pool would fall below the minimum; waits are durable. Details in [Load balancer draining](https://manent-deployer.github.io/manent/guida/svuotamento/).
+- **Percentage canary and blue/green:** with `rollout.strategy: traffic` the new version goes next to the stable one, without traffic, and the steps (`steps: [1, 5, 25, 50, 100]`, `[100]` for blue/green) shift traffic with bake, comparative gates (`compare: stable`, `{track}`), approvals and a check for weights changed by others. Going back is a weight change. Routers: Gateway API or Istio in the `kubernetes` plugin (slots `-a`/`-b`, Helm charts too), weighted `lambda` aliases, `cloudrun` and `containerapps` revisions, `appservice` slots with `rampUpRules` and swap, external plugins; for in-place targets an environment router (`aws-alb`) with targets labelled by slot. For in-place targets HAProxy, F5 and NGINX Plus also act as routers through server weights. With `rollout.waves` the rollout proceeds one cluster or region at a time; with `replicas: proportional` the candidate grows with its share. ECS services with a native strategy (blue/green, linear, canary) use it in delegated mode. Details in [Percentage rollouts](https://manent-deployer.github.io/manent/guida/traffico/).
 
 ## Operations
 
@@ -105,7 +105,7 @@ With targets in several regions and AZs, the environment configuration can defin
 - **Packaging:** `Dockerfile` (distroless, non-root), Helm chart in `deploy/helm/manent` (workers in a StatefulSet), systemd units in `deploy/systemd`, releases with GoReleaser (checksums signed with cosign, SBOM), CI in `.github/workflows`, [CHANGELOG](CHANGELOG.md).
 - **Tests:** `make test-postgres` (the same tests on Postgres), `make test-e2e` (real SSH in Docker), `make test-load` (load and chaos).
 
-Details in [installation](docs/content/operazioni/installazione.md), [recovery and retention](docs/content/operazioni/affidabilita.md), [upgrades](docs/content/operazioni/aggiornamenti.md) and [observability](docs/content/operazioni/osservabilita.md).
+Details in [installation](https://manent-deployer.github.io/manent/operazioni/installazione/), [recovery and retention](https://manent-deployer.github.io/manent/operazioni/affidabilita/), [upgrades](https://manent-deployer.github.io/manent/operazioni/aggiornamenti/) and [observability](https://manent-deployer.github.io/manent/operazioni/osservabilita/).
 
 ## API
 
@@ -134,7 +134,7 @@ The full API contract is [`api/openapi.yaml`](api/openapi.yaml).
 
 ## Security
 
-The default configuration is meant for development: at startup `serve` and `worker` report every setting not fit for production. The full checklist is in [docs/content/operazioni/sicurezza.md](docs/content/operazioni/sicurezza.md).
+The default configuration is meant for development: at startup `serve` and `worker` report every setting not fit for production. The full checklist is in [Security](https://manent-deployer.github.io/manent/operazioni/sicurezza/).
 
 **Authentication** (`auth`):
 
@@ -338,7 +338,7 @@ rollback:
 - **Cancelled deploy:** a deploy cancelled with `cancel` is not compensated.
 - **Manual rollback:** `manent rollback -a <app> -e <environment> [--to <version>]` releases a previous version again (see [Governance](#release-governance)).
 
-Details in the [documentation](docs/content/guida/rollback.md).
+Details in the [documentation](https://manent-deployer.github.io/manent/guida/rollback/).
 
 ## Release governance
 
@@ -369,7 +369,7 @@ manent freezes -e prod                                       # active and future
 - **Freezes:** block deploys at enqueueing, at start on the worker and before every rollout stage; `freezeOverride: "<reason>"` in the descriptor overrides them, with the `deployment.freeze-override` permission, except for `hard` windows. `manent freeze add --name incident -e prod --for 4h` creates an emergency freeze at runtime, without restarts.
 - **Dry-runs:** not subject to the rules.
 
-Details in the [documentation](docs/content/guida/governance.md).
+Details in the [documentation](https://manent-deployer.github.io/manent/guida/governance/).
 
 ### Tenants
 
@@ -382,7 +382,7 @@ manent inventory --selector "criticality=high"                     # tags of the
 manent freeze add --name incident -a 'payments/*' -e prod --for 2h
 ```
 
-Application patterns are qualified (`shop` only untenanted, `payments/*`, `*/*`); rules, freezes, Rego policies and RBAC bindings also accept the `tenants` (owner) and `selector` (applications) selectors. Details in [Tenants](docs/content/guida/tenant.md).
+Application patterns are qualified (`shop` only untenanted, `payments/*`, `*/*`); rules, freezes, Rego policies and RBAC bindings also accept the `tenants` (owner) and `selector` (applications) selectors. Details in [Tenants](https://manent-deployer.github.io/manent/guida/tenant/).
 
 ### Policies in Rego
 
@@ -395,7 +395,7 @@ manent policy approve 13                                           # by an ident
 manent-server policy test -d policies/                             # locally, without a server
 ```
 
-The policy returns denials and obligations (`requires`, `approvals` with the `approvers`, `change`, freeze exemptions); manent enforces them. Decisions are recorded in DBOS steps with the revision, so a recovery never re-evaluates. Possible sources are manent's store, a directory, a signed OPA bundle or Consul. Details in [Policies in Rego](docs/content/guida/policy.md).
+The policy returns denials and obligations (`requires`, `approvals` with the `approvers`, `change`, freeze exemptions); manent enforces them. Decisions are recorded in DBOS steps with the revision, so a recovery never re-evaluates. Possible sources are manent's store, a directory, a signed OPA bundle or Consul. Details in [Policies in Rego](https://manent-deployer.github.io/manent/guida/policy/).
 
 ## Chat and change management
 
@@ -418,7 +418,7 @@ governance:
 - **Approvals from Slack:** Approve and Reject buttons pointing to `/integrations/slack/interactions`, verified with Slack's signature; the decision counts as that of the manent identity linked to the user, with the same permissions and the ban on self-approval. In Teams, a link to the deploy in the web interface.
 - **Change management:** with `change` in the governance rule, a ticket in ServiceNow or Jira for every deploy, opened at start and closed with the outcome; with `approval: true` the deploy also waits for the change approval in the ITSM.
 
-Details in the [documentation](docs/content/guida/integrazioni.md).
+Details in the [documentation](https://manent-deployer.github.io/manent/guida/integrazioni/).
 
 ## Pipeline
 
@@ -451,7 +451,7 @@ A step with `type` in `pipeline.steps` adds a phase without writing code: a comm
     command: ["/opt/tools/migrate", "up", "--to", "{{ .Version }}", "--db", "{{ .Params.database }}"]
 ```
 
-See [Custom steps](docs/content/guida/step-personalizzati.md).
+See [Custom steps](https://manent-deployer.github.io/manent/guida/step-personalizzati/).
 
 ## Web interface
 
@@ -521,7 +521,7 @@ plugins:
     artifact_types: [application]
 ```
 
-manent starts the process at the first deploy and talks to it over gRPC ([hashicorp/go-plugin](https://github.com/hashicorp/go-plugin)). The plugin does not inherit the worker's environment variables and receives secrets only through `req.Secrets`. Details in the [documentation](docs/content/plugins/esterni.md).
+manent starts the process at the first deploy and talks to it over gRPC ([hashicorp/go-plugin](https://github.com/hashicorp/go-plugin)). The plugin does not inherit the worker's environment variables and receives secrets only through `req.Secrets`. Details in the [documentation](https://manent-deployer.github.io/manent/plugins/esterni/).
 
 ## License
 
