@@ -15,3 +15,4 @@
 /web/test-results/
 /web/playwright-report/
 /demo/.bin/
+__pycache__/
