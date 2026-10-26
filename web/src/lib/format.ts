@@ -80,3 +80,9 @@ export function formatBytes(n: number | undefined, locale: string): string {
 export function shortId(id: string): string {
   return id.length > 14 ? id.slice(0, 8) + "…" : id;
 }
+
+/** tenantLabel hides "untenanted", the reserved tenant of the applications no tenant lists:
+ * without tenants it would be on every row. */
+export function tenantLabel(tenant: string | undefined): string | undefined {
+  return tenant && tenant !== "untenanted" ? tenant : undefined;
+}

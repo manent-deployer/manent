@@ -1,0 +1,10 @@
+# shop 1.4.0 has a bug: /healthz does not answer, so the canary health gate fails and manent
+# rolls the release back.
+apiVersion: manent/v1
+application: shop
+environment: prod
+artifact:
+  type: application
+  name: shop
+  version: "1.4.0"
+  source: file:///demo/artifacts/shop-1.4.0.tar.gz

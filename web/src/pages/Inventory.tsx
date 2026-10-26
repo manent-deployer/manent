@@ -8,8 +8,17 @@ import { useApi, useMe } from "@/api/context";
 import { PromoteDialog, RollbackDialog } from "@/components/actions";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, StatusBadge, inputClass } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { formatDateTime, formatRelative, tenantLabel } from "@/lib/format";
 import { can, canInApp } from "@/lib/permissions";
+
+// historyHref is the deployment list of a release, as manent list -a -A [-e] [--tenant].
+function historyHref(application: string, artifact?: string, tenant?: string, environment?: string) {
+  const q = new URLSearchParams({ application });
+  if (artifact) q.set("artifact", artifact);
+  if (environment) q.set("environment", environment);
+  if (tenant) q.set("tenant", tenant);
+  return `/deployments?${q.toString()}`;
+}
 
 type Open = { kind: "promote" | "rollback"; application: string; artifact?: string; environment: string; tenant?: string } | null;
 
@@ -78,11 +87,16 @@ function Cell({ e, onAction }: { e?: InventoryEntry; onAction: (o: Open) => void
       ) : (
         <span className="text-sm text-muted">{t("inventory.notDeployed")}</span>
       )}
-      {cur && (
-        <span className="text-xs text-muted">
-          <time dateTime={cur.updated_at}>{formatRelative(cur.updated_at, locale)}</time>
-        </span>
-      )}
+      <span className="flex flex-wrap gap-x-2 text-xs text-muted">
+        {cur && <time dateTime={cur.updated_at}>{formatRelative(cur.updated_at, locale)}</time>}
+        <Link
+          to={historyHref(e.application, e.artifact, e.tenant, e.environment)}
+          aria-label={t("inventory.historyIn", { name: e.artifact || e.application, environment: e.environment })}
+          className="hover:text-fg hover:underline"
+        >
+          {t("inventory.history")}
+        </Link>
+      </span>
       <Targets e={e} />
       {e.drift && (
         <span className="flex items-start gap-1 text-xs text-warn">
@@ -145,7 +159,15 @@ export function InventoryPage() {
       return { application, artifact, tenant };
     });
     const byKey = new Map(entries.map((e) => [`${e.application}/${e.artifact ?? ""}/${e.environment}/${e.tenant ?? ""}`, e]));
-    return { rows, envs, byKey, tenanted: entries.some((e) => e.tenant), byArtifact: entries.some((e) => e.artifact) };
+    // The tenant and artifact columns only when they say something: some tenant other than
+    // "untenanted", some artifact named differently from its application.
+    return {
+      rows,
+      envs,
+      byKey,
+      tenanted: entries.some((e) => tenantLabel(e.tenant)),
+      byArtifact: entries.some((e) => e.artifact && e.artifact !== e.application),
+    };
   }, [q.data]);
   const needle = filter.trim().toLowerCase();
   const shown = rows.filter(
@@ -197,6 +219,14 @@ export function InventoryPage() {
                 <tr key={`${app}/${artifact}/${tenant}`} className="border-b border-border/40 align-top last:border-0">
                   <th scope="row" className="px-4 py-3 font-medium">
                     {app}
+                    {/* All the deployments of the release, in every environment. */}
+                    <Link
+                      to={historyHref(app, artifact, tenant)}
+                      aria-label={t("inventory.historyOf", { name: artifact || app })}
+                      className="block text-xs font-normal text-muted hover:text-fg hover:underline"
+                    >
+                      {t("inventory.history")}
+                    </Link>
                   </th>
                   {byArtifact && <td className="px-4 py-3 font-mono text-xs">{artifact || "—"}</td>}
                   {tenanted && <td className="px-4 py-3 font-mono text-xs">{tenant || "—"}</td>}

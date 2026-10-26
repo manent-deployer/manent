@@ -13,6 +13,22 @@ Questa pagina descrive il client.
 manent [-c <client.yml>] [--server <url>] [--token-file <file>] [--ca-file <pem>] <comando> [opzioni]
 ```
 
+## Output { #output }
+
+Sul terminale il client stampa per le persone: `deploy`, `promote` e `rollback` mostrano ogni step appena concluso, una riga per ondata con il suo health gate e un riepilogo; `list`, `inventory` e `status` stampano tabelle; `logs` mostra l'ora, i livelli colorati e solo gli attributi che dicono qualcosa sulla riga. Quando l'output va in una pipe o in un file (script, CI) o con `--json`, stampano il JSON dell'API, come prima. `NO_COLOR` disattiva i colori.
+
+```text
+$ manent deploy -f shop.yml
+deploy enqueued: 8c1f…
+  ✓ deploy@canary#0                  1.1s
+  ◷ wave canary                      1 host released, health gate running
+  ✗ wave canary                      health gate red
+  ✓ rollback:deploy@canary#0         0.1s
+  ↺ wave canary                      rolled back
+✗ shop 1.4.0 → prod deploy failed after 2.9s
+  automatic rollback: completed
+```
+
 ## Configurazione del client
 
 Ogni comando passa dall'API: valgono sempre l'[autenticazione, i permessi e l'audit](../operazioni/accesso.md) del server.
@@ -176,7 +192,7 @@ manent policy activate <revisione>       # torna a una revisione già attiva in 
 ## Log, timeline e metriche
 
 ```sh
-manent logs [-f] [--json] <id>         # log del deploy; -f lo segue fino alla conclusione
+manent logs [-f] [--json] [--level warn] <id>   # log del deploy; -f lo segue fino alla conclusione, --level nasconde i livelli inferiori
 manent steps <id>                      # step registrati con orari, durata, output ed errori
 manent dora [--since 30d] [-a <applicazione>] [-e <ambiente>]
 ```

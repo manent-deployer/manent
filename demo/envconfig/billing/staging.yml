@@ -1,0 +1,14 @@
+# billing in staging: every target in one step, rolled back if the deploy fails.
+plugin: remote-copy
+targets:
+  - {host: staging-1, user: staging-1, labels: {region: eu-west, az: eu-west-1a}}
+params:
+  dest_dir: apps/billing
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  post_command: 'echo "billing $MANENT_VERSION is live on $USER"'
+secrets:
+  - name: deploy-key
+    ref: file:/var/lib/manent/keys/id

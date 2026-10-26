@@ -1,5 +1,27 @@
 # Quick start
 
+## Try the demo { #demo }
+
+To see manent at work before installing anything, the demo image runs in one container the server, the web interface, a worker and five hosts reached over SSH, with a few minutes of release history:
+
+```sh
+docker build -f demo/Dockerfile -t manent-demo .
+docker run --rm -p 8080:8080 -p 9000:9000 --name manent-demo manent-demo
+```
+
+Open <http://localhost:8080> (port 9000 is the demo identity provider, which signs you in as John Doe with no password), then release `shop` to production in waves (a canary host, then one region at a time, each behind a health gate) and try a broken version, which manent rolls back by itself:
+
+```sh
+docker exec -it manent-demo manent deploy -f /demo/deploys/shop-1.3.0.yml
+docker exec -it manent-demo manent deploy -f /demo/deploys/shop-1.4.0.yml
+docker exec -it manent-demo manent logs <id> --level warn
+docker exec -it manent-demo manent inventory
+```
+
+![manent demo](assets/demo.gif)
+
+The demo has no login and keeps its data inside the container: it is not a configuration for real environments. The steps below build manent and run it on your machine.
+
 ## Requirements
 
 - Go 1.27 or later. `go.mod` pins the 1.27.x toolchain: with an older Go it is downloaded automatically (`GOTOOLCHAIN=auto`).

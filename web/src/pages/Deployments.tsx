@@ -8,7 +8,7 @@ import { useApi } from "@/api/context";
 import { Badge, Button, EmptyState, ErrorState, Field, Loading, PageHeader, StatusBadge, inputClass } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
-import { durationBetween, formatDateTime, formatDuration, formatRelative, shortId } from "@/lib/format";
+import { durationBetween, formatDateTime, formatDuration, formatRelative, shortId, tenantLabel } from "@/lib/format";
 
 const STATES = ["PENDING", "ENQUEUED", "DELAYED", "AWAITING_APPROVAL", "WAITING_DEPENDENCY", "SUCCESS", "ERROR", "CANCELLED", "REJECTED", "EXPIRED", "DEPENDENCY_FAILED"];
 const PAGE = 50;
@@ -20,6 +20,7 @@ export function DeploymentsPage() {
   const filters = {
     application: params.get("application") ?? "",
     environment: params.get("environment") ?? "",
+    artifact: params.get("artifact") ?? "",
     tenant: params.get("tenant") ?? "",
     state: params.get("state") ?? "",
   };
@@ -46,7 +47,7 @@ export function DeploymentsPage() {
     setParams(next);
   };
   const reset = () => {
-    setDraft({ application: "", environment: "", tenant: "", state: "" });
+    setDraft({ application: "", environment: "", artifact: "", tenant: "", state: "" });
     setParams(new URLSearchParams());
   };
 
@@ -61,12 +62,15 @@ export function DeploymentsPage() {
           </Button>
         }
       />
-      <form onSubmit={submit} className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end" aria-label={t("common.filters")}>
+      <form onSubmit={submit} className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] lg:items-end" aria-label={t("common.filters")}>
         <Field label={t("deployments.filter.application")}>
           {(p) => <input {...p} className={inputClass} value={draft.application} onChange={(e) => setDraft({ ...draft, application: e.target.value })} />}
         </Field>
         <Field label={t("deployments.filter.environment")}>
           {(p) => <input {...p} className={inputClass} value={draft.environment} onChange={(e) => setDraft({ ...draft, environment: e.target.value })} />}
+        </Field>
+        <Field label={t("deployments.filter.artifact")}>
+          {(p) => <input {...p} className={inputClass} value={draft.artifact} onChange={(e) => setDraft({ ...draft, artifact: e.target.value })} />}
         </Field>
         <Field label={t("deployments.filter.tenant")}>
           {(p) => <input {...p} className={inputClass} value={draft.tenant} onChange={(e) => setDraft({ ...draft, tenant: e.target.value })} />}
@@ -120,9 +124,10 @@ export function DeploymentsPage() {
                 <tr key={d.id} className="border-b border-border/40 last:border-0 hover:bg-raised/40">
                   <th scope="row" className="px-4 py-3 font-normal">
                     <Link to={`/deployments/${encodeURIComponent(d.id)}`} className="font-medium text-fg underline-offset-4 hover:text-accent hover:underline">
-                      {d.application ?? "—"} <span aria-hidden>→</span>
+                      {/* The artifact is shown only when it differs from the application, as in manent list. */}
+                      {d.application ?? "—"}{d.artifact && d.artifact !== d.application && <span className="text-muted">/{d.artifact}</span>} <span aria-hidden>→</span>
                       <span className="sr-only"> / </span> {d.environment ?? "—"}
-                      {d.tenant && <span className="text-muted"> · {d.tenant}</span>}
+                      {tenantLabel(d.tenant) && <span className="text-muted"> · {d.tenant}</span>}
                     </Link>
                     <div className="font-mono text-xs text-muted">{shortId(d.id)}</div>
                   </th>

@@ -1,0 +1,76 @@
+# manent demo (demo/Dockerfile): one container with the server, a worker, SQLite and five
+# emulated hosts reached over SSH (one user and one loopback address per host, see entrypoint.sh).
+# Short bake and health intervals, so a wave rollout takes seconds.
+app:
+  name: manent-demo
+  version: 0.1.0
+
+dbos:
+  database_url: sqlite:/var/lib/manent/manent.db
+  executor_id: demo
+  queue: deployments
+  concurrency: 4
+  environment_concurrency: 1
+  schedule_poll_interval: 5s
+  drain_timeout: 10s
+
+rollout:
+  check_timeout: 3s
+
+# The worker reads the release running on the targets: the inventory shows hosts changed by hand.
+reconcile:
+  interval: 20s
+  timeout: 10s
+
+http:
+  listen: ":8080"
+
+logging:
+  level: info
+  format: text
+
+workdir: /var/lib/manent/work
+
+envconfig:
+  provider: file
+  required: true
+  file:
+    path: /demo/envconfig/{application}/{environment}.yml
+
+artifacts:
+  allow_unlisted: false
+  sources:
+    - prefix: file:///demo/artifacts/
+
+rollback:
+  locator: plugin
+  artifact_types:
+    application:
+      allowed: true
+      enabled: true
+      on: [deploy, post-test, activation]
+
+# One user, John Doe (john.doe, group admins): the CLI in the container uses the static token
+# in MANENT_TOKEN (identity token:john.doe), the web interface signs in through the demo
+# identity provider on :9000 (oidc:john.doe), with no password. Never like this outside a demo.
+auth:
+  mode: enabled
+  oidc:
+    issuer: http://localhost:9000
+    audience: manent
+    username_claim: preferred_username
+    groups_claim: groups
+    ui:
+      client_id: manent-ui
+  tokens:
+    # sha256 of manent-demo-john-doe
+    - {name: john.doe, sha256: 7f4f869960af832346e4b7cf6c8855fe0883702a9d655f596ad1e18a567a7d60, groups: [admins]}
+
+rbac:
+  bindings:
+    - {groups: [admins], role: admin, applications: ["*"], environments: ["*"]}
+
+plugins:
+  remote-copy:
+    known_hosts: /var/lib/manent/.ssh/known_hosts
+    artifact_types: [application]

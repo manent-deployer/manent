@@ -6,6 +6,10 @@ Manent is an open-source, deploy-as-code engine for orchestrating reliable appli
 
 Describe a deployment in YAML, submit it through a CLI or API, and let Manent coordinate the execution through durable workflows.
 
+![A release in waves across two regions, a broken version rolled back by its health gate, then the same deploys in the web interface](docs/content/assets/demo.gif)
+
+<sub>The [demo container](#try-the-demo), recorded with [`demo/record/make-gif.sh`](demo/record/make-gif.sh).</sub>
+
 > The name **manent** comes from the Latin *manere*, "to remain, to stand firm": it expresses the immutability of the artifact, which stays exactly as it was tested, validated and put into service.
 
 ## Why Manent?
@@ -56,6 +60,26 @@ The same server also serves a [web interface](#web-interface) for following depl
 | ![Activity](docs/content/assets/screenshots/activity.png)<br/>**Activity**: running, waiting, queued and scheduled deploys and the workers running them. | ![Metrics](docs/content/assets/screenshots/metrics.png)<br/>**Metrics**: DORA metrics computed from the deployment history. |
 
 The full documentation is at [manent-deployer.github.io/manent](https://manent-deployer.github.io/manent/); its sources are in [`docs/`](docs) (`make docs` builds the site locally).
+
+## Try the demo
+
+One container with the server, the web interface, a worker and five hosts reached over SSH, plus a few minutes of release history:
+
+```sh
+docker build -f demo/Dockerfile -t manent-demo .
+docker run --rm -p 8080:8080 -p 9000:9000 --name manent-demo manent-demo
+```
+
+Open http://localhost:8080 (you are signed in as John Doe), then, in another terminal:
+
+```sh
+docker exec -it manent-demo manent deploy -f /demo/deploys/shop-1.3.0.yml   # canary, then one region at a time
+docker exec -it manent-demo manent deploy -f /demo/deploys/shop-1.4.0.yml   # red health gate: rolled back
+docker exec -it manent-demo manent logs <id> --level warn
+docker exec -it manent-demo manent inventory
+```
+
+The demo has no login and keeps its data in the container: see [`demo/`](demo) for how it is put together.
 
 ## Quick start
 

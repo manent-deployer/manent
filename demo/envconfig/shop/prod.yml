@@ -1,0 +1,30 @@
+# shop in production: four hosts in two regions. Canary on one host, then one region at a time,
+# each followed by a health gate on /healthz; a red gate rolls every wave back.
+plugin: remote-copy
+targets:
+  - {host: web-eu-1a, user: web-eu-1a, labels: {region: eu-west, az: eu-west-1a}}
+  - {host: web-eu-1b, user: web-eu-1b, labels: {region: eu-west, az: eu-west-1b}}
+  - {host: web-us-1a, user: web-us-1a, labels: {region: us-east, az: us-east-1a}}
+  - {host: web-us-1b, user: web-us-1b, labels: {region: us-east, az: us-east-1b}}
+params:
+  dest_dir: apps/shop
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  post_command: 'sleep 1; echo "shop $MANENT_VERSION is live on $USER"'
+  rollback_command: 'echo "shop rolled back on $USER"'
+secrets:
+  - name: deploy-key
+    ref: file:/var/lib/manent/keys/id
+rollout:
+  waves:
+    - {name: canary, select: "az=eu-west-1a", bake: 3s}
+    - {name: regions, select: "az!=eu-west-1a", by: region, bake: 2s}
+  maxUnavailable: "1"
+  onFailure: rollback-all
+  health:
+    interval: 1s
+    failuresToStop: 1
+    probes:
+      - {url: "http://{host}:8081/shop/current/healthz"}

@@ -1,4 +1,4 @@
-import { formatDuration, formatRelative } from "@/lib/format";
+import { formatDuration, formatRelative, tenantLabel } from "@/lib/format";
 import { appMatches, can, glob } from "@/lib/permissions";
 import { parseSSE } from "@/lib/sse";
 import { format } from "@/i18n/i18n";
@@ -50,6 +50,12 @@ describe("SSE", () => {
 });
 
 describe("formattazione", () => {
+  it("nasconde il tenant riservato untenanted", () => {
+    expect(tenantLabel("untenanted")).toBeUndefined();
+    expect(tenantLabel(undefined)).toBeUndefined();
+    expect(tenantLabel("payments")).toBe("payments");
+  });
+
   it("rende durate e tempi relativi", () => {
     expect(formatDuration(450)).toBe("450 ms");
     expect(formatDuration(125_000)).toBe("2 min 5 s");

@@ -1,6 +1,6 @@
 // Command oidc is a minimal OIDC identity provider for the use case lab: login by choosing a
 // test user (no password), Authorization Code with PKCE, refresh tokens and RS256 JWTs with
-// the groups claim. Never use it outside the lab.
+// the groups claim. Never use it outside the lab (or the demo, which runs it with -user).
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,7 +61,18 @@ func main() {
 	issuer := flag.String("issuer", "http://oidc:9000", "issuer published in the tokens")
 	audience := flag.String("audience", "manent", "token audience")
 	clientID := flag.String("client-id", "manent-ui", "allowed public OIDC client")
+	only := flag.String("user", "", "the only user, as name:group,group (signed in without the choice page)")
+	display := flag.String("user-name", "", "display name (name claim) of -user")
 	flag.Parse()
+	if *only != "" {
+		name, groups, _ := strings.Cut(*only, ":")
+		users = map[string][]string{name: strings.Split(groups, ",")}
+		order = []string{name}
+		extraClaims = map[string]map[string]any{}
+		if *display != "" {
+			extraClaims[name] = map[string]any{"name": *display}
+		}
+	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		log.Fatal(err)
@@ -170,6 +182,10 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		if _, ok := users[c.Value]; ok {
 			user = c.Value
 		}
+	}
+	// A single user (-user) needs no choice.
+	if r.Method == http.MethodGet && user == "" && len(order) == 1 {
+		user = order[0]
 	}
 	if r.Method == http.MethodGet && user == "" {
 		params := map[string]string{}

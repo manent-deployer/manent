@@ -153,6 +153,8 @@ func newWaveEngine(t *testing.T, fail string, gov Governance) waveEnv {
 	opts := workerOpts(testdb.URL(t), "w1", reg)
 	opts.Health = ch
 	opts.Governance = gov
+	// The worker writes to the deploy log too (red health gate reads).
+	opts.Logger = sl
 	w := startWorker(t, opts)
 	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: ch, Governance: gov})
 	return waveEnv{e: e, log: l, checker: ch}
@@ -219,6 +221,13 @@ func TestRolloutGateRossoFerma(t *testing.T) {
 	}
 	if !strings.Contains(st.Rollout.Stages[2].Gate, "error-rate (us-1): valore 0.2") {
 		t.Errorf("gate: %q", st.Rollout.Stages[2].Gate)
+	}
+	// The red read is in the deploy log, under the gate step.
+	p, _ := env.e.Logs(ctx, sub.ID, 0)
+	if !slices.ContainsFunc(p.Lines, func(l service.LogLine) bool {
+		return l.Level == "WARN" && l.Message == "health gate red" && strings.HasPrefix(l.Step, "gate@resto/eu-2a+us-1a#") && strings.Contains(l.Attrs["reason"], "error-rate (us-1)")
+	}) {
+		t.Errorf("gate rosso non nel log: %+v", p.Lines)
 	}
 	// The inventory flags the misaligned environment.
 	inv, _ := env.e.Inventory(ctx, InventoryFilter{})

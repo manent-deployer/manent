@@ -38,6 +38,24 @@ describe("deploy", () => {
     expect(screen.getByRole("note")).toHaveTextContent(/Authentication is disabled/);
   });
 
+  it("filtra per artefatto dall'URL e lo mostra accanto all'applicazione", async () => {
+    let sent: URLSearchParams | undefined;
+    const { api } = fakeApi(({ path, query }) => {
+      if (path === "/api/v1/me") return { json: identity({ auth_enabled: false }) };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/deployments") {
+        sent = query;
+        return { json: { deployments: [dep({ id: "a", artifact: "shop-web" })] } };
+      }
+    });
+    renderApp(api, "/deployments?application=shop&artifact=shop-web");
+    const table = await screen.findByRole("table", { name: "Deployments, newest first" });
+    expect(within(table).getByRole("link", { name: /shop.*shop-web.*prod/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("Artifact")).toHaveValue("shop-web");
+    expect(sent?.get("application")).toBe("shop");
+    expect(sent?.get("artifact")).toBe("shop-web");
+  });
+
   it("parla italiano", async () => {
     const { api } = fakeApi(({ path }) => {
       if (path === "/api/v1/me") return { json: identity({ auth_enabled: false }) };
@@ -478,6 +496,15 @@ describe("tenant", () => {
     expect(within(table).getByRole("columnheader", { name: "Artifact" })).toBeInTheDocument();
     expect(within(table).getByText("shop-web")).toBeInTheDocument();
     expect(within(table).getByRole("link", { name: "1.3.0" })).toHaveAttribute("href", "/deployments/g1");
+    // Every artifact links to its deployment list, as manent list -a -A.
+    expect(within(table).getByRole("link", { name: "Deployments of shop-web" })).toHaveAttribute(
+      "href",
+      "/deployments?application=shop&artifact=shop-web&tenant=payments",
+    );
+    expect(within(table).getByRole("link", { name: "Deployments of shop-api in prod" })).toHaveAttribute(
+      "href",
+      "/deployments?application=shop&artifact=shop-api&environment=prod&tenant=payments",
+    );
   });
 });
 

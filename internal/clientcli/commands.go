@@ -33,6 +33,7 @@ type DeployCmd struct {
 	Outputs string `long:"outputs" description:"file to append the outcome to as key=value lines (deployment_id, state, ...): $GITHUB_OUTPUT or a GitLab dotenv report"`
 	Summary string `long:"summary" description:"file to append the deploy summary to, in Markdown ($GITHUB_STEP_SUMMARY)"`
 	CI      bool   `long:"ci" description:"detect GitHub Actions (outcomes in $GITHUB_OUTPUT, summary in $GITHUB_STEP_SUMMARY) or GitLab CI (outcomes in manent.env, or $MANENT_DOTENV)"`
+	outputOptions
 }
 
 // ArtifactOverrides replace fields of the descriptor from the command line: in CI the
@@ -108,7 +109,7 @@ func (c *DeployCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		ferr := follow(ctx, svc, sub, c.NoWait, c.Timeout)
+		ferr := follow(ctx, svc, sub, c.NoWait, c.Timeout, c.human())
 		// Also on failure: the pipeline reads the state of the deploy it started.
 		return errors.Join(ferr, rep.write(ctx, svc, d, sub))
 	})
@@ -171,6 +172,7 @@ type idArgs struct {
 type StatusCmd struct {
 	global *GlobalOptions
 	Args   idArgs `positional-args:"yes"`
+	outputOptions
 }
 
 // Execute implements flags.Commander.
@@ -179,6 +181,9 @@ func (c *StatusCmd) Execute([]string) error {
 		st, err := svc.Status(ctx, c.Args.ID)
 		if err != nil {
 			return err
+		}
+		if c.human() {
+			return printStatus(os.Stdout, st, time.Now())
 		}
 		return cliutil.PrintJSON(st)
 	})
@@ -195,6 +200,7 @@ type ListCmd struct {
 	Selector    string `long:"selector" description:"only the applications chosen by the tag selector (e.g. criticality=high, tenant=payments)"`
 	State       string `long:"state" description:"only the deploys in this state (e.g. SUCCESS, ERROR, AWAITING_APPROVAL)"`
 	Limit       int    `short:"n" long:"limit" default:"20" description:"maximum number of deploys"`
+	outputOptions
 }
 
 // Execute implements flags.Commander.
@@ -203,6 +209,9 @@ func (c *ListCmd) Execute([]string) error {
 		deps, err := svc.List(ctx, service.ListFilter{Schedule: c.Schedule, Application: c.Application, Environment: c.Environment, Tenant: c.Tenant, Artifact: c.Artifact, Selector: c.Selector, State: c.State, Limit: c.Limit})
 		if err != nil {
 			return err
+		}
+		if c.human() {
+			return printDeploys(os.Stdout, deps, time.Now())
 		}
 		return cliutil.PrintJSON(deps)
 	})
@@ -313,6 +322,7 @@ type redeployOptions struct {
 	FreezeOverride string        `long:"freeze-override" description:"reason to override an active freeze (requires the deployment.freeze-override permission)"`
 	NoWait         bool          `long:"no-wait" description:"do not wait for the deploy to end"`
 	Timeout        time.Duration `long:"timeout" description:"maximum time to wait (0 = no limit)"`
+	outputOptions
 }
 
 func (o redeployOptions) redeploy() service.Redeploy {
@@ -354,7 +364,7 @@ func (c *PromoteCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		return follow(ctx, svc, sub, c.NoWait, c.Timeout)
+		return follow(ctx, svc, sub, c.NoWait, c.Timeout, c.human())
 	})
 }
 
@@ -377,7 +387,7 @@ func (c *RollbackCmd) Execute([]string) error {
 		if err != nil {
 			return err
 		}
-		return follow(ctx, svc, sub, c.NoWait, c.Timeout)
+		return follow(ctx, svc, sub, c.NoWait, c.Timeout, c.human())
 	})
 }
 
@@ -390,6 +400,7 @@ type InventoryCmd struct {
 	Artifact    string `short:"A" long:"artifact" description:"only this artifact (artifact.name)"`
 	Selector    string `long:"selector" description:"only the applications chosen by the tag selector (e.g. product=checkout)"`
 	OutOfSync   bool   `long:"out-of-sync" description:"only the environments with targets changed outside manent (reconciliation)"`
+	outputOptions
 }
 
 // Execute implements flags.Commander.
@@ -401,6 +412,9 @@ func (c *InventoryCmd) Execute([]string) error {
 		}
 		if c.OutOfSync {
 			inv = slices.DeleteFunc(inv, func(e service.InventoryEntry) bool { return !e.OutOfSync })
+		}
+		if c.human() {
+			return printInventory(os.Stdout, inv, time.Now())
 		}
 		return cliutil.PrintJSON(inv)
 	})
@@ -479,6 +493,7 @@ type LogsCmd struct {
 	Follow   bool          `short:"f" long:"follow" description:"waits for new lines until the deploy ends"`
 	JSON     bool          `long:"json" description:"one JSON line per entry"`
 	Interval time.Duration `long:"interval" default:"2s" description:"read interval with --follow"`
+	Level    string        `short:"l" long:"level" choice:"debug" choice:"info" choice:"warn" choice:"error" description:"only the lines at this level or above"`
 	Args     idArgs        `positional-args:"yes"`
 }
 
@@ -494,7 +509,9 @@ func (c *LogsCmd) Execute([]string) error {
 				return err
 			}
 			for _, l := range p.Lines {
-				c.print(l)
+				if levelRank(l.Level) >= levelRank(c.Level) {
+					c.print(l)
+				}
 			}
 			offset = p.Next
 			if !c.Follow || p.Done {
@@ -513,6 +530,10 @@ func (c *LogsCmd) print(l service.LogLine) {
 	if c.JSON {
 		b, _ := json.Marshal(l)
 		fmt.Println(string(b))
+		return
+	}
+	if stdoutIsTerminal() {
+		fmt.Println(humanLogLine(l))
 		return
 	}
 	var b strings.Builder

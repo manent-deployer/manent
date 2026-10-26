@@ -624,6 +624,8 @@ func (w *Worker) readGate(ctx dbos.Context, id string, d *descriptor.Descriptor,
 // checkGate runs the given reads in a DBOS step and merges their outcome.
 func (w *Worker) checkGate(ctx dbos.Context, name string, ins ...rollout.GateInput) (rollout.GateResult, error) {
 	return dbos.RunAsStep(ctx, func(c context.Context) (rollout.GateResult, error) {
+		// Only the red reads go to the deploy log: a green one every interval would bury the rest.
+		c = deploylog.WithStep(c, name)
 		cc, cancel := context.WithTimeout(c, w.healthTimeout)
 		defer cancel()
 		var parts []rollout.GateResult
@@ -632,7 +634,11 @@ func (w *Worker) checkGate(ctx dbos.Context, name string, ins ...rollout.GateInp
 				parts = append(parts, w.health.Check(cc, in))
 			}
 		}
-		return rollout.Merge(parts...), nil
+		r := rollout.Merge(parts...)
+		if !r.OK {
+			w.logger.WarnContext(c, "health gate red", "reason", r.Failed())
+		}
+		return r, nil
 	}, dbos.WithStepName(name))
 }
 

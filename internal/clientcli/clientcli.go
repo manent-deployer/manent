@@ -207,8 +207,9 @@ func withService(g *GlobalOptions, fn func(context.Context, service.Service) err
 }
 
 // follow shows the outcome of the submission and, if requested, waits for the deploy to end.
-// It does not wait for scheduled deploys nor for those awaiting approval.
-func follow(ctx context.Context, svc service.Service, sub *service.Submission, noWait bool, timeout time.Duration) error {
+// It does not wait for scheduled deploys nor for those awaiting approval. With human, on a
+// terminal, it shows the steps as they end and a summary instead of the JSON result.
+func follow(ctx context.Context, svc service.Service, sub *service.Submission, noWait bool, timeout time.Duration, human bool) error {
 	if sub.State == service.StateAwaitingApproval {
 		fmt.Fprintln(os.Stderr, "deploy awaiting approval: manent approve", sub.ID)
 		return cliutil.PrintJSON(sub)
@@ -223,11 +224,19 @@ func follow(ctx context.Context, svc service.Service, sub *service.Submission, n
 	if sub.DryRun {
 		kind = "dry-run"
 	}
-	fmt.Fprintln(os.Stderr, kind, "enqueued:", sub.ID, "(manent logs -f", sub.ID+" to follow it)")
+	if human {
+		// The progress follows right below: no need to suggest manent logs.
+		fmt.Fprintln(os.Stderr, kind, "enqueued:", sub.ID)
+	} else {
+		fmt.Fprintln(os.Stderr, kind, "enqueued:", sub.ID, "(manent logs -f", sub.ID+" to follow it)")
+	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
+	}
+	if human {
+		return watch(ctx, svc, sub.ID, kind, os.Stdout)
 	}
 	res, err := svc.Wait(ctx, sub.ID)
 	if err != nil {
