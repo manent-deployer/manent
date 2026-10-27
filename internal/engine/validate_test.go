@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/manent-deployer/manent/internal/artifact"
 	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/envconfig"
 	"github.com/manent-deployer/manent/internal/governance"
@@ -27,7 +28,7 @@ func TestValidate(t *testing.T) {
 
 	d := appDescriptor("prod", "1.0.0")
 	d.Secrets = []descriptor.SecretRef{{Name: "chiave", Ref: "vault:segreto/chiave"}}
-	v, err := e.Validate(ctx, d)
+	v, err := e.Validate(ctx, d, ValidateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,11 +45,11 @@ func TestValidate(t *testing.T) {
 	// Policy violated: invalid request. Configuration unreachable: only a warning.
 	e.resolver = policyResolver{}
 	d.Application = "vietata"
-	if _, err := e.Validate(ctx, d); !errors.Is(err, ErrInvalidRequest) {
+	if _, err := e.Validate(ctx, d, ValidateOptions{}); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("atteso ErrInvalidRequest, ricevuto %v", err)
 	}
 	d.Application = "irraggiungibile"
-	if v, err := e.Validate(ctx, d); err != nil || len(v.Warnings) != 1 {
+	if v, err := e.Validate(ctx, d, ValidateOptions{}); err != nil || len(v.Warnings) != 1 {
 		t.Errorf("configurazione irraggiungibile: %+v %v", v, err)
 	}
 }
@@ -57,7 +58,7 @@ func TestValidateRollout(t *testing.T) {
 	_, planner := testRegistry(t, waveStep{name: "deploy", log: &waveLog{}})
 	e := NewService(ServiceOptions{Planner: planner, Logger: discard, Resolver: newFakeResolver("r1"), Health: &fakeChecker{}})
 	d := waveDescriptor("v-ondate")
-	v, err := e.Validate(context.Background(), d)
+	v, err := e.Validate(context.Background(), d, ValidateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,13 +67,13 @@ func TestValidateRollout(t *testing.T) {
 	}
 	// A target without a wave makes the request invalid.
 	d.Deploy.Targets = append(d.Deploy.Targets, descriptor.Target{Host: "ap-1a", Labels: map[string]string{"region": "ap-1", "az": "ap-1a"}})
-	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a belongs to no wave") {
+	if _, err := e.Validate(context.Background(), d, ValidateOptions{}); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "ap-1a belongs to no wave") {
 		t.Errorf("target scoperto: %v", err)
 	}
 	// An onFailure with rollback without rollback enabled is rejected.
 	d = waveDescriptor("v-ondate-2")
 	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
-	if _, err := e.Validate(context.Background(), d); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback enabled") {
+	if _, err := e.Validate(context.Background(), d, ValidateOptions{}); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "rollback enabled") {
 		t.Errorf("rollback non attivo: %v", err)
 	}
 }
@@ -104,5 +105,50 @@ func TestValidateEnvironment(t *testing.T) {
 	// The example descriptor must be of the environment checked.
 	if _, err := e.ValidateEnvironment(ctx, EnvironmentCheck{Application: "altra", Environment: "prod", Config: "plugin: x\n", Descriptor: d}); !errors.Is(err, ErrInvalidRequest) {
 		t.Errorf("descrittore di un altro ambiente: %v", err)
+	}
+}
+
+// fakeProber finds only the artifacts in the map, with their digest.
+type fakeProber map[string]string
+
+func (f fakeProber) Probe(_ context.Context, source string) (*artifact.Probed, error) {
+	sha, ok := f[source]
+	if !ok {
+		return nil, errors.New("artifact not found at the source (status 404)")
+	}
+	return &artifact.Probed{SHA256: sha, Size: -1}, nil
+}
+
+func TestValidateArtifact(t *testing.T) {
+	_, planner := testRegistry(t, artifactStep{})
+	e := NewService(ServiceOptions{Planner: planner, Logger: discard})
+	ctx := context.Background()
+	d := appDescriptor("test", "1.0.0")
+	check := ValidateOptions{CheckArtifact: true}
+
+	// Without the option the source is never contacted.
+	if v, err := e.Validate(ctx, d, ValidateOptions{}); err != nil || v.Artifact != nil {
+		t.Fatalf("validate senza controllo: %+v %v", v, err)
+	}
+	if _, err := e.Validate(ctx, d, check); !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("server senza prober: atteso ErrInvalidRequest, ricevuto %v", err)
+	}
+
+	e.artifacts = fakeProber{d.Artifact.Source: "abc"}
+	v, err := e.Validate(ctx, d, check)
+	if err != nil || v.Artifact == nil || v.Artifact.SHA256 != "abc" || v.Artifact.Size != 0 || v.Artifact.SHA256Verified {
+		t.Fatalf("artefatto presente: %+v %v", v.Artifact, err)
+	}
+	d.Artifact.SHA256 = "ABC"
+	if v, err := e.Validate(ctx, d, check); err != nil || !v.Artifact.SHA256Verified {
+		t.Errorf("sha256 uguale: %+v %v", v, err)
+	}
+	d.Artifact.SHA256 = "def"
+	if _, err := e.Validate(ctx, d, check); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "the descriptor expects def") {
+		t.Errorf("sha256 diverso: %v", err)
+	}
+	d.Artifact.Source = "https://repo.example.com/manca.tgz"
+	if _, err := e.Validate(ctx, d, check); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "artifact check: artifact not found") {
+		t.Errorf("artefatto mancante: %v", err)
 	}
 }

@@ -84,7 +84,7 @@ type DeploymentService interface {
 	Plan(ctx context.Context, d *descriptor.Descriptor) (pipeline.Plan, error)
 	// Validate checks the descriptor as at submission and returns the effective deploy, without
 	// starting it.
-	Validate(ctx context.Context, d *descriptor.Descriptor) (*Validation, error)
+	Validate(ctx context.Context, d *descriptor.Descriptor, opts ValidateOptions) (*Validation, error)
 	// ValidateEnvironment checks a candidate environment configuration, before it is applied, as
 	// a deploy would use it at submission.
 	ValidateEnvironment(ctx context.Context, c EnvironmentCheck) (*Validation, error)
@@ -151,8 +151,29 @@ type Validation struct {
 	Governance *GovernanceValidation `json:"governance,omitempty"`
 	// Rollout is the wave plan (stages and passes) that would run.
 	Rollout *RolloutState `json:"rollout,omitempty"`
+	// Artifact is the outcome of the artifact check (ValidateOptions.CheckArtifact).
+	Artifact *ArtifactCheck `json:"artifact,omitempty"`
 	// Warnings reports the checks not performed, for example with Consul unreachable.
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+// ValidateOptions are the optional checks of Validate.
+type ValidateOptions struct {
+	// CheckArtifact also checks, from the API server, that the artifact exists at its source
+	// and that the source credentials give access to it, without downloading it.
+	CheckArtifact bool `json:"check_artifact,omitempty"`
+}
+
+// ArtifactCheck describes the artifact found at its source.
+type ArtifactCheck struct {
+	Source string `json:"source"`
+	// SHA256 is the digest read from the source: only for registry images (the manifest).
+	SHA256 string `json:"sha256,omitempty"`
+	// Size is the size declared by the source, omitted if unknown.
+	Size int64 `json:"size,omitempty"`
+	// SHA256Verified reports whether the expected artifact.sha256 was compared with the one
+	// of the source; for files and URLs that requires the download, left to the worker.
+	SHA256Verified bool `json:"sha256_verified"`
 }
 
 // EnvironmentCheck asks to check a candidate environment configuration (e.g. a change in the

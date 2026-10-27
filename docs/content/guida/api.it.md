@@ -121,7 +121,7 @@ Richiede `deployment.read` sull'applicazione e l'ambiente del descrittore.
 
 ### Verificare un descrittore
 
-`POST /api/v1/deployments/validate` esegue le verifiche dell'accodamento (policy sui descrittori, configurazione di ambiente, callback, sorgente dell'artefatto, rollback) senza accodare nulla. È quello che usa `manent validate`. Richiede `deployment.read`.
+`POST /api/v1/deployments/validate` esegue le verifiche dell'accodamento (policy sui descrittori, configurazione di ambiente, callback, sorgente dell'artefatto, rollback) senza accodare nulla. È quello che usa `manent validate`. Richiede `deployment.read`. Con `?check_artifact=true` il server cerca anche l'artefatto nella sua sorgente senza scaricarlo (`manent validate --check-artifact`, richiede anche `deployment.dry-run`) e riporta l'esito in `artifact`.
 
 ```json
 {

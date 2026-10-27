@@ -493,9 +493,13 @@ func (c *Client) ValidateEnvironment(ctx context.Context, e service.EnvironmentC
 }
 
 // Validate implements service.Service.
-func (c *Client) Validate(ctx context.Context, d *descriptor.Descriptor) (*service.Validation, error) {
+func (c *Client) Validate(ctx context.Context, d *descriptor.Descriptor, opts service.ValidateOptions) (*service.Validation, error) {
+	var q url.Values
+	if opts.CheckArtifact {
+		q = url.Values{"check_artifact": {"true"}}
+	}
 	var v service.Validation
-	if err := c.do(ctx, http.MethodPost, "/deployments/validate", nil, d, &v); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/deployments/validate", q, d, &v); err != nil {
 		return nil, err
 	}
 	return &v, nil

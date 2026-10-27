@@ -139,10 +139,12 @@ func applyImports(d *descriptor.Descriptor, specs []string) error {
 
 // ValidateCmd checks the descriptor on the server, as at submission but without starting the
 // deploy, and shows plan, effective deploy (merged with the environment configuration),
-// rollback and governance rules. Unlike "deploy --dry-run" it touches no secrets, artifact or targets.
+// rollback and governance rules. Unlike "deploy --dry-run" it touches no secrets or targets;
+// with --check-artifact the API server also looks for the artifact at its source.
 type ValidateCmd struct {
-	global *GlobalOptions
-	File   string `short:"f" long:"file" required:"true" description:"YAML deploy descriptor"`
+	global        *GlobalOptions
+	File          string `short:"f" long:"file" required:"true" description:"YAML deploy descriptor"`
+	CheckArtifact bool   `long:"check-artifact" description:"also check from the API server that the artifact exists at its source, without downloading it (requires the dry-run permission)"`
 }
 
 // Execute implements flags.Commander.
@@ -152,7 +154,7 @@ func (c *ValidateCmd) Execute([]string) error {
 		return err
 	}
 	return withService(c.global, func(ctx context.Context, svc service.Service) error {
-		v, err := svc.Validate(ctx, d)
+		v, err := svc.Validate(ctx, d, service.ValidateOptions{CheckArtifact: c.CheckArtifact})
 		if err != nil {
 			return err
 		}

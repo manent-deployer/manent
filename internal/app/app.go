@@ -610,7 +610,7 @@ func (c *components) service(cfg *config.Config, client dbos.Client, executors e
 func (c *components) engine(cfg *config.Config, client dbos.Client, executors engine.ExecutorLister) *engine.Engine {
 	opts := engine.ServiceOptions{
 		Client: client, QueueName: cfg.DBOS.Queue, Planner: c.planner,
-		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources,
+		CallbackPolicy: c.policy, Rollback: c.rollback, Sources: c.sources, Artifacts: artifact.DefaultFetcher{Sources: c.sources},
 		Resolver: c.resolver, Governance: c.governance, Policies: c.governance, Tenants: c.tenants, RejectUntenanted: c.rejectUntenanted, Health: c.health, Traffic: c.traffic, Logger: c.log,
 		Executors: executors, StaleAfter: cfg.Recovery.StaleAfter,
 		QueueLimits: engine.QueueOptions{

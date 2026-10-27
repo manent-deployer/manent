@@ -99,7 +99,7 @@ func TestPolicyNegaAlSubmitERegistraLaDecisione(t *testing.T) {
 	if _, err := e.Submit(alice, appDescriptor("prod", "1.0.0")); !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "no deploys on Friday") {
 		t.Fatalf("divieto della policy: %v", err)
 	}
-	v, err := e.Validate(alice, appDescriptor("prod", "1.0.0"))
+	v, err := e.Validate(alice, appDescriptor("prod", "1.0.0"), ValidateOptions{})
 	if err != nil || len(v.Governance.Deny) != 1 || !strings.HasPrefix(v.Governance.Revision, "builtin:") {
 		t.Fatalf("validazione con il divieto: %+v %v", v.Governance, err)
 	}

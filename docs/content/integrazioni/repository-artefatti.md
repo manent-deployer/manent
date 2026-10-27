@@ -93,9 +93,10 @@ Promotions pin it automatically: production receives exactly the bytes that succ
 
 ```sh
 manent validate -f deploy/test.yml     # a source outside artifacts.sources is refused here
+manent validate -f deploy/test.yml --check-artifact   # the artifact exists and the credentials work
 manent deploy -f deploy/test.yml --dry-run
 ```
 
-The `artifacts` step of the dry-run downloads the artifact with the configured credentials and reports `sha256` and `size`.
+`--check-artifact` asks the API server to find the artifact without downloading it (`HEAD`, or the manifest for an image, whose digest is compared with `artifact.sha256`). The `artifacts` step of the dry-run downloads the artifact with the configured credentials and reports `sha256` and `size`.
 
 Reference: [Secrets and artifact sources](../operazioni/segreti-artefatti.md).

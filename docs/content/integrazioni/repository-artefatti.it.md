@@ -93,9 +93,10 @@ Le promozioni lo fissano in automatico: la produzione riceve esattamente i byte 
 
 ```sh
 manent validate -f deploy/test.yml     # una sorgente fuori da artifacts.sources viene rifiutata qui
+manent validate -f deploy/test.yml --check-artifact   # l'artefatto esiste e le credenziali funzionano
 manent deploy -f deploy/test.yml --dry-run
 ```
 
-Lo step `artifacts` del dry-run scarica l'artefatto con le credenziali configurate e riporta `sha256` e `size`.
+`--check-artifact` chiede al server API di trovare l'artefatto senza scaricarlo (`HEAD`, o il manifest per un'immagine, il cui digest viene confrontato con `artifact.sha256`). Lo step `artifacts` del dry-run scarica l'artefatto con le credenziali configurate e riporta `sha256` e `size`.
 
 Riferimento: [Segreti e sorgenti degli artefatti](../operazioni/segreti-artefatti.md).

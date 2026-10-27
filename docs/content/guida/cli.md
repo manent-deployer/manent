@@ -85,13 +85,16 @@ Scheduled deploys (`schedule` in the descriptor) and those [awaiting approval](g
 
 ### `validate`
 
-Checks the descriptor on the server with the same checks as enqueuing (descriptor policy, environment configuration, callbacks, artifact source, rollback) and shows the plan and the effective deploy, i.e. the descriptor merged with the environment configuration. It enqueues nothing and does not contact secrets, artifact or targets. Requires the `deployment.read` permission.
+Checks the descriptor on the server with the same checks as enqueuing (descriptor policy, environment configuration, callbacks, artifact source, rollback) and shows the plan and the effective deploy, i.e. the descriptor merged with the environment configuration. It enqueues nothing and does not contact secrets or targets, nor the artifact source unless `--check-artifact` is given. Requires the `deployment.read` permission.
 
 ```sh
 manent validate -f examples/descriptor.yml
+manent validate -f examples/descriptor.yml --check-artifact
 ```
 
 The output also lists the names of the declared secrets, the [governance](governance.md) rule that applies and any active freeze. If the environment configuration cannot be reached, the server reports it in `warnings` and the check is left to the worker. To check a manent configuration before installing it there is [`manent-server validate`](../operazioni/server.md#validate).
+
+With `--check-artifact` the API server also looks for the artifact at its source, with the credentials of `artifacts.sources` and without downloading it: `HEAD` for an http(s) URL, the manifest for an `oci://` image, the file for a local path. A missing artifact, denied access or an unreachable source make the validation fail; the result is in the `artifact` field. For an image the manifest digest is compared with `artifact.sha256` (`sha256_verified`); for files and URLs that would require the download, which stays with the `artifacts` step (or `deploy --dry-run`). The request comes from the API server, not from a worker: where only the workers reach the repository, use the dry-run. It also requires the `deployment.dry-run` permission.
 
 ### `env validate`
 

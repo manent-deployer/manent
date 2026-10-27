@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,24 +75,8 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 	if err := f.Sources.Check(source); err != nil {
 		return nil, "", err
 	}
-	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
-		if err != nil {
-			return nil, "", err
-		}
-		client, err := f.Sources.prepare(ctx, req, source)
-		if err != nil {
-			return nil, "", err
-		}
-		if client == nil {
-			client = f.Client
-		}
-		if client == nil {
-			client = http.DefaultClient
-		}
-		// Credentials do not follow a redirect to another host: net/http drops Authorization
-		// and the sensitive headers when the domain changes.
-		resp, err := client.Do(req)
+	if isHTTP(source) {
+		resp, err := f.httpDo(ctx, http.MethodGet, source)
 		if err != nil {
 			return nil, "", err
 		}
@@ -99,7 +84,12 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 			resp.Body.Close()
 			return nil, "", fmt.Errorf("artifact download: status %d", resp.StatusCode)
 		}
-		return resp.Body, filepath.Base(req.URL.Path), nil
+		u, err := url.Parse(source)
+		if err != nil {
+			resp.Body.Close()
+			return nil, "", err
+		}
+		return resp.Body, filepath.Base(u.Path), nil
 	}
 	path := strings.TrimPrefix(source, "file://")
 	file, err := os.Open(path)
@@ -107,6 +97,26 @@ func (f DefaultFetcher) open(ctx context.Context, source string) (io.ReadCloser,
 		return nil, "", err
 	}
 	return file, filepath.Base(path), nil
+}
+
+// isHTTP reports whether the source is an http(s) URL.
+func isHTTP(source string) bool {
+	return strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
+}
+
+// httpDo sends a request to an http(s) source with the source credentials.
+func (f DefaultFetcher) httpDo(ctx context.Context, method, source string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, source, nil)
+	if err != nil {
+		return nil, err
+	}
+	client, err := f.Sources.prepare(ctx, req, source)
+	if err != nil {
+		return nil, err
+	}
+	// Credentials do not follow a redirect to another host: net/http drops Authorization
+	// and the sensitive headers when the domain changes.
+	return f.client(client).Do(req)
 }
 
 // Store manages the artifacts of every deploy in the worker's local working directory.

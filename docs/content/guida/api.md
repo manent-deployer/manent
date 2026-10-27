@@ -121,7 +121,7 @@ Requires `deployment.read` on the descriptor's application and environment.
 
 ### Check a descriptor
 
-`POST /api/v1/deployments/validate` runs the enqueue-time checks (descriptor policy, environment configuration, callbacks, artifact source, rollback) without enqueuing anything. It is what `manent validate` uses. Requires `deployment.read`.
+`POST /api/v1/deployments/validate` runs the enqueue-time checks (descriptor policy, environment configuration, callbacks, artifact source, rollback) without enqueuing anything. It is what `manent validate` uses. Requires `deployment.read`. With `?check_artifact=true` the server also looks for the artifact at its source without downloading it (`manent validate --check-artifact`, also requires `deployment.dry-run`) and reports the outcome in `artifact`.
 
 ```json
 {

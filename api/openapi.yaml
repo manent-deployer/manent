@@ -105,6 +105,14 @@ paths:
       tags: [deployments]
       summary: Checks the descriptor as at enqueueing, without enqueueing it
       operationId: validateDeployment
+      parameters:
+        - name: check_artifact
+          in: query
+          description: |
+            Also checks from the API server that the artifact exists at its source, with the
+            source credentials and without downloading it (HEAD for http(s), the manifest for an
+            image, stat for a file). Requires the deployment.dry-run permission.
+          schema: {type: boolean}
       requestBody:
         required: true
         content:
@@ -1104,6 +1112,15 @@ components:
             notes: {type: array, items: {type: string}}
             error: {type: string}
         rollout: {$ref: '#/components/schemas/RolloutState'}
+        artifact:
+          type: object
+          description: Outcome of the artifact check (check_artifact)
+          required: [source, sha256_verified]
+          properties:
+            source: {type: string}
+            sha256: {type: string, description: Digest read from the source, only for registry images}
+            size: {type: integer, format: int64}
+            sha256_verified: {type: boolean, description: Whether artifact.sha256 was compared with the source}
         warnings: {type: array, items: {type: string}}
     StepRecord:
       type: object

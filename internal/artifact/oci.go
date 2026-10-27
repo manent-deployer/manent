@@ -107,26 +107,9 @@ func (r ociRef) reference(digest string) string {
 // has moved in the meantime. Only the reference pinned to the digest is written locally
 // (plugin.ImageRefExt), not the layers.
 func (f DefaultFetcher) fetchOCI(ctx context.Context, source, destDir string) (*Fetched, error) {
-	if err := f.Sources.Check(source); err != nil {
-		return nil, err
-	}
-	ref, err := parseOCI(source)
+	ref, digest, size, err := f.ociManifest(ctx, source)
 	if err != nil {
 		return nil, err
-	}
-	want := ref.tag
-	if ref.digest != "" {
-		want = "sha256:" + ref.digest
-	}
-	u := ref.scheme + "://" + ref.apiHost() + "/v2/" + ref.repo + "/manifests/" + want
-	body, err := f.ociGet(ctx, source, ref, u)
-	if err != nil {
-		return nil, fmt.Errorf("image manifest %s: %w", strings.TrimPrefix(strings.TrimPrefix(source, SchemeOCIHTTP), SchemeOCI), err)
-	}
-	sum := sha256.Sum256(body)
-	digest := hex.EncodeToString(sum[:])
-	if ref.digest != "" && ref.digest != digest {
-		return nil, fmt.Errorf("the registry returned a manifest with digest sha256:%s instead of sha256:%s", digest, ref.digest)
 	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return nil, err
@@ -135,7 +118,34 @@ func (f DefaultFetcher) fetchOCI(ctx context.Context, source, destDir string) (*
 	if err := os.WriteFile(dest, []byte(ref.reference(digest)+"\n"), 0o644); err != nil {
 		return nil, err
 	}
-	return &Fetched{LocalPath: dest, SHA256: digest, Size: int64(len(body))}, nil
+	return &Fetched{LocalPath: dest, SHA256: digest, Size: size}, nil
+}
+
+// ociManifest reads the image manifest and returns the reference, the manifest digest and
+// its size. A digest in the source must match the one of the manifest returned.
+func (f DefaultFetcher) ociManifest(ctx context.Context, source string) (ociRef, string, int64, error) {
+	if err := f.Sources.Check(source); err != nil {
+		return ociRef{}, "", 0, err
+	}
+	ref, err := parseOCI(source)
+	if err != nil {
+		return ociRef{}, "", 0, err
+	}
+	want := ref.tag
+	if ref.digest != "" {
+		want = "sha256:" + ref.digest
+	}
+	u := ref.scheme + "://" + ref.apiHost() + "/v2/" + ref.repo + "/manifests/" + want
+	body, err := f.ociGet(ctx, source, ref, u)
+	if err != nil {
+		return ociRef{}, "", 0, fmt.Errorf("image manifest %s: %w", strings.TrimPrefix(strings.TrimPrefix(source, SchemeOCIHTTP), SchemeOCI), err)
+	}
+	sum := sha256.Sum256(body)
+	digest := hex.EncodeToString(sum[:])
+	if ref.digest != "" && ref.digest != digest {
+		return ociRef{}, "", 0, fmt.Errorf("the registry returned a manifest with digest sha256:%s instead of sha256:%s", digest, ref.digest)
+	}
+	return ref, digest, int64(len(body)), nil
 }
 
 // ociGet reads the manifest. If the registry asks for a token (401 with WWW-Authenticate
@@ -173,7 +183,11 @@ func (f DefaultFetcher) ociGet(ctx context.Context, source string, ref ociRef, u
 		}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return nil, errors.New("not found in the registry (status 404)")
+	default:
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))

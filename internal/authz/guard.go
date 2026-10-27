@@ -601,10 +601,18 @@ func (g *Guard) DORA(ctx context.Context, f engine.DORAFilter) (*engine.DORARepo
 }
 
 // Validate requires read on the application and environment: it shows the effective
-// configuration, which may include the environment's targets and parameters.
-func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {
-	if err := g.check(ctx, DeploymentRead, target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}); err != nil {
+// configuration, which may include the environment's targets and parameters. The artifact
+// check also requires the dry-run permission: the API server contacts the artifact source
+// with its credentials, as the worker does in a dry-run.
+func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor, opts engine.ValidateOptions) (*engine.Validation, error) {
+	t := target{tenant: d.Tenant, application: d.Application, artifact: d.Artifact.Name, environment: d.Environment}
+	if err := g.check(ctx, DeploymentRead, t); err != nil {
 		return nil, err
+	}
+	if opts.CheckArtifact {
+		if err := g.check(ctx, DeploymentDryRun, t); err != nil {
+			return nil, err
+		}
 	}
 	// The effective deploy shows the imported targets and parameters.
 	if err := g.checkDependencies(ctx, d.After); err != nil {
@@ -613,7 +621,7 @@ func (g *Guard) Validate(ctx context.Context, d *descriptor.Descriptor) (*engine
 	if err := g.checkImports(ctx, d); err != nil {
 		return nil, err
 	}
-	return g.Next.Validate(ctx, d)
+	return g.Next.Validate(ctx, d, opts)
 }
 
 // ValidateEnvironment requires reading the deploys of the environment: the check reveals its

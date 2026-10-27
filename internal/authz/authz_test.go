@@ -176,7 +176,7 @@ func (f *fakeService) ValidateEnvironment(context.Context, engine.EnvironmentChe
 	return &engine.Validation{Valid: true}, nil
 }
 
-func (f *fakeService) Validate(context.Context, *descriptor.Descriptor) (*engine.Validation, error) {
+func (f *fakeService) Validate(context.Context, *descriptor.Descriptor, engine.ValidateOptions) (*engine.Validation, error) {
 	return &engine.Validation{Valid: true}, nil
 }
 
@@ -289,11 +289,20 @@ func TestGuard(t *testing.T) {
 		t.Errorf("schedule di un altro team visibili: %+v", ss)
 	}
 	// Validate shows the effective configuration: it requires read.
-	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-b-api", Environment: "test"}); !errors.Is(err, engine.ErrForbidden) {
+	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-b-api", Environment: "test"}, engine.ValidateOptions{}); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("validate di un altro team: atteso ErrForbidden, ricevuto %v", err)
 	}
-	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-a-api", Environment: "prod"}); err != nil {
+	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-a-api", Environment: "prod"}, engine.ValidateOptions{}); err != nil {
 		t.Errorf("validate in lettura: %v", err)
+	}
+	// The artifact check contacts the source: it requires the dry-run permission too.
+	check := engine.ValidateOptions{CheckArtifact: true}
+	if _, err := g.Validate(alice, &descriptor.Descriptor{Application: "team-a-api", Environment: "prod"}, check); err != nil {
+		t.Errorf("controllo dell'artefatto con il ruolo tester: %v", err)
+	}
+	viewer := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "joeg", Method: auth.MethodCLI})
+	if _, err := g.Validate(viewer, &descriptor.Descriptor{Application: "team-a-api", Environment: "prod"}, check); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("controllo dell'artefatto in sola lettura: atteso ErrForbidden, ricevuto %v", err)
 	}
 	// Timeline, logs and DORA metrics follow the read permission.
 	if _, err := g.Logs(alice, "b1", 0); !errors.Is(err, engine.ErrForbidden) {
@@ -379,7 +388,7 @@ func TestGuard(t *testing.T) {
 			denied++
 		}
 	}
-	if allowed != 5 || denied != 13 {
+	if allowed != 5 || denied != 14 {
 		t.Errorf("voci di audit inattese (allowed=%d denied=%d): %+v", allowed, denied, rec.entries)
 	}
 	if rec.entries[0].Actor != "oidc:alice" || rec.entries[0].Deployment != "new" || rec.entries[0].Action != string(DeploymentSubmit) {

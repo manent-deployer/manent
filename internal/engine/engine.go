@@ -14,6 +14,7 @@ import (
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 	"github.com/google/uuid"
 
+	"github.com/manent-deployer/manent/internal/artifact"
 	"github.com/manent-deployer/manent/internal/auth"
 	"github.com/manent-deployer/manent/internal/callback"
 	"github.com/manent-deployer/manent/internal/descriptor"
@@ -91,6 +92,8 @@ type ServiceOptions struct {
 	// Sources, if set, rejects already at submission an artifact source that is not allowed.
 	// The worker checks it again at download.
 	Sources SourceChecker
+	// Artifacts, if set, looks for the artifact at its source for Validate with CheckArtifact.
+	Artifacts ArtifactProber
 	// Rollback, if set, rejects already at submission a rollback the policy does not allow.
 	// The final decision is the worker's, after merging with the environment configuration.
 	// It also decides whether an artifact allows manual rollback.
@@ -144,6 +147,12 @@ type SourceChecker interface {
 	Check(source string) error
 }
 
+// ArtifactProber checks that an artifact exists at its source without downloading it
+// (artifact.DefaultFetcher).
+type ArtifactProber interface {
+	Probe(ctx context.Context, source string) (*artifact.Probed, error)
+}
+
 // Engine implements Service using only the DBOS client APIs: it enqueues and queries
 // workflows but does not run them (Workers do).
 type Engine struct {
@@ -153,6 +162,7 @@ type Engine struct {
 	callbacks  callback.Policy
 	rollback   RollbackPolicy
 	sources    SourceChecker
+	artifacts  ArtifactProber
 	resolver   ConfigResolver
 	governance Governance
 	policies   PolicyAdmin
@@ -186,6 +196,7 @@ func NewService(opts ServiceOptions) *Engine {
 		callbacks:        opts.CallbackPolicy,
 		rollback:         opts.Rollback,
 		sources:          opts.Sources,
+		artifacts:        opts.Artifacts,
 		resolver:         opts.Resolver,
 		governance:       opts.Governance,
 		policies:         opts.Policies,
@@ -403,7 +414,7 @@ func (e *Engine) check(ctx context.Context, d *descriptor.Descriptor) (*descript
 // Validate checks the descriptor as at submission, without enqueuing it, and returns the plan
 // and the effective deploy: environment configuration, rollback and governance rules.
 // The client uses it for "manent validate", since it has no access to the environment configuration.
-func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Validation, error) {
+func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor, opts ValidateOptions) (*Validation, error) {
 	plan, err := e.planner.Plan(d)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -414,7 +425,33 @@ func (e *Engine) Validate(ctx context.Context, d *descriptor.Descriptor) (*Valid
 	}
 	v.Plan = plan.Public()
 	e.describeGovernance(ctx, v, d, eff)
+	if opts.CheckArtifact {
+		if v.Artifact, err = e.checkArtifact(ctx, d.Artifact); err != nil {
+			return nil, err
+		}
+	}
 	return v, nil
+}
+
+// checkArtifact looks for the artifact at its source from the API server. Every failure makes
+// the request invalid: the check was asked explicitly, so an unreachable source is not just a
+// warning.
+func (e *Engine) checkArtifact(ctx context.Context, a descriptor.Artifact) (*ArtifactCheck, error) {
+	if e.artifacts == nil {
+		return nil, fmt.Errorf("%w: this server cannot check artifacts", ErrInvalidRequest)
+	}
+	p, err := e.artifacts.Probe(ctx, a.Source)
+	if err != nil {
+		return nil, fmt.Errorf("%w: artifact check: %w", ErrInvalidRequest, err)
+	}
+	c := &ArtifactCheck{Source: a.Source, SHA256: p.SHA256, Size: max(p.Size, 0)}
+	if p.SHA256 != "" && a.SHA256 != "" {
+		if !strings.EqualFold(p.SHA256, a.SHA256) {
+			return nil, fmt.Errorf("%w: artifact check: the source has sha256 %s, the descriptor expects %s", ErrInvalidRequest, p.SHA256, a.SHA256)
+		}
+		c.SHA256Verified = true
+	}
+	return c, nil
 }
 
 // CandidateResolver merges a descriptor with a given environment configuration instead of the

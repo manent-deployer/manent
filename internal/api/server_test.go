@@ -35,6 +35,7 @@ type mockService struct {
 	filter    engine.ListFilter
 	op        string
 	onSubmit  func(context.Context)
+	validate  engine.ValidateOptions
 }
 
 func (m *mockService) Plan(context.Context, *descriptor.Descriptor) (pipeline.Plan, error) {
@@ -177,7 +178,8 @@ func (m *mockService) ValidateEnvironment(_ context.Context, c engine.Environmen
 	return &engine.Validation{Valid: true, Config: map[string]string{"source": "candidate configuration", "application": c.Application}}, nil
 }
 
-func (m *mockService) Validate(_ context.Context, d *descriptor.Descriptor) (*engine.Validation, error) {
+func (m *mockService) Validate(_ context.Context, d *descriptor.Descriptor, opts engine.ValidateOptions) (*engine.Validation, error) {
+	m.validate = opts
 	if d.Environment == "prod" {
 		return nil, fmt.Errorf("%w: policy", engine.ErrInvalidRequest)
 	}
@@ -496,10 +498,14 @@ func TestParseSince(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	r := newTestRouter(&mockService{})
+	svc := &mockService{}
+	r := newTestRouter(svc)
 	w := do(r, http.MethodPost, "/api/v1/deployments/validate", validJSON)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"secrets":["key"]`) {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"secrets":["key"]`) || svc.validate.CheckArtifact {
 		t.Fatalf("validate: %d %s", w.Code, w.Body)
+	}
+	if w := do(r, http.MethodPost, "/api/v1/deployments/validate?check_artifact=true", validJSON); w.Code != http.StatusOK || !svc.validate.CheckArtifact {
+		t.Fatalf("validate con check_artifact: %d %s", w.Code, w.Body)
 	}
 	prod := strings.Replace(validJSON, `"environment": "test"`, `"environment": "prod"`, 1)
 	if w := do(r, http.MethodPost, "/api/v1/deployments/validate", prod); w.Code != http.StatusUnprocessableEntity {

@@ -1177,6 +1177,16 @@ export interface components {
                 error?: string;
             };
             rollout?: components["schemas"]["RolloutState"];
+            /** @description Outcome of the artifact check (check_artifact) */
+            artifact?: {
+                source: string;
+                /** @description Digest read from the source */
+                sha256?: string;
+                /** Format: int64 */
+                size?: number;
+                /** @description Whether artifact.sha256 was compared with the source */
+                sha256_verified: boolean;
+            };
             warnings?: string[];
         };
         StepRecord: {
@@ -1691,7 +1701,13 @@ export interface operations {
     };
     validateDeployment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also checks from the API server that the artifact exists at its source, with the
+                 *     source credentials and without downloading it (HEAD for http(s), the manifest for an
+                 *     image, stat for a file). Requires the deployment.dry-run permission.
+                 *      */
+                check_artifact?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

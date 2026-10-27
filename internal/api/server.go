@@ -434,7 +434,7 @@ func (s *Server) validate(c *gin.Context) {
 	if !ok {
 		return
 	}
-	v, err := s.svc.Validate(c.Request.Context(), d)
+	v, err := s.svc.Validate(c.Request.Context(), d, engine.ValidateOptions{CheckArtifact: c.Query("check_artifact") == "true"})
 	if err != nil {
 		writeError(c, err)
 		return

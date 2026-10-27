@@ -122,7 +122,7 @@ func TestStepPersonalizzati(t *testing.T) {
 	d.Callbacks = []descriptor.Callback{{URL: "https://hooks.example.com/manent"}}
 
 	// Client and API see type and hash of the spec, never commands and URLs.
-	v, err := e.Validate(alice, d)
+	v, err := e.Validate(alice, d, ValidateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
