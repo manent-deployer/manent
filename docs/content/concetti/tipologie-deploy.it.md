@@ -5,7 +5,7 @@ Ogni deploy di manent esegue la stessa pipeline. Ciò che cambia si descrive lun
 | Asse | Domanda | Possibilità |
 |---|---|---|
 | [**Avvio**](#trigger) | Quando parte? | subito, a un orario, in modo ricorrente, dopo altri deploy, dentro una release composta |
-| [**Tipo**](#kind) | Da dove viene l'artefatto? | nuovo deploy, promozione, rollback manuale, adozione, più il dry-run come modalità |
+| [**Tipo**](#kind) | Da dove viene l'artefatto? | nuovo deploy, promozione, rollback manuale, più il dry-run come modalità |
 | [**Strategia**](#strategy) | Come raggiunge i target? | tutti insieme, a ondate, con svuotamento dal load balancer, per percentuale di traffico, delegata al servizio cloud |
 | [**Piattaforma**](#platform) | Cosa cambia sul target? | file sui server, container, oggetti Kubernetes, servizi cloud gestiti, application server, Windows |
 

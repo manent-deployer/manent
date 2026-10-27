@@ -5,7 +5,7 @@ Every deploy in manent runs the same pipeline. What changes is described along f
 | Axis | Question | Options |
 |---|---|---|
 | [**Trigger**](#trigger) | When does it start? | immediately, at a given time, recurring, after other deploys, as part of a composite release |
-| [**Kind**](#kind) | Where does the artifact come from? | new deploy, promotion, manual rollback, adoption, plus dry-run as a mode |
+| [**Kind**](#kind) | Where does the artifact come from? | new deploy, promotion, manual rollback, plus dry-run as a mode |
 | [**Strategy**](#strategy) | How does it reach the targets? | all at once, in waves, with load balancer draining, by traffic percentage, delegated to the cloud service |
 | [**Platform**](#platform) | What is changed on the target? | files on servers, containers, Kubernetes objects, managed cloud services, application servers, Windows |
 
