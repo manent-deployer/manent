@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,12 +34,28 @@ type VersionCmd struct{}
 // Execute implements flags.Commander.
 func (c *VersionCmd) Execute([]string) error { return PrintJSON(version.Get()) }
 
-// Parse runs the parser; a help request is not an error.
+// Parse runs the parser; a help request is not an error. A missing command (e.g. "manent" or
+// "manent policy" alone) prints the full help of the command reached, like --help, instead of
+// the bare list of command names, and still fails.
 func Parse(p *flags.Parser, args []string) error {
+	printErrors := p.Options&flags.PrintErrors != 0
+	p.Options &^= flags.PrintErrors
 	_, err := p.ParseArgs(args)
 	var ferr *flags.Error
-	if errors.As(err, &ferr) && ferr.Type == flags.ErrHelp {
+	switch {
+	case err == nil:
 		return nil
+	case errors.As(err, &ferr) && ferr.Type == flags.ErrHelp:
+		if printErrors {
+			fmt.Fprintln(os.Stdout, err)
+		}
+		return nil
+	case errors.As(err, &ferr) && ferr.Type == flags.ErrCommandRequired:
+		p.WriteHelp(os.Stderr)
+		return err
+	}
+	if printErrors {
+		fmt.Fprintln(os.Stderr, err)
 	}
 	return err
 }
