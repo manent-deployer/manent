@@ -250,7 +250,7 @@ func (p *Plugin) Validate(req *plugin.Request) error {
 	return err
 }
 
-// Deploy releases the version to every target in sequence and stops at the first error. A
+// Deploy releases the version to every target (req.Parallelism at a time) and stops at the first error. A
 // target already on the requested version is not touched: the operation is idempotent.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	o, err := parse(req)
@@ -343,23 +343,26 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	})
 }
 
-// each opens a session per target and runs fn, stopping at the first error.
+// each opens a session per target and runs fn, req.Parallelism targets at a time, stopping
+// at the first error.
 func (p *Plugin) each(ctx context.Context, req *plugin.Request, o options, status string, fn func(*session) (map[string]string, error)) (*plugin.Result, error) {
-	res := &plugin.Result{Plugin: Name}
-	for _, t := range req.Targets {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		s, err := p.open(ctx, req, o, t)
 		var details map[string]string
 		if err == nil {
 			details, err = fn(s)
 		}
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			return res, fmt.Errorf("target %s: %w", t.Host, err)
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: status, Details: details})
-	}
-	return res, nil
+		return plugin.TargetResult{Status: status, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
+
+// ParallelTargets implements plugin.ParallelDeployer: every target (server or domain
+// controller) has its own management session.
+func (p *Plugin) ParallelTargets() bool { return true }
 
 // session is the connection to a standalone instance or a domain controller.
 type session struct {

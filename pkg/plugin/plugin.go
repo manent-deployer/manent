@@ -96,6 +96,10 @@ type Request struct {
 	Secrets SecretResolver
 	// Traffic is set only in traffic percentage rollouts (SlotDeployer).
 	Traffic *TrafficRequest
+	// Parallelism is the number of targets the plugin may work on at the same time (0 or 1:
+	// one after the other). manent sets it above 1 only for plugins that implement
+	// ParallelDeployer; ForEachTarget honors it.
+	Parallelism int
 }
 
 // TargetResult is the deploy outcome on a single target.
@@ -103,6 +107,8 @@ type TargetResult struct {
 	Host    string            `json:"host"`
 	Status  string            `json:"status"`
 	Details map[string]string `json:"details,omitempty"`
+	// DurationMS is the time spent on the target, set by ForEachTarget.
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 // Result is the overall outcome returned by the plugin. It must be JSON serializable.
@@ -130,4 +136,6 @@ const (
 	StatusReady = "ready"
 	// StatusRolledBack means a target brought back to the previous release.
 	StatusRolledBack = "rolled_back"
+	// StatusSkipped means a target never started because another target of the batch failed.
+	StatusSkipped = "skipped"
 )

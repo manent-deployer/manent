@@ -13,7 +13,7 @@ L'artefatto è un archivio `.zip`, o un pacchetto `.msi` con `mode: msi`. Ogni v
 - l'**azione** dell'attività pianificata;
 - per MSI, il prodotto installato da quella directory.
 
-Il cambio è quindi una modifica di configurazione (o un'installazione), e il rollback torna a una directory già presente. Per ogni target, in sequenza:
+Il cambio è quindi una modifica di configurazione (o un'installazione), e il rollback torna a una directory già presente. Per ogni target (uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta):
 
 1. legge la release in esercizio, crea `releases_dir` se manca e ne verifica la scrittura;
 2. se la versione non è già presente con lo stesso sha256, copia l'artefatto, ne verifica lo sha256 sul target, lo estrae (o conserva il pacchetto) in una directory temporanea e la sposta in `<versione>`. Un retry o una recovery non ricopiano una release già presente;

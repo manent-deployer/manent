@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/manent-deployer/manent/pkg/plugin"
 )
@@ -270,5 +272,61 @@ func TestRollback(t *testing.T) {
 	}
 	if indexOf(missing.commands, "ln -sfn") >= 0 {
 		t.Errorf("switch eseguito su un target senza la release: %q", missing.commands)
+	}
+}
+
+// countingDialer gives every host its own session and records how many are open together.
+type countingDialer struct {
+	mu           sync.Mutex
+	active, peak int
+}
+
+type countingSession struct {
+	fakeSession
+	d *countingDialer
+}
+
+func (s *countingSession) Run(ctx context.Context, cmd string) (string, error) {
+	if strings.HasPrefix(cmd, "sha256sum") {
+		time.Sleep(20 * time.Millisecond)
+	}
+	return s.fakeSession.Run(ctx, cmd)
+}
+
+func (s *countingSession) Close() error {
+	s.d.mu.Lock()
+	defer s.d.mu.Unlock()
+	s.d.active--
+	return nil
+}
+
+func (d *countingDialer) Dial(context.Context, plugin.Target, Auth) (Session, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.active++
+	d.peak = max(d.peak, d.active)
+	return &countingSession{fakeSession: fakeSession{checksum: "abc"}, d: d}, nil
+}
+
+func TestDeployParallel(t *testing.T) {
+	d := &countingDialer{}
+	p := New(d, []string{"application"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if !plugin.SupportsParallel(p) {
+		t.Fatal("remote-copy must declare parallel targets")
+	}
+	req := newRequest()
+	req.Targets = []plugin.Target{{Host: "h1", User: "u"}, {Host: "h2", User: "u"}, {Host: "h3", User: "u"}, {Host: "h4", User: "u"}, {Host: "h5", User: "u"}}
+	req.Parallelism = 2
+	res, err := p.Deploy(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.peak != 2 {
+		t.Errorf("sessions open together: %d, want 2", d.peak)
+	}
+	for i, r := range res.Targets {
+		if r.Host != req.Targets[i].Host || r.Status != plugin.StatusDeployed {
+			t.Errorf("target %d: %+v", i, r)
+		}
 	}
 }

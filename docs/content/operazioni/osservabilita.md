@@ -31,6 +31,7 @@ observability:
 | `manent_deployment_duration_seconds` | histogram | `application`, `environment`, `outcome` | Duration from start on the worker to completion, excluding queue wait and approvals. |
 | `manent_step_duration_seconds` | histogram | `step`, `outcome` | Duration of each attempt of a step: retries included. |
 | `manent_rollout_passes_total` | counter | `application`, `environment`, `region`, `az`, `outcome` | [Wave rollout](../guida/ondate.md) passes completed by the process. |
+| `manent_target_deploy_seconds` | histogram | `plugin`, `status` | Time a plugin spent on a single target of a batch, measured by plugins that update targets in [parallel](../guida/ondate.md#parallel-targets). |
 | `manent_http_request_duration_seconds` | histogram | `method`, `route`, `code` | API requests. |
 | `manent_workflows` | gauge | `workflow`, `status`, `queue` | Workflows per state: deploys queued, running, awaiting approval and finished. |
 | `manent_executor_up` | gauge | `executor`, `version` | 1 if the worker sends heartbeats, 0 if it is lost or stopped. |

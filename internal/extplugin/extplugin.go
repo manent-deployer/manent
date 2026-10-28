@@ -229,6 +229,14 @@ func (p *Process) RollbackSupported(context.Context) (bool, error) {
 	return c.Has(external.CapabilityRollback), nil
 }
 
+// ParallelTargets implements plugin.ParallelDeployer: it starts the process, if needed, and
+// reads the declared capability. A process that does not start counts as sequential: the
+// deploy then fails on its own call.
+func (p *Process) ParallelTargets() bool {
+	c, err := p.conn()
+	return err == nil && c.Has(external.CapabilityParallelTargets)
+}
+
 // TrafficSupported implements plugin.TrafficChecker: it starts the process, if needed, and
 // reads the capabilities declared for percentage rollouts.
 func (p *Process) TrafficSupported(ctx context.Context) (plugin.TrafficSupport, error) {

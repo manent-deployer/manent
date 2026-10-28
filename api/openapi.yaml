@@ -796,7 +796,7 @@ components:
         pattern: {type: string, description: Anchored regular expression (required with format string)}
     DeployTargets:
       type: object
-      description: Deploy section of a descriptor (plugin, targets, parameters).
+      description: "Deploy section of a descriptor (plugin, targets, parameters, parallel: targets of a batch the plugin updates at the same time)."
       additionalProperties: true
     PlannedStep:
       type: object

@@ -13,7 +13,7 @@ The artifact is a `.zip` archive, or a `.msi` package with `mode: msi`. Every ve
 - the **action** of the scheduled task;
 - for MSI, the product installed from that directory.
 
-The switch is therefore a configuration change (or an installation), and the rollback goes back to a directory already there. For each target, in sequence:
+The switch is therefore a configuration change (or an installation), and the rollback goes back to a directory already there. For each target (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time):
 
 1. reads the release in service, creates `releases_dir` if missing and checks it is writable;
 2. if the version is not already there with the same sha256, copies the artifact, checks its sha256 on the target, extracts it (or keeps the package) into a temporary directory and moves it to `<version>`. A retry or a recovery does not copy a release already there;

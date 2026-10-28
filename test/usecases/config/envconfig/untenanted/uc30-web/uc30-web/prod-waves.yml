@@ -1,0 +1,23 @@
+# UC30: wave rollout, two hosts out of service together (maxUnavailable: 2) and updated
+# together (parallel: 2); the canary wave keeps one host at a time.
+plugin: remote-copy
+parallel: "2"
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc30-web-waves
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  post_command: 'f=$HOME/fault/uc30-web; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id
+rollout:
+  waves:
+    - {name: canary, select: "az=eu-1a", parallel: "1"}
+    - {name: resto, select: "az!=eu-1a"}
+  maxUnavailable: "2"

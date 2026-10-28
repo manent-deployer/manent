@@ -10,7 +10,9 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/pipeline"
@@ -62,11 +64,70 @@ type Deploy struct {
 	// Locators are the strategies to find the release to go back to on rollback, by name
 	// (rollback.locator).
 	Locators map[string]plugin.ReleaseLocator
-	Logger   *slog.Logger
+	// MaxParallel returns the cap on the targets of a batch the plugin updates at the same time
+	// (plugins.<name>.max_parallel); nil: no cap.
+	MaxParallel func(plugin string) int
+	// Targets records the time spent on every target; nil: not recorded.
+	Targets TargetRecorder
+	Logger  *slog.Logger
 }
+
+// TargetRecorder records the time a plugin spent on a single target (telemetry.Metrics).
+type TargetRecorder interface {
+	TargetFinished(plugin, status string, d time.Duration)
+}
+
+// Output keys of the parallelism of a batch.
+const (
+	// OutParallel is the number of targets the plugin was allowed to update at the same time.
+	OutParallel = "parallel"
+	// OutParallelRequested is what deploy.parallel asked for, when it was reduced.
+	OutParallelRequested = "parallel_requested"
+)
 
 // Name returns the step name.
 func (Deploy) Name() string { return "deploy" }
+
+// parallelism sets req.Parallelism from deploy.parallel (the effective descriptor, with the
+// wave's value for a batch of a wave), capped by the plugin's max_parallel and the batch size.
+// A plugin that does not declare plugin.ParallelDeployer gets 1, with a warning. It returns
+// the step outputs that report it, empty if the descriptor asks for nothing.
+func (s Deploy) parallelism(ctx context.Context, dep plugin.Deployer, req *plugin.Request, d *descriptor.Descriptor, log *slog.Logger) pipeline.Output {
+	spec := d.Deploy.Parallel
+	if spec == "" {
+		return nil
+	}
+	n := len(req.Targets)
+	asked := min(descriptor.Count(spec, n), max(n, 1))
+	p := asked
+	if s.MaxParallel != nil {
+		p = min(p, max(1, s.MaxParallel(dep.Name())))
+	}
+	if p > 1 && !plugin.SupportsParallel(dep) {
+		log.WarnContext(ctx, "the plugin does not support parallel targets: they are updated one after the other", "parallel", spec)
+		p = 1
+	} else if p < asked {
+		log.InfoContext(ctx, "parallelism capped by plugins.<name>.max_parallel", "requested", asked, "parallel", p)
+	}
+	req.Parallelism = p
+	out := pipeline.Output{OutParallel: strconv.Itoa(p)}
+	if p != asked {
+		out[OutParallelRequested] = strconv.Itoa(asked)
+	}
+	return out
+}
+
+// recordTargets reports the time spent on every target, when the plugin measured it.
+func (s Deploy) recordTargets(name string, res *plugin.Result) {
+	if s.Targets == nil || res == nil {
+		return
+	}
+	for _, t := range res.Targets {
+		if t.DurationMS > 0 {
+			s.Targets.TargetFinished(name, t.Status, time.Duration(t.DurationMS)*time.Millisecond)
+		}
+	}
+}
 
 // Run builds the request for the plugin, validates it and runs the deploy.
 func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, error) {
@@ -74,7 +135,8 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 	if err != nil {
 		return nil, err
 	}
-	log.InfoContext(ctx, "deploy started", "targets", len(req.Targets))
+	par := s.parallelism(ctx, dep, req, in.Descriptor, log)
+	log.InfoContext(ctx, "deploy started", "targets", len(req.Targets), "parallel", max(req.Parallelism, 1))
 	deploy := dep.Deploy
 	if req.Traffic != nil {
 		// Percentage rollout: the new version goes next to the stable one, without traffic.
@@ -85,6 +147,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		deploy = sd.DeployCandidate
 	}
 	res, err := deploy(ctx, req)
+	s.recordTargets(dep.Name(), res)
 	if err != nil {
 		log.ErrorContext(ctx, "deploy failed", "error", err)
 		return nil, unsupported(dep, err)
@@ -94,6 +157,7 @@ func (s Deploy) Run(ctx context.Context, in pipeline.Input) (pipeline.Output, er
 		log.ErrorContext(ctx, "invalid plugin outputs", "error", err)
 		return nil, err
 	}
+	maps.Copy(out, par)
 	log.InfoContext(ctx, "deploy completed", "outputs", len(res.Outputs))
 	return out, nil
 }
@@ -138,6 +202,8 @@ func (s Deploy) DryRun(ctx context.Context, in pipeline.Input) (pipeline.Output,
 		return nil, err
 	}
 	out := pipeline.Output{"plugin": dep.Name(), "dry_run": "validated"}
+	// The dry-run shows the parallelism the deploy would use, and warns if it would be reduced.
+	maps.Copy(out, s.parallelism(ctx, dep, req, in.Descriptor, log))
 	dr, ok := dep.(plugin.DryRunner)
 	if !ok {
 		log.InfoContext(ctx, "dry-run: valid request, the plugin does not support checks on the targets", "targets", len(req.Targets))
@@ -306,7 +372,8 @@ func (s Deploy) Compensate(ctx context.Context, in pipeline.Input, cp pipeline.O
 	if err != nil {
 		return nil, err
 	}
-	log.WarnContext(ctx, "rollback started", "version", prev.Version, "targets", len(req.Targets))
+	s.parallelism(ctx, dep, req, in.Descriptor, log)
+	log.WarnContext(ctx, "rollback started", "version", prev.Version, "targets", len(req.Targets), "parallel", max(req.Parallelism, 1))
 	res, err := rb.Rollback(ctx, req, prev)
 	if err != nil {
 		log.ErrorContext(ctx, "rollback failed", "version", prev.Version, "error", err)

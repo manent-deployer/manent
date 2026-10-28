@@ -1,6 +1,7 @@
 package descriptor
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/url"
@@ -68,6 +69,8 @@ type Wave struct {
 	// BatchBake, if set, adds a gate after every batch of a pass but the last (the stage gate
 	// follows it): the probes read the batch targets for this time ("0s": a single read).
 	BatchBake string `json:"batchBake,omitempty" yaml:"batchBake,omitempty"`
+	// Parallel, if set, replaces deploy.parallel for the batches of this wave.
+	Parallel string `json:"parallel,omitempty" yaml:"parallel,omitempty"`
 }
 
 // Health are the checks run during and at the end of the observation time.
@@ -262,10 +265,13 @@ func (h *Health) IntervalDuration() time.Duration {
 // MaxUnavailableFor returns the targets of wave w updated together out of n targets (at least
 // 1): the wave's maxUnavailable, otherwise the rollout's.
 func (r *Rollout) MaxUnavailableFor(w Wave, n int) int {
-	v := strings.TrimSpace(w.MaxUnavailable)
-	if v == "" {
-		v = strings.TrimSpace(r.MaxUnavailable)
-	}
+	return Count(cmp.Or(strings.TrimSpace(w.MaxUnavailable), r.MaxUnavailable), n)
+}
+
+// Count resolves a count field (maxUnavailable, parallel) against n items: a number, or a
+// percentage of n; at least 1, and 1 when empty.
+func Count(v string, n int) int {
+	v = strings.TrimSpace(v)
 	if v == "" {
 		return 1
 	}
@@ -275,6 +281,19 @@ func (r *Rollout) MaxUnavailableFor(w Wave, n int) int {
 	}
 	k, _ := strconv.Atoi(v)
 	return max(1, k)
+}
+
+// ParallelFor returns the parallelism requested for the batches of the given wave: the wave's
+// parallel, otherwise deploy.parallel ("" = one target after the other).
+func (d *Descriptor) ParallelFor(wave string) string {
+	if d.Rollout != nil {
+		for _, w := range d.Rollout.Waves {
+			if w.Name == wave && w.Parallel != "" {
+				return w.Parallel
+			}
+		}
+	}
+	return d.Deploy.Parallel
 }
 
 // OnFailureOrDefault returns the behavior on a failed pass.
@@ -341,14 +360,20 @@ func (r *Rollout) Validate() error {
 				errs = append(errs, fmt.Errorf("%s.batchBake not allowed with strategy: traffic (the pass is a single batch)", p))
 			}
 		}
+		if w.Parallel != "" {
+			errs = append(errs, validCount(p+".parallel", w.Parallel))
+			if r.IsTraffic() {
+				errs = append(errs, fmt.Errorf("%s.parallel not allowed with strategy: traffic (the pass is a single batch)", p))
+			}
+		}
 		if w.MaxUnavailable != "" {
-			errs = append(errs, validMaxUnavailable(p+".maxUnavailable", w.MaxUnavailable))
+			errs = append(errs, validCount(p+".maxUnavailable", w.MaxUnavailable))
 			if r.IsTraffic() {
 				errs = append(errs, fmt.Errorf("%s.maxUnavailable not allowed with strategy: traffic (the pass is a single batch)", p))
 			}
 		}
 	}
-	errs = append(errs, validMaxUnavailable("rollout.maxUnavailable", r.MaxUnavailable))
+	errs = append(errs, validCount("rollout.maxUnavailable", r.MaxUnavailable))
 	switch r.OnFailure {
 	case "", OnFailureStop, OnFailureRollbackWave, OnFailureRollbackAll:
 	default:
@@ -373,8 +398,9 @@ func (r *Rollout) Validate() error {
 	return errors.Join(errs...)
 }
 
-// validMaxUnavailable checks a maxUnavailable value: a number >= 1 or a percentage 1-100%.
-func validMaxUnavailable(field, v string) error {
+// validCount checks a count field (maxUnavailable, parallel): a number >= 1 or a percentage
+// 1-100%.
+func validCount(field, v string) error {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return nil

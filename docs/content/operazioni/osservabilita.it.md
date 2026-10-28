@@ -31,6 +31,7 @@ observability:
 | `manent_deployment_duration_seconds` | histogram | `application`, `environment`, `outcome` | Durata dall'avvio sul worker alla conclusione, senza l'attesa in coda né le approvazioni. |
 | `manent_step_duration_seconds` | histogram | `step`, `outcome` | Durata di ogni tentativo di uno step: anche i retry. |
 | `manent_rollout_passes_total` | counter | `application`, `environment`, `region`, `az`, `outcome` | Passi dei [rilasci a ondate](../guida/ondate.md) conclusi dal processo. |
+| `manent_target_deploy_seconds` | histogram | `plugin`, `status` | Tempo speso da un plugin su un singolo target di un lotto, misurato dai plugin che aggiornano i target in [parallelo](../guida/ondate.md#target-in-parallelo). |
 | `manent_http_request_duration_seconds` | histogram | `method`, `route`, `code` | Richieste all'API. |
 | `manent_workflows` | gauge | `workflow`, `status`, `queue` | Workflow per stato: deploy in coda, in esecuzione, in attesa di approvazione e conclusi. |
 | `manent_executor_up` | gauge | `executor`, `version` | 1 se il worker invia heartbeat, 0 se è perso o arrestato. |

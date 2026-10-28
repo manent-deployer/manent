@@ -160,6 +160,7 @@ See [Release governance](../guida/governance.md) and [Policies in Rego](../guida
 | `targets` | `true` | Targets given by the descriptor. |
 | `step_params` | `{}` | Parameters of [custom steps](../guida/step-personalizzati.md) the descriptor may set, per step (`"*"` = all). Default: none. |
 | `config_ref` | `none` | Revision of the environment configuration the descriptor may choose with `config.ref` ([git provider](../integrazioni/git.md)): `none`, `ref` (allowed refs only) or `sha` (also commit SHAs). |
+| `max_parallel` | `0` (no limit) | Maximum [parallelism](../guida/ondate.md#parallel-targets) a descriptor may ask for (`deploy.parallel`, `rollout.waves[].parallel`); a percentage is resolved against all the targets. The environment configuration is not subject to it. |
 
 See [Security](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
@@ -205,6 +206,8 @@ plugins:
       sha256: "3f1c…"
     artifact_types: [container]
 ```
+
+Two keys are read by manent and not passed to the plugin: `queue` (the plugin's [own queue](scalabilita.md#plugin-queues)) and `max_parallel`, the cap on the targets of a batch the plugin updates at the same time, whatever the deploy asks for (default `16`): it protects workers and destinations, such as SSH connections or the rate limits of a cloud API. See [parallel targets](../guida/ondate.md#parallel-targets).
 
 Plugins compiled into manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md). See also [External plugins](../plugins/esterni.md).
 

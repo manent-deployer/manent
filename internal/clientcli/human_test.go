@@ -3,6 +3,7 @@ package clientcli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -167,5 +168,24 @@ func TestLivelloDeiLog(t *testing.T) {
 	// An unknown level in a line is not hidden without --level.
 	if levelRank("NOTICE") < levelRank("") {
 		t.Fatal("livello sconosciuto nascosto")
+	}
+}
+
+func TestParallelNote(t *testing.T) {
+	for out, want := range map[string]string{
+		`{"plugin":"remote-copy"}`:                  "",
+		`{"parallel":"4"}`:                          " · 4 at a time",
+		`{"parallel":"1","parallel_requested":"4"}`: " · 1 at a time (4 requested)",
+	} {
+		var o any
+		if err := json.Unmarshal([]byte(out), &o); err != nil {
+			t.Fatal(err)
+		}
+		if got := parallelNote(o); got != want {
+			t.Errorf("%s: %q, want %q", out, got, want)
+		}
+	}
+	if parallelNote(nil) != "" {
+		t.Error("no output")
 	}
 }

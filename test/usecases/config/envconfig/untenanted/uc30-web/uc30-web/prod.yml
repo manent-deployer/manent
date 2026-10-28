@@ -1,0 +1,21 @@
+# UC30: parallel deploy on the targets of a batch, no rollout: the three hosts are one batch
+# and the environment asks to update all of them together (capped by max_parallel: 2).
+plugin: remote-copy
+parallel: "100%"
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+  - {host: eu1-c, user: deploy, labels: {region: eu-1, az: eu-1c}}
+params:
+  dest_dir: /home/deploy/apps/uc30-web
+  layout: releases
+  keep_releases: "3"
+  ssh_key_secret: deploy-key
+  prepare_command: 'tar -xzf "$MANENT_ARTIFACT" -C "$MANENT_RELEASE_DIR"'
+  # Faults simulated by the use cases: $HOME/fault/uc30-web.sleep (wait) and .fail (error).
+  # Every run logs "<epoch> start|end <version>": the case reads the overlap from it.
+  post_command: 'f=$HOME/fault/uc30-web; echo "$(date +%s) start $MANENT_VERSION" >> $f.log; if [ -f $f.sleep ]; then sleep $(cat $f.sleep); fi; echo "$(date +%s) end $MANENT_VERSION" >> $f.log; if [ -e $f.fail ]; then echo "guasto simulato su $(hostname)" >&2; exit 1; fi'
+  rollback_command: "true"
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

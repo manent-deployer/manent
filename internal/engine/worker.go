@@ -819,7 +819,7 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 		}
 		exec = dr.DryRun
 	}
-	rec := startedStep{Step: ps, Label: label, Targets: targets, Outputs: maps.Clone(outputs)}
+	rec := startedStep{Step: ps, Label: label, Targets: targets, Parallel: d.Deploy.Parallel, Outputs: maps.Clone(outputs)}
 	in := rec.input(id, d)
 	_, compensable := step.(pipeline.Compensator)
 	compensable = compensable && d.Rollback.IsEnabled()
@@ -961,7 +961,10 @@ type startedStep struct {
 	Step  pipeline.PlannedStep `json:"step"`
 	Label string               `json:"label"`
 	// Targets, if set, are the targets of the pass or batch.
-	Targets    []descriptor.Target        `json:"targets,omitempty"`
+	Targets []descriptor.Target `json:"targets,omitempty"`
+	// Parallel is the deploy.parallel the step ran with (a wave can set its own): the
+	// compensation uses it too.
+	Parallel   string                     `json:"parallel,omitempty"`
 	Outputs    map[string]pipeline.Output `json:"outputs,omitempty"`
 	Checkpoint pipeline.Output            `json:"checkpoint,omitempty"`
 }
@@ -969,9 +972,12 @@ type startedStep struct {
 // input rebuilds the step input.
 func (s startedStep) input(id string, d *descriptor.Descriptor) pipeline.Input {
 	dd := d
-	if s.Targets != nil {
+	if s.Targets != nil || s.Parallel != d.Deploy.Parallel {
 		c := *d
-		c.Deploy.Targets = s.Targets
+		if s.Targets != nil {
+			c.Deploy.Targets = s.Targets
+		}
+		c.Deploy.Parallel = s.Parallel
 		dd = &c
 	}
 	return pipeline.Input{DeploymentID: id, Descriptor: dd, Outputs: s.Outputs}

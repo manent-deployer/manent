@@ -52,7 +52,7 @@ message ConfigureRequest {
 message ConfigureResponse {
   string name = 1;
   // Optional interfaces implemented by the plugin: "dry_run", "current_release", "rollback",
-  // "slots", "traffic_router", "testers", "scale".
+  // "slots", "traffic_router", "testers", "scale", "parallel_targets".
   // A plugin built with an earlier SDK declares none.
   repeated string capabilities = 2;
 }
@@ -96,6 +96,9 @@ message DeployRequest {
   // Tenant of the release ("untenanted" for the applications no tenant lists): with application,
   // artifact name and environment it identifies the release. Empty from hosts before it existed.
   string tenant = 9;
+  // Targets the plugin may work on at the same time (0 or 1: one after the other). Above 1
+  // only for plugins that declare the "parallel_targets" capability; 0 from earlier hosts.
+  uint32 parallelism = 10;
 }
 
 message TrafficRequest {
@@ -126,6 +129,8 @@ message TargetResult {
   string host = 1;
   string status = 2;
   map<string, string> details = 3;
+  // Time spent on the target (plugin.ForEachTarget); 0 from earlier plugins.
+  int64 duration_ms = 4;
 }
 
 message DeployResponse {

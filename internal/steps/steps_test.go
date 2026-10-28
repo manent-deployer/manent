@@ -5,8 +5,10 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/manent-deployer/manent/internal/artifact"
 	"github.com/manent-deployer/manent/internal/descriptor"
@@ -300,4 +302,75 @@ func TestDeployOutputDelPlugin(t *testing.T) {
 			t.Errorf("output non valido %v: %v", bad, err)
 		}
 	}
+}
+
+// parallelDeployer declares parallel targets and reports a duration per target.
+type parallelDeployer struct{ fakeDeployer }
+
+func (p *parallelDeployer) ParallelTargets() bool { return true }
+func (p *parallelDeployer) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, error) {
+	p.got = r
+	return &plugin.Result{Plugin: p.name, Targets: []plugin.TargetResult{{Host: "h1", Status: plugin.StatusDeployed, DurationMS: 1500}}}, nil
+}
+
+type targetRec map[string]time.Duration
+
+func (t targetRec) TargetFinished(plugin, status string, d time.Duration) { t[plugin+"/"+status] += d }
+
+func TestDeployParallelism(t *testing.T) {
+	seq := &fakeDeployer{name: "seq", types: []string{"application"}}
+	par := &parallelDeployer{fakeDeployer{name: "par", types: []string{"application"}}}
+	reg := newPlugins(t, seq)
+	if err := reg.Register("par", func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return par, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Activate("par", nil, discard); err != nil {
+		t.Fatal(err)
+	}
+	rec := targetRec{}
+	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}}, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard,
+		MaxParallel: func(name string) int { return 3 }, Targets: rec}
+	run := func(name, parallel string, n int) (pipeline.Output, *plugin.Request) {
+		t.Helper()
+		ts := make([]descriptor.Target, n)
+		for i := range ts {
+			ts[i] = descriptor.Target{Host: "h" + strconv.Itoa(i)}
+		}
+		in := pipeline.Input{DeploymentID: "d1",
+			Descriptor: &descriptor.Descriptor{Artifact: descriptor.Artifact{Type: "application"}, Deploy: descriptor.Deploy{Plugin: name, Parallel: parallel, Targets: ts}},
+			Outputs:    map[string]pipeline.Output{"artifacts": {OutLocalPath: "/w/app.tgz", OutSHA256: "abc"}}}
+		out, err := s.Run(context.Background(), in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "par" {
+			return out, par.got
+		}
+		return out, seq.got
+	}
+	for _, tc := range []struct {
+		plugin, parallel string
+		targets          int
+		want, requested  string
+	}{
+		{"par", "", 10, "", ""},    // not asked: no output, sequential
+		{"par", "2", 10, "2", ""},  // as asked
+		{"par", "50%", 4, "2", ""}, // percentage of the batch
+		{"par", "8", 10, "3", "8"}, // capped by max_parallel
+		{"par", "8", 2, "2", ""},   // no more than the batch
+		{"seq", "4", 10, "1", "4"}, // plugin without parallel targets
+	} {
+		out, req := run(tc.plugin, tc.parallel, tc.targets)
+		if out[OutParallel] != tc.want || out[OutParallelRequested] != tc.requested || max(req.Parallelism, 1) != max(atoi(tc.want), 1) {
+			t.Errorf("%+v: outputs %v, request parallelism %d", tc, out, req.Parallelism)
+		}
+	}
+	if rec["par/deployed"] != 5*1500*time.Millisecond {
+		t.Errorf("target durations: %v", rec)
+	}
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }

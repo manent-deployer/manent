@@ -109,7 +109,7 @@ type ConfigureResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Optional interfaces implemented by the plugin: "dry_run", "current_release", "rollback",
-	// "slots", "traffic_router", "testers", "scale".
+	// "slots", "traffic_router", "testers", "scale", "parallel_targets".
 	// A plugin built with an earlier SDK declares none.
 	Capabilities  []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -408,7 +408,10 @@ type DeployRequest struct {
 	Traffic *TrafficRequest `protobuf:"bytes,8,opt,name=traffic,proto3" json:"traffic,omitempty"`
 	// Tenant of the release ("untenanted" for the applications no tenant lists): with application,
 	// artifact name and environment it identifies the release. Empty from hosts before it existed.
-	Tenant        string `protobuf:"bytes,9,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	Tenant string `protobuf:"bytes,9,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	// Targets the plugin may work on at the same time (0 or 1: one after the other). Above 1
+	// only for plugins that declare the "parallel_targets" capability; 0 from earlier hosts.
+	Parallelism   uint32 `protobuf:"varint,10,opt,name=parallelism,proto3" json:"parallelism,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -504,6 +507,13 @@ func (x *DeployRequest) GetTenant() string {
 		return x.Tenant
 	}
 	return ""
+}
+
+func (x *DeployRequest) GetParallelism() uint32 {
+	if x != nil {
+		return x.Parallelism
+	}
+	return 0
 }
 
 type TrafficRequest struct {
@@ -759,10 +769,12 @@ func (x *DetailsResponse) GetDetails() map[string]string {
 }
 
 type TargetResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	Details       map[string]string      `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Host    string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Status  string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Details map[string]string      `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Time spent on the target (plugin.ForEachTarget); 0 from earlier plugins.
+	DurationMs    int64 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -816,6 +828,13 @@ func (x *TargetResult) GetDetails() map[string]string {
 		return x.Details
 	}
 	return nil
+}
+
+func (x *TargetResult) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
 }
 
 type DeployResponse struct {
@@ -1146,7 +1165,7 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\x06labels\x18\x04 \x03(\v2$.manent.plugin.v1.Target.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe4\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x04\n" +
 	"\rDeployRequest\x12#\n" +
 	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12 \n" +
 	"\vapplication\x18\x02 \x01(\tR\vapplication\x12 \n" +
@@ -1156,7 +1175,9 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\x06params\x18\x06 \x03(\v2+.manent.plugin.v1.DeployRequest.ParamsEntryR\x06params\x12*\n" +
 	"\x11secrets_broker_id\x18\a \x01(\rR\x0fsecretsBrokerId\x12:\n" +
 	"\atraffic\x18\b \x01(\v2 .manent.plugin.v1.TrafficRequestR\atraffic\x12\x16\n" +
-	"\x06tenant\x18\t \x01(\tR\x06tenant\x1a9\n" +
+	"\x06tenant\x18\t \x01(\tR\x06tenant\x12 \n" +
+	"\vparallelism\x18\n" +
+	" \x01(\rR\vparallelism\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x02\n" +
@@ -1185,11 +1206,13 @@ const file_pkg_plugin_external_proto_deployer_proto_rawDesc = "" +
 	"\adetails\x18\x01 \x03(\v2..manent.plugin.v1.DetailsResponse.DetailsEntryR\adetails\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbd\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xde\x01\n" +
 	"\fTargetResult\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12E\n" +
-	"\adetails\x18\x03 \x03(\v2+.manent.plugin.v1.TargetResult.DetailsEntryR\adetails\x1a:\n" +
+	"\adetails\x18\x03 \x03(\v2+.manent.plugin.v1.TargetResult.DetailsEntryR\adetails\x12\x1f\n" +
+	"\vduration_ms\x18\x04 \x01(\x03R\n" +
+	"durationMs\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe7\x01\n" +

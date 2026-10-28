@@ -32,6 +32,8 @@ type EnvConfig struct {
 	Targets []descriptor.Target    `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string      `json:"params,omitempty" yaml:"params,omitempty"`
 	Secrets []descriptor.SecretRef `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	// Parallel is the environment's deploy.parallel: targets of a batch updated at the same time.
+	Parallel string `json:"parallel,omitempty" yaml:"parallel,omitempty"`
 	// Rollback imposes the environment's automatic rollback (e.g. always on in production),
 	// within the artifact type policy.
 	Rollback *descriptor.Rollback `json:"rollback,omitempty" yaml:"rollback,omitempty"`
@@ -163,6 +165,7 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 	}
 	d.Deploy.Policy = pick("deploy.policy", c.Policy, d.Deploy.Policy)
 	d.Deploy.Plugin = pick("deploy.plugin", c.Plugin, d.Deploy.Plugin)
+	d.Deploy.Parallel = pick("deploy.parallel", c.Parallel, d.Deploy.Parallel)
 
 	if len(c.Targets) > 0 {
 		if len(d.Deploy.Targets) > 0 && !slices.EqualFunc(c.Targets, d.Deploy.Targets, descriptor.Target.Equal) {

@@ -73,6 +73,8 @@ const (
 	CapabilityTrafficRouter  = "traffic_router"
 	CapabilityTesters        = "testers"
 	CapabilityScale          = "scale"
+	// CapabilityParallelTargets: the plugin honors Request.Parallelism (plugin.ParallelDeployer).
+	CapabilityParallelTargets = "parallel_targets"
 )
 
 // capabilities returns the optional interfaces implemented by the deployer.
@@ -98,6 +100,9 @@ func capabilities(d plugin.Deployer) []string {
 	}
 	if _, ok := d.(plugin.SlotScaler); ok {
 		caps = append(caps, CapabilityScale)
+	}
+	if plugin.SupportsParallel(d) {
+		caps = append(caps, CapabilityParallelTargets)
 	}
 	return caps
 }
@@ -152,6 +157,9 @@ func (c *Client) Rollback(ctx context.Context, req *plugin.Request, previous plu
 		return resp, err
 	})
 }
+
+// ParallelTargets implements plugin.ParallelDeployer with the capabilities declared in Configure.
+func (c *Client) ParallelTargets() bool { return c.Has(CapabilityParallelTargets) }
 
 // TrafficSupported implements plugin.TrafficChecker with the capabilities declared in Configure.
 func (c *Client) TrafficSupported(context.Context) (plugin.TrafficSupport, error) {
@@ -376,6 +384,7 @@ func toProtoRequest(req *plugin.Request, secretsID uint32) *pb.DeployRequest {
 		},
 		Params:          req.Params,
 		SecretsBrokerId: secretsID,
+		Parallelism:     uint32(max(req.Parallelism, 0)),
 	}
 	if t := req.Traffic; t != nil {
 		r.Traffic = &pb.TrafficRequest{State: t.State, TesterHeader: t.TesterHeader, TesterTag: t.TesterTag, ProportionalReplicas: t.ProportionalReplicas}
@@ -400,7 +409,8 @@ func fromProtoRequest(r *pb.DeployRequest) *plugin.Request {
 			LocalPath: a.GetLocalPath(),
 			SHA256:    a.GetSha256(),
 		},
-		Params: r.GetParams(),
+		Params:      r.GetParams(),
+		Parallelism: int(r.GetParallelism()),
 	}
 	if t := r.GetTraffic(); t != nil {
 		req.Traffic = &plugin.TrafficRequest{State: t.GetState(), TesterHeader: t.GetTesterHeader(), TesterTag: t.GetTesterTag(),
@@ -432,7 +442,7 @@ func toProtoResult(res *plugin.Result) *pb.DeployResponse {
 	}
 	out := &pb.DeployResponse{Plugin: res.Plugin, Outputs: res.Outputs}
 	for _, t := range res.Targets {
-		out.Targets = append(out.Targets, &pb.TargetResult{Host: t.Host, Status: t.Status, Details: t.Details})
+		out.Targets = append(out.Targets, &pb.TargetResult{Host: t.Host, Status: t.Status, Details: t.Details, DurationMs: t.DurationMS})
 	}
 	return out
 }
@@ -440,7 +450,7 @@ func toProtoResult(res *plugin.Result) *pb.DeployResponse {
 func fromProtoResult(r *pb.DeployResponse) *plugin.Result {
 	res := &plugin.Result{Plugin: r.GetPlugin(), Outputs: r.GetOutputs()}
 	for _, t := range r.GetTargets() {
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.GetHost(), Status: t.GetStatus(), Details: t.GetDetails()})
+		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.GetHost(), Status: t.GetStatus(), Details: t.GetDetails(), DurationMS: t.GetDurationMs()})
 	}
 	return res
 }

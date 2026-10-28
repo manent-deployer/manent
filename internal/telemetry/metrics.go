@@ -53,6 +53,7 @@ type Metrics struct {
 	steps       *prometheus.HistogramVec
 	http        *prometheus.HistogramVec
 	passes      *prometheus.CounterVec
+	targets     *prometheus.HistogramVec
 }
 
 var _ Recorder = (*Metrics)(nil)
@@ -84,6 +85,11 @@ func NewMetrics(b BuildInfo) *Metrics {
 			Name: "manent_rollout_passes_total",
 			Help: "Passes of wave rollouts ended by this process, by region, AZ and outcome.",
 		}, []string{"application", "environment", "region", "az", "outcome"}),
+		targets: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "manent_target_deploy_seconds",
+			Help:    "Time a plugin spent on a single target of a batch, by plugin and target status.",
+			Buckets: prometheus.ExponentialBuckets(0.5, 2, 12),
+		}, []string{"plugin", "status"}),
 	}
 	info := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name:        "manent_build_info",
@@ -91,7 +97,7 @@ func NewMetrics(b BuildInfo) *Metrics {
 		ConstLabels: prometheus.Labels{"version": b.Version, "commit": b.Commit, "workflow_version": b.WorkflowVersion},
 	})
 	info.Set(1)
-	m.reg.MustRegister(m.deployments, m.durations, m.steps, m.http, m.passes, info,
+	m.reg.MustRegister(m.deployments, m.durations, m.steps, m.http, m.passes, m.targets, info,
 		collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	return m
 }
@@ -117,6 +123,11 @@ func (m *Metrics) HTTPRequest(method, route string, status int, d time.Duration)
 // PassFinished implements Recorder.
 func (m *Metrics) PassFinished(application, environment, region, az, outcome string) {
 	m.passes.WithLabelValues(application, environment, region, az, outcome).Inc()
+}
+
+// TargetFinished records the time a plugin spent on a target (steps.TargetRecorder).
+func (m *Metrics) TargetFinished(plugin, status string, d time.Duration) {
+	m.targets.WithLabelValues(plugin, status).Observe(d.Seconds())
 }
 
 // Register adds a collector (e.g. StateCollector).

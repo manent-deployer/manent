@@ -115,6 +115,7 @@ Supported schemes: `env:`, `file:` and, if configured, `vault:` (e.g. `vault:sec
 | `params` | Plugin-specific parameters, as a string map. |
 | `targetsFrom` | Targets taken from `targets` exports of the imports: `[{import: infra, export: vms}]`. See [Exports and imports](catene.md#export-import). |
 | `paramsFrom` | Parameters taken from exports of the imports: `{db_host: {import: infra, export: db_host}}`. |
+| `parallel` | Targets of a batch the plugin updates at the same time: a number or a percentage of the batch (default `1`, one after the other), within `plugins.<name>.max_parallel` and `descriptor_policy.max_parallel`. See [parallel targets](ondate.md#parallel-targets). |
 
 All these fields can come from the [environment configuration](configurazione-ambiente.md): the descriptor can only add what is not defined there. After the merge there must be at least one target.
 

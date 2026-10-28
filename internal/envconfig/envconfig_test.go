@@ -246,6 +246,46 @@ func TestDescriptorPolicy(t *testing.T) {
 	}
 }
 
+func TestParallel(t *testing.T) {
+	// The environment's parallel wins; the descriptor can add it or repeat it, never change it.
+	c := envCfg()
+	c.Parallel = "4"
+	d := baseDescriptor()
+	eff, err := Merge(d, c)
+	if err != nil || eff.Deploy.Parallel != "4" {
+		t.Fatalf("parallel from the environment: %q %v", eff.Deploy.Parallel, err)
+	}
+	d.Deploy.Parallel = "8"
+	if _, err := Merge(d, c); err == nil || !strings.Contains(err.Error(), "deploy.parallel") {
+		t.Errorf("conflicting parallel: %v", err)
+	}
+	c.Parallel = ""
+	if eff, err := Merge(d, c); err != nil || eff.Deploy.Parallel != "8" {
+		t.Errorf("parallel from the descriptor: %q %v", eff.Deploy.Parallel, err)
+	}
+
+	pol := &DescriptorPolicy{Params: map[string][]string{"*": {"*"}}, Targets: true, MaxParallel: 4}
+	env := EnvConfig{Targets: make([]descriptor.Target, 20)}
+	d = baseDescriptor()
+	d.Deploy.Parallel = "4"
+	if err := pol.Check(d, env); err != nil {
+		t.Errorf("parallel within the limit: %v", err)
+	}
+	d.Deploy.Parallel = "25%" // 5 of 20 targets
+	d.Rollout = &descriptor.Rollout{Waves: []descriptor.Wave{{Name: "all", Select: "x=y", Parallel: "10"}}}
+	err = pol.Check(d, env)
+	for _, want := range []string{"deploy.parallel 25%", "rollout.waves[0].parallel 10", "descriptor_policy.max_parallel"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("want %q, got %v", want, err)
+		}
+	}
+	// What the environment configuration defines is not subject to the policy.
+	env.Parallel, env.Rollout = "25%", d.Rollout
+	if err := pol.Check(d, env); err != nil {
+		t.Errorf("environment values rejected: %v", err)
+	}
+}
+
 func TestMergeRollout(t *testing.T) {
 	c, err := Parse([]byte(`
 targets:

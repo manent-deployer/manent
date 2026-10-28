@@ -275,9 +275,14 @@ pipeline:
           interval: 1s
           until: {path: "$.status", in: [done]}
 
+# UC30: a descriptor can ask for at most 4 targets at the same time (deploy.parallel).
+descriptor_policy:
+  max_parallel: 4
+
 plugins:
   remote-copy:
     insecure_ignore_host_key: true   # lab: host keys regenerated at every start
+    max_parallel: 2                  # UC30: cap on the targets updated together
     artifact_types: [application]
   container:
     insecure_ignore_host_key: true

@@ -80,7 +80,7 @@ rollback:
 
 ## How it works
 
-For each target, in sequence:
+For each target (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time):
 
 1. it reads the running container (`container inspect`): version, image and state;
 2. if the container already has the same image and version and is ready, it leaves it alone. Retries and recovery do not restart the application;
@@ -89,7 +89,7 @@ For each target, in sequence:
 5. it removes the previous container and starts the new one with `--restart unless-stopped`, the labels `manent.application`, `manent.environment`, `manent.version` and `manent.deployment`, `run_args` and `command`;
 6. it waits until the container is ready: with a `HEALTHCHECK` in the image, until it is `healthy`; without one, until it has been running for `stable_for` without restarts. A container that exits or is `unhealthy` fails the deploy, and the last lines of its log go to the deploy log.
 
-The deploy stops at the first target that fails. Between removing the old container and starting the new one the application on that target does not answer: to avoid downtime, use a [wave rollout](../guida/ondate.md) with `maxUnavailable` and a load balancer that skips targets that are not ready.
+After the first target that fails no other target starts; the ones already running finish. Between removing the old container and starting the new one the application on that target does not answer: to avoid downtime, use a [wave rollout](../guida/ondate.md) with `maxUnavailable` and a load balancer that skips targets that are not ready.
 
 ## Rollback
 

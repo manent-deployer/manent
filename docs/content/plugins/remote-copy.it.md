@@ -53,7 +53,7 @@ deploy:
 
 ## Funzionamento
 
-Per ogni target, in sequenza:
+Per ogni target (uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta):
 
 1. apre la connessione SSH, con la chiave o la password lette dai segreti al momento della connessione;
 2. crea `dest_dir` (`mkdir -p`);
@@ -61,7 +61,7 @@ Per ogni target, in sequenza:
 4. se l'artefatto ha uno sha256 e `verify_checksum` non è `false`, esegue `sha256sum` sul file remoto e lo confronta;
 5. esegue `post_command`, se indicato.
 
-Il deploy si ferma al primo target che fallisce. Rieseguirlo sovrascrive il file remoto con lo stesso contenuto, quindi è idempotente. Anche `post_command` deve esserlo, perché un retry lo esegue di nuovo.
+Dopo il primo target che fallisce nessun altro target parte; quelli già avviati finiscono. Rieseguirlo sovrascrive il file remoto con lo stesso contenuto, quindi è idempotente. Anche `post_command` deve esserlo, perché un retry lo esegue di nuovo.
 
 ## Layout `releases`
 
@@ -143,8 +143,11 @@ Il dry-run controlla tutti i target e riporta lo stato di ciascuno (`ready` o `f
     {
       "host": "192.168.1.10",
       "status": "deployed",
-      "details": {"remote_path": "/opt/myapp/releases/myapp-1.2.3.tar.gz", "checksum": "verified", "post_command": "ok"}
+      "details": {"remote_path": "/opt/myapp/releases/myapp-1.2.3.tar.gz", "checksum": "verified", "post_command": "ok"},
+      "duration_ms": 4210
     }
   ]
 }
 ```
+
+Lo `status` di un target è `deployed`, `failed` oppure `skipped` quando non è mai partito perché un altro target del lotto è fallito; `duration_ms` è il tempo speso su di esso.

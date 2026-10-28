@@ -6,7 +6,7 @@ Supported versions: JBoss EAP 7.4 and later, WildFly 23 and later (the `suspend-
 
 ## How versions are switched
 
-Every version becomes a separate deployment, `<artifact>-<version>.<ext>` (for example `shop-1.4.0.war`), with the same **runtime-name** (default `<artifact>.<ext>`, so the context root does not change). The artifact name is the application's for an application with a single artifact, so the names stay those of earlier releases; two artifacts of an application are two applications on the server. For the applications of a [tenant](../guida/tenant.md) both names start with the tenant (`payments.shop-1.4.0.war`, runtime-name `payments.shop.war`): two applications on a server cannot share a context root. For each target, in sequence:
+Every version becomes a separate deployment, `<artifact>-<version>.<ext>` (for example `shop-1.4.0.war`), with the same **runtime-name** (default `<artifact>.<ext>`, so the context root does not change). The artifact name is the application's for an application with a single artifact, so the names stay those of earlier releases; two artifacts of an application are two applications on the server. For the applications of a [tenant](../guida/tenant.md) both names start with the tenant (`payments.shop-1.4.0.war`, runtime-name `payments.shop.war`): two applications on a server cannot share a context root. For each target (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time):
 
 1. it reads the deployments; if the requested version is already active with the same content it touches nothing, so retries and recoveries do not restart the application;
 2. it uploads the archive (`/management/add-content`) and adds the deployment, **disabled**;

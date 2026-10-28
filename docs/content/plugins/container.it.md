@@ -80,7 +80,7 @@ rollback:
 
 ## Funzionamento
 
-Per ogni target, in sequenza:
+Per ogni target (uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta):
 
 1. legge il container in esercizio (`container inspect`): versione, immagine e stato;
 2. se il container ha già la stessa immagine e versione ed è pronto, non lo tocca. Retry e recovery non riavviano l'applicazione;
@@ -89,7 +89,7 @@ Per ogni target, in sequenza:
 5. rimuove il container precedente e avvia il nuovo con `--restart unless-stopped`, le etichette `manent.application`, `manent.environment`, `manent.version` e `manent.deployment`, `run_args` e `command`;
 6. attende che sia pronto: con un `HEALTHCHECK` nell'immagine finché è `healthy`; senza, finché resta in esecuzione per `stable_for` senza riavvii. Un container uscito o `unhealthy` fa fallire il deploy, e le ultime righe del suo log finiscono nel log del deploy.
 
-Il deploy si ferma al primo target che fallisce. Tra la rimozione del vecchio container e l'avvio del nuovo l'applicazione su quel target non risponde: per evitarlo si usa un [rilascio a ondate](../guida/ondate.md) con `maxUnavailable` e un bilanciatore che escluda i target non pronti.
+Dopo il primo target che fallisce nessun altro target parte; quelli già avviati finiscono. Tra la rimozione del vecchio container e l'avvio del nuovo l'applicazione su quel target non risponde: per evitarlo si usa un [rilascio a ondate](../guida/ondate.md) con `maxUnavailable` e un bilanciatore che escluda i target non pronti.
 
 ## Rollback
 

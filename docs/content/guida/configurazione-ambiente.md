@@ -118,7 +118,7 @@ The environment configuration is **authoritative**: the descriptor can only add 
 
 | Field | Rule |
 |---|---|
-| `policy`, `plugin` | If defined in both they must match. |
+| `policy`, `plugin`, `parallel` | If defined in both they must match. `parallel` is `deploy.parallel`: the targets of a batch updated at the same time ([parallel targets](ondate.md#parallel-targets)); a value set here is not subject to `descriptor_policy.max_parallel`. |
 | `targets` | If the configuration defines them, the descriptor can omit them or repeat them identically, labels included. |
 | `params` | The descriptor can add keys; a key present in both must have the same value. |
 | `secrets` | The descriptor can add secrets; the same name must have the same reference. |

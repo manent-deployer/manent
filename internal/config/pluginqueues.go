@@ -14,6 +14,35 @@ import (
 // reads the key and does not pass it to the plugin.
 const PluginQueueKey = "queue"
 
+// PluginMaxParallelKey is the key of a plugin's configuration (plugins.<name>.max_parallel)
+// that caps the targets of a batch the plugin updates at the same time, whatever the
+// descriptor asks: it protects workers and destinations (SSH connections, API rate limits).
+// manent reads the key and does not pass it to the plugin.
+const PluginMaxParallelKey = "max_parallel"
+
+// DefaultPluginMaxParallel is the cap of a plugin without max_parallel.
+const DefaultPluginMaxParallel = 16
+
+// PluginMaxParallel returns the parallelism cap of the plugin.
+func (c *Config) PluginMaxParallel(name string) int {
+	if v, ok := c.Plugins[name][PluginMaxParallelKey].(int); ok && v > 0 {
+		return v
+	}
+	return DefaultPluginMaxParallel
+}
+
+// validatePluginParallel checks plugins.<name>.max_parallel.
+func (c *Config) validatePluginParallel() []error {
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(c.Plugins)) {
+		raw, ok := c.Plugins[name][PluginMaxParallelKey]
+		if v, isInt := raw.(int); ok && (!isInt || v < 1) {
+			errs = append(errs, fmt.Errorf("plugins.%s.max_parallel: an integer >= 1, got %v", name, raw))
+		}
+	}
+	return errs
+}
+
 // queueRe are the allowed queue names.
 var queueRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
 

@@ -340,7 +340,7 @@ func (p *Plugin) connect(ctx context.Context, req *plugin.Request, s settings, t
 	return tr, nil
 }
 
-// Deploy implements plugin.Deployer: on every target, one after the other, it copies and
+// Deploy implements plugin.Deployer: on every target (req.Parallelism at a time) it copies and
 // extracts the release (if not already there with the same sha256), puts it in service and
 // removes the releases beyond keep_releases. It is idempotent.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
@@ -348,18 +348,20 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	if err != nil {
 		return nil, err
 	}
-	res := &plugin.Result{Plugin: Name}
-	for _, t := range req.Targets {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		d := map[string]string{"version": req.Artifact.Version, "mode": s.Mode, "transport": s.Conn.Transport}
 		if err := p.deployOne(ctx, req, s, t); err != nil {
 			d["error"] = err.Error()
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: d})
-			return res, fmt.Errorf("target %s: %w", t.Host, err)
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: d}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusDeployed, Details: d})
-	}
-	return res, nil
+		return plugin.TargetResult{Status: plugin.StatusDeployed, Details: d}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
+
+// ParallelTargets implements plugin.ParallelDeployer: every target has its own WinRM or SSH
+// connection.
+func (p *Plugin) ParallelTargets() bool { return true }
 
 func (p *Plugin) deployOne(ctx context.Context, req *plugin.Request, s settings, t plugin.Target) error {
 	log := p.logger.With("target", t.Host, "version", req.Artifact.Version, "mode", s.Mode)
@@ -550,9 +552,7 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	if !versionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("version %q is not valid as a release name", previous.Version)
 	}
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		d := map[string]string{"version": previous.Version}
 		pw, err := p.taskPassword(ctx, req, s)
 		var tr Transport
@@ -564,15 +564,13 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 			tr.Close()
 		}
 		if err != nil {
-			errs = append(errs, fmt.Errorf("target %s: %w", t.Host, err))
 			d["error"] = err.Error()
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: d})
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: d}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusRolledBack, Details: d})
 		p.logger.WarnContext(ctx, "rollback completed on the target", "target", t.Host, "version", previous.Version)
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusRolledBack, Details: d}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 var (

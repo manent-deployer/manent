@@ -101,6 +101,28 @@ A plugin compiled with an earlier SDK declares no capabilities: it works as befo
 
 A deployer that implements `plugin.SlotDeployer`, `plugin.TrafficRouter` and possibly `plugin.TesterRouter` and `plugin.SlotScaler` takes part in [percentage rollouts](../guida/traffico.md) like an internal plugin: the `slots`, `traffic_router`, `testers` and `scale` capabilities declare it to manent, and the state recorded by `PrepareSlots` arrives in every call (`DeployRequest.traffic`). Calls that are not implemented return `UNIMPLEMENTED` and the deploy fails without retries.
 
+### Parallel targets { #parallel-targets }
+
+A deploy can ask to update several targets of a batch at the same time ([parallel targets](../guida/ondate.md#parallel-targets)). manent passes the number in `Request.Parallelism` (`DeployRequest.parallelism`) only to the plugins that declare it: implement `plugin.ParallelDeployer` (`ParallelTargets() bool`), and the SDK announces the `parallel_targets` capability. The other plugins always get 1, and work as before.
+
+The SDK has the loop that honors it, with the same rules as the built-in plugins: `plugin.ForEachTarget` stops starting targets after the first error and lets the running ones finish; `plugin.ForAllTargets` runs them all (a rollback, a dry-run). Both keep the order of the targets, report the ones never started as `skipped` and measure the time spent on each target (`TargetResult.DurationMS`, the `manent_target_deploy_seconds` metric).
+
+```go
+func (d *deployer) ParallelTargets() bool { return true }
+
+func (d *deployer) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
+		if err := d.release(ctx, t, req); err != nil {
+			return plugin.TargetResult{}, fmt.Errorf("target %s: %w", t.Host, err)
+		}
+		return plugin.TargetResult{Status: plugin.StatusDeployed}, nil
+	})
+	return &plugin.Result{Plugin: "my-plugin", Targets: targets}, err
+}
+```
+
+The function runs on several goroutines at once: what it shares (clients, caches, counters) must be safe for concurrent use. Log with the target's host, because the lines of different targets interleave.
+
 ## Configuring manent
 
 The plugin is enabled in the `plugins` section of `manent.yml`, under the name descriptors will use to refer to it (`deploy.plugin`). The `external` key marks it as external; all other keys are the configuration passed to the plugin's Factory.
@@ -181,9 +203,9 @@ service Secrets {
 
 | Call | Notes |
 |---|---|
-| `Configure` | First call after every start. Receives the configuration as JSON and returns the plugin name and capabilities (`dry_run`, `current_release`, `rollback`, `slots`, `traffic_router`, `testers`, `scale`). |
+| `Configure` | First call after every start. Receives the configuration as JSON and returns the plugin name and capabilities (`dry_run`, `current_release`, `rollback`, `slots`, `traffic_router`, `testers`, `scale`, `parallel_targets`). |
 | `Supports` | Queried by the selection policy. A communication error counts as "not supported". |
 | `Validate` | No access to secrets. 30-second timeout. |
-| `Deploy`, `DryRun`, `CurrentRelease`, `Rollback` | With the deploy context: a cancellation propagates to the plugin. `secrets_broker_id` says where the `Secrets` service is exposed. |
+| `Deploy`, `DryRun`, `CurrentRelease`, `Rollback` | With the deploy context: a cancellation propagates to the plugin. `secrets_broker_id` says where the `Secrets` service is exposed; `parallelism` how many targets the plugin may work on at the same time (0 from earlier hosts). |
 
 To regenerate the Go code after changing the `.proto`: `make proto`.

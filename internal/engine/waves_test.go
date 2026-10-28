@@ -664,6 +664,14 @@ func (s *crashOnceStep) Run(_ context.Context, in pipeline.Input) (pipeline.Outp
 }
 
 func TestRolloutRipresoDopoUnCrash(t *testing.T) {
+	// The parallelism stays inside the batch step: with or without it, a recovery resumes from
+	// the same DBOS steps.
+	for _, parallel := range []string{"", "2"} {
+		t.Run("parallel="+parallel, func(t *testing.T) { rolloutCrashRecovery(t, parallel) })
+	}
+}
+
+func rolloutCrashRecovery(t *testing.T, parallel string) {
 	l := &waveLog{}
 	step := &crashOnceStep{host: "eu-2a", log: l, calls: new(atomic.Int32), started: make(chan struct{}), release: make(chan struct{})}
 	t.Cleanup(func() { close(step.release) })
@@ -679,7 +687,9 @@ func TestRolloutRipresoDopoUnCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := NewService(ServiceOptions{Client: w1.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: &fakeChecker{}})
-	sub, err := e.Submit(context.Background(), waveDescriptor("ondate-crash"))
+	d := waveDescriptor("ondate-crash")
+	d.Deploy.Parallel = parallel
+	sub, err := e.Submit(context.Background(), d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -740,5 +750,69 @@ func TestRolloutApprovazioniSpostateNelRollout(t *testing.T) {
 	}
 	if n := len(env.log.get()); n != 12 {
 		t.Errorf("esecuzioni dopo l'approvazione: %d", n)
+	}
+}
+
+// parallelStep records the deploy.parallel every batch (and its compensation) receives.
+type parallelStep struct {
+	log  *waveLog
+	fail string
+}
+
+func (parallelStep) Name() string { return "deploy" }
+
+func (s parallelStep) Run(_ context.Context, in pipeline.Input) (pipeline.Output, error) {
+	h := hostsOf(in.Descriptor.Deploy.Targets)
+	s.log.add(h + "=" + in.Descriptor.Deploy.Parallel)
+	if s.fail != "" && strings.Contains(h, s.fail) {
+		return nil, pipeline.Permanent(errors.New("broken " + s.fail))
+	}
+	return pipeline.Output{}, nil
+}
+
+func (parallelStep) Checkpoint(context.Context, pipeline.Input) (pipeline.Output, error) {
+	return pipeline.Output{}, nil
+}
+
+func (s parallelStep) Compensate(_ context.Context, in pipeline.Input, _ pipeline.Output) (pipeline.Output, error) {
+	s.log.add("undo:" + hostsOf(in.Descriptor.Deploy.Targets) + "=" + in.Descriptor.Deploy.Parallel)
+	return pipeline.Output{pipeline.OutRollback: pipeline.RollbackCompleted}, nil
+}
+
+func TestRolloutParallelPerWave(t *testing.T) {
+	l := &waveLog{}
+	reg, planner := testRegistry(t, parallelStep{log: l, fail: "us-1"})
+	opts := workerOpts(testdb.URL(t), "w1", reg)
+	opts.Health = &fakeChecker{red: map[string]bool{}}
+	w := startWorker(t, opts)
+	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard, Health: opts.Health})
+
+	d := waveDescriptor("parallel-1")
+	d.Deploy.Parallel = "50%"
+	d.Rollout.MaxUnavailable = "2"
+	d.Rollout.OnFailure = descriptor.OnFailureRollbackAll
+	d.Rollout.Waves = []descriptor.Wave{
+		{Name: "canary", Select: "canary=true", Parallel: "1"},
+		{Name: "eu", Select: "region=eu-1, canary!=true"},
+		{Name: "rest", Select: "region in (eu-2, us-1)", Parallel: "2"},
+	}
+	on := true
+	d.Rollback = &descriptor.Rollback{Enabled: &on}
+	ctx := context.Background()
+	sub, err := e.Submit(ctx, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Wait(ctx, sub.ID); err == nil {
+		t.Fatal("the us-1 batch must fail")
+	}
+	// Every batch gets its wave's parallel, otherwise deploy.parallel; the compensations get
+	// the value their batch ran with.
+	want := []string{
+		"eu-1a=1", "eu-1b=50%", "eu-2a,eu-2b=2", "us-1a,us-1b=2",
+		"undo:us-1a,us-1b=2", "undo:eu-2a,eu-2b=2", "undo:eu-1b=50%", "undo:eu-1a=1",
+	}
+	if got := l.get(); !slices.Equal(got, want) {
+		t.Fatalf("runs:\n %v\nwant\n %v", got, want)
 	}
 }

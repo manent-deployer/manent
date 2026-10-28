@@ -101,6 +101,28 @@ Un plugin compilato con un SDK precedente non dichiara nessuna capacità: funzio
 
 Un deployer che implementa `plugin.SlotDeployer`, `plugin.TrafficRouter` ed eventualmente `plugin.TesterRouter` e `plugin.SlotScaler` partecipa ai [rilasci per percentuale](../guida/traffico.md) come un plugin interno: le capacità `slots`, `traffic_router`, `testers` e `scale` lo dichiarano a manent, e lo stato registrato da `PrepareSlots` arriva in ogni chiamata (`DeployRequest.traffic`). Le chiamate non implementate restituiscono `UNIMPLEMENTED` e il deploy fallisce senza retry.
 
+### Target in parallelo { #parallel-targets }
+
+Un deploy può chiedere di aggiornare più target di un lotto nello stesso momento ([target in parallelo](../guida/ondate.md#target-in-parallelo)). manent passa il numero in `Request.Parallelism` (`DeployRequest.parallelism`) solo ai plugin che lo dichiarano: implementa `plugin.ParallelDeployer` (`ParallelTargets() bool`) e l'SDK annuncia la capacità `parallel_targets`. Gli altri plugin ricevono sempre 1 e funzionano come prima.
+
+L'SDK ha il ciclo che lo rispetta, con le stesse regole dei plugin inclusi: `plugin.ForEachTarget` non avvia altri target dopo il primo errore e lascia finire quelli in corso; `plugin.ForAllTargets` li esegue tutti (un rollback, un dry-run). Entrambi mantengono l'ordine dei target, riportano come `skipped` quelli mai avviati e misurano il tempo speso su ogni target (`TargetResult.DurationMS`, metrica `manent_target_deploy_seconds`).
+
+```go
+func (d *deployer) ParallelTargets() bool { return true }
+
+func (d *deployer) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
+		if err := d.release(ctx, t, req); err != nil {
+			return plugin.TargetResult{}, fmt.Errorf("target %s: %w", t.Host, err)
+		}
+		return plugin.TargetResult{Status: plugin.StatusDeployed}, nil
+	})
+	return &plugin.Result{Plugin: "my-plugin", Targets: targets}, err
+}
+```
+
+La funzione gira su più goroutine insieme: ciò che condivide (client, cache, contatori) deve essere sicuro per l'uso concorrente. Logga con l'host del target, perché le righe di target diversi si mescolano.
+
 ## Configurare manent
 
 Il plugin si attiva nella sezione `plugins` di `manent.yml`, sotto il nome con cui i descrittori lo riferiranno (`deploy.plugin`). La chiave `external` lo identifica come esterno; tutte le altre chiavi sono la configurazione passata alla Factory del plugin.
@@ -181,9 +203,9 @@ service Secrets {
 
 | Chiamata | Note |
 |---|---|
-| `Configure` | Prima chiamata dopo ogni avvio. Riceve la configurazione in JSON e restituisce il nome del plugin e le capacità (`dry_run`, `current_release`, `rollback`, `slots`, `traffic_router`, `testers`, `scale`). |
+| `Configure` | Prima chiamata dopo ogni avvio. Riceve la configurazione in JSON e restituisce il nome del plugin e le capacità (`dry_run`, `current_release`, `rollback`, `slots`, `traffic_router`, `testers`, `scale`, `parallel_targets`). |
 | `Supports` | Interrogata dalla policy di selezione. Un errore di comunicazione vale "non supportato". |
 | `Validate` | Senza accesso ai segreti. Timeout di 30 secondi. |
-| `Deploy`, `DryRun`, `CurrentRelease`, `Rollback` | Con il contesto del deploy: un annullamento si propaga al plugin. `secrets_broker_id` indica dove è esposto il servizio `Secrets`. |
+| `Deploy`, `DryRun`, `CurrentRelease`, `Rollback` | Con il contesto del deploy: un annullamento si propaga al plugin. `secrets_broker_id` indica dove è esposto il servizio `Secrets`; `parallelism` su quanti target il plugin può lavorare nello stesso momento (0 dagli host precedenti). |
 
 Per rigenerare il codice Go dopo una modifica del `.proto`: `make proto`.

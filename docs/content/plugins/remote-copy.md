@@ -53,7 +53,7 @@ deploy:
 
 ## How it works
 
-For each target, in sequence:
+For each target (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time):
 
 1. opens the SSH connection, with the key or password read from the secrets at connection time;
 2. creates `dest_dir` (`mkdir -p`);
@@ -61,7 +61,7 @@ For each target, in sequence:
 4. if the artifact has a sha256 and `verify_checksum` is not `false`, runs `sha256sum` on the remote file and compares it;
 5. runs `post_command`, if set.
 
-The deploy stops at the first target that fails. Rerunning it overwrites the remote file with the same contents, so it is idempotent. `post_command` must be idempotent too, because a retry runs it again.
+After the first target that fails no other target starts; the ones already running finish. Rerunning it overwrites the remote file with the same contents, so it is idempotent. `post_command` must be idempotent too, because a retry runs it again.
 
 ## `releases` layout
 
@@ -143,8 +143,11 @@ The dry-run checks all targets and reports the state of each (`ready` or `failed
     {
       "host": "192.168.1.10",
       "status": "deployed",
-      "details": {"remote_path": "/opt/myapp/releases/myapp-1.2.3.tar.gz", "checksum": "verified", "post_command": "ok"}
+      "details": {"remote_path": "/opt/myapp/releases/myapp-1.2.3.tar.gz", "checksum": "verified", "post_command": "ok"},
+      "duration_ms": 4210
     }
   ]
 }
 ```
+
+A target's `status` is `deployed`, `failed`, or `skipped` when it never started because another target of the batch failed; `duration_ms` is the time spent on it.

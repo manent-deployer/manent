@@ -19,7 +19,7 @@
 :   The observation time after a rollout stage or a traffic step, during which the health gate is read repeatedly.
 
 **Batch**
-:   Within a rollout pass, the group of at most `maxUnavailable` targets updated together.
+:   Within a rollout pass, the group of at most `maxUnavailable` targets out of service together. Without a rollout all the targets are one batch. The plugin updates its targets one after the other, or `parallel` at a time ([parallel targets](../guida/ondate.md#parallel-targets)).
 
 **Callback**
 :   An HTTP endpoint that receives an event for every step and for the outcome of a deploy. See [Callbacks](../guida/callback.md).

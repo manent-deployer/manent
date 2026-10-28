@@ -32,6 +32,9 @@ type DescriptorPolicy struct {
 	// ConfigRef says which configuration revision the descriptor can choose with config.ref:
 	// none (default), ref (an allowed ref name) or sha (also a commit SHA).
 	ConfigRef string
+	// MaxParallel limits the parallelism (deploy.parallel, rollout.waves[].parallel) the
+	// descriptor can ask for; a percentage is resolved against all the targets. 0: no limit.
+	MaxParallel int
 }
 
 // Values of DescriptorPolicy.ConfigRef.
@@ -103,6 +106,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 			}
 		}
 	}
+	errs = append(errs, p.checkParallel(d, c)...)
 	if !p.Targets && len(d.Deploy.Targets) > 0 && len(c.Targets) == 0 {
 		errs = append(errs, errors.New("deploy.targets cannot be set by the descriptor: it must be defined in the environment configuration (descriptor_policy.targets)"))
 	}
@@ -110,4 +114,34 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 		return fmt.Errorf("descriptor not allowed by the policy: %w", err)
 	}
 	return nil
+}
+
+// checkParallel verifies the parallelism the descriptor adds against MaxParallel. What the
+// environment configuration defines (parallel, rollout) is not checked. A percentage is
+// resolved against all the targets known before the merge: no batch is larger.
+func (p *DescriptorPolicy) checkParallel(d descriptor.Descriptor, c EnvConfig) []error {
+	if p.MaxParallel <= 0 {
+		return nil
+	}
+	n := max(len(c.Targets), len(d.Deploy.Targets))
+	check := func(field, v string) error {
+		if v == "" || descriptor.Count(v, n) <= p.MaxParallel {
+			return nil
+		}
+		return fmt.Errorf("%s %s cannot be set by the descriptor: at most %d targets at the same time (descriptor_policy.max_parallel)", field, v, p.MaxParallel)
+	}
+	var errs []error
+	if c.Parallel == "" {
+		if err := check("deploy.parallel", d.Deploy.Parallel); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if c.Rollout == nil && d.Rollout != nil {
+		for i, w := range d.Rollout.Waves {
+			if err := check(fmt.Sprintf("rollout.waves[%d].parallel", i), w.Parallel); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errs
 }

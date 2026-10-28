@@ -76,7 +76,7 @@
 :   Il modo in cui si trova la release a cui tornare in un rollback; `plugin` la legge dai target.
 
 **Lotto**
-:   Dentro un passo del rollout, il gruppo di al più `maxUnavailable` target aggiornati insieme.
+:   Dentro un passo del rollout, il gruppo di al più `maxUnavailable` target fuori servizio insieme. Senza rollout tutti i target sono un lotto. Il plugin ne aggiorna i target uno dopo l'altro, o `parallel` alla volta ([target in parallelo](../guida/ondate.md#target-in-parallelo)).
 
 **Ondata**
 :   Un gruppo di target selezionati per etichetta in un rollout a ondate, rilasciato dopo che il gate dell'ondata precedente è verde.

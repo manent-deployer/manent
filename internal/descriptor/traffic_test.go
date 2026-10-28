@@ -108,3 +108,35 @@ func TestMetricGateAnalisi(t *testing.T) {
 		t.Errorf("soglie invertite: %v", err)
 	}
 }
+
+func TestParallel(t *testing.T) {
+	for v, want := range map[string]int{"": 1, "4": 4, "25%": 5, "1%": 1, "100%": 20} {
+		if got := Count(v, 20); got != want {
+			t.Errorf("Count(%q, 20) = %d, want %d", v, got, want)
+		}
+	}
+	d := &Descriptor{Deploy: Deploy{Parallel: "4"}, Rollout: &Rollout{Waves: []Wave{{Name: "canary", Select: "x=y", Parallel: "1"}, {Name: "all", Select: "x=z"}}}}
+	if d.ParallelFor("canary") != "1" || d.ParallelFor("all") != "4" || d.ParallelFor("other") != "4" {
+		t.Errorf("ParallelFor: %q %q", d.ParallelFor("canary"), d.ParallelFor("all"))
+	}
+	cases := map[string]*Rollout{
+		"invalid rollout.waves[0].parallel \"0\"": {Waves: []Wave{{Name: "a", Select: "x=y", Parallel: "0"}}},
+		"invalid rollout.waves[0].parallel \"x\"": {Waves: []Wave{{Name: "a", Select: "x=y", Parallel: "x"}}},
+		"parallel not allowed with strategy":      {Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}, Waves: []Wave{{Name: "a", Select: "x=y", Parallel: "2"}}},
+	}
+	for want, r := range cases {
+		if err := r.Validate(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("want %q, got %v", want, err)
+		}
+	}
+	bad := Descriptor{APIVersion: APIVersion, Application: "a", Environment: "e", Artifact: Artifact{Type: "t", Name: "a", Source: "s"},
+		Deploy: Deploy{Parallel: "150%"}}
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "invalid deploy.parallel") {
+		t.Errorf("deploy.parallel 150%%: %v", err)
+	}
+	bad.Deploy.Parallel = "2"
+	bad.Rollout = &Rollout{Strategy: StrategyTraffic, Traffic: &TrafficRollout{Steps: []int{100}}}
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "deploy.parallel not allowed") {
+		t.Errorf("deploy.parallel with traffic: %v", err)
+	}
+}

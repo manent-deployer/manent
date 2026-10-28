@@ -113,6 +113,18 @@ func (s slotFake) CandidateWeight(context.Context, *plugin.Request) (int, error)
 	return *s.weight, nil
 }
 
+// parFake works on its targets with plugin.ForEachTarget and reports the parallelism it got.
+type parFake struct{ fake }
+
+func (parFake) ParallelTargets() bool { return true }
+
+func (parFake) Deploy(ctx context.Context, r *plugin.Request) (*plugin.Result, error) {
+	res, err := plugin.ForEachTarget(ctx, r, func(context.Context, plugin.Target) (plugin.TargetResult, error) {
+		return plugin.TargetResult{Status: plugin.StatusDeployed, Details: map[string]string{"parallelism": strconv.Itoa(r.Parallelism)}}, nil
+	})
+	return &plugin.Result{Plugin: "fake", Targets: res}, err
+}
+
 func factory(cfg map[string]any, log *slog.Logger) (plugin.Deployer, error) {
 	if v, _ := cfg["slots"].(bool); v {
 		return slotFake{fake: fake{log: log}, weight: new(int)}, nil
@@ -122,6 +134,9 @@ func factory(cfg map[string]any, log *slog.Logger) (plugin.Deployer, error) {
 	}
 	if v, _ := cfg["rollback"].(bool); v {
 		return rbFake{fake{log: log}}, nil
+	}
+	if v, _ := cfg["parallel"].(bool); v {
+		return parFake{fake{log: log}}, nil
 	}
 	if v, _ := cfg["dry_run"].(bool); v {
 		return dryFake{fake{log: log}}, nil

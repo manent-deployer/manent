@@ -42,7 +42,7 @@ rollout:
     - {name: canary, select: "canary=true", bake: 15m}
     - {name: eu-1, select: "region=eu-1, canary!=true", by: az, bake: 10m}
     - {name: resto, select: "region in (eu-2, us-1)", by: az, parallelRegions: 2, bake: 10m}
-  maxUnavailable: 25%                  # target aggiornati insieme in un passo
+  maxUnavailable: 25%                  # target fuori servizio insieme in un passo
   onFailure: stop                      # stop | rollback-wave | rollback-all
   approvalsBetween: [canary]           # pausa per approvazione dopo queste ondate
   health:
@@ -66,7 +66,8 @@ rollout:
 | `waves[].bake` | `0s` | Tempo di osservazione dopo ogni stadio dell'ondata (al massimo 24h). |
 | `waves[].batchBake` | nessun gate | Se presente, gate dopo ogni lotto di un passo tranne l'ultimo: le sonde leggono i target del lotto per questo tempo (`0s`: una sola lettura). Vedi [gate per lotto](#gate-per-lotto). |
 | `waves[].maxUnavailable` | quello del rollout | Sostituisce `maxUnavailable` per i passi dell'ondata: ad esempio un nodo alla volta nel canary e il 25% nelle ondate ampie. |
-| `maxUnavailable` | `1` | Target aggiornati insieme dentro un passo: un numero o una percentuale dei target del passo. |
+| `waves[].parallel` | `deploy.parallel` | Sostituisce `deploy.parallel` per i lotti dell'ondata. Vedi [target in parallelo](#target-in-parallelo). |
+| `maxUnavailable` | `1` | Target di un passo fuori servizio insieme (un lotto): un numero o una percentuale dei target del passo. |
 | `onFailure` | `stop` | Cosa fare se un passo o un gate fallisce (vedi sotto). |
 | `approvalsBetween` | | Ondate dopo le quali il rollout attende un'approvazione. |
 | `health` | | Controlli del gate. Senza, il gate è solo il tempo di osservazione. |
@@ -84,6 +85,29 @@ manent validate -f release.yml     # rollout.stages: canary, eu-1/eu-1b, resto/e
 - Dentro un passo i target sono aggiornati a **lotti** di `maxUnavailable` (quello dell'ondata, se presente, altrimenti quello del rollout), un lotto dopo l'altro. Una percentuale si calcola sui target del passo, arrotondando per difetto e con almeno un target.
 
 Gli step che lavorano sui target, da `deploy` ad `activation` (con `post-test` in mezzo), sono eseguiti per ogni lotto; quelli prima (`secrets`, `artifacts`, `qa`) una volta sola all'inizio. Nel log e nella timeline ogni esecuzione porta il nome del passo e del lotto: `deploy@eu-1/eu-1/eu-1b#0`.
+
+### Target in parallelo { #target-in-parallelo }
+
+`maxUnavailable` dice quanti target sono fuori servizio insieme; `parallel` dice quanti di questi il plugin aggiorna **nello stesso momento**. Di default (`1`) il plugin tratta i target di un lotto uno dopo l'altro: con 20 host in un lotto e una copia di 30 secondi, il lotto dura 10 minuti. Con `parallel: 10` dura circa un minuto, e lotti, gate e approvazioni restano esattamente come prima.
+
+```yaml
+deploy:
+  parallel: 10            # configurazione di ambiente: parallel: 10
+rollout:
+  maxUnavailable: 50%     # 40 host: due lotti da 20, uno dopo l'altro, con il gate in mezzo
+  waves:
+    - {name: canary, select: "tier=canary", parallel: 1}   # un host alla volta
+    - {name: all, select: "tier=web"}                      # 10 host alla volta
+```
+
+- **Valore.** Un numero o una percentuale del lotto (`25%`), almeno 1. `waves[].parallel` sostituisce `deploy.parallel` per i lotti di quell'ondata. Senza rollout c'è un solo lotto con tutti i target, quindi `deploy.parallel` funziona anche da solo.
+- **Limiti.** Il parallelismo effettivo di un lotto è il minimo tra quanto richiesto, `plugins.<nome>.max_parallel` in `manent.yml` (default 16, scelto dalla piattaforma per proteggere worker e destinazioni) e la dimensione del lotto. `descriptor_policy.max_parallel` limita quanto può chiedere un descrittore (`422` oltre il limite); un valore nella configurazione di ambiente non vi è soggetto.
+- **Plugin.** Aggiornano i target in parallelo solo i plugin che lo dichiarano: tra quelli inclusi `remote-copy`, `container`, `jboss` e `windows`, e i [plugin esterni](../plugins/esterni.md#parallel-targets) con la capability `parallel_targets`. Con gli altri plugin i target restano in sequenza, con un warning nel log del deploy.
+- **Errori.** Dopo il primo target fallito nessun altro target del lotto parte, e quelli già avviati finiscono (interrompere una copia a metà lascerebbe uno stato più difficile da recuperare). I target mai avviati risultano `skipped`. Un rollback ripristina i target del lotto con lo stesso parallelismo.
+- **Durabilità.** Il lotto resta un solo step DBOS: retry e recovery ripetono l'intero lotto, come prima, e il `Deploy` del plugin deve essere idempotente. Step e nomi non cambiano, quindi i deploy già in corso quando manent viene aggiornato proseguono invariati.
+- **Dove vederlo.** L'output dello step `deploy` riporta `parallel` (effettivo) e, quando è stato ridotto, `parallel_requested`; `manent deploy` su terminale lo mostra accanto allo step (`deploy@all#0  42s · 10 at a time`). `manent_target_deploy_seconds` misura il tempo speso su ogni target.
+
+`parallel` non è ammesso con la strategy `traffic`: lo slot candidato non ha lotti.
 
 ## Health gate
 

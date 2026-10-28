@@ -42,7 +42,7 @@ rollout:
     - {name: canary, select: "canary=true", bake: 15m}
     - {name: eu-1, select: "region=eu-1, canary!=true", by: az, bake: 10m}
     - {name: rest, select: "region in (eu-2, us-1)", by: az, parallelRegions: 2, bake: 10m}
-  maxUnavailable: 25%                  # targets updated together in a pass
+  maxUnavailable: 25%                  # targets out of service together in a pass
   onFailure: stop                      # stop | rollback-wave | rollback-all
   approvalsBetween: [canary]           # pause for approval after these waves
   health:
@@ -66,7 +66,8 @@ rollout:
 | `waves[].bake` | `0s` | Bake time after each stage of the wave (at most 24h). |
 | `waves[].batchBake` | no gate | If set, a gate after every batch of a pass but the last: the probes read the batch's targets for this time (`0s`: a single reading). See [batch gate](#batch-gate). |
 | `waves[].maxUnavailable` | the rollout's | Replaces `maxUnavailable` for the passes of the wave: for example one node at a time in the canary and 25% in the wide waves. |
-| `maxUnavailable` | `1` | Targets updated together within a pass: a number or a percentage of the pass's targets. |
+| `waves[].parallel` | `deploy.parallel` | Replaces `deploy.parallel` for the batches of the wave. See [parallel targets](#parallel-targets). |
+| `maxUnavailable` | `1` | Targets of a pass out of service together (a batch): a number or a percentage of the pass's targets. |
 | `onFailure` | `stop` | What to do if a pass or a gate fails (see below). |
 | `approvalsBetween` | | Waves after which the rollout waits for an approval. |
 | `health` | | Gate checks. Without them, the gate is only the bake time. |
@@ -84,6 +85,29 @@ manent validate -f release.yml     # rollout.stages: canary, eu-1/eu-1b, rest/eu
 - Within a pass the targets are updated in **batches** of `maxUnavailable` (the wave's, if set, otherwise the rollout's), one batch after the other. A percentage is computed on the pass's targets, rounded down and with at least one target.
 
 The steps that work on the targets, from `deploy` to `activation` (with `post-test` in between), run for each batch; the ones before (`secrets`, `artifacts`, `qa`) run only once at the start. In the log and the timeline each run carries the name of the pass and the batch: `deploy@eu-1/eu-1/eu-1b#0`.
+
+### Parallel targets { #parallel-targets }
+
+`maxUnavailable` says how many targets are out of service together; `parallel` says how many of them the plugin updates **at the same time**. By default (`1`) the plugin works on the targets of a batch one after the other: with 20 hosts in a batch and a 30-second copy, the batch takes 10 minutes. With `parallel: 10` it takes about one minute, and the batches, gates and approvals stay exactly as they were.
+
+```yaml
+deploy:
+  parallel: 10            # environment configuration: parallel: 10
+rollout:
+  maxUnavailable: 50%     # 40 hosts: two batches of 20, one after the other, gate between them
+  waves:
+    - {name: canary, select: "tier=canary", parallel: 1}   # one host at a time
+    - {name: all, select: "tier=web"}                      # 10 hosts at a time
+```
+
+- **Value.** A number or a percentage of the batch (`25%`), at least 1. `waves[].parallel` replaces `deploy.parallel` for the batches of that wave. Without a rollout there is a single batch with all the targets, so `deploy.parallel` works on its own too.
+- **Caps.** The effective parallelism of a batch is the smallest of what is asked, `plugins.<name>.max_parallel` in `manent.yml` (default 16, chosen by the platform to protect workers and destinations) and the size of the batch. `descriptor_policy.max_parallel` limits what a descriptor can ask for (`422` beyond it); a value in the environment configuration is not subject to it.
+- **Plugins.** Only the plugins that declare it update targets in parallel: `remote-copy`, `container`, `jboss` and `windows` among the built-in ones, and the [external plugins](../plugins/esterni.md#parallel-targets) with the `parallel_targets` capability. With any other plugin the targets stay one after the other, with a warning in the deploy log.
+- **Errors.** After the first failed target no new target of the batch starts, and the ones already running finish (stopping a copy halfway would leave a state harder to recover). The targets never started are reported as `skipped`. A rollback restores the targets of the batch with the same parallelism.
+- **Durability.** The batch stays a single DBOS step: retries and recoveries repeat the whole batch, as before, and the plugin's `Deploy` must be idempotent. Steps and their names do not change, so deploys already running when manent is updated go on unchanged.
+- **Where to see it.** The output of the `deploy` step reports `parallel` (effective) and, when it was reduced, `parallel_requested`; `manent deploy` on a terminal prints it next to the step (`deploy@all#0  42s · 10 at a time`). `manent_target_deploy_seconds` measures the time spent on each target.
+
+`parallel` is not allowed with the `traffic` strategy: the candidate slot has no batches.
 
 ## Health gate { #health-gate }
 

@@ -175,6 +175,7 @@ func NewPlugins(cfg *config.Config, log *slog.Logger, worker bool) (*plugin.Regi
 	for _, name := range slices.Sorted(maps.Keys(cfg.Plugins)) {
 		pc := maps.Clone(cfg.Plugins[name])
 		delete(pc, config.PluginQueueKey)
+		delete(pc, config.PluginMaxParallelKey)
 		switch {
 		case !cfg.ServesPlugin(name, worker):
 			if err := reg.Register(name, queuedPlugin(name, cfg.PluginQueue(name), cfg.PluginArtifactTypes(name))); err != nil {
@@ -211,14 +212,20 @@ func NewRollbackPolicy(cfg *config.Config, locators map[string]plugin.ReleaseLoc
 // artifacts step, the deploy step (which downloads again a missing file) and the final cleanup.
 // It also returns the load balancer and router operations used by the engine (batch draining
 // and percentage rollouts), which share the deploy plugin and the secrets.
-func NewSteps(plugins *plugin.Registry, store *artifact.Store, sp secrets.Provider, locators map[string]plugin.ReleaseLocator, log *slog.Logger) (*pipeline.Registry, *steps.Traffic, error) {
+//
+// cfg gives the parallelism caps of the plugins (plugins.<name>.max_parallel); targets, if not
+// nil, records the time spent on every target.
+func NewSteps(cfg *config.Config, plugins *plugin.Registry, store *artifact.Store, sp secrets.Provider, locators map[string]plugin.ReleaseLocator,
+	targets steps.TargetRecorder, log *slog.Logger) (*pipeline.Registry, *steps.Traffic, error) {
 	stepLog := log.With("component", "step")
 	deploy := steps.Deploy{
-		Policies:  map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
-		Secrets:   sp,
-		Artifacts: store,
-		Locators:  locators,
-		Logger:    stepLog,
+		Policies:    map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
+		Secrets:     sp,
+		Artifacts:   store,
+		Locators:    locators,
+		MaxParallel: cfg.PluginMaxParallel,
+		Targets:     targets,
+		Logger:      stepLog,
 	}
 	providers := NewTrafficProviders()
 	pool := steps.Pool{Providers: providers, Secrets: sp, Logger: log.With("component", "traffic")}
@@ -442,7 +449,8 @@ func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker,
 // NewDescriptorPolicy returns the descriptor policy of the configuration.
 func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 	dp := cfg.DescriptorPolicy
-	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams, ConfigRef: cmp.Or(dp.ConfigRef, envconfig.ConfigRefNone)}
+	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams, ConfigRef: cmp.Or(dp.ConfigRef, envconfig.ConfigRefNone),
+		MaxParallel: dp.MaxParallel}
 }
 
 // NewResolver creates the environment configuration resolver for the configured provider;
@@ -678,7 +686,16 @@ func newComponents(cfg *config.Config, worker bool) (*components, error) {
 	}
 	store := &artifact.Store{Fetcher: artifact.DefaultFetcher{Sources: sources}, WorkDir: cfg.WorkDir}
 	locators := NewLocators(cfg, log)
-	reg, trafficOps, err := NewSteps(plugins, store, sp, locators, log)
+	var metrics *telemetry.Metrics
+	if cfg.Observability.Metrics {
+		metrics = telemetry.NewMetrics(telemetry.BuildInfo{Version: version.Version, Commit: version.Get().Commit, WorkflowVersion: cfg.App.Version})
+	}
+	// A nil *Metrics must not become a non-nil interface.
+	var targetRec steps.TargetRecorder
+	if metrics != nil {
+		targetRec = metrics
+	}
+	reg, trafficOps, err := NewSteps(cfg, plugins, store, sp, locators, targetRec, log)
 	if err != nil {
 		return nil, err
 	}
@@ -704,10 +721,6 @@ func newComponents(cfg *config.Config, worker bool) (*components, error) {
 		Secrets: sp,
 		Policy:  policy,
 		Logger:  log.With("component", "callback"),
-	}
-	var metrics *telemetry.Metrics
-	if cfg.Observability.Metrics {
-		metrics = telemetry.NewMetrics(telemetry.BuildInfo{Version: version.Version, Commit: version.Get().Commit, WorkflowVersion: cfg.App.Version})
 	}
 	health, err := NewHealthChecker(cfg, sp)
 	if err != nil {

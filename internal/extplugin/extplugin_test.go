@@ -159,6 +159,31 @@ func TestDryRun(t *testing.T) {
 	}
 }
 
+func TestParallelTargets(t *testing.T) {
+	// A plugin without the capability counts as sequential.
+	p, _ := newProcess(t, map[string]any{"command": fakeBin}, nil)
+	if plugin.SupportsParallel(p) {
+		t.Fatal("parallel_targets declared by a plugin that does not implement it")
+	}
+	p, _ = newProcess(t, map[string]any{"command": fakeBin}, map[string]any{"parallel": true})
+	if !plugin.SupportsParallel(p) {
+		t.Fatal("parallel_targets capability lost")
+	}
+	req := request(nil)
+	req.Targets = []plugin.Target{{Host: "h1"}, {Host: "h2"}, {Host: "h3"}}
+	req.Parallelism = 2
+	res, err := p.Deploy(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parallelism reaches the plugin; result order and durations cross the protocol.
+	for i, r := range res.Targets {
+		if r.Host != req.Targets[i].Host || r.Details["parallelism"] != "2" || r.Status != plugin.StatusDeployed {
+			t.Errorf("target %d: %+v", i, r)
+		}
+	}
+}
+
 func TestRollback(t *testing.T) {
 	ctx := context.Background()
 	// Plugin without rollback: the declared capabilities exclude it.

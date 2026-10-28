@@ -802,7 +802,7 @@ export interface components {
             /** @description Anchored regular expression (required with format string) */
             pattern?: string;
         };
-        /** @description Deploy section of a descriptor (plugin, targets, parameters). */
+        /** @description Deploy section of a descriptor (plugin, targets, parameters, parallel: targets of a batch the plugin updates at the same time). */
         DeployTargets: {
             [key: string]: unknown;
         };

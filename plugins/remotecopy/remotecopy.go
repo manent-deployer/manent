@@ -197,17 +197,18 @@ func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	if err != nil {
 		return nil, err
 	}
-	res := &plugin.Result{Plugin: Name}
-	for _, t := range req.Targets {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.deployTarget(ctx, t, auth, req)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed})
-			return res, fmt.Errorf("target %s: %w", t.Host, err)
+			return plugin.TargetResult{Status: plugin.StatusFailed}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusDeployed, Details: details})
-	}
-	return res, nil
+		return plugin.TargetResult{Status: plugin.StatusDeployed, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
+
+// ParallelTargets implements plugin.ParallelDeployer: every target has its own SSH session.
+func (p *Plugin) ParallelTargets() bool { return true }
 
 func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, auth Auth, req *plugin.Request) (map[string]string, error) {
 	log := p.logger.With("deployment", req.DeploymentID, "host", t.Host)
@@ -402,18 +403,14 @@ func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plu
 	if err != nil {
 		return nil, err
 	}
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.rollbackTarget(ctx, t, auth, req, previous.Version)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			errs = append(errs, fmt.Errorf("target %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusRolledBack, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusRolledBack, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, auth Auth, req *plugin.Request, version string) (map[string]string, error) {
@@ -457,18 +454,14 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 	if err != nil {
 		return nil, err
 	}
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.checkTarget(ctx, t, auth, req)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			errs = append(errs, fmt.Errorf("target %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusReady, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusReady, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, auth Auth, req *plugin.Request) (map[string]string, error) {

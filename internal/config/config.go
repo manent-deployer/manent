@@ -691,6 +691,9 @@ type DescriptorPolicy struct {
 	// ConfigRef says which configuration revision a descriptor can choose with config.ref
 	// (git provider): none (default), ref (an allowed ref) or sha (also a commit SHA).
 	ConfigRef string `yaml:"config_ref"`
+	// MaxParallel limits the targets of a batch a descriptor can ask to update at the same time
+	// (deploy.parallel, rollout.waves[].parallel). 0: no limit beyond plugins.<name>.max_parallel.
+	MaxParallel int `yaml:"max_parallel"`
 }
 
 // Secrets configures the secret providers besides env: and file:.
@@ -935,6 +938,9 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("descriptor_policy.config_ref %q not supported (none|ref|sha)", c.DescriptorPolicy.ConfigRef))
 	}
+	if c.DescriptorPolicy.MaxParallel < 0 {
+		errs = append(errs, errors.New("descriptor_policy.max_parallel must be >= 0"))
+	}
 	if c.Callbacks.Timeout <= 0 || c.Callbacks.MaxRetries < 0 {
 		errs = append(errs, errors.New("callbacks: timeout must be > 0 and max_retries >= 0"))
 	}
@@ -946,6 +952,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateGovernance()...)
 	errs = append(errs, c.validateRBACEngine()...)
 	errs = append(errs, c.validatePluginQueues()...)
+	errs = append(errs, c.validatePluginParallel()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {
 		errs = append(errs, errors.New("dbos.environment_concurrency cannot exceed global_concurrency"))

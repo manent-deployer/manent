@@ -258,6 +258,11 @@ type Deploy struct {
 	TargetsFrom []ExportRef `json:"targetsFrom,omitempty" yaml:"targetsFrom,omitempty"`
 	// ParamsFrom sets plugin parameters to string exports of the imports.
 	ParamsFrom map[string]ExportRef `json:"paramsFrom,omitempty" yaml:"paramsFrom,omitempty"`
+	// Parallel is the number of targets of a batch the plugin updates at the same time: a
+	// number or a percentage ("25%") of the batch. Default 1 (one after the other). It does not
+	// change how many targets are out of service together (rollout maxUnavailable); a wave can
+	// set its own.
+	Parallel string `json:"parallel,omitempty" yaml:"parallel,omitempty"`
 }
 
 // Target is a deploy destination.
@@ -358,8 +363,12 @@ func (d *Descriptor) Validate() error {
 			errs = append(errs, fmt.Errorf("deploy.targets[%d]: %w", i, err))
 		}
 	}
+	errs = append(errs, validCount("deploy.parallel", d.Deploy.Parallel))
 	if d.Rollout != nil {
 		errs = append(errs, d.Rollout.Validate())
+		if d.Deploy.Parallel != "" && d.Rollout.IsTraffic() {
+			errs = append(errs, errors.New("deploy.parallel not allowed with rollout strategy: traffic (the candidate slot has no batches)"))
+		}
 	}
 	if ref := d.ConfigRef(); d.Config != nil && !ValidConfigRef(ref) {
 		errs = append(errs, fmt.Errorf("invalid config.ref %q: a ref name (refs/tags/env-1) or a commit SHA", ref))

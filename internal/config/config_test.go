@@ -309,6 +309,12 @@ dbos:
 	if cfg.PluginQueue("ansible") != "ansible-pool" || cfg.PluginQueue("remote-copy") != "" {
 		t.Errorf("plugin queues: %v", cfg.Plugins)
 	}
+	if cfg.PluginMaxParallel("remote-copy") != DefaultPluginMaxParallel {
+		t.Errorf("default max_parallel: %d", cfg.PluginMaxParallel("remote-copy"))
+	}
+	if c, err := loadRaw("plugins: {remote-copy: {max_parallel: 4}}\ndbos: {executor_id: w1}"); err != nil || c.PluginMaxParallel("remote-copy") != 4 {
+		t.Errorf("max_parallel: %v", err)
+	}
 	if !cfg.ServesPlugin("ansible", true) || cfg.ServesPlugin("ansible", false) || !cfg.ServesPlugin("remote-copy", false) {
 		t.Error("only a worker that lists the plugin serves its queue; plugins without a queue are served everywhere")
 	}
@@ -318,9 +324,12 @@ dbos:
 		"no types":       {"plugins: {ansible: {queue: ansible-pool}}", "needs artifact_types"},
 		"same type": {"plugins: {a: {artifact_types: [x], queue: qa}, b: {artifact_types: [x], queue: qb}}",
 			"already routed"},
-		"unknown plugin": {"dbos: {executor_id: w1, plugins: [ansible]}", "plugin ansible is not configured"},
-		"no queue":       {"plugins: {remote-copy: {}}\ndbos: {executor_id: w1, plugins: [remote-copy]}", "has no queue"},
-		"region routing": {"plugins: {ansible: {artifact_types: [ansible], queue: q}}\ndbos: {executor_id: w1, region_routing: true, plugins: [ansible]}", "region_routing"},
+		"unknown plugin":   {"dbos: {executor_id: w1, plugins: [ansible]}", "plugin ansible is not configured"},
+		"no queue":         {"plugins: {remote-copy: {}}\ndbos: {executor_id: w1, plugins: [remote-copy]}", "has no queue"},
+		"region routing":   {"plugins: {ansible: {artifact_types: [ansible], queue: q}}\ndbos: {executor_id: w1, region_routing: true, plugins: [ansible]}", "region_routing"},
+		"max_parallel 0":   {"plugins: {remote-copy: {max_parallel: 0}}", "plugins.remote-copy.max_parallel"},
+		"max_parallel str": {"plugins: {remote-copy: {max_parallel: many}}", "plugins.remote-copy.max_parallel"},
+		"policy limit":     {"descriptor_policy: {max_parallel: -1}", "descriptor_policy.max_parallel"},
 	} {
 		if _, err := loadRaw(tc.yaml); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v", name, err)

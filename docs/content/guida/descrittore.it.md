@@ -115,6 +115,7 @@ Schemi supportati: `env:`, `file:` e, se configurato, `vault:` (es. `vault:secre
 | `params` | Parametri specifici del plugin, come mappa di stringhe. |
 | `targetsFrom` | Target presi dagli export `targets` degli import: `[{import: infra, export: vms}]`. Vedi [Export e import](catene.md#export-import). |
 | `paramsFrom` | Parametri presi dagli export degli import: `{db_host: {import: infra, export: db_host}}`. |
+| `parallel` | Target di un lotto che il plugin aggiorna nello stesso momento: un numero o una percentuale del lotto (default `1`, uno dopo l'altro), entro `plugins.<nome>.max_parallel` e `descriptor_policy.max_parallel`. Vedi [target in parallelo](ondate.md#target-in-parallelo). |
 
 Tutti questi campi possono arrivare dalla [configurazione di ambiente](configurazione-ambiente.md): il descrittore può solo aggiungere ciò che non vi è definito. Dopo la fusione deve esserci almeno un target.
 

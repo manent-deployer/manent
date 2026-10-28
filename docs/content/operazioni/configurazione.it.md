@@ -160,6 +160,7 @@ Vedi [Governance dei rilasci](../guida/governance.md) e [Policy in Rego](../guid
 | `targets` | `true` | Target indicati dal descrittore. |
 | `step_params` | `{}` | Parametri degli [step personalizzati](../guida/step-personalizzati.md) impostabili dal descrittore, per step (`"*"` = tutti). Default: nessuno. |
 | `config_ref` | `none` | Revisione della configurazione di ambiente che il descrittore può scegliere con `config.ref` ([provider git](../integrazioni/git.md)): `none`, `ref` (solo ref ammessi) o `sha` (anche SHA di commit). |
+| `max_parallel` | `0` (nessun limite) | [Parallelismo](../guida/ondate.md#target-in-parallelo) massimo che un descrittore può chiedere (`deploy.parallel`, `rollout.waves[].parallel`); una percentuale si calcola su tutti i target. La configurazione di ambiente non vi è soggetta. |
 
 Vedi [Sicurezza](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
@@ -205,6 +206,8 @@ plugins:
       sha256: "3f1c…"
     artifact_types: [container]
 ```
+
+Due chiavi sono lette da manent e non passate al plugin: `queue` (la [coda propria](scalabilita.md#plugin-queues) del plugin) e `max_parallel`, il limite ai target di un lotto che il plugin aggiorna nello stesso momento, qualunque cosa chieda il deploy (default `16`): protegge worker e destinazioni, come le connessioni SSH o i rate limit di un'API cloud. Vedi [target in parallelo](../guida/ondate.md#target-in-parallelo).
 
 Plugin compilati in manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md). Vedi anche [Plugin esterni](../plugins/esterni.md).
 

@@ -190,7 +190,7 @@ func watch(ctx context.Context, svc service.Service, id, kind string, out io.Wri
 				if s.Error != "" {
 					fmt.Fprintf(out, "  %s %-32s %s  %s\n", p.red("✗"), s.Name, p.dim(d), p.red(firstLine(s.Error)))
 				} else {
-					fmt.Fprintf(out, "  %s %-32s %s\n", p.green("✓"), s.Name, p.dim(d))
+					fmt.Fprintf(out, "  %s %-32s %s\n", p.green("✓"), s.Name, p.dim(d+parallelNote(s.Output)))
 				}
 			}
 		}
@@ -215,6 +215,20 @@ func watch(ctx context.Context, svc service.Service, id, kind string, out io.Wri
 		case <-time.After(progressInterval):
 		}
 	}
+}
+
+// parallelNote describes the parallelism of a deploy batch from the step output: "" when the
+// deploy did not ask for any.
+func parallelNote(output any) string {
+	o, _ := output.(map[string]any)
+	n, _ := o["parallel"].(string)
+	if n == "" {
+		return ""
+	}
+	if asked, _ := o["parallel_requested"].(string); asked != "" {
+		return fmt.Sprintf(" · %s at a time (%s requested)", n, asked)
+	}
+	return " · " + n + " at a time"
 }
 
 // printStages prints a line when a rollout stage starts its health gate or ends; seen holds

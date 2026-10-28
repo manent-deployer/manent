@@ -284,6 +284,12 @@ func (w *Worker) passFinished(d *descriptor.Descriptor, p rollout.Pass, err erro
 func (w *Worker) runPass(ctx dbos.Context, id string, ev *events, d *descriptor.Descriptor, steps pipeline.Plan,
 	p rollout.Pass, outputs map[string]pipeline.Output, res *Result, track *passTrack) ([]startedStep, error) {
 	var started []startedStep
+	// A wave with its own parallel uses it in place of deploy.parallel for its batches.
+	if v := d.ParallelFor(p.Wave); v != d.Deploy.Parallel {
+		c := *d
+		c.Deploy.Parallel = v
+		d = &c
+	}
 	// With a pool every batch is drained from the load balancer before the deploy and put back
 	// in service before activation (or at the end).
 	pool := d.Traffic != nil && d.Traffic.Pool != nil && !d.DryRun

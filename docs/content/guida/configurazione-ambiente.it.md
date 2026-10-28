@@ -118,7 +118,7 @@ La configurazione di ambiente è **autorevole**: il descrittore può solo aggiun
 
 | Campo | Regola |
 |---|---|
-| `policy`, `plugin` | Se definiti in entrambi devono coincidere. |
+| `policy`, `plugin`, `parallel` | Se definiti in entrambi devono coincidere. `parallel` è `deploy.parallel`: i target di un lotto aggiornati nello stesso momento ([target in parallelo](ondate.md#target-in-parallelo)); un valore definito qui non è soggetto a `descriptor_policy.max_parallel`. |
 | `targets` | Se la configurazione li definisce, il descrittore può ometterli o ripeterli identici, etichette comprese. |
 | `params` | Il descrittore può aggiungere chiavi; una chiave presente in entrambi deve avere lo stesso valore. |
 | `secrets` | Il descrittore può aggiungere segreti; lo stesso nome deve avere lo stesso riferimento. |
