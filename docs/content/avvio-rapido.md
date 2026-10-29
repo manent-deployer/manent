@@ -5,6 +5,7 @@
 To see manent at work before installing anything, the demo image runs in one container the server, the web interface, a worker and five hosts reached over SSH, with a few minutes of release history:
 
 ```sh
+git clone https://github.com/manent-deployer/manent.git && cd manent
 docker build -f demo/Dockerfile -t manent-demo .
 docker run --rm -p 8080:8080 -p 9000:9000 --name manent-demo manent-demo
 ```

@@ -66,6 +66,7 @@ The full documentation is at [manent-deployer.github.io/manent](https://manent-d
 One container with the server, the web interface, a worker and five hosts reached over SSH, plus a few minutes of release history:
 
 ```sh
+git clone https://github.com/manent-deployer/manent.git && cd manent
 docker build -f demo/Dockerfile -t manent-demo .
 docker run --rm -p 8080:8080 -p 9000:9000 --name manent-demo manent-demo
 ```
