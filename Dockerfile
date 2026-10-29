@@ -18,7 +18,9 @@ RUN npm run build
 FROM golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+# Downloads from the module proxy are retried: a dropped stream (e.g. "INTERNAL_ERROR; received
+# from peer") is transient and would otherwise fail the whole build.
+RUN for i in 1 2 3; do go mod download && break; [ "$i" = 3 ] && exit 1; sleep $((i * 10)); done
 COPY . .
 COPY --from=web /src/internal/webui/dist internal/webui/dist
 ARG VERSION=dev
@@ -29,12 +31,18 @@ RUN LDFLAGS="-s -w -X github.com/manent-deployer/manent/internal/version.Version
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/manent-plugin-remote-copy ./cmd/manent-plugin-remote-copy
 # The terraform plugin lives in its own repository (manent-deployer/manent-plugin-terraform).
 ARG TERRAFORM_PLUGIN_VERSION=v0.1.0
-RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags "-s -w" \
-    github.com/manent-deployer/manent-plugin-terraform@${TERRAFORM_PLUGIN_VERSION}
+RUN for i in 1 2 3; do \
+      CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags "-s -w" \
+        github.com/manent-deployer/manent-plugin-terraform@${TERRAFORM_PLUGIN_VERSION} && break; \
+      [ "$i" = 3 ] && exit 1; sleep $((i * 10)); \
+    done
 # The ansible plugin lives in its own repository too (manent-deployer/manent-plugin-ansible).
 ARG ANSIBLE_PLUGIN_VERSION=v0.1.0
-RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags "-s -w" \
-    github.com/manent-deployer/manent-plugin-ansible@${ANSIBLE_PLUGIN_VERSION}
+RUN for i in 1 2 3; do \
+      CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags "-s -w" \
+        github.com/manent-deployer/manent-plugin-ansible@${ANSIBLE_PLUGIN_VERSION} && break; \
+      [ "$i" = 3 ] && exit 1; sleep $((i * 10)); \
+    done
 
 # Static Helm binary, used only for "helm template" by the kubernetes plugin.
 FROM alpine/helm:4.3.0 AS helm
