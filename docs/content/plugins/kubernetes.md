@@ -129,7 +129,7 @@ The token's permissions decide what manent can change: a Role limited to the app
 
 ## How it works
 
-For each cluster, in sequence:
+For each cluster (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time: every cluster has its own connection and Helm rendering, and most of the time goes into waiting for the rollout):
 
 1. it reads the manifests and substitutes the variables, or renders the chart with the cluster's capabilities; then it checks every object against the cluster's discovery (existing apiVersion and kind). Objects without a namespace get `namespace`;
 2. it adds the labels `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant`, `manent.io/environment` and the annotations `manent.io/version` and `manent.io/deployment`;

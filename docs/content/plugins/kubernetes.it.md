@@ -129,7 +129,7 @@ I permessi del token decidono cosa manent può modificare: un Role limitato al n
 
 ## Funzionamento
 
-Per ogni cluster, in sequenza:
+Per ogni cluster (uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta: ogni cluster ha la propria connessione e il proprio rendering Helm, e la maggior parte del tempo è l'attesa del rollout):
 
 1. legge i manifest e sostituisce le variabili, oppure renderizza il chart con le capabilities del cluster; poi verifica ogni oggetto con la discovery del cluster (apiVersion e kind esistenti). Agli oggetti senza namespace assegna `namespace`;
 2. aggiunge le etichette `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant`, `manent.io/environment` e le annotazioni `manent.io/version` e `manent.io/deployment`;

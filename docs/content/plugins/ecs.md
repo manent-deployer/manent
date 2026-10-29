@@ -77,7 +77,7 @@ rollback:
 
 ## How it works
 
-For each region, in sequence:
+For each region (one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time: most of the time goes into waiting for the ECS rollout):
 
 1. it reads the service and its task definition. A service with the `CODE_DEPLOY` or `EXTERNAL` deployment controller is rejected;
 2. if the task definition in use was already registered by this deploy with this image, it skips to the wait: retries and recovery do not create new revisions;

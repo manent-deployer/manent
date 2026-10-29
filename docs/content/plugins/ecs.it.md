@@ -77,7 +77,7 @@ rollback:
 
 ## Come funziona
 
-Per ogni region, in sequenza:
+Per ogni region (una dopo l'altra, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta: la maggior parte del tempo è l'attesa del rollout di ECS):
 
 1. legge il servizio e la sua task definition. Un servizio con deployment controller `CODE_DEPLOY` o `EXTERNAL` viene rifiutato;
 2. se la task definition in uso è già stata registrata da questo deploy con questa immagine, passa all'attesa: retry e recovery non creano nuove revisioni;

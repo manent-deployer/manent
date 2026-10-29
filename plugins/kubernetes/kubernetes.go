@@ -433,20 +433,22 @@ func (p *Plugin) objects(ctx context.Context, api API, req *plugin.Request) ([]O
 	return objs, nil, err
 }
 
-// Deploy releases the manifests to every cluster in sequence; it stops at the first error.
-// Server-side apply is idempotent, so the deploy can run again.
+// Deploy releases the manifests to every cluster, req.Parallelism at a time; it stops at the
+// first error. Server-side apply is idempotent, so the deploy can run again.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
-	res := &plugin.Result{Plugin: Name}
-	for _, t := range req.Targets {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.deployTarget(ctx, t, req)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			return res, fmt.Errorf("cluster %s: %w", t.Host, err)
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusDeployed, Details: details})
-	}
-	return res, nil
+		return plugin.TargetResult{Status: plugin.StatusDeployed, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
+
+// ParallelTargets implements plugin.ParallelDeployer: every cluster has its own connection and
+// its own Helm rendering directory.
+func (p *Plugin) ParallelTargets() bool { return true }
 
 func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.Request) (map[string]string, error) {
 	log := p.logger.With("deployment", req.DeploymentID, "cluster", t.Host)
@@ -891,23 +893,19 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 // Rollback applies again on every cluster the objects of the given release, saved in the
 // history, waits for their rollout and, with prune, deletes the objects created only by the
 // failed release. It continues even if a cluster fails and reports the errors at the end. It
-// is idempotent.
+// is idempotent. The clusters run req.Parallelism at a time.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !versionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.rollbackTarget(ctx, t, req, previous.Version)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			errs = append(errs, fmt.Errorf("cluster %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusRolledBack, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusRolledBack, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugin.Request, version string) (map[string]string, error) {
@@ -956,18 +954,14 @@ func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugi
 // object kinds and an apply with dryRun=All, which goes through the cluster's validation,
 // admission and RBAC. Objects in a namespace created by the same manifests cannot be checked.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.checkTarget(ctx, t, req)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			errs = append(errs, fmt.Errorf("cluster %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("cluster %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusReady, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusReady, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 func (p *Plugin) checkTarget(ctx context.Context, t plugin.Target, req *plugin.Request) (map[string]string, error) {

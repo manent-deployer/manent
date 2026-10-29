@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,6 +32,10 @@ type fakeCluster struct {
 	dryRuns int
 	// rv is the global resourceVersion, incremented at every write.
 	rv int
+	// deployed, shared by several clusters, counts the Deployments applied: until it reaches
+	// hold no rollout appears observed.
+	deployed *atomic.Int32
+	hold     int32
 }
 
 var discovery = map[string]string{
@@ -114,6 +119,9 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.rv++
 		o.metadata()["resourceVersion"] = strconv.Itoa(c.rv)
 		if o.Kind() == "Deployment" {
+			if c.deployed != nil {
+				c.deployed.Add(1)
+			}
 			st := map[string]any{"observedGeneration": float64(gen), "replicas": float64(1), "updatedReplicas": float64(1), "availableReplicas": float64(1)}
 			for _, img := range images(o) {
 				if strings.Contains(img, "broken") {
@@ -131,6 +139,9 @@ func (c *fakeCluster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(b)
 	case http.MethodGet:
 		if o, ok := c.objects[r.URL.Path]; ok {
+			if o.Kind() == "Deployment" && c.deployed != nil && c.deployed.Load() < c.hold {
+				o = Object{"apiVersion": o["apiVersion"], "kind": o["kind"], "metadata": o["metadata"], "status": map[string]any{"observedGeneration": float64(0)}}
+			}
 			_ = json.NewEncoder(w).Encode(o)
 			return
 		}
@@ -483,5 +494,45 @@ func TestStoricoPerRelease(t *testing.T) {
 	}
 	if d := fc.get(deployPath); d.str("metadata", "labels", LabelTenant) != "payments" || d.str("metadata", "labels", LabelArtifact) != "shop" {
 		t.Errorf("etichette della release sugli oggetti: %v", d.metadata()["labels"])
+	}
+}
+
+func TestDeployInParallelo(t *testing.T) {
+	p, _, _ := setup(t)
+	if !plugin.SupportsParallel(p) {
+		t.Fatal("ParallelTargets")
+	}
+	// No rollout is observed before the Deployment is applied on all three clusters: one
+	// cluster at a time the first wait would expire.
+	var deployed atomic.Int32
+	var targets []plugin.Target
+	var clusters []*fakeCluster
+	for range 3 {
+		fc := &fakeCluster{objects: map[string]Object{}, deployed: &deployed, hold: 3}
+		srv := httptest.NewServer(fc)
+		t.Cleanup(srv.Close)
+		targets, clusters = append(targets, plugin.Target{Host: srv.URL}), append(clusters, fc)
+	}
+	req := request(targets[0].Host, "1.0.0", manifestV1, t)
+	req.Targets, req.Parallelism = targets, 3
+	res, err := p.Deploy(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range res.Targets {
+		if r.Host != targets[i].Host || r.Status != plugin.StatusDeployed || clusters[i].get(pointerPath).str("data", "version") != "1.0.0" {
+			t.Errorf("cluster %d: %+v", i, r)
+		}
+	}
+
+	req2 := request(targets[0].Host, "2.0.0", manifestV1, t)
+	req2.Targets, req2.Params[ParamWaitTimeout] = targets, "300ms"
+	for _, fc := range clusters {
+		fc.mu.Lock()
+		fc.hold = deployed.Load() + 3
+		fc.mu.Unlock()
+	}
+	if _, err := p.Deploy(context.Background(), req2); err == nil || !strings.Contains(err.Error(), "not completed") {
+		t.Fatalf("in sequenza la prima attesa deve scadere: %v", err)
 	}
 }

@@ -32,6 +32,8 @@ type fakeECS struct {
 	revisions map[string]int
 	registers int
 	updates   int
+	// hold keeps the deployments in progress until that many services have been updated.
+	hold int
 }
 
 type fakeService struct {
@@ -95,7 +97,7 @@ func (f *fakeECS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.reads++
-		if p := s.deployments[0]; p["rolloutState"] == "IN_PROGRESS" && s.reads >= 2 {
+		if p := s.deployments[0]; p["rolloutState"] == "IN_PROGRESS" && s.reads >= 2 && f.updates >= f.hold {
 			image := f.taskDefs[p["taskDefinition"].(string)]["containerDefinitions"].([]any)[0].(map[string]any)["image"].(string)
 			if strings.Contains(image, "broken") {
 				p["rolloutState"], p["rolloutStateReason"], p["failedTasks"] = "FAILED", "ECS deployment circuit breaker: tasks failed to start.", 3
@@ -380,5 +382,43 @@ func TestStrategiaNativaDelegata(t *testing.T) {
 	}
 	if (&Service{Strategy: "ROLLING"}).delegated() {
 		t.Error("rolling delegato")
+	}
+}
+
+func TestDeployInParallelo(t *testing.T) {
+	p, f := setup(t)
+	if !plugin.SupportsParallel(p) {
+		t.Fatal("ParallelTargets")
+	}
+	f.mu.Lock()
+	for _, c := range []string{"prod2", "prod3"} {
+		arn := f.services["prod/shop"].taskDef
+		f.services[c+"/shop"] = &fakeService{taskDef: arn, deployments: []map[string]any{deployment(arn, "PRIMARY", "COMPLETED")}}
+	}
+	// No rollout completes before all three services are updated: one cluster at a time the
+	// first wait would expire.
+	f.hold = 3
+	f.mu.Unlock()
+	req := request(t, "1.0.0", "123456789012.dkr.ecr.eu-west-1.amazonaws.com/shop@"+digest)
+	req.Targets = []plugin.Target{{Host: "eu-west-1/prod"}, {Host: "eu-west-1/prod2"}, {Host: "eu-west-1/prod3"}}
+	req.Params[ParamWaitTimeout] = "2s"
+	req.Parallelism = 3
+	res, err := p.Deploy(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range res.Targets {
+		if r.Host != req.Targets[i].Host || r.Status != plugin.StatusDeployed {
+			t.Errorf("target %d: %+v", i, r)
+		}
+	}
+
+	req2 := request(t, "2.0.0", "123456789012.dkr.ecr.eu-west-1.amazonaws.com/shop@"+digest)
+	req2.Targets, req2.Params[ParamWaitTimeout] = req.Targets, "300ms"
+	f.mu.Lock()
+	f.hold = f.updates + 3
+	f.mu.Unlock()
+	if _, err := p.Deploy(context.Background(), req2); err == nil || !strings.Contains(err.Error(), "not completed") {
+		t.Fatalf("in sequenza la prima attesa deve scadere: %v", err)
 	}
 }

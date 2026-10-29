@@ -339,25 +339,27 @@ func (s *state) details(req *plugin.Request) map[string]string {
 	return d
 }
 
-// Deploy releases the image to every target in sequence; it stops at the first error. It is
-// idempotent: if the service already uses the revision registered by this deploy, it only
-// waits for completion.
+// Deploy releases the image to every target, req.Parallelism at a time; it stops at the first
+// error. It is idempotent: if the service already uses the revision registered by this deploy,
+// it only waits for completion.
 func (p *Plugin) Deploy(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
 	image, err := plugin.ImageReference(req.Artifact)
 	if err != nil {
 		return nil, err
 	}
-	res := &plugin.Result{Plugin: Name}
-	for _, t := range req.Targets {
+	targets, err := plugin.ForEachTarget(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.deployTarget(ctx, t, req, image)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			return res, fmt.Errorf("target %s: %w", t.Host, err)
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusDeployed, Details: details})
-	}
-	return res, nil
+		return plugin.TargetResult{Status: plugin.StatusDeployed, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
+
+// ParallelTargets implements plugin.ParallelDeployer: every target (region and cluster) has its
+// own client and service, so most of the deploy is the wait for the ECS rollout.
+func (p *Plugin) ParallelTargets() bool { return true }
 
 func (p *Plugin) deployTarget(ctx context.Context, t plugin.Target, req *plugin.Request, image string) (map[string]string, error) {
 	s, err := p.read(ctx, t, req)
@@ -501,23 +503,20 @@ func (p *Plugin) CurrentRelease(ctx context.Context, req *plugin.Request) (*plug
 
 // Rollback brings every service back to the task definition of the given release: the one
 // recorded in the release details or, failing that, the family's most recent one with the
-// version tag. It continues even if a target fails. It is idempotent.
+// version tag. It continues even if a target fails, req.Parallelism targets at a time. It is
+// idempotent.
 func (p *Plugin) Rollback(ctx context.Context, req *plugin.Request, previous plugin.Release) (*plugin.Result, error) {
 	if !pluginutil.VersionRe.MatchString(previous.Version) {
 		return nil, fmt.Errorf("invalid version %q", previous.Version)
 	}
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		details, err := p.rollbackTarget(ctx, t, req, previous)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed, Details: details})
-			errs = append(errs, fmt.Errorf("target %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed, Details: details}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusRolledBack, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusRolledBack, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
 
 func (p *Plugin) rollbackTarget(ctx context.Context, t plugin.Target, req *plugin.Request, previous plugin.Release) (map[string]string, error) {
@@ -568,14 +567,10 @@ func (p *Plugin) findRevision(ctx context.Context, s *state, req *plugin.Request
 // DryRun checks on every target, without changing it, that service, task definition and
 // container exist and that the credentials can read them.
 func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Result, error) {
-	res := &plugin.Result{Plugin: Name}
-	var errs []error
-	for _, t := range req.Targets {
+	targets, err := plugin.ForAllTargets(ctx, req, func(ctx context.Context, t plugin.Target) (plugin.TargetResult, error) {
 		s, err := p.read(ctx, t, req)
 		if err != nil {
-			res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusFailed})
-			errs = append(errs, fmt.Errorf("target %s: %w", t.Host, err))
-			continue
+			return plugin.TargetResult{Status: plugin.StatusFailed}, fmt.Errorf("target %s: %w", t.Host, err)
 		}
 		details := s.details(req)
 		details[DetailTaskDefinition] = s.current.ARN
@@ -584,7 +579,7 @@ func (p *Plugin) DryRun(ctx context.Context, req *plugin.Request) (*plugin.Resul
 		}
 		details["running"] = fmt.Sprintf("%d/%d", s.service.RunningCount, s.service.DesiredCount)
 		p.logger.InfoContext(ctx, "service ready for the deploy", "deployment", req.DeploymentID, "region", s.target.region, "service", serviceName(req), "dry_run", true)
-		res.Targets = append(res.Targets, plugin.TargetResult{Host: t.Host, Status: plugin.StatusReady, Details: details})
-	}
-	return res, errors.Join(errs...)
+		return plugin.TargetResult{Status: plugin.StatusReady, Details: details}, nil
+	})
+	return &plugin.Result{Plugin: Name, Targets: targets}, err
 }
