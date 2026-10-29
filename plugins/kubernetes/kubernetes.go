@@ -597,7 +597,8 @@ func ready(o Object) (bool, string, error) {
 		for _, c := range conds {
 			m, _ := c.(map[string]any)
 			if m["type"] == "Progressing" && m["status"] == "False" && m["reason"] == "ProgressDeadlineExceeded" {
-				return false, "", fmt.Errorf("rollout stuck: %v", m["message"])
+				// The deadline has passed: applying the same objects again cannot help.
+				return false, "", plugin.Permanent(fmt.Errorf("rollout stuck: %v", m["message"]))
 			}
 		}
 		updated, total, available := num(o, "status", "updatedReplicas"), num(o, "status", "replicas"), num(o, "status", "availableReplicas")

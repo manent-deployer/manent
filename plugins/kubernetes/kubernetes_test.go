@@ -320,7 +320,7 @@ func TestDeployERollback(t *testing.T) {
 		"---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: shop-extra\n"
 	v2 := request(server, "2.0.0", broken, t)
 	v2.Params[ParamPrune] = "true"
-	if _, err := p.Deploy(ctx, v2); err == nil || !strings.Contains(err.Error(), "rollout stuck") {
+	if _, err := p.Deploy(ctx, v2); err == nil || !strings.Contains(err.Error(), "rollout stuck") || !errors.Is(err, plugin.ErrPermanent) {
 		t.Fatalf("atteso rollout bloccato: %v", err)
 	}
 	if fc.get(pointerPath).str("data", "version") != "1.0.0" || fc.get(extraPath) == nil {

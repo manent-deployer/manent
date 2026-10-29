@@ -134,7 +134,7 @@ Per ogni cluster (uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-
 1. legge i manifest e sostituisce le variabili, oppure renderizza il chart con le capabilities del cluster; poi verifica ogni oggetto con la discovery del cluster (apiVersion e kind esistenti). Agli oggetti senza namespace assegna `namespace`;
 2. aggiunge le etichette `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant`, `manent.io/environment` e le annotazioni `manent.io/version` e `manent.io/deployment`;
 3. applica prima i Namespace, poi salva la release nello storico, poi applica gli altri oggetti in ordine di dipendenza (CRD, permessi, ConfigMap e Secret, Service, workload). Il server-side apply usa il field manager `manent` ed è idempotente;
-4. attende il rollout di Deployment, StatefulSet e DaemonSet. Un Deployment oltre il suo `progressDeadlineSeconds` fallisce subito, senza attendere `wait_timeout`;
+4. attende il rollout di Deployment, StatefulSet e DaemonSet. Un Deployment oltre il suo `progressDeadlineSeconds` fallisce subito, senza attendere `wait_timeout` e senza retry (errore permanente);
 5. con `prune`, elimina gli oggetti rimossi dai manifest;
 6. aggiorna la release in esercizio ed elimina dallo storico le release oltre `keep_releases`.
 

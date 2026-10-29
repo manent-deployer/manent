@@ -137,7 +137,7 @@ rollback:
   enabled: true
 ```
 
-Ogni target è un cluster. Con più cluster aggiungi un target per ciascuno con le etichette `region` e `az`, e un [rilascio a ondate](../guida/ondate.md) li aggiorna uno alla volta.
+Ogni target è un cluster. Con più cluster aggiungi un target per ciascuno con le etichette `region` e `az`, e un [rilascio a ondate](../guida/ondate.md) li aggiorna uno alla volta; senza ondate vengono aggiornati uno dopo l'altro, o [`parallel`](../guida/ondate.md#target-in-parallelo) alla volta.
 
 ```yaml title="manent.yml"
 dbos:

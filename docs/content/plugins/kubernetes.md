@@ -134,7 +134,7 @@ For each cluster (one after the other, or [`parallel`](../guida/ondate.md#parall
 1. it reads the manifests and substitutes the variables, or renders the chart with the cluster's capabilities; then it checks every object against the cluster's discovery (existing apiVersion and kind). Objects without a namespace get `namespace`;
 2. it adds the labels `app.kubernetes.io/managed-by: manent`, `manent.io/application`, `manent.io/artifact`, `manent.io/tenant`, `manent.io/environment` and the annotations `manent.io/version` and `manent.io/deployment`;
 3. it applies the Namespaces first, then saves the release in the history, then applies the other objects in dependency order (CRDs, permissions, ConfigMaps and Secrets, Services, workloads). Server-side apply uses the `manent` field manager and is idempotent;
-4. it waits for Deployments, StatefulSets and DaemonSets to roll out. A Deployment past its `progressDeadlineSeconds` fails immediately, without waiting for `wait_timeout`;
+4. it waits for Deployments, StatefulSets and DaemonSets to roll out. A Deployment past its `progressDeadlineSeconds` fails immediately, without waiting for `wait_timeout` and without retries (permanent error);
 5. with `prune`, it deletes the objects removed from the manifests;
 6. it updates the live release and removes releases beyond `keep_releases` from the history.
 

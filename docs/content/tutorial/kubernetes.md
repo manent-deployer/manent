@@ -137,7 +137,7 @@ rollback:
   enabled: true
 ```
 
-Each target is a cluster. With several clusters, add a target for each one with `region` and `az` labels, and a [wave rollout](../guida/ondate.md) releases them one at a time.
+Each target is a cluster. With several clusters, add a target for each one with `region` and `az` labels, and a [wave rollout](../guida/ondate.md) releases them one at a time; without waves they are updated one after the other, or [`parallel`](../guida/ondate.md#parallel-targets) at a time.
 
 ```yaml title="manent.yml"
 dbos:
