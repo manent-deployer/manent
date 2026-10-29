@@ -26,6 +26,30 @@ flowchart LR
 - I **worker** (`manent-server worker`) eseguono i deploy. Ognuno ha un `executor_id` stabile; dopo un riavvio riprende i propri deploy interrotti.
 - **Postgres** contiene tutto: code, workflow, storico, schedule, approvazioni, log, il registro dei worker. È l'unico componente con stato.
 
+### Perché API e worker sono separati
+
+Sul portatile `serve` esegue entrambi in un solo processo, e resta la scelta giusta per lo sviluppo e le installazioni piccole. In produzione la separazione conviene:
+
+- **Scalabilità indipendente.** Le repliche dell'API seguono le richieste e l'interfaccia web; i worker seguono quanti deploy girano insieme (`dbos.concurrency`, `dbos.environment_concurrency`).
+- **Riavvii senza impatto.** Un pod dell'API si può sostituire in qualunque momento. Un worker smette di prendere deploy, attende quelli in corso fino a `dbos.drain_timeout` e riprende i propri deploy interrotti quando torna con lo stesso `executor_id`: per questo i worker sono uno StatefulSet.
+- **Superficie esposta ridotta.** L'API è ciò che raggiungono utenti e CI; solo i worker raggiungono i target e leggono chiavi SSH, token dei cluster e credenziali cloud. All'API non servono la rete verso i target, `helm` né i plugin esterni.
+- **Worker specializzati.** Worker per region (`dbos.region`), per plugin (`dbos.plugins`, per esempio un'immagine con Ansible) o per coda di un tenant sono possibili solo come processi separati.
+
+Cosa deve raggiungere ogni processo:
+
+| | API | Worker |
+|---|---|---|
+| Postgres | sì | sì |
+| Identity provider (discovery e chiavi OIDC) | sì | no |
+| Consul o Git (configurazione di ambiente) | sì, per rifiutare subito una richiesta non valida | sì |
+| Vault | solo per i segreti che usa l'API stessa: credenziali degli artefatti per `validate --check-artifact`, signing secret di Slack, chiave HMAC dell'audit | sì |
+| Repository degli artefatti | solo per `validate --check-artifact` | sì |
+| Target (SSH, WinRM, API dei cluster e dei cloud) | no | sì |
+| Sistemi di metriche, Alertmanager | no | sì, per i gate di salute |
+| Chat, ITSM, destinatari dei callback | no (riceve le interazioni di Slack) | sì |
+
+Se l'API non raggiunge Consul o Git, i deploy vengono comunque accettati e la verifica passa al worker: gli errori arrivano più tardi, non mai. La separazione non isola l'API dal database: le sue credenziali di Postgres possono agire direttamente su DBOS, quindi sono sensibili quanto quelle dei worker. Con SQLite i processi possono solo condividere un file sullo stesso host: separali solo su Postgres.
+
 ## 1. Postgres
 
 ```sql

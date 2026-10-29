@@ -26,6 +26,30 @@ flowchart LR
 - The **workers** (`manent-server worker`) run deploys. Each one has a stable `executor_id`; after a restart it resumes its own interrupted deploys.
 - **Postgres** holds everything: queues, workflows, history, schedules, approvals, logs, the worker registry. It is the only stateful component.
 
+### Why API and workers are separate
+
+On a laptop `serve` runs both in one process, and that stays the right choice for development and small installations. In production the split pays off:
+
+- **Independent scaling.** API replicas follow requests and the web interface; workers follow how many deploys run together (`dbos.concurrency`, `dbos.environment_concurrency`).
+- **Restarts without impact.** An API pod can be replaced at any time. A worker stops taking deploys, waits for the running ones up to `dbos.drain_timeout` and resumes its own interrupted deploys when it comes back with the same `executor_id`: that is why workers are a StatefulSet.
+- **Smaller exposed surface.** The API is what users and CI reach; only the workers reach the targets and read SSH keys, cluster tokens and cloud credentials. The API needs no network path to the targets, no `helm` and no external plugins.
+- **Specialized workers.** Workers per region (`dbos.region`), per plugin (`dbos.plugins`, for example an image with Ansible) or per tenant queue are only possible as separate processes.
+
+What each process must reach:
+
+| | API | Workers |
+|---|---|---|
+| Postgres | yes | yes |
+| Identity provider (OIDC discovery and keys) | yes | no |
+| Consul or Git (environment configuration) | yes, to reject an invalid request at once | yes |
+| Vault | only for the secrets the API itself uses: artifact credentials for `validate --check-artifact`, the Slack signing secret, the audit HMAC key | yes |
+| Artifact repositories | only for `validate --check-artifact` | yes |
+| Targets (SSH, WinRM, cluster and cloud APIs) | no | yes |
+| Metrics systems, Alertmanager | no | yes, for the health gates |
+| Chat, ITSM, callback receivers | no (it receives the Slack interactions) | yes |
+
+If the API cannot reach Consul or Git, deploys are still accepted and the check moves to the worker: errors arrive later, not never. The split does not isolate the API from the database: its Postgres credentials can act on DBOS directly, so they are as sensitive as the workers'. With SQLite the processes can only share a file on one host: split them only on Postgres.
+
 ## 1. Postgres
 
 ```sql
