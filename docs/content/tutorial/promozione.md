@@ -27,6 +27,9 @@ printf '%s' "$(cat lab/bob.token)" | shasum -a 256
 !!! note "Users sign in with OIDC"
     Static tokens are meant for automated systems such as CI. People normally sign in through an identity provider: see [OIDC identity providers](../integrazioni/oidc.md). The rules below apply in the same way to both.
 
+!!! warning "The web interface needs OIDC"
+    The web interface signs in only through an identity provider. Once `auth.mode` is `enabled` with static tokens alone, it shows *Sign-in is not configured* and the rest of this tutorial uses the CLI. To use the interface again, configure `auth.oidc` with a public client for it (`auth.oidc.ui.client_id`), as explained in [OIDC identity providers](../integrazioni/oidc.md); tokens and OIDC work together, so Alice's and Bob's tokens keep working for the CLI.
+
 ## 2. Roles and rules
 
 Add authentication, permissions and a governance rule to `manent.yml`:

@@ -27,6 +27,9 @@ printf '%s' "$(cat lab/bob.token)" | shasum -a 256
 !!! note "Le persone accedono con OIDC"
     I token statici servono ai sistemi automatici come la CI. Le persone di solito accedono tramite un identity provider: vedi [Identity provider OIDC](../integrazioni/oidc.md). Le regole qui sotto valgono allo stesso modo per entrambi.
 
+!!! warning "L'interfaccia web richiede OIDC"
+    L'interfaccia web accede solo tramite un identity provider. Quando `auth.mode` è `enabled` con i soli token statici, mostra *Sign-in is not configured* e il resto del tutorial usa la CLI. Per tornare a usare l'interfaccia configura `auth.oidc` con un client pubblico per la UI (`auth.oidc.ui.client_id`), come spiegato in [Identity provider OIDC](../integrazioni/oidc.md); token e OIDC funzionano insieme, quindi i token di Alice e Bob restano validi per la CLI.
+
 ## 2. Ruoli e regole
 
 Aggiungi autenticazione, permessi e una regola di governance a `manent.yml`:
