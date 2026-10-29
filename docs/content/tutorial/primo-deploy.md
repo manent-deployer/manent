@@ -171,7 +171,7 @@ manent deploy -f hello.yml
 deploy enqueued: 49bef919-2df2-47f3-bbec-3287a72de817 (manent logs -f 49bef919-… to follow it)
 ```
 
-The command waits for the end and prints the result of every step; it exits with code `0` on success. Look at what happened:
+The command waits for the end and prints the result of every step; it exits with code `0` on success. Look at what happened, replacing `<id>` with the ID printed by `deploy`:
 
 ```sh
 manent logs <id>

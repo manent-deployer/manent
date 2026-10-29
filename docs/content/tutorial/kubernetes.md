@@ -118,6 +118,8 @@ spec:
 
 ## 3. Environment configuration
 
+Replace `/home/you/manent-tutorial` with your path in the secret references and in the descriptor.
+
 ```yaml title="envconfig/hello/hello/test.yml"
 plugin: kubernetes
 targets:

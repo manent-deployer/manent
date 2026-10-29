@@ -14,7 +14,7 @@ In tutorial 1 the descriptor holds everything: hosts, the destination directory,
 
 ## 1. Environment configuration in a file
 
-Create the configuration of `hello` in `test`, with what used to be in the descriptor:
+Create the configuration of `hello` in `test`, with what used to be in the descriptor. As in tutorial 1, replace `/home/you/manent-tutorial` with your path: a secret file that does not exist makes the `secrets` step fail.
 
 ```yaml title="envconfig/hello/hello/test.yml"
 plugin: remote-copy

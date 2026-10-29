@@ -118,6 +118,8 @@ spec:
 
 ## 3. Configurazione di ambiente
 
+Sostituisci `/home/you/manent-tutorial` con il tuo percorso nei riferimenti ai segreti e nel descrittore.
+
 ```yaml title="envconfig/hello/hello/test.yml"
 plugin: kubernetes
 targets:

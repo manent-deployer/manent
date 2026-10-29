@@ -14,7 +14,7 @@ Nel tutorial 1 il descrittore contiene tutto: host, directory di destinazione, i
 
 ## 1. Configurazione di ambiente in un file
 
-Crea la configurazione di `hello` in `test`, con ciò che prima stava nel descrittore:
+Crea la configurazione di `hello` in `test`, con ciò che prima stava nel descrittore. Come nel tutorial 1, sostituisci `/home/you/manent-tutorial` con il tuo percorso: un file del segreto inesistente fa fallire lo step `secrets`.
 
 ```yaml title="envconfig/hello/hello/test.yml"
 plugin: remote-copy
