@@ -122,14 +122,16 @@ manent promote -a hello --from test --to prod --no-wait
 deploy awaiting approval: manent approve 7d817406-dae3-4a37-a382-5a078f2ea912
 ```
 
-Una promozione prende la richiesta dell'ultimo deploy riuscito in `test`, cambia l'ambiente e fissa `artifact.sha256` all'hash effettivamente rilasciato: lo step `qa` rifiuterà qualunque altro file. Target e parametri vengono dalla configurazione di `prod`, mai da `test`.
+Nei comandi che seguono sostituisci `<id>` con l'ID stampato da `promote`.
+
+Una promozione prende la richiesta dell'ultimo deploy riuscito in `test`, cambia l'ambiente e fissa `artifact.sha256` all'hash effettivamente rilasciato: lo step `qa` rifiuterà qualunque altro file. I target non vengono mai copiati: arrivano dalla configurazione di `prod`, insieme ai suoi parametri e segreti. Quello che il descrittore di origine impostava da sé viene invece copiato, quindi si possono promuovere solo le versioni rilasciate in `test` con il descrittore corto `hello-min.yml`: le versioni 1.x del [tutorial 1](primo-deploy.md), rilasciate con un descrittore che imposta `dest_dir` e la chiave, andrebbero in conflitto con la configurazione di `prod` (`environment configuration incompatible with the descriptor`). Se serve, `--deploy-file` sostituisce la sezione `deploy` del deploy di origine.
 
 ## 5. Quattro occhi
 
 Alice non può approvare la propria promozione: il suo ruolo non lo consente, e anche con il permesso chi ha richiesto un deploy non può approvarlo.
 
 ```sh
-manent approve 7d817406-dae3-4a37-a382-5a078f2ea912 -m ok
+manent approve <id> -m ok
 ```
 
 ```text
@@ -140,13 +142,13 @@ Bob vede la richiesta tra quelle su cui può decidere, e la approva citando il c
 
 ```sh
 MANENT_TOKEN_FILE=lab/bob.token manent approvals
-MANENT_TOKEN_FILE=lab/bob.token manent approve 7d817406-dae3-4a37-a382-5a078f2ea912 -m "CHG-1234"
+MANENT_TOKEN_FILE=lab/bob.token manent approve <id> -m "CHG-1234"
 ```
 
 Il deploy viene accodato con lo stesso ID e parte. Il suo stato conserva tutta la storia:
 
 ```sh
-manent status 7d817406-dae3-4a37-a382-5a078f2ea912 | jq -c '{state, kind, version, requested_by, approval: .approval.decisions}'
+manent status <id> | jq -c '{state, kind, version, requested_by, approval: .approval.decisions}'
 ```
 
 ```json
@@ -162,7 +164,7 @@ Una finestra di freeze blocca i deploy reali. Quelle configurate stanno in `gove
 
 ```sh
 MANENT_TOKEN_FILE=lab/bob.token manent freeze add --name incident-42 -e prod --for 2h --reason "incident 42 in progress"
-manent promote -a hello --from test --to prod --version 1.1.0 --no-wait
+manent promote -a hello --from test --to prod --version 2.0.0 --no-wait
 ```
 
 ```text
