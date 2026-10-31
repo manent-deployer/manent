@@ -2,7 +2,6 @@
 # With the consul provider the content is the value of the manent/myapp/test key (YAML or JSON).
 # Only secret references, never values: the configuration is saved in the deploy history.
 plugin: remote-copy
-policy: default
 targets:
   - host: 192.168.1.10
     port: 22

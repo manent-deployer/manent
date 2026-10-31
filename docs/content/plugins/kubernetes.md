@@ -144,10 +144,10 @@ To stop a deploy that does not start without waiting for the timeout, set `progr
 
 The history is made of ConfigMaps in the namespace:
 
-- `manent-<app>-<env>`: the live release;
-- `manent-<app>-<env>-<version>`: the objects applied by each release, compressed (about 900 KiB at most per release).
+- `manent-<tenant>-<app>-<artifact>-<env>-<hash>`: the live release (for example `manent-untenanted-shop-shop-api-prod-1a2b3c4d`; `untenanted` for the applications no [tenant](../guida/tenant.md) lists);
+- the same name followed by `-<version>`: the objects applied by each release, compressed (about 900 KiB at most per release).
 
-These are the names of a release whose artifact is named after the application, without [tenant](../guida/tenant.md). Every other release (another artifact of the application, or the application of a tenant) has its own history, named from tenant, application, artifact and environment with a hash suffix (for example `manent-untenanted-shop-shop-api-prod-1a2b3c4d`). The ConfigMaps carry the labels of the release, and the pruning beyond `keep_releases` only touches the history of the release being deployed.
+Every release (tenant, application, artifact, environment) has its own history. The ConfigMaps carry the labels of the release, and the pruning beyond `keep_releases` only touches the history of the release being deployed.
 
 The **rollback** re-applies on each cluster the saved objects of the previous release, waits for them to roll out and, with `prune`, deletes the objects created only by the failed release. The previous artifact does not need to be downloaded again. The live release (`plugin` locator) is read from the history; clusters with different releases stop the deploy at the checkpoint.
 
@@ -205,7 +205,7 @@ In [dry-run](../guida/dry-run.md), for each cluster: version and credentials, th
     {
       "host": "k8s-eu1.example.com",
       "status": "deployed",
-      "details": {"namespace": "shop-prod", "objects": "4", "release": "manent-shop-prod-1-4-0-1a2b3c4d", "previous": "1.3.0", "pruned": "ConfigMap/shop-prod/shop-legacy"}
+      "details": {"namespace": "shop-prod", "objects": "4", "release": "manent-untenanted-shop-shop-prod-5e6f7a8b-1-4-0-1a2b3c4d", "previous": "1.3.0", "pruned": "ConfigMap/shop-prod/shop-legacy"}
     }
   ]
 }

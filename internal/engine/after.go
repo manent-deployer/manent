@@ -39,7 +39,7 @@ const (
 
 // Read intervals of the state of dependencies and releases: start at chainPollMin and double
 // up to chainPollMax. Normally the wait is woken earlier by a message from whoever ends
-// (notifyWaiters): periodic reads cover the cases without a message (old workflows,
+// (notifyWaiters): periodic reads cover the cases without a message (a crash before notifying,
 // MAX_RECOVERY_ATTEMPTS_EXCEEDED, retention).
 const (
 	defaultChainPoll = 5 * time.Second

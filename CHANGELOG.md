@@ -220,6 +220,25 @@ ne usa il contenuto come note.
 
 ### Modificato
 
+- **Incompatibile:** `siem.network` e `siem.address` non sono più accettati: ogni destinazione
+  sta in `siem.destinations` (`[{network: tcp, address: siem.example.com:6514}]`).
+- **Incompatibile:** tolto `deploy.policy` (descrittore e configurazione di ambiente): esisteva
+  solo la policy `default`. Il plugin è `deploy.plugin`, altrimenti il primo plugin attivo che
+  supporta il tipo di artefatto.
+- **Incompatibile:** tolto `manent-server serve --no-worker`: per la sola API c'è `manent-server
+  api`.
+- **Incompatibile:** versione dei workflow `0.2.0` (`app.version`). Tolti i percorsi per i
+  workflow delle versioni precedenti: il controllo dei freeze nel rollout e la valutazione dei
+  tick delle schedule avvengono sempre negli step `policy@…`/`policy`, le release eseguono
+  sempre lo step `submit`, lo stato non ricava più applicazione e ambiente dalla chiave di
+  partizione, una revisione fissata della configurazione di ambiente richiede il provider che
+  l'ha registrata. Prima dell'aggiornamento lasciare concludere deploy, approvazioni, attese e
+  release in corso.
+- **Incompatibile:** il plugin `kubernetes` dà a ogni release lo storico
+  `manent-<tenant>-<app>-<artefatto>-<env>-<hash>`, anche all'artefatto omonimo
+  dell'applicazione senza tenant (prima `manent-<app>-<env>`): le ConfigMap con il nome vecchio
+  non sono più lette, e il primo deploy dopo l'aggiornamento non ha una release precedente per
+  il rollback.
 - **Incompatibile:** `envconfig.provider` con le sezioni `envconfig.consul`, `envconfig.file` ed
   `envconfig.git` non è più accettato: manent non parte e l'errore indica la forma
   `envconfig.providers: [{name: default, type: <tipo>, <tipo>: {...}}]`. La sorgente `consul`

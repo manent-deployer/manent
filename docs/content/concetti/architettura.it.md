@@ -32,7 +32,7 @@ flowchart LR
 |---|---|---|
 | `manent` | tutti | Client: parla solo con l'API. Non contiene DBOS, plugin, SSH né driver di database (lo verifica un test sulle dipendenze). |
 | `manent-server` | `serve`, `worker` | **Worker**: possiede un contesto DBOS, esegue i deploy dalla coda e, all'avvio, riprende quelli interrotti con il proprio `executor_id`. |
-| `manent-server` | `api` (o `serve --no-worker`), `admin` | **Client DBOS**: accoda e interroga i deploy, ma non li esegue e non li riprende. |
+| `manent-server` | `api`, `admin` | **Client DBOS**: accoda e interroga i deploy, ma non li esegue e non li riprende. |
 
 Solo `serve` e `worker` avviano un contesto DBOS completo. Gli altri comandi usano un client DBOS: se avviassero un contesto, riprenderebbero i workflow in corso associati al loro ID e li rieseguirebbero in un processo destinato a terminare dopo pochi secondi.
 

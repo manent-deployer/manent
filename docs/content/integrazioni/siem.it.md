@@ -13,8 +13,9 @@ logging:
   format: json            # log applicativo su stderr: json o text
 siem:
   enabled: true
-  network: tcp            # udp | tcp (octet counting, RFC 6587) | unixgram | journald
-  address: siem.example.com:6514
+  destinations:
+    - network: tcp            # udp | tcp (octet counting, RFC 6587) | unixgram | journald
+      address: siem.example.com:6514
 ```
 
 Ogni record diventa un messaggio RFC 5424 con facility `local0`, la severità del livello di log, `APP-NAME` da `app.name` e gli attributi del record come structured data nell'SD-ID `manent@32473`:
@@ -53,9 +54,9 @@ Il TLS verso il collettore lo gestisce di solito un forwarder locale (rsyslog, s
 ```yaml title="manent.yml"
 siem:
   enabled: true
-  network: tcp
-  address: siem.example.com:6514
   destinations:
+    - network: tcp
+      address: siem.example.com:6514
     - network: journald            # gli attributi diventano campi MANENT_<NOME>
 ```
 

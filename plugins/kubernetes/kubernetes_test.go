@@ -274,7 +274,12 @@ const (
 	deployPath  = "/apis/apps/v1/namespaces/shop/deployments/shop"
 	servicePath = "/api/v1/namespaces/shop/services/shop"
 	extraPath   = "/api/v1/namespaces/shop/configmaps/shop-extra"
-	pointerPath = "/api/v1/namespaces/shop/configmaps/manent-shop-prod"
+)
+
+// shopHistory is the history name of the test release (untenanted shop/shop/prod).
+var (
+	shopHistory = historyNames(&plugin.Request{Application: "shop", Environment: "prod"}).pointer
+	pointerPath = "/api/v1/namespaces/shop/configmaps/" + shopHistory
 )
 
 func image(o Object) string {
@@ -358,7 +363,7 @@ func TestStoricoEDryRun(t *testing.T) {
 	}
 	var history []string
 	for path := range fc.objects {
-		if strings.HasPrefix(path, "/api/v1/namespaces/shop/configmaps/manent-shop-prod-") {
+		if strings.HasPrefix(path, "/api/v1/namespaces/shop/configmaps/"+shopHistory+"-") {
 			history = append(history, path)
 		}
 	}
@@ -461,7 +466,7 @@ func TestStoricoPerRelease(t *testing.T) {
 		deploy("shop-api", "untenanted", v, api)
 	}
 	apiNames := historyNames(&plugin.Request{Tenant: "untenanted", Application: "shop", Environment: "prod", Artifact: plugin.Artifact{Name: "shop-api"}})
-	if apiNames.pointer == "manent-shop-prod" || !strings.HasPrefix(apiNames.pointer, "manent-untenanted-shop-shop-api-prod-") {
+	if apiNames.pointer == shopHistory || !strings.HasPrefix(apiNames.pointer, "manent-untenanted-shop-shop-api-prod-") {
 		t.Fatalf("nome dello storico dell'artefatto: %s", apiNames.pointer)
 	}
 	count := func(prefix string) int {
@@ -480,16 +485,16 @@ func TestStoricoPerRelease(t *testing.T) {
 		t.Errorf("il puntatore dell'artefatto shop-api: %s", got)
 	}
 	// keep_releases 2 for each release: the pruning of shop-api did not touch shop.
-	if a, b := count("manent-shop-prod"), count(apiNames.prefix); a != 2 || b != 2 {
+	if a, b := count(shopHistory), count(apiNames.prefix); a != 2 || b != 2 {
 		t.Errorf("storico per release: shop %d, shop-api %d", a, b)
 	}
 	// The same artifact of a tenant is a third release.
 	deploy("shop", "payments", "3.0.0", manifestV1)
 	pay := historyNames(&plugin.Request{Tenant: "payments", Application: "shop", Environment: "prod", Artifact: plugin.Artifact{Name: "shop"}})
-	if pay.pointer == "manent-shop-prod" || fc.get("/api/v1/namespaces/shop/configmaps/"+pay.pointer).str("data", "version") != "3.0.0" {
+	if pay.pointer == shopHistory || fc.get("/api/v1/namespaces/shop/configmaps/"+pay.pointer).str("data", "version") != "3.0.0" {
 		t.Errorf("storico del tenant: %s", pay.pointer)
 	}
-	if count("manent-shop-prod") != 2 || fc.get(pointerPath).str("data", "version") != "1.2.0" {
+	if count(shopHistory) != 2 || fc.get(pointerPath).str("data", "version") != "1.2.0" {
 		t.Error("lo storico untenanted non deve cambiare")
 	}
 	if d := fc.get(deployPath); d.str("metadata", "labels", LabelTenant) != "payments" || d.str("metadata", "labels", LabelArtifact) != "shop" {

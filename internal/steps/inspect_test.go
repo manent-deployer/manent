@@ -36,7 +36,7 @@ func TestInspectTargets(t *testing.T) {
 	reg := plugin.NewRegistry()
 	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
 	_ = reg.Activate(dep.name, nil, discard)
-	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}}, Logger: discard}
+	s := Deploy{Plugins: reg, Logger: discard}
 	d := &descriptor.Descriptor{Application: "shop", Environment: "prod", Artifact: descriptor.Artifact{Type: "application"}}
 	ts := []descriptor.Target{{Host: "a"}, {Host: "b"}, {Host: "c"}}
 	vs, errs, err := s.InspectTargets(context.Background(), d, ts, time.Second, 2)
@@ -49,7 +49,7 @@ func TestInspectTargets(t *testing.T) {
 
 	// A plugin that cannot read the release in service: the whole environment is unreadable.
 	plain := newPlugins(t, &fakeDeployer{name: "plain", types: []string{"application"}})
-	s.Policies[""] = DefaultPolicy{Plugins: plain}
+	s.Plugins = plain
 	if _, _, err := s.InspectTargets(context.Background(), d, ts, time.Second, 2); err == nil {
 		t.Error("atteso errore con un plugin senza ReleaseInspector")
 	}

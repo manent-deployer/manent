@@ -19,8 +19,7 @@ secrets:
     ref: env:MANENT_CALLBACK_KEY
 
 deploy:
-  policy: default
-  plugin: remote-copy                  # optional: otherwise chosen by the policy per artifact type
+  plugin: remote-copy                  # optional: otherwise the first active plugin for the artifact type
   targets:
     - host: 192.168.1.10
       port: 22

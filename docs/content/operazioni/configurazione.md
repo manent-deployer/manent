@@ -9,7 +9,7 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 | Key | Default | Description |
 |---|---|---|
 | `name` | `manent` | Name of the DBOS application and `APP-NAME` of the messages sent to the SIEM. |
-| `version` | `0.1.0` | Workflow version recorded by DBOS: a worker resumes only the workflows of its own version. It is not the binary version and should be changed only when the release notes say so. See [Versions and upgrades](aggiornamenti.md). |
+| `version` | `0.2.0` | Workflow version recorded by DBOS: a worker resumes only the workflows of its own version. It is not the binary version and should be changed only when the release notes say so. See [Versions and upgrades](aggiornamenti.md). |
 
 ### `dbos`
 
@@ -42,9 +42,9 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 | `logging.level` | `info` | `debug`, `info`, `warn`, `error`. |
 | `logging.format` | `text` | `text` or `json`. |
 | `siem.enabled` | `false` | Forwards every log to the structured log destinations. |
-| `siem.network` | `udp` | `udp`, `tcp`, `unixgram` (local syslog socket) or `journald` (native protocol). |
-| `siem.address` | | `host:port` of the collector; for `unixgram` and `journald` the socket path (default `/dev/log` and `/run/systemd/journal/socket`). |
-| `siem.destinations` | `[]` | Additional destinations (`network`, `address`), e.g. the local journal together with the remote SIEM. |
+| `siem.destinations` | `[]` | The destinations, at least one with `enabled`; each forwards every message. |
+| `siem.destinations[].network` | | `udp`, `tcp`, `unixgram` (local syslog socket) or `journald` (native protocol). |
+| `siem.destinations[].address` | | `host:port` of the collector; for `unixgram` and `journald` the socket path (default `/dev/log` and `/run/systemd/journal/socket`). |
 
 See [Logs and SIEM](log-siem.md).
 

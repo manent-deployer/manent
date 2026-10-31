@@ -3,7 +3,7 @@
 # Short bake and health intervals, so a wave rollout takes seconds.
 app:
   name: manent-demo
-  version: 0.1.0
+  version: 0.2.0
 
 dbos:
   database_url: sqlite:/var/lib/manent/manent.db

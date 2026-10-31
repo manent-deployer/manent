@@ -47,8 +47,8 @@ func Run(args []string) error {
 		}
 	}
 	g := &global
-	add("serve", "Starts the API and, in the same process, a worker (unless --no-worker)", &ServeCmd{global: g})
-	add("api", "Starts only the API: enqueues deploys without running them (as serve --no-worker)", &ServeCmd{global: g, NoWorker: true})
+	add("serve", "Starts the API and, in the same process, a worker", &ServeCmd{global: g})
+	add("api", "Starts only the API: enqueues deploys without running them", &ServeCmd{global: g, apiOnly: true})
 	add("worker", "Starts a worker that runs the deploys from the queue", &WorkerCmd{global: g})
 	add("validate", "Checks configuration and descriptor locally, without database", &ValidateCmd{global: g})
 	add("version", "Shows the manent-server version", &cliutil.VersionCmd{})
@@ -188,18 +188,18 @@ func (c *ValidateCmd) Execute([]string) error {
 }
 
 // ServeCmd starts the HTTP server and stops it cleanly on SIGINT/SIGTERM.
-// By default it is also a worker; with --no-worker it only exposes the APIs and leaves
-// execution to the workers.
+// As serve it is also a worker; as api it only exposes the APIs and leaves execution to the
+// workers.
 type ServeCmd struct {
-	global   *GlobalOptions
-	Listen   string `short:"l" long:"listen" description:"listen address (overrides the configuration)"`
-	NoWorker bool   `long:"no-worker" description:"API only: enqueues deploys without running them"`
+	global  *GlobalOptions
+	apiOnly bool
+	Listen  string `short:"l" long:"listen" description:"listen address (overrides the configuration)"`
 }
 
 // Execute implements flags.Commander.
 func (c *ServeCmd) Execute([]string) error {
 	newApp := newWorker
-	if c.NoWorker {
+	if c.apiOnly {
 		newApp = newClient
 	}
 	a, err := newApp(c.global)

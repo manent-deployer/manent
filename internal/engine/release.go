@@ -33,8 +33,7 @@ type releaseInput struct {
 	Release ReleaseStatus `json:"release"`
 	// Descriptors are the deploy descriptors, in the order of Release.Deploys, with IDs and
 	// dependencies (after) already assigned: the workflow enqueues them in its first step.
-	// Releases enqueued by earlier versions lack them, because their deploys were already enqueued.
-	Descriptors []descriptor.Descriptor `json:"descriptors,omitempty"`
+	Descriptors []descriptor.Descriptor `json:"descriptors"`
 }
 
 // SubmitRelease implements ReleaseService. It checks plan, policy, governance and external
@@ -183,15 +182,13 @@ type releaseCheck struct {
 func (w *Worker) releaseWorkflow(ctx dbos.Context, in releaseInput) (ReleaseStatus, error) {
 	rs := in.Release
 	log := w.logger.With("release", rs.ID)
-	if len(in.Descriptors) > 0 {
-		deploys, err := dbos.RunAsStep(ctx, func(c context.Context) ([]ReleaseDeployState, error) {
-			return w.submitDeploys(c, rs, in.Descriptors), nil
-		}, dbos.WithStepName("submit"))
-		if err != nil {
-			return rs, err
-		}
-		rs.Deploys = deploys
+	deploys, err := dbos.RunAsStep(ctx, func(c context.Context) ([]ReleaseDeployState, error) {
+		return w.submitDeploys(c, rs, in.Descriptors), nil
+	}, dbos.WithStepName("submit"))
+	if err != nil {
+		return rs, err
 	}
+	rs.Deploys = deploys
 	stopped := false
 	var published []ReleaseDeployState
 	for poll := w.chainPoll; ; poll = min(poll*2, chainPollMax) {

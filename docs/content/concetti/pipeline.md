@@ -130,7 +130,7 @@ Each deploy uses the `workdir/<deployment-id>` directory of the worker running i
 
 ## Plugin selection
 
-The `deploy` step picks the plugin through a **policy**, given by `deploy.policy`. The default policy:
+The `deploy` step picks the plugin as follows:
 
 1. uses `deploy.plugin`, if set, and checks that it supports the artifact type;
 2. otherwise uses the first active plugin, in alphabetical order, that supports `artifact.type`.

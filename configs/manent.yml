@@ -3,7 +3,7 @@ app:
   name: manent
   # DBOS workflow version (not the binary's): a worker resumes only the workflows of its own
   # version. Change it only when the release notes say so.
-  version: 0.1.0
+  version: 0.2.0
 
 dbos:
   # Overridable with DBOS_SYSTEM_DATABASE_URL. Several nodes need Postgres: postgres://user:pass@host:5432/manent
@@ -76,8 +76,9 @@ logging:
 
 siem:
   enabled: false
-  network: udp            # udp | tcp
-  address: siem.example.com:514
+  destinations:
+    - network: udp            # udp | tcp | unixgram | journald
+      address: siem.example.com:514
 
 # Local directory where artifacts are downloaded (shared if several executors)
 workdir: ./work

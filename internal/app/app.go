@@ -219,7 +219,7 @@ func NewSteps(cfg *config.Config, plugins *plugin.Registry, store *artifact.Stor
 	targets steps.TargetRecorder, log *slog.Logger) (*pipeline.Registry, *steps.Traffic, error) {
 	stepLog := log.With("component", "step")
 	deploy := steps.Deploy{
-		Policies:    map[string]steps.Policy{"": steps.DefaultPolicy{Plugins: plugins}, "default": steps.DefaultPolicy{Plugins: plugins}},
+		Plugins:     plugins,
 		Secrets:     sp,
 		Artifacts:   store,
 		Locators:    locators,
@@ -914,7 +914,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 }
 
 // NewClient creates an application that enqueues and queries deploys without running or
-// recovering them: used by CLI commands and by "serve --no-worker". Deploys need at least one running worker.
+// recovering them: used by CLI commands and by "api". Deploys need at least one running worker.
 func NewClient(cfg *config.Config) (*App, error) {
 	c, err := newComponents(cfg, false)
 	if err != nil {

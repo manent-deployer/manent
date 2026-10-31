@@ -21,44 +21,11 @@ import (
 	"github.com/manent-deployer/manent/pkg/plugin"
 )
 
-// Policy selects the deploy plugin suited to the descriptor.
-type Policy interface {
-	Select(d *descriptor.Descriptor) (plugin.Deployer, error)
-}
-
-// DefaultPolicy uses the plugin named in the descriptor; otherwise the first active plugin
-// (in alphabetical order) that supports the artifact type.
-type DefaultPolicy struct {
-	Plugins *plugin.Registry
-}
-
-// Select applies the selection policy.
-func (p DefaultPolicy) Select(d *descriptor.Descriptor) (plugin.Deployer, error) {
-	if name := d.Deploy.Plugin; name != "" {
-		dep, ok := p.Plugins.Get(name)
-		if !ok {
-			return nil, fmt.Errorf("plugin %q not active", name)
-		}
-		if !dep.Supports(d.Artifact.Type) {
-			return nil, fmt.Errorf("plugin %q does not support artifacts of type %q", name, d.Artifact.Type)
-		}
-		return dep, nil
-	}
-	for _, name := range p.Plugins.Active() {
-		dep, _ := p.Plugins.Get(name)
-		if dep.Supports(d.Artifact.Type) {
-			return dep, nil
-		}
-	}
-	return nil, fmt.Errorf("no active plugin supports artifacts of type %q", d.Artifact.Type)
-}
-
-// Deploy selects the plugin through the policies and runs its deploy.
+// Deploy selects the plugin and runs its deploy.
 type Deploy struct {
-	// Policies maps the policy name (deploy.policy in the descriptor) to its implementation.
-	// The "" key is the default policy.
-	Policies map[string]Policy
-	Secrets  secrets.Provider
+	// Plugins are the active deploy plugins.
+	Plugins *plugin.Registry
+	Secrets secrets.Provider
 	// Artifacts ensures the artifact is present even if the deploy was recovered on another worker.
 	Artifacts ArtifactStore
 	// Locators are the strategies to find the release to go back to on rollback, by name
@@ -250,18 +217,34 @@ func (s Deploy) prepare(ctx context.Context, in pipeline.Input) (plugin.Deployer
 	return dep, req, log, nil
 }
 
-// selectPlugin applies the plugin selection policy.
+// selectPlugin chooses the plugin: the one named in the descriptor (deploy.plugin), otherwise
+// the first active plugin (in alphabetical order) that supports the artifact type.
 func (s Deploy) selectPlugin(in pipeline.Input) (plugin.Deployer, *slog.Logger, error) {
-	d := in.Descriptor
-	pol, ok := s.Policies[d.Deploy.Policy]
-	if !ok {
-		return nil, nil, fmt.Errorf("unknown deploy policy %q", d.Deploy.Policy)
-	}
-	dep, err := pol.Select(d)
+	dep, err := s.choose(in.Descriptor)
 	if err != nil {
 		return nil, nil, err
 	}
 	return dep, s.Logger.With("deployment", in.DeploymentID, "plugin", dep.Name()), nil
+}
+
+func (s Deploy) choose(d *descriptor.Descriptor) (plugin.Deployer, error) {
+	if name := d.Deploy.Plugin; name != "" {
+		dep, ok := s.Plugins.Get(name)
+		if !ok {
+			return nil, fmt.Errorf("plugin %q not active", name)
+		}
+		if !dep.Supports(d.Artifact.Type) {
+			return nil, fmt.Errorf("plugin %q does not support artifacts of type %q", name, d.Artifact.Type)
+		}
+		return dep, nil
+	}
+	for _, name := range s.Plugins.Active() {
+		dep, _ := s.Plugins.Get(name)
+		if dep.Supports(d.Artifact.Type) {
+			return dep, nil
+		}
+	}
+	return nil, fmt.Errorf("no active plugin supports artifacts of type %q", d.Artifact.Type)
 }
 
 // request builds and validates the request for the plugin.

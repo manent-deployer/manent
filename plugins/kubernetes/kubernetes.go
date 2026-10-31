@@ -12,6 +12,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -237,22 +238,11 @@ func (p *Plugin) connect(ctx context.Context, t plugin.Target, req *plugin.Reque
 // and the one of every version.
 type names struct{ pointer, prefix string }
 
-// historyNames keys the history on the release: tenant, application, artifact and environment.
-// The release whose artifact is named after the application, without tenant, keeps the name
-// "manent-<application>-<environment>" of the clusters already in use; every other release gets
-// a name from all four parts, made unique by dnsName's hash ("/" is not a valid character).
+// historyNames keys the history on the release: tenant, application, artifact and environment,
+// made unique by dnsName's hash ("/" is not a valid character).
 func historyNames(req *plugin.Request) names {
-	base := dnsName("manent-" + req.Application + "-" + req.Environment)
-	if !legacyRelease(req) {
-		base = dnsName("manent-" + releaseTenant(req) + "/" + req.Application + "/" + req.Artifact.Name + "/" + req.Environment)
-	}
+	base := dnsName("manent-" + releaseTenant(req) + "/" + req.Application + "/" + cmp.Or(req.Artifact.Name, req.Application) + "/" + req.Environment)
 	return names{pointer: base, prefix: base}
-}
-
-// legacyRelease reports whether the release is identified by application and environment alone:
-// artifact named after the application and no tenant.
-func legacyRelease(req *plugin.Request) bool {
-	return (req.Artifact.Name == "" || req.Artifact.Name == req.Application) && releaseTenant(req) == untenanted
 }
 
 // untenanted is the tenant of the applications no tenant lists.
@@ -820,14 +810,11 @@ func (p *Plugin) pruneHistory(ctx context.Context, api API, ns string, n names, 
 		return
 	}
 	// Only this release's history: the other artifacts and tenants of the application have
-	// their own. A ConfigMap written before the artifact and tenant labels belongs to the
-	// release with the historical name.
-	legacy := legacyRelease(req)
+	// their own.
 	list = slices.DeleteFunc(list, func(cm Object) bool {
+		labels, _ := cm.metadata()["labels"].(map[string]any)
 		for _, k := range []string{LabelArtifact, LabelTenant} {
-			labels, _ := cm.metadata()["labels"].(map[string]any)
-			v, ok := labels[k]
-			if (ok && v != rl[k]) || (!ok && !legacy) {
+			if v, ok := labels[k]; !ok || v != rl[k] {
 				return true
 			}
 		}

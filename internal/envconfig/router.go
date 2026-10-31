@@ -71,7 +71,8 @@ func (r *Router) GetAt(ctx context.Context, k Key, rev Revision) (*Document, err
 	if err != nil {
 		return nil, err
 	}
-	if name := PinnedProvider(ctx); rev.Pinned && name != "" {
+	if rev.Pinned {
+		name := PinnedProvider(ctx)
 		i := slices.IndexFunc(r.Routes, func(rt Route) bool { return rt.Name == name })
 		if i < 0 {
 			return nil, pipeline.Permanent(fmt.Errorf("environment configuration provider %q of the recorded revision is no longer configured (envconfig.providers)", name))

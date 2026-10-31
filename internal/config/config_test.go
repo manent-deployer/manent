@@ -83,9 +83,9 @@ func TestDestinazioniSIEM(t *testing.T) {
 	cfg, err := load(t, `
 siem:
   enabled: true
-  network: tcp
-  address: siem.example.com:6514
   destinations:
+    - network: tcp
+      address: siem.example.com:6514
     - network: journald
     - network: unixgram
       address: /dev/log
@@ -97,23 +97,18 @@ siem:
 	if len(got) != 3 || got[0].Network != "tcp" || got[1].Network != "journald" || got[2].Address != "/dev/log" {
 		t.Errorf("destinazioni: %+v", got)
 	}
-	// Journal only: the default network (udp) without address is not a destination.
-	cfg, err = load(t, "siem: {enabled: true, destinations: [{network: journald}]}\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := cfg.SIEM.Targets(); len(got) != 1 || got[0].Network != "journald" {
-		t.Errorf("solo journald: %+v", got)
-	}
-	if cfg, _ := load(t, "siem: {enabled: false, network: journald}\n"); len(cfg.SIEM.Targets()) != 0 {
+	if cfg, _ := load(t, "siem: {enabled: false, destinations: [{network: journald}]}\n"); len(cfg.SIEM.Targets()) != 0 {
 		t.Error("SIEM disattivato con destinazioni attive")
 	}
+	if _, err := load(t, "siem: {enabled: true, network: tcp, address: x:1}\n"); err == nil || !strings.Contains(err.Error(), "siem.network, siem.address no longer supported") {
+		t.Errorf("vecchia forma: %v", err)
+	}
 	for in, want := range map[string]string{
-		"siem: {enabled: true}\n":                                     "address (udp, tcp)",
-		"siem: {enabled: true, network: syslog, address: x}\n":        `network "syslog" not supported`,
-		"siem: {enabled: true, destinations: [{network: tcp}]}\n":     "without address",
-		"siem: {enabled: true, network: unixgram}\n":                  "",
-		"siem: {enabled: true, network: journald, address: /tmp/j}\n": "",
+		"siem: {enabled: true}\n": "at least one entry in destinations",
+		"siem: {enabled: true, destinations: [{network: syslog, address: x}]}\n":        `network "syslog" not supported`,
+		"siem: {enabled: true, destinations: [{network: tcp}]}\n":                       "without address",
+		"siem: {enabled: true, destinations: [{network: unixgram}]}\n":                  "",
+		"siem: {enabled: true, destinations: [{network: journald, address: /tmp/j}]}\n": "",
 	} {
 		_, err := load(t, in)
 		if (want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), want)) {

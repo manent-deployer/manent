@@ -1,6 +1,6 @@
 # Configurazione di ambiente
 
-Plugin, policy, target, parametri e riferimenti ai segreti di ogni applicazione in ogni ambiente possono essere gestiti in un sistema di configurazione invece che nel descrittore. Chi richiede il deploy indica solo applicazione, ambiente e artefatto:
+Plugin, target, parametri e riferimenti ai segreti di ogni applicazione in ogni ambiente possono essere gestiti in un sistema di configurazione invece che nel descrittore. Chi richiede il deploy indica solo applicazione, ambiente e artefatto:
 
 ```yaml title="Descrittore minimale"
 apiVersion: manent/v1
@@ -19,7 +19,6 @@ La configurazione di un ambiente è un documento YAML o JSON:
 
 ```yaml title="manent/myapp/myapp/test"
 plugin: remote-copy
-policy: default
 targets:
   - host: 192.168.1.10
     port: 22

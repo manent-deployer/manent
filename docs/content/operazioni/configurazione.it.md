@@ -9,7 +9,7 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `name` | `manent` | Nome dell'applicazione DBOS e `APP-NAME` dei messaggi inviati al SIEM. |
-| `version` | `0.1.0` | Versione dei workflow registrata da DBOS: un worker riprende solo i workflow della propria versione. Non è la versione del binario e va cambiata solo quando le note di rilascio lo indicano. Vedi [Versioni e aggiornamenti](aggiornamenti.md). |
+| `version` | `0.2.0` | Versione dei workflow registrata da DBOS: un worker riprende solo i workflow della propria versione. Non è la versione del binario e va cambiata solo quando le note di rilascio lo indicano. Vedi [Versioni e aggiornamenti](aggiornamenti.md). |
 
 ### `dbos`
 
@@ -42,9 +42,9 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 | `logging.level` | `info` | `debug`, `info`, `warn`, `error`. |
 | `logging.format` | `text` | `text` oppure `json`. |
 | `siem.enabled` | `false` | Inoltra ogni log alle destinazioni dei log strutturati. |
-| `siem.network` | `udp` | `udp`, `tcp`, `unixgram` (socket syslog locale) o `journald` (protocollo nativo). |
-| `siem.address` | | `host:porta` del collettore; per `unixgram` e `journald` il percorso del socket (default `/dev/log` e `/run/systemd/journal/socket`). |
-| `siem.destinations` | `[]` | Destinazioni aggiuntive (`network`, `address`), ad esempio il journal locale insieme al SIEM remoto. |
+| `siem.destinations` | `[]` | Le destinazioni, almeno una con `enabled`; ognuna riceve ogni messaggio. |
+| `siem.destinations[].network` | | `udp`, `tcp`, `unixgram` (socket syslog locale) o `journald` (protocollo nativo). |
+| `siem.destinations[].address` | | `host:porta` del collettore; per `unixgram` e `journald` il percorso del socket (default `/dev/log` e `/run/systemd/journal/socket`). |
 
 Vedi [Log e SIEM](log-siem.md).
 

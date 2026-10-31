@@ -202,8 +202,9 @@ logging:
   format: json
 siem:
   enabled: true
-  network: tcp
-  address: siem.example.com:6514
+  destinations:
+    - network: tcp
+      address: siem.example.com:6514
 ```
 
 Every record, DBOS and plugins included, goes to the SIEM as RFC 5424 with the attributes as structured data; audit entries carry `audit=true`. See [SIEM and syslog](../integrazioni/siem.md).

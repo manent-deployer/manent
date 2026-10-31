@@ -11,8 +11,9 @@ logging:
   format: json
 siem:
   enabled: true
-  network: tcp
-  address: siem.example.com:6514
+  destinations:
+    - network: tcp
+      address: siem.example.com:6514
 ```
 
 Lo stesso logger viene passato a DBOS, ai plugin e ai processi dei plugin esterni, quindi anche i loro log arrivano al SIEM.
@@ -43,9 +44,9 @@ Oltre al SIEM remoto, o al suo posto, i log strutturati possono andare al log di
 ```yaml
 siem:
   enabled: true
-  network: tcp                    # SIEM remoto (facoltativo)
-  address: siem.example.com:6514
   destinations:
+    - network: tcp                    # SIEM remoto (facoltativo)
+      address: siem.example.com:6514
     - network: journald           # protocollo nativo: gli attributi diventano campi del journal
     # - network: unixgram         # socket syslog: RFC 5424 su /dev/log
     #   address: /dev/log

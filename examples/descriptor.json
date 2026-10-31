@@ -13,7 +13,6 @@
     { "name": "deploy-key", "ref": "env:DEPLOY_SSH_KEY" }
   ],
   "deploy": {
-    "policy": "default",
     "targets": [
       { "host": "192.168.1.10", "port": 22, "user": "deploy" }
     ],

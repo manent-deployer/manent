@@ -73,7 +73,7 @@ func trafficInput(d *descriptor.Descriptor) pipeline.Input {
 
 func TestTrafficConIlPlugin(t *testing.T) {
 	dep := &slotDeployer{fakeDeployer: fakeDeployer{name: "slots", types: []string{"application"}}}
-	deploy := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: slotRegistry(t, dep)}}, Artifacts: &fakeStore{path: "/w/app"}, Logger: discard}
+	deploy := Deploy{Plugins: slotRegistry(t, dep), Artifacts: &fakeStore{path: "/w/app"}, Logger: discard}
 	tr := Traffic{Deploy: deploy, Providers: traffic.Default(), Logger: discard}
 	d := &descriptor.Descriptor{
 		Artifact: descriptor.Artifact{Type: "application", Version: "2.0.0"},
@@ -124,7 +124,7 @@ func TestTrafficConIlPlugin(t *testing.T) {
 		t.Errorf("tester: %v", err)
 	}
 	// A plugin without side-by-side versions requires an environment router.
-	plain := Traffic{Deploy: Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "plain", types: []string{"application"}})}}, Logger: discard}, Providers: traffic.Default()}
+	plain := Traffic{Deploy: Deploy{Plugins: newPlugins(t, &fakeDeployer{name: "plain", types: []string{"application"}}), Logger: discard}, Providers: traffic.Default()}
 	if err := plain.Check(d); err == nil || !strings.Contains(err.Error(), "traffic.router") {
 		t.Errorf("plugin senza slot: %v", err)
 	}

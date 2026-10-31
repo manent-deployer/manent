@@ -1,6 +1,6 @@
 # Environment configuration
 
-Plugin, policy, targets, parameters and secret references of each application in each environment can be managed in a configuration system instead of the descriptor. Whoever requests the deploy only states application, environment and artifact:
+Plugin, targets, parameters and secret references of each application in each environment can be managed in a configuration system instead of the descriptor. Whoever requests the deploy only states application, environment and artifact:
 
 ```yaml title="Minimal descriptor"
 apiVersion: manent/v1
@@ -19,7 +19,6 @@ An environment's configuration is a YAML or JSON document:
 
 ```yaml title="manent/myapp/myapp/test"
 plugin: remote-copy
-policy: default
 targets:
   - host: 192.168.1.10
     port: 22

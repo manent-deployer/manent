@@ -47,10 +47,9 @@ func (w *Worker) scheduledWorkflow(ctx dbos.Context, in dbos.ScheduledWorkflowIn
 	req := sc.Request
 	d := &req.Descriptor
 	id := scheduledIDPrefix(d.ScheduleName()) + in.ScheduledTime.UTC().Format("20060102T150405Z")
-	// The schedule's deploys count as requested by whoever created it. Schedules created with
-	// a governance decision evaluate the policy in force at every run, in a DBOS step; the older
-	// ones keep the obligations of the schedule's creation.
-	if req.Policy != nil && w.governance != nil {
+	// The schedule's deploys count as requested by whoever created it. Every run evaluates the
+	// policy in force, in a DBOS step.
+	if w.governance != nil {
 		tp, err := dbos.RunAsStep(ctx, func(c context.Context) (tickPolicy, error) {
 			return w.evaluateTick(c, req, in.ScheduledTime)
 		}, dbos.WithStepName("policy"), dbos.WithStepMaxRetries(policyStepRetries))

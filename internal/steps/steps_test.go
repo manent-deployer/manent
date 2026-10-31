@@ -60,24 +60,24 @@ func newPlugins(t *testing.T, deps ...*fakeDeployer) *plugin.Registry {
 	return reg
 }
 
-func TestDefaultPolicy(t *testing.T) {
+func TestSceltaDelPlugin(t *testing.T) {
 	reg := newPlugins(t,
 		&fakeDeployer{name: "b-infra", types: []string{"infrastructure"}},
 		&fakeDeployer{name: "a-app", types: []string{"application"}},
 	)
-	pol := DefaultPolicy{Plugins: reg}
+	pol := Deploy{Plugins: reg}
 
 	d := &descriptor.Descriptor{Artifact: descriptor.Artifact{Type: "infrastructure"}}
-	if dep, err := pol.Select(d); err != nil || dep.Name() != "b-infra" {
+	if dep, err := pol.choose(d); err != nil || dep.Name() != "b-infra" {
 		t.Fatalf("selezione per tipo errata: %v %v", dep, err)
 	}
 	d.Deploy.Plugin = "a-app"
-	if _, err := pol.Select(d); err == nil {
+	if _, err := pol.choose(d); err == nil {
 		t.Fatal("atteso errore: plugin esplicito non supporta il tipo")
 	}
 	d.Artifact.Type = "sconosciuto"
 	d.Deploy.Plugin = ""
-	if _, err := pol.Select(d); err == nil {
+	if _, err := pol.choose(d); err == nil {
 		t.Fatal("atteso errore: nessun plugin per il tipo")
 	}
 }
@@ -85,7 +85,7 @@ func TestDefaultPolicy(t *testing.T) {
 func TestDeployPassaArtefattoAlPlugin(t *testing.T) {
 	dep := &fakeDeployer{name: "app", types: []string{"application"}}
 	store := &fakeStore{path: "/altro-worker/app.tgz"}
-	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, dep)}}, Artifacts: store, Logger: discard}
+	s := Deploy{Plugins: newPlugins(t, dep), Artifacts: store, Logger: discard}
 	in := pipeline.Input{
 		DeploymentID: "d1",
 		Descriptor: &descriptor.Descriptor{
@@ -110,7 +110,7 @@ func TestDeployErrorePermanenteDelPlugin(t *testing.T) {
 		permanent bool
 	}{{plugin.Permanent(errors.New("over max_destroy")), true}, {errors.New("connection reset"), false}} {
 		dep := &fakeDeployer{name: "infra", types: []string{"terraform"}, err: tc.err}
-		s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: newPlugins(t, dep)}}, Artifacts: &fakeStore{path: "/w/m.tgz"}, Logger: discard}
+		s := Deploy{Plugins: newPlugins(t, dep), Artifacts: &fakeStore{path: "/w/m.tgz"}, Logger: discard}
 		in := pipeline.Input{
 			DeploymentID: "d1",
 			Descriptor: &descriptor.Descriptor{
@@ -152,7 +152,7 @@ func TestDeployDryRun(t *testing.T) {
 	reg := plugin.NewRegistry()
 	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
 	_ = reg.Activate(dep.name, nil, discard)
-	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}}, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard}
+	s := Deploy{Plugins: reg, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard}
 	out, err := s.DryRun(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestDeployDryRun(t *testing.T) {
 
 	// Plugin without DryRun: validation only, no deploy.
 	plain := &fakeDeployer{name: "app", types: []string{"application"}}
-	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, plain)}
+	s.Plugins = newPlugins(t, plain)
 	if out, err = s.DryRun(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestDeployCheckpointECompensate(t *testing.T) {
 	_ = reg.Register(dep.name, func(map[string]any, *slog.Logger) (plugin.Deployer, error) { return dep, nil })
 	_ = reg.Activate(dep.name, nil, discard)
 	s := Deploy{
-		Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}},
+		Plugins:  reg,
 		Locators: map[string]plugin.ReleaseLocator{plugin.PluginLocatorName: plugin.PluginLocator{}},
 		Logger:   discard,
 	}
@@ -274,7 +274,7 @@ func TestDeployCheckpointECompensate(t *testing.T) {
 	}
 
 	// Plugin without Rollbacker: the checkpoint fails before the deploy.
-	s.Policies[""] = DefaultPolicy{Plugins: newPlugins(t, &fakeDeployer{name: "app", types: []string{"application"}})}
+	s.Plugins = newPlugins(t, &fakeDeployer{name: "app", types: []string{"application"}})
 	if _, err := s.Checkpoint(context.Background(), in); err == nil || !strings.Contains(err.Error(), "does not support it") {
 		t.Fatalf("atteso errore di rollback non supportato, ricevuto %v", err)
 	}
@@ -328,7 +328,7 @@ func TestDeployParallelism(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := targetRec{}
-	s := Deploy{Policies: map[string]Policy{"": DefaultPolicy{Plugins: reg}}, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard,
+	s := Deploy{Plugins: reg, Artifacts: &fakeStore{path: "/w/app.tgz"}, Logger: discard,
 		MaxParallel: func(name string) int { return 3 }, Targets: rec}
 	run := func(name, parallel string, n int) (pipeline.Output, *plugin.Request) {
 		t.Helper()

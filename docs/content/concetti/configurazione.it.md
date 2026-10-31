@@ -35,7 +35,7 @@ Nello step `config` i livelli vengono fusi nel **deploy effettivo**, che è ciò
 
 | Campo | Ambiente | Descrittore |
 |---|---|---|
-| `plugin`, `policy` | Li definisce. | Può ripeterli. |
+| `plugin` | Li definisce. | Può ripeterli. |
 | `targets` | Li definisce. | Può ometterli o ripeterli; può aggiungerne solo se `descriptor_policy.targets` lo consente. |
 | `params` | Li definisce. | Può aggiungere le chiavi ammesse da `descriptor_policy.params`. |
 | `secrets` | Dichiara nome → riferimento. | Può aggiungere segreti il cui riferimento corrisponde a `descriptor_policy.secret_refs`. |

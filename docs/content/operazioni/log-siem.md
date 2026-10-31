@@ -11,8 +11,9 @@ logging:
   format: json
 siem:
   enabled: true
-  network: tcp
-  address: siem.example.com:6514
+  destinations:
+    - network: tcp
+      address: siem.example.com:6514
 ```
 
 The same logger is passed to DBOS, to plugins and to external plugin processes, so their logs reach the SIEM too.
@@ -43,9 +44,9 @@ In addition to the remote SIEM, or instead of it, structured logs can go to the 
 ```yaml
 siem:
   enabled: true
-  network: tcp                    # remote SIEM (optional)
-  address: siem.example.com:6514
   destinations:
+    - network: tcp                # remote SIEM (optional)
+      address: siem.example.com:6514
     - network: journald           # native protocol: attributes become journal fields
     # - network: unixgram         # syslog socket: RFC 5424 on /dev/log
     #   address: /dev/log

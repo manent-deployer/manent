@@ -109,7 +109,6 @@ Supported schemes: `env:`, `file:` and, if configured, `vault:` (e.g. `vault:sec
 
 | Field | Description |
 |---|---|
-| `policy` | Plugin selection policy (default: `default`). |
 | `plugin` | Plugin to use. If absent, the policy picks the first active plugin that supports `artifact.type`. |
 | `targets` | Destinations: `host` (required), `port`, `user`, `labels` (labels; `region` and `az` are used by [wave rollouts](ondate.md)). |
 | `params` | Plugin-specific parameters, as a string map. |

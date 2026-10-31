@@ -17,13 +17,12 @@ manent-server [-c <manent.yml>] <comando> [opzioni]
 Avvia l'API HTTP e, nello stesso processo, un worker. È il modo più semplice per lo sviluppo e per installazioni con un solo nodo.
 
 ```sh
-manent-server serve [-l :8080] [--no-worker]
+manent-server serve [-l :8080]
 ```
 
 | Opzione | Descrizione |
 |---|---|
 | `-l`, `--listen` | Indirizzo di ascolto (sovrascrive `http.listen`). |
-| `--no-worker` | Solo API, come `api`. |
 
 ### `api`
 

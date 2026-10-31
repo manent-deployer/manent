@@ -346,15 +346,11 @@ func (w *Worker) evaluateStage(ctx context.Context, req Request, d *descriptor.D
 }
 
 // waitFreeze waits for the end of the freezes active on the stage's regions (or on the whole
-// environment). For requests with a recorded decision every check is a DBOS step
-// (policy@<stage>#<n>): a policy changed meanwhile does not alter the step sequence in a
-// recovery. A denial stops the rollout.
+// environment). Every check is a DBOS step (policy@<stage>#<n>): a policy changed meanwhile
+// does not alter the step sequence in a recovery. A denial stops the rollout.
 func (w *Worker) waitFreeze(ctx dbos.Context, req Request, d *descriptor.Descriptor, stage rollout.Stage, rs *RolloutState) error {
 	if w.governance == nil {
 		return nil
-	}
-	if req.Policy == nil {
-		return w.waitFreezeLegacy(ctx, req, d, stage, rs)
 	}
 	for n := 0; ; n++ {
 		sp, err := dbos.RunAsStep(ctx, func(c context.Context) (stagePolicy, error) {
@@ -371,38 +367,6 @@ func (w *Worker) waitFreeze(ctx dbos.Context, req Request, d *descriptor.Descrip
 			return nil
 		}
 		if err := w.pauseForFreeze(ctx, stage, sp.Freeze, sp.Region, sp.Time, freezeRecheck, rs); err != nil {
-			return err
-		}
-	}
-}
-
-// waitFreezeLegacy is the check of the workflows enqueued before the decision snapshot
-// (Request.Policy empty): evaluated in the workflow, with the time from the step now. An
-// override ignores every window, as it did.
-func (w *Worker) waitFreezeLegacy(ctx dbos.Context, req Request, d *descriptor.Descriptor, stage rollout.Stage, rs *RolloutState) error {
-	if d.FreezeOverride != "" {
-		return nil
-	}
-	for {
-		t, err := now(ctx)
-		if err != nil {
-			return err
-		}
-		var win *governance.WindowStatus
-		region := ""
-		for _, reg := range stage.Regions() {
-			in := policyInput(governance.PhaseStage, req, d, t)
-			in.Region = reg
-			if dec, err := w.governance.Evaluate(ctx, in); err == nil && dec.Freeze != nil {
-				win, region = dec.Freeze, reg
-				break
-			}
-		}
-		if win == nil {
-			w.resumeAfterFreeze(ctx, rs)
-			return nil
-		}
-		if err := w.pauseForFreeze(ctx, stage, win, region, t, 0, rs); err != nil {
 			return err
 		}
 	}

@@ -246,11 +246,10 @@ type SecretRef struct {
 	Ref  string `json:"ref" yaml:"ref"`
 }
 
-// Deploy holds the policy, the explicit plugin if any, the targets and the plugin parameters.
+// Deploy holds the explicit plugin if any, the targets and the plugin parameters.
 // All fields can come from the environment configuration (internal/envconfig): the
 // descriptor can only add what is not defined there.
 type Deploy struct {
-	Policy  string            `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Plugin  string            `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Targets []Target          `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string `json:"params,omitempty" yaml:"params,omitempty"`

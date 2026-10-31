@@ -109,7 +109,6 @@ Schemi supportati: `env:`, `file:` e, se configurato, `vault:` (es. `vault:secre
 
 | Campo | Descrizione |
 |---|---|
-| `policy` | Policy di scelta del plugin (default: `default`). |
 | `plugin` | Plugin da usare. Se assente, la policy sceglie il primo plugin attivo che supporta `artifact.type`. |
 | `targets` | Destinazioni: `host` (obbligatorio), `port`, `user`, `labels` (etichette; `region` e `az` sono usate dai [rilasci a ondate](ondate.md)). |
 | `params` | Parametri specifici del plugin, come mappa di stringhe. |

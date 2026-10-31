@@ -140,10 +140,10 @@ func TestRouterRevisioni(t *testing.T) {
 	if _, err := r.GetAt(ctx, k, Revision{Ref: "sha-x", Pinned: true}); err == nil || pipeline.Retryable(err) {
 		t.Errorf("pinned on a removed provider: %v", err)
 	}
-	// Deploys recorded before named providers: the routes choose as usual.
+	// A revision is always recorded with its provider: without it, permanent error.
 	ctx = WithRevision(context.Background(), "", "sha-a")
-	if doc, err := r.GetAt(ctx, k, Revision{Ref: "sha-a", Pinned: true}); err != nil || doc.Provider != "a" {
-		t.Errorf("pinned without provider: %+v %v", doc, err)
+	if _, err := r.GetAt(ctx, k, Revision{Ref: "sha-a", Pinned: true}); err == nil || pipeline.Retryable(err) {
+		t.Errorf("pinned without provider: %v", err)
 	}
 	// A requested revision (config.ref) needs a versioned provider.
 	rp := &Router{Routes: []Route{{Name: "plain", Provider: plain}}}

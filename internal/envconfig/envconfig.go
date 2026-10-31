@@ -27,7 +27,6 @@ var ErrNotFound = errors.New("environment configuration not found")
 // EnvConfig is the deploy configuration of an environment: plugin, targets and plugin
 // parameters. It must not contain secret values, only references: DBOS persists it as step output.
 type EnvConfig struct {
-	Policy  string                 `json:"policy,omitempty" yaml:"policy,omitempty"`
 	Plugin  string                 `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Targets []descriptor.Target    `json:"targets,omitempty" yaml:"targets,omitempty"`
 	Params  map[string]string      `json:"params,omitempty" yaml:"params,omitempty"`
@@ -92,7 +91,7 @@ type pinned struct{ provider, revision string }
 
 // WithRevision pins the configuration revision of the resolutions made with ctx (the one a
 // rollback goes back to, the one of the release a reconciliation reads), with the provider
-// that recorded it (empty for the deploys made before named providers); it takes precedence
+// that recorded it; it takes precedence
 // over config.ref and only applies to versioned providers.
 func WithRevision(ctx context.Context, provider, revision string) context.Context {
 	if revision == "" {
@@ -114,7 +113,7 @@ func PinnedProvider(ctx context.Context) string {
 }
 
 // errRefUnsupported is returned for config.ref without a versioned provider.
-var errRefUnsupported = errors.New("config.ref requires the git environment configuration provider (envconfig.provider: git)")
+var errRefUnsupported = errors.New("config.ref requires the git environment configuration provider (a git provider in envconfig.providers)")
 
 // Key identifies the configuration of a release: tenant, application, artifact and
 // environment. Templates without a placeholder ignore that part (e.g. without {artifact}, one
@@ -177,7 +176,6 @@ func Merge(d descriptor.Descriptor, c EnvConfig) (descriptor.Descriptor, error) 
 		}
 		return desc
 	}
-	d.Deploy.Policy = pick("deploy.policy", c.Policy, d.Deploy.Policy)
 	d.Deploy.Plugin = pick("deploy.plugin", c.Plugin, d.Deploy.Plugin)
 	d.Deploy.Parallel = pick("deploy.parallel", c.Parallel, d.Deploy.Parallel)
 

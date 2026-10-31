@@ -255,11 +255,8 @@ type Logging struct {
 // SIEM configures sending structured logs: to an RFC 5424 collector (udp, tcp), to the local
 // syslog socket (unixgram, e.g. /dev/log) or to journald with the native protocol (journald).
 type SIEM struct {
-	Enabled bool   `yaml:"enabled"`
-	Network string `yaml:"network"`
-	Address string `yaml:"address"`
-	// Destinations are destinations besides network/address (e.g. the remote SIEM and the local
-	// journal together).
+	Enabled bool `yaml:"enabled"`
+	// Destinations receive every message (e.g. the remote SIEM and the local journal together).
 	Destinations []SIEMDestination `yaml:"destinations"`
 }
 
@@ -275,11 +272,7 @@ func (s SIEM) Targets() []SIEMDestination {
 	if !s.Enabled {
 		return nil
 	}
-	out := []SIEMDestination{}
-	if s.Network != "" && (s.Address != "" || s.Network == "unixgram" || s.Network == "journald") {
-		out = append(out, SIEMDestination{Network: s.Network, Address: s.Address})
-	}
-	return append(out, s.Destinations...)
+	return s.Destinations
 }
 
 // Supported environment configuration providers.
@@ -832,14 +825,13 @@ type Step struct {
 // Default returns a working configuration for local development.
 func Default() *Config {
 	return &Config{
-		App: App{Name: "manent", Version: "0.1.0"},
+		App: App{Name: "manent", Version: "0.2.0"},
 		DBOS: DBOS{
 			DatabaseURL: "sqlite:manent.db", Queue: "deployments", Concurrency: 4, EnvironmentConcurrency: 1,
 			DrainTimeout: 2 * time.Minute,
 		},
 		HTTP:      HTTP{Listen: ":8080"},
 		Logging:   Logging{Level: "info", Format: "text"},
-		SIEM:      SIEM{Network: "udp"},
 		WorkDir:   "./work",
 		EnvConfig: EnvConfig{MaxRetries: 3},
 		Tenants:   Tenants{Cache: 30 * time.Second},
@@ -1033,21 +1025,30 @@ func (e EnvConfig) validateProviders() []error {
 func checkRemovedKeys(data []byte) error {
 	var doc struct {
 		EnvConfig map[string]yaml.Node `yaml:"envconfig"`
+		SIEM      map[string]yaml.Node `yaml:"siem"`
 	}
 	if yaml.Unmarshal(data, &doc) != nil {
 		return nil // the decoder reports the error
 	}
-	var removed []string
-	for _, k := range []string{"provider", "consul", "file", "git"} {
-		if _, ok := doc.EnvConfig[k]; ok {
-			removed = append(removed, "envconfig."+k)
+	var errs []error
+	if removed := present(doc.EnvConfig, "envconfig", "provider", "consul", "file", "git"); removed != "" {
+		errs = append(errs, fmt.Errorf("invalid configuration: %s no longer supported: declare the provider in envconfig.providers, e.g. providers: [{name: default, type: consul, consul: {address: ...}}]", removed))
+	}
+	if removed := present(doc.SIEM, "siem", "network", "address"); removed != "" {
+		errs = append(errs, fmt.Errorf("invalid configuration: %s no longer supported: declare the destination in siem.destinations, e.g. destinations: [{network: tcp, address: siem.example.com:6514}]", removed))
+	}
+	return errors.Join(errs...)
+}
+
+// present lists the keys of section found in m, prefixed with the section name.
+func present(m map[string]yaml.Node, section string, keys ...string) string {
+	var out []string
+	for _, k := range keys {
+		if _, ok := m[k]; ok {
+			out = append(out, section+"."+k)
 		}
 	}
-	if len(removed) == 0 {
-		return nil
-	}
-	return fmt.Errorf("invalid configuration: %s no longer supported: declare the provider in envconfig.providers, e.g. providers: [{name: default, type: consul, consul: {address: ...}}]",
-		strings.Join(removed, ", "))
+	return strings.Join(out, ", ")
 }
 
 // Validate checks the consistency of the configuration.
@@ -1125,7 +1126,7 @@ func (c *Config) validateSIEM() []error {
 	}
 	targets := c.SIEM.Targets()
 	if len(targets) == 0 {
-		return []error{errors.New("siem: with enabled, address (udp, tcp) or an entry in destinations is required")}
+		return []error{errors.New("siem: with enabled, at least one entry in destinations is required")}
 	}
 	var errs []error
 	for i, d := range targets {

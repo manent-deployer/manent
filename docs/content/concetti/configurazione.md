@@ -35,7 +35,7 @@ The layers are merged in the `config` step into the **effective deploy**, which 
 
 | Field | Environment | Descriptor |
 |---|---|---|
-| `plugin`, `policy` | Defines them. | Can repeat them. |
+| `plugin` | Defines them. | Can repeat them. |
 | `targets` | Defines them. | Can omit or repeat them; can add them only if `descriptor_policy.targets` allows it. |
 | `params` | Defines them. | Can add the keys allowed by `descriptor_policy.params`. |
 | `secrets` | Declares name → reference. | Can add secrets whose reference matches `descriptor_policy.secret_refs`. |

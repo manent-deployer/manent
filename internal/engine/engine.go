@@ -1072,11 +1072,6 @@ func toStatus(st dbos.WorkflowStatus) Status {
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
 		Exports: exportsAttr(attr(st, attrExports)), PublicExports: strings.Fields(attr(st, attrPublicExports)),
 	}
-	if s.Application == "" {
-		// Deploys enqueued before attributes existed: the partition key is "<application>/<environment>".
-		s.Application, s.Environment, _ = strings.Cut(st.QueuePartitionKey, "/")
-		s.Application, _, _ = strings.Cut(s.Application, artifactSep)
-	}
 	s.Release = attr(st, attrRelease)
 	s.Tenant = cmp.Or(attr(st, attrTenant), tenant.Untenanted)
 	if rev := attr(st, attrPolicy); rev != "" {
