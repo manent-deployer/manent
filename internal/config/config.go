@@ -889,6 +889,13 @@ func (c *Config) SecurityWarnings() []string {
 	if c.Artifacts.AllowUnlisted != nil && *c.Artifacts.AllowUnlisted {
 		w = append(w, "artifacts.allow_unlisted: the worker downloads artifacts from any source, local files too")
 	}
+	for _, name := range slices.Sorted(maps.Keys(c.Plugins)) {
+		for _, opt := range []string{"insecure_ignore_host_key", "insecure_skip_tls_verify"} {
+			if v, _ := c.Plugins[name][opt].(bool); v {
+				w = append(w, fmt.Sprintf("plugins.%s.%s: the identity of the targets is not verified", name, opt))
+			}
+		}
+	}
 	w = append(w, c.Pipeline.securityWarnings()...)
 	return w
 }

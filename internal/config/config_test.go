@@ -256,6 +256,22 @@ pipeline:
 	}
 }
 
+func TestAvvisiPluginInsicuri(t *testing.T) {
+	cfg, err := load(t, `
+plugins:
+  remote-copy: {insecure_ignore_host_key: true}
+  kubernetes: {insecure_skip_tls_verify: true}
+  jboss: {insecure_skip_tls_verify: false}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := strings.Join(cfg.SecurityWarnings(), "\n")
+	if !strings.Contains(w, "plugins.remote-copy.insecure_ignore_host_key") || !strings.Contains(w, "plugins.kubernetes.insecure_skip_tls_verify") || strings.Contains(w, "plugins.jboss") {
+		t.Errorf("avvisi: %s", w)
+	}
+}
+
 func TestRiconciliazione(t *testing.T) {
 	cfg, err := load(t, "reconcile: {interval: 10m}\n")
 	if err != nil {
