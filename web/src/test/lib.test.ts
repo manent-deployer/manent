@@ -1,5 +1,6 @@
 import { formatDuration, formatRelative, tenantLabel } from "@/lib/format";
 import { appMatches, can, glob } from "@/lib/permissions";
+import { safeReturnPath } from "@/lib/returnPath";
 import { parseSSE } from "@/lib/sse";
 import { format } from "@/i18n/i18n";
 
@@ -62,5 +63,18 @@ describe("formattazione", () => {
     expect(formatDuration(3_720_000)).toBe("1 h 2 min");
     expect(formatRelative("2026-10-11T10:00:00Z", "en", Date.parse("2026-10-11T10:05:00Z"))).toBe("5 min. ago");
     expect(format("{a} e {b}", { a: 1 })).toBe("1 e {b}");
+  });
+});
+
+describe("ritorno dopo il login", () => {
+  const origin = "https://manent.example.com";
+  it("conserva i percorsi dell'applicazione", () => {
+    expect(safeReturnPath("/deployments/d-1?tab=logs#step", origin)).toBe("/deployments/d-1?tab=logs#step");
+    expect(safeReturnPath("/", origin)).toBe("/");
+  });
+  it("rifiuta i percorsi che portano a un altro sito", () => {
+    for (const v of ["//evil.com", "/\\evil.com", "/%5Cevil.com", "/%2F/evil.com", "https://evil.com", "evil.com", "/\tx", "/%E0%A4%A", undefined, 42]) {
+      expect(safeReturnPath(v, origin)).toBe("/");
+    }
   });
 });

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useNavigate } from "react-router-dom";
 
 import type { UIConfig } from "@/lib/config";
+import { safeReturnPath } from "@/lib/returnPath";
 
 // Login state. With auth_mode "none" there is no login; "unavailable" is a server with
 // authentication enabled but no OIDC client for the UI.
@@ -89,7 +90,7 @@ export function AuthProvider({ config, children }: { config: UIConfig; children:
         const u = await mgr.signinRedirectCallback();
         set(u);
         const st = u.state as ReturnState | undefined;
-        const to = st?.returnTo && st.returnTo.startsWith("/") && !st.returnTo.startsWith("//") ? st.returnTo : "/";
+        const to = safeReturnPath(st?.returnTo);
         // The router must know about the path change: history.replaceState does not notify it.
         navigate(to, { replace: true });
         setStatus("authenticated");
