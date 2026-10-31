@@ -4,7 +4,7 @@
 # login, navigation and accessibility (axe), detail with live logs, promotion with dry-run,
 # self-approval ban, approval by another user, keyboard and language.
 APP=uc8-web
-PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.49.1-noble
+PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.64.1-noble
 log "UC8 · interfaccia web"
 
 info "-- UI e configurazione pubblica"
