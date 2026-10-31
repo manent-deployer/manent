@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/glob"
@@ -91,7 +93,7 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 		if slices.ContainsFunc(c.Secrets, func(e descriptor.SecretRef) bool { return e.Name == s.Name }) {
 			continue
 		}
-		if !glob.Any(patterns, s.Ref) {
+		if !glob.Any(patterns, s.Ref) || !plainRef(s.Ref) {
 			errs = append(errs, fmt.Errorf("secrets.%s: reference not allowed in descriptors (descriptor_policy.secret_refs)", s.Name))
 		}
 	}
@@ -114,6 +116,26 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 		return fmt.Errorf("descriptor not allowed by the policy: %w", err)
 	}
 	return nil
+}
+
+// plainRef reports whether the path of a secret reference has no "." or ".." segment, also
+// percent-encoded: "*" in the secret_refs patterns matches "/" too, so a path like
+// file:/run/secrets/app/../../other would match the pattern and read outside it.
+func plainRef(ref string) bool {
+	_, rest, _ := strings.Cut(ref, ":")
+	p, _, _ := strings.Cut(rest, "#")
+	decoded, err := url.PathUnescape(p)
+	if err != nil {
+		return false
+	}
+	for _, v := range []string{p, decoded, strings.ReplaceAll(decoded, `\`, "/")} {
+		for _, seg := range strings.Split(v, "/") {
+			if seg == "." || seg == ".." {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // checkParallel verifies the parallelism the descriptor adds against MaxParallel. What the

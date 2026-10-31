@@ -53,7 +53,7 @@ descriptor_policy:
 | Key | Default | Description |
 |---|---|---|
 | `params` | `{"*": ["*"]}` | Patterns of the `deploy.params` parameters the descriptor may set, per plugin. The entries of the selected plugin (`deploy.plugin`, from the environment or the descriptor) and those of `"*"` apply. |
-| `secret_refs` | `["*"]` | Patterns of the references the descriptor may declare in `secrets`. |
+| `secret_refs` | `["*"]` | Patterns of the references the descriptor may declare in `secrets`. `*` also matches `/`, so a reference whose path has a `.` or `..` segment, even percent-encoded, is always refused. |
 | `targets` | `true` | Allows `deploy.targets` in the descriptor when the environment does not define them. |
 
 What comes from the environment configuration is not subject to the policy: commands, secrets and targets stay under the control of whoever administers it. If the section is present, omitted fields keep the default; in production set all three.

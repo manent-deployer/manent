@@ -53,7 +53,7 @@ descriptor_policy:
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `params` | `{"*": ["*"]}` | Pattern dei parametri di `deploy.params` impostabili dal descrittore, per plugin. Si applicano le voci del plugin indicato (`deploy.plugin`, dall'ambiente o dal descrittore) e quelle di `"*"`. |
-| `secret_refs` | `["*"]` | Pattern dei riferimenti che il descrittore può dichiarare in `secrets`. |
+| `secret_refs` | `["*"]` | Pattern dei riferimenti che il descrittore può dichiarare in `secrets`. `*` corrisponde anche a `/`, quindi un riferimento con un segmento `.` o `..` nel percorso, anche codificato, è sempre rifiutato. |
 | `targets` | `true` | Ammette `deploy.targets` nel descrittore quando l'ambiente non li definisce. |
 
 Ciò che arriva dalla configurazione di ambiente non è soggetto alla policy: comandi, segreti e target restano sotto il controllo di chi la amministra. Se la sezione è indicata, i campi omessi mantengono il default; in produzione vanno impostati tutti e tre.

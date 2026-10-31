@@ -230,6 +230,29 @@ func TestDescriptorPolicy(t *testing.T) {
 		}
 	}
 
+	// "*" matches "/" too: a "." or ".." segment, also encoded, must not leave the pattern.
+	file := &DescriptorPolicy{SecretRefs: []string{"file:/run/secrets/{application}/*", "vault:secret/data/{application}/*"}}
+	for _, ref := range []string{
+		"file:/run/secrets/myapp/../../../var/run/secrets/kubernetes.io/serviceaccount/token",
+		"file:/run/secrets/myapp/./key",
+		"file:/run/secrets/myapp/%2e%2e/other/key",
+		"vault:secret/data/myapp/%2E%2E/other#ssh",
+		"vault:secret/data/myapp/..%2fother#ssh",
+		"vault:secret/data/myapp/..%5cother#ssh",
+		"vault:secret/data/myapp/%zz#ssh",
+	} {
+		dd := baseDescriptor()
+		dd.Secrets = []descriptor.SecretRef{{Name: "key", Ref: ref}}
+		if err := file.Check(dd, env); err == nil || !strings.Contains(err.Error(), "secrets.key") {
+			t.Errorf("%s: accepted (%v)", ref, err)
+		}
+	}
+	dd := baseDescriptor()
+	dd.Secrets = []descriptor.SecretRef{{Name: "key", Ref: "file:/run/secrets/myapp/db..key"}, {Name: "v", Ref: "vault:secret/data/myapp/prod#a.b"}}
+	if err := file.Check(dd, env); err != nil {
+		t.Errorf("plain references rejected: %v", err)
+	}
+
 	// What the environment configuration defines is not subject to the policy.
 	env = EnvConfig{
 		Params:  map[string]string{"post_command": "rm -rf /"},
