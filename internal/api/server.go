@@ -455,7 +455,7 @@ func (s *Server) validate(c *gin.Context) {
 // validateEnvironment checks a candidate environment configuration before it is applied.
 func (s *Server) validateEnvironment(c *gin.Context) {
 	var req engine.EnvironmentCheck
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize)).Decode(&req); err != nil {
 		writeError(c, fmt.Errorf("%w: %w", engine.ErrInvalidRequest, err))
 		return
 	}

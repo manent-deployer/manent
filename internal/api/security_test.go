@@ -57,3 +57,11 @@ func TestReadyzNonEsponeIlMotivo(t *testing.T) {
 		t.Errorf("motivo registrato %d volte:\n%s", n, buf.String())
 	}
 }
+
+func TestCorpoDellaRichiestaLimitato(t *testing.T) {
+	r := NewRouterWith(&mockService{}, nil, slog.New(slog.DiscardHandler), Options{})
+	big := `{"application":"a","environment":"e","config":"` + strings.Repeat("x", maxBodySize) + `"}`
+	if w := do(r, http.MethodPost, "/api/v1/environments/validate", big); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "too large") {
+		t.Errorf("environments/validate with a body over the limit: %d %s", w.Code, w.Body)
+	}
+}
