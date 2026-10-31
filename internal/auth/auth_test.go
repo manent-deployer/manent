@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,7 +95,11 @@ func (f *fakeIssuer) token(t *testing.T, claims map[string]any) string {
 
 func TestOIDC(t *testing.T) {
 	iss := newFakeIssuer(t)
-	o, err := NewOIDC(context.Background(), OIDCConfig{Issuer: iss.srv.URL, Audience: "manent", PolicyClaims: []string{"email", "employee_type", "admin"}})
+	if _, err := NewOIDC(context.Background(), OIDCConfig{Issuer: iss.srv.URL, Audience: "manent"}); err == nil {
+		t.Fatal("username claim must be required")
+	}
+	o, err := NewOIDC(context.Background(), OIDCConfig{Issuer: iss.srv.URL, Audience: "manent", UsernameClaim: "preferred_username",
+		PolicyClaims: []string{"email", "employee_type", "admin"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +128,12 @@ func TestOIDC(t *testing.T) {
 	}
 	if _, err := o.Authenticate(ctx, iss.token(t, claims("manent", now.Add(-time.Minute)))); err == nil {
 		t.Error("token scaduto accettato")
+	}
+	// Without the configured claim the token is refused: sub is not used in its place.
+	noName := claims("manent", now.Add(time.Hour))
+	delete(noName, "preferred_username")
+	if _, err := o.Authenticate(ctx, iss.token(t, noName)); err == nil || !strings.Contains(err.Error(), "preferred_username") {
+		t.Errorf("token senza username claim: %v", err)
 	}
 	// A value that is not a JWT goes to the next authenticator of the chain.
 	if _, err := o.Authenticate(ctx, "token-statico"); !errors.Is(err, ErrUnauthenticated) {

@@ -21,7 +21,8 @@ type OIDCConfig struct {
 	Issuer string
 	// Audience is the value expected in the aud claim (typically manent's client ID).
 	Audience string
-	// UsernameClaim is the claim with the user name (default preferred_username, then sub).
+	// UsernameClaim is the claim with the user name (required). It identifies the user in
+	// bindings, approvals and audit: it must be unique and not changeable by the user.
 	UsernameClaim string
 	// GroupsClaim is the claim with the groups (default groups).
 	GroupsClaim string
@@ -43,8 +44,8 @@ type OIDC struct {
 // NewOIDC runs the issuer discovery. Signing keys are reloaded automatically when they
 // change (rotation).
 func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
-	if cfg.Issuer == "" || cfg.Audience == "" {
-		return nil, errors.New("oidc: issuer and audience are required")
+	if cfg.Issuer == "" || cfg.Audience == "" || cfg.UsernameClaim == "" {
+		return nil, errors.New("oidc: issuer, audience and username claim are required")
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	if cfg.CAFile != "" {
@@ -73,9 +74,6 @@ func NewOIDC(ctx context.Context, cfg OIDCConfig) (*OIDC, error) {
 		groupsClaim:   cfg.GroupsClaim,
 		policyClaims:  cfg.PolicyClaims,
 	}
-	if o.usernameClaim == "" {
-		o.usernameClaim = "preferred_username"
-	}
 	if o.groupsClaim == "" {
 		o.groupsClaim = "groups"
 	}
@@ -96,10 +94,13 @@ func (o *OIDC) Authenticate(ctx context.Context, token string) (*Principal, erro
 	if err := tok.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("unreadable OIDC claims: %w", err)
 	}
-	p := &Principal{Subject: tok.Subject, Method: MethodOIDC}
-	if v, ok := claims[o.usernameClaim].(string); ok && v != "" {
-		p.Subject = v
+	// No fallback to another claim: values of two claims could collide (a sub equal to
+	// another user's name) and the identity would change with the token's content.
+	name, _ := claims[o.usernameClaim].(string)
+	if name == "" {
+		return nil, fmt.Errorf("invalid OIDC token: claim %q missing", o.usernameClaim)
 	}
+	p := &Principal{Subject: name, Method: MethodOIDC}
 	switch g := claims[o.groupsClaim].(type) {
 	case []any:
 		for _, v := range g {

@@ -1096,6 +1096,9 @@ func (c *Config) validateSecurity() []error {
 		if o := c.Auth.OIDC; o != nil && (o.Issuer == "" || o.Audience == "") {
 			errs = append(errs, errors.New("auth.oidc: issuer and audience are required"))
 		}
+		if o := c.Auth.OIDC; o != nil && o.UsernameClaim == "" {
+			errs = append(errs, errors.New("auth.oidc.username_claim is required: a claim unique per user that users cannot change (sub; oid for Microsoft Entra ID)"))
+		}
 		if o := c.Auth.OIDC; o != nil && o.UI != nil {
 			if o.UI.ClientID == "" {
 				errs = append(errs, errors.New("auth.oidc.ui.client_id is required"))

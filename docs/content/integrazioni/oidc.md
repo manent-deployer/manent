@@ -23,10 +23,23 @@ sequenceDiagram
 |---|---|---|
 | `iss` | `auth.oidc.issuer` | |
 | `aud` | `auth.oidc.audience` | |
-| user name | `auth.oidc.username_claim` | `preferred_username` (falls back to `sub`) |
+| user name | `auth.oidc.username_claim` | required: see [below](#nome-utente) |
 | groups | `auth.oidc.groups_claim` | `groups` |
 
 The identity becomes `oidc:<user name>`, as shown by `manent whoami` and recorded in the audit log.
+
+### Choosing the user name claim { #nome-utente }
+
+`username_claim` is required: the user name is what subject bindings, the four-eyes rule on approvals and the audit log rely on. Choose a claim that is unique for each user and that users cannot change themselves. A token without that claim is refused; manent never falls back to another claim.
+
+| Provider | Claim | Notes |
+|---|---|---|
+| Keycloak | `preferred_username` | Readable. Keep *Realm settings → Edit username* off, the default, so users cannot rename themselves. |
+| Microsoft Entra ID | `oid` | The immutable object ID. Microsoft advises against `preferred_username` for authorization: administrators can change it and assign it again to another user. |
+| Okta | `sub` | In access tokens of a custom authorization server, `sub` is the user's login. |
+| Any | `sub` | Unique and stable by the OIDC specification, but often an opaque ID. |
+
+Changing `username_claim` on an existing installation changes every identity: pending approvals compare the requester's old name with the approver's new one, so drain them first and update bindings and Slack identities.
 
 ## Configure your provider
 
@@ -69,7 +82,7 @@ The identity becomes `oidc:<user name>`, as shown by `manent whoami` and recorde
       oidc:
         issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
         audience: <client ID of manent-api>
-        username_claim: preferred_username
+        username_claim: oid            # immutable; subjects become object IDs
         groups_claim: roles
         ui:
           client_id: <client ID of manent-ui>

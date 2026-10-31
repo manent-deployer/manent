@@ -72,6 +72,7 @@ auth:
   oidc:
     issuer: https://login.example.com/realms/corp
     audience: manent
+    username_claim: preferred_username
     groups_claim: groups
     ui:
       client_id: manent-ui          # public client, no secret

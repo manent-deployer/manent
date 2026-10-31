@@ -23,6 +23,7 @@ auth:
   oidc:
     issuer: https://sso.example.com/realms/corp
     audience: manent
+    username_claim: preferred_username
   tokens:
     - name: ci-pipeline
       sha256: "9f2c…"
@@ -39,7 +40,7 @@ manent verifies JWTs issued by an OIDC identity provider (Keycloak, Microsoft En
 |---|---|---|
 | `issuer` | | Issuer URL. |
 | `audience` | | Expected value of the `aud` claim, typically the client ID registered for manent. |
-| `username_claim` | `preferred_username` | Claim with the user name. If missing, `sub` is used. |
+| `username_claim` | | Required. Claim with the user name, unique and not changeable by the user: see [Choosing the user name claim](../integrazioni/oidc.md#nome-utente). A token without it is refused. |
 | `groups_claim` | `groups` | Claim with the groups, used by permissions. |
 | `policy_claims` | `[email, name]` | Claims exposed to the [permission policy](../guida/permessi.md) (`input.identity.claims`); the others never reach it. |
 | `ca_file` | | Additional CAs to reach the issuer. |

@@ -23,10 +23,23 @@ sequenceDiagram
 |---|---|---|
 | `iss` | `auth.oidc.issuer` | |
 | `aud` | `auth.oidc.audience` | |
-| nome utente | `auth.oidc.username_claim` | `preferred_username` (in mancanza `sub`) |
+| nome utente | `auth.oidc.username_claim` | obbligatorio: vedi [sotto](#nome-utente) |
 | gruppi | `auth.oidc.groups_claim` | `groups` |
 
 L'identità diventa `oidc:<nome utente>`, come mostra `manent whoami` e come viene registrata nell'audit.
+
+### Scegliere il claim del nome utente { #nome-utente }
+
+`username_claim` è obbligatorio: sul nome utente si basano i binding per soggetto, la regola dei quattro occhi nelle approvazioni e l'audit. Scegli un claim unico per ogni utente e che gli utenti non possano cambiare da soli. Un token senza quel claim viene rifiutato: manent non ripiega mai su un altro claim.
+
+| Provider | Claim | Note |
+|---|---|---|
+| Keycloak | `preferred_username` | Leggibile. Lascia disattivato *Realm settings → Edit username*, come da default, così gli utenti non possono rinominarsi. |
+| Microsoft Entra ID | `oid` | L'object ID, immutabile. Microsoft sconsiglia `preferred_username` per le autorizzazioni: gli amministratori possono cambiarlo e assegnarlo di nuovo a un altro utente. |
+| Okta | `sub` | Nei token di accesso di un authorization server personalizzato, `sub` è il login dell'utente. |
+| Qualsiasi | `sub` | Unico e stabile per la specifica OIDC, ma spesso un ID opaco. |
+
+Cambiare `username_claim` su un'installazione esistente cambia tutte le identità: le approvazioni in attesa confrontano il vecchio nome del richiedente con il nuovo nome di chi approva, quindi esauriscile prima e aggiorna binding e identità di Slack.
 
 ## Configura il provider
 
@@ -69,7 +82,7 @@ L'identità diventa `oidc:<nome utente>`, come mostra `manent whoami` e come vie
       oidc:
         issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
         audience: <client ID di manent-api>
-        username_claim: preferred_username
+        username_claim: oid            # immutabile: i soggetti diventano object ID
         groups_claim: roles
         ui:
           client_id: <client ID di manent-ui>

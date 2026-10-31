@@ -122,6 +122,7 @@ auth:
   oidc:
     issuer: https://sso.example.com/realms/corp
     audience: manent
+    username_claim: preferred_username
     groups_claim: groups
     ui:
       client_id: manent-ui                 # client pubblico con PKCE, per l'interfaccia web
