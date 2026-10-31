@@ -111,6 +111,84 @@ func TestSorgentiConCredenziali(t *testing.T) {
 	}
 }
 
+func TestSorgentiNonEsconoDalPrefisso(t *testing.T) {
+	srcs, err := NewSources([]Source{
+		{Prefix: "https://nexus.example.com", Auth: &SourceAuth{Type: AuthBearer, SecretRef: "env:X"}},
+		{Prefix: "https://repo.example.com/releases/"},
+		{Prefix: "oci://registry.example.com/team/app"},
+	}, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, src := range []string{
+		"https://nexus.example.com/repository/app.tgz",
+		"https://nexus.example.com",
+		"https://repo.example.com/releases/app-1.0.tgz",
+		"https://repo.example.com/releases/a..b/app.tgz",
+		"oci://registry.example.com/team/app:1.0",
+		"oci://registry.example.com/team/app@sha256:abc",
+	} {
+		if err := srcs.Check(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+	for _, src := range []string{
+		"https://nexus.example.com.evil.example/app.tgz",
+		"https://nexus.example.com@evil.example/app.tgz",
+		"https://nexus.example.com:8443/app.tgz",
+		"https://repo.example.com/releases/../private/app.tgz",
+		"https://repo.example.com/releases/%2e%2e/private/app.tgz",
+		"https://repo.example.com/releases/..%2fprivate/app.tgz",
+		"https://repo.example.com/releases/./app.tgz",
+		"https://repo.example.com/releases/%zz",
+		"oci://registry.example.com/team/app-private:1.0",
+	} {
+		if err := srcs.Check(src); err == nil {
+			t.Errorf("%s: accepted", src)
+		}
+	}
+}
+
+func TestHeaderDelleCredenzialiNonSegueIRedirect(t *testing.T) {
+	var leaked string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked = r.Header.Get("X-Api-Key")
+		_, _ = w.Write([]byte("contenuto"))
+	}))
+	defer other.Close()
+	var same string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/releases/away.tgz":
+			http.Redirect(w, r, other.URL+"/blob", http.StatusFound)
+		case "/releases/here.tgz":
+			http.Redirect(w, r, "/releases/blob", http.StatusFound)
+		default:
+			same = r.Header.Get("X-Api-Key")
+			_, _ = w.Write([]byte("contenuto"))
+		}
+	}))
+	defer srv.Close()
+	srcs, err := NewSources([]Source{{Prefix: srv.URL + "/releases/", Auth: &SourceAuth{Type: AuthHeader, Header: "X-Api-Key", SecretRef: "env:API_KEY"}}},
+		false, mapProvider{"env:API_KEY": "k"}, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := DefaultFetcher{Sources: srcs}
+	if _, err := f.Fetch(context.Background(), srv.URL+"/releases/away.tgz", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if leaked != "" {
+		t.Errorf("header sent to the redirect host: %q", leaked)
+	}
+	if _, err := f.Fetch(context.Background(), srv.URL+"/releases/here.tgz", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if same != "k" {
+		t.Errorf("header dropped on a redirect to the same host: %q", same)
+	}
+}
+
 func TestSorgentiFile(t *testing.T) {
 	dir := t.TempDir()
 	srcs, err := NewSources([]Source{{Prefix: "file://" + filepath.ToSlash(dir) + "/"}}, false, nil, nil)

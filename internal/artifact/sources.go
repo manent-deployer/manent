@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"cmp"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,13 +112,55 @@ func clientWithCA(base *http.Client, caFile string) (*http.Client, error) {
 // images are unchanged, local paths become "file://" plus the cleaned absolute path.
 func normalize(source string) (string, error) {
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") || IsOCI(source) {
-		return source, nil
+		return source, checkRemote(source)
 	}
 	abs, err := filepath.Abs(strings.TrimPrefix(source, "file://"))
 	if err != nil {
 		return "", err
 	}
 	return "file://" + filepath.ToSlash(abs), nil
+}
+
+// checkRemote refuses what would make a URL leave the prefix it matches: credentials before
+// the host (https://repo.example.com@evil.example/) and "." or ".." path segments, also
+// percent-encoded, which the server would resolve outside the prefix.
+func checkRemote(source string) error {
+	_, rest, _ := strings.Cut(source, "://")
+	host, p, _ := strings.Cut(rest, "/")
+	if strings.Contains(host, "@") {
+		return errors.New("artifact source: credentials in the URL are not allowed")
+	}
+	p, _, _ = strings.Cut(p, "?")
+	p, _, _ = strings.Cut(p, "#")
+	decoded, err := url.PathUnescape(p)
+	if err != nil {
+		return fmt.Errorf("artifact source: invalid path: %w", err)
+	}
+	for _, v := range []string{p, decoded, strings.ReplaceAll(decoded, `\`, "/")} {
+		for _, seg := range strings.Split(v, "/") {
+			if seg == "." || seg == ".." {
+				return errors.New("artifact source: '.' and '..' path segments are not allowed")
+			}
+		}
+	}
+	return nil
+}
+
+// hasPrefix reports whether the normalized source is under the prefix. A prefix that does not
+// end with "/" matches only up to a boundary: https://repo.example.com does not cover
+// https://repo.example.com.evil.example/, an image prefix covers its tags and digests.
+func hasPrefix(norm, prefix string) bool {
+	if !strings.HasPrefix(norm, prefix) {
+		return false
+	}
+	if len(norm) == len(prefix) || strings.HasSuffix(prefix, "/") {
+		return true
+	}
+	bounds := "/?#"
+	if IsOCI(prefix) {
+		bounds = "/:@"
+	}
+	return strings.ContainsRune(bounds, rune(norm[len(prefix)]))
 }
 
 // match returns the configured source with the longest prefix, or nil.
@@ -127,7 +171,7 @@ func (s *Sources) match(source string) (*Source, error) {
 	}
 	var best *Source
 	for i := range s.list {
-		if strings.HasPrefix(norm, s.list[i].Prefix) && (best == nil || len(s.list[i].Prefix) > len(best.Prefix)) {
+		if hasPrefix(norm, s.list[i].Prefix) && (best == nil || len(s.list[i].Prefix) > len(best.Prefix)) {
 			best = &s.list[i]
 		}
 	}
@@ -177,10 +221,35 @@ func (s *Sources) prepare(ctx context.Context, req *http.Request, source string)
 			req.Header.Set("Authorization", "Bearer "+secret)
 		case AuthHeader:
 			req.Header.Set(a.Header, secret)
+			// Go drops Authorization on a redirect to another host, not a custom header.
+			return withoutHeaderElsewhere(cmp.Or(src.client, s.Client), a.Header), nil
 		}
 	}
 	if src.client != nil {
 		return src.client, nil
 	}
 	return s.Client, nil
+}
+
+// withoutHeaderElsewhere returns a copy of the client that removes the header from the
+// redirects to a host other than the one of the first request.
+func withoutHeaderElsewhere(c *http.Client, header string) *http.Client {
+	cp := http.Client{}
+	if c != nil {
+		cp = *c
+	}
+	next := cp.CheckRedirect
+	cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if req.URL.Host != via[0].URL.Host {
+			req.Header.Del(header)
+		}
+		if next != nil {
+			return next(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &cp
 }

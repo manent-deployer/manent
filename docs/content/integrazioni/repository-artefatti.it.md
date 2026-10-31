@@ -18,6 +18,7 @@ artifacts:
 
 - Vince il **prefisso più lungo** che corrisponde, quindi un prefisso più specifico può avere credenziali diverse.
 - Le credenziali vengono lette a ogni download e non vengono mai inoltrate su un redirect verso un altro host.
+- Un prefisso copre solo ciò che sta sotto: `https://repo.example.com` non copre `https://repo.example.com.evil.example/`, e un URL con credenziali prima dell'host o con segmenti `.`/`..` nel percorso (anche codificati) è rifiutato, così non può uscire dal prefisso sul server.
 - Con `allow_unlisted: true` (il default, solo per lo sviluppo) un descrittore potrebbe far scaricare al worker qualunque URL raggiungibile dalla sua rete, o copiare sui target un file locale del worker.
 
 ## 2. Repository per repository

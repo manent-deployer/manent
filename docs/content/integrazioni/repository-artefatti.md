@@ -18,6 +18,7 @@ artifacts:
 
 - The **longest matching prefix** wins, so a narrower prefix can carry different credentials.
 - Credentials are read at every download and are never forwarded on a redirect to another host.
+- A prefix covers only what is under it: `https://repo.example.com` does not cover `https://repo.example.com.evil.example/`, and a URL with credentials before the host or with `.`/`..` path segments (also percent-encoded) is refused, so it cannot leave its prefix on the server.
 - With `allow_unlisted: true` (the default, development only) a descriptor could make the worker download any URL reachable from its network, or copy a local file of the worker to the targets.
 
 ## 2. Repository by repository
