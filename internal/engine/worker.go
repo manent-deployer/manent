@@ -616,6 +616,9 @@ func (w *Worker) recordAttributes(ctx dbos.Context, id string, req Request, res 
 		}
 		if v := s.Output[outRevision]; s.Name == stepConfig && gitsrc.IsSHA(v) {
 			attrs[attrConfigRevision] = v
+			if p := s.Output[outProvider]; p != "" {
+				attrs[attrConfigProvider] = p
+			}
 		}
 	}
 	if res.Change != nil {
@@ -642,6 +645,8 @@ const (
 	// stepConfig records in outRevision the revision of the environment configuration.
 	stepConfig  = "config"
 	outRevision = "revision"
+	// outProvider is the environment configuration provider in the output of the config step.
+	outProvider = "provider"
 )
 
 // recordOutcome records the final deploy outcome in the audit, in a DBOS step: after a
@@ -900,7 +905,7 @@ func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig
 	d, approvals := req.Descriptor, req.Approval
 	meta := map[string]string{}
 	// A manual rollback reads the configuration revision of the deploy it goes back to.
-	ctx = envconfig.WithRevision(ctx, req.ConfigRevision)
+	ctx = envconfig.WithRevision(ctx, req.ConfigProvider, req.ConfigRevision)
 	if w.resolver != nil || d.HasImports() {
 		var err error
 		if d, meta, err = w.reader.importResolve(w.resolver)(ctx, d); err != nil {

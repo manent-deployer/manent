@@ -33,3 +33,9 @@ tenants:
     tags: {division: platform}
     applications:
       uc25-api: {}
+  # UC31: a team that keeps its environment configuration in its own provider (envconfig.providers).
+  uc31team:
+    description: Team con la propria configurazione di ambiente
+    applications:
+      uc31-team-web: {}
+    envconfig: uc31-team

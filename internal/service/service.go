@@ -259,6 +259,8 @@ type Status struct {
 	// ConfigRevision is the commit SHA of the environment configuration (git provider),
 	// recorded at the end of the deploy.
 	ConfigRevision string `json:"config_revision,omitempty"`
+	// ConfigProvider is the environment configuration provider that recorded ConfigRevision.
+	ConfigProvider string `json:"config_provider,omitempty"`
 	Kind           string `json:"kind,omitempty"`
 	Source         string `json:"source,omitempty"`
 	DryRun         bool   `json:"dry_run,omitempty"`

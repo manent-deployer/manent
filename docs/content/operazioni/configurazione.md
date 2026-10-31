@@ -65,6 +65,7 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 | Key | Default | Description |
 |---|---|---|
 | `provider` | `none` | `none`, `consul`, `file` or `git`. |
+| `providers` | `[]` | Several named providers, alternative to `provider` ([Several providers](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), the section of the type with the same keys as below, `match` (`applications`, `artifacts`, `environments`) or `tenant_only`, and `on_missing` (`fail`, `next`). |
 | `required` | `false` | Makes the deploy fail if there is no configuration for the environment. |
 | `max_retries` | `3` | Additional read attempts. |
 | `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |

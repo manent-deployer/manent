@@ -345,7 +345,7 @@ func (e *Engine) Rollback(ctx context.Context, r RollbackRequest) (*Submission, 
 	if err != nil {
 		return nil, err
 	}
-	return e.submit(ctx, d, submitMeta{kind: KindRollback, source: target.ID, configRevision: target.ConfigRevision})
+	return e.submit(ctx, d, submitMeta{kind: KindRollback, source: target.ID, configRevision: target.ConfigRevision, configProvider: target.ConfigProvider})
 }
 
 // rollbackDescriptor finds the release to go back to and builds the descriptor of the rollback.

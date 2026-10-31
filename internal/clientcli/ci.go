@@ -67,6 +67,9 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 		if st.ConfigRevision != "" {
 			lines = append(lines, "config_revision="+st.ConfigRevision)
 		}
+		if st.ConfigProvider != "" {
+			lines = append(lines, "config_provider="+st.ConfigProvider)
+		}
 		for _, l := range lines {
 			if strings.ContainsAny(l, "\r\n") {
 				return fmt.Errorf("value cannot be written to %s: %q", r.outputs, l)
@@ -92,7 +95,11 @@ func (r ciReport) write(ctx context.Context, svc service.Service, d *descriptor.
 		fmt.Fprintf(&b, "### manent · %s of %s to %s\n\n| | |\n|---|---|\n", kind, d.Application, d.Environment)
 		fmt.Fprintf(&b, "| Version | `%s` |\n| Deploy | `%s` |\n| Outcome | **%s** |\n", d.Artifact.Version, sub.ID, st.State)
 		if st.ConfigRevision != "" {
-			fmt.Fprintf(&b, "| Configuration | `%s` |\n", st.ConfigRevision)
+			rev := st.ConfigRevision
+			if st.ConfigProvider != "" {
+				rev = st.ConfigProvider + "@" + rev
+			}
+			fmt.Fprintf(&b, "| Configuration | `%s` |\n", rev)
 		}
 		if st.RolloutProgress != "" {
 			fmt.Fprintf(&b, "| Rollout | %s |\n", st.RolloutProgress)

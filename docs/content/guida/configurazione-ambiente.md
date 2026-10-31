@@ -103,6 +103,50 @@ Configured in `manent.yml`, section `envconfig`:
 
 Templates (`consul.key`, `file.path`, `git.path`) contain `{tenant}` (the [tenant](tenant.md) of the release, `untenanted` for the applications no tenant lists) and `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application of a tenant. See [Applications with several artifacts](artefatti.md).
 
+## Several providers { #piu-provider }
+
+One installation can read from several systems at once: for example the payments team from its own Git repository, the applications not migrated yet from the old Consul, everyone else from the default Consul. `envconfig.providers` replaces `provider` and its section:
+
+```yaml title="manent.yml"
+envconfig:
+  required: true
+  providers:
+    - name: payments-git
+      type: git
+      git:
+        repository: https://git.example.com/payments/envconfig.git
+        password_ref: vault:secret/manent/payments-git#token
+      match: {applications: ["payments/*"]}
+    - name: legacy-consul
+      type: consul
+      consul:
+        address: https://consul-old.example.com
+        key: "manent/{application}/{environment}"
+        token_file: /etc/manent/consul-old.token
+      match: {environments: [dev, test]}
+      on_missing: next                     # not migrated yet? read the next one
+    - name: retail-git
+      type: git
+      git: {repository: https://git.example.com/retail/envconfig.git}
+      tenant_only: true
+    - name: default
+      type: consul
+```
+
+```yaml title="tenants.yml"
+tenants:
+  retail:
+    applications: {shop: {}}
+    envconfig: retail-git                  # read first, whatever the match rules say
+```
+
+- **Which provider.** A deploy reads from the provider its tenant names in the registry (`envconfig`), then from the providers whose `match` applies, in order. `match` takes patterns on `applications` (qualified with the tenant, as in permissions and rules: `payments/*`), `artifacts` and `environments`; a provider without `match` serves everything, one with `tenant_only: true` only the tenants that name it. The first one that has the document wins; with no candidate the deploy has no environment configuration (an error with `required: true`).
+- **A missing document.** With `on_missing: fail` (default) the deploy stops at that provider, as with a single one. With `on_missing: next` it moves to the next candidate: useful to migrate one application at a time. Any other error, such as an unreachable system or an invalid document, never moves on: the deploy retries, and never silently reads another configuration.
+- **Own settings.** Each provider has its template, address and credentials. `CONSUL_HTTP_TOKEN` and `CONSUL_HTTP_ADDR` are only the defaults of the Consul providers without `token_file` and `address`.
+- **Traceability.** The `config` step records `provider` (and `skipped`, the providers passed over with `on_missing: next`) next to `source` and `revision`; with Git the deploy also records `config_provider`, shown in the status next to `config_revision`.
+- **Revisions.** `config.ref` requires that the provider the deploy reads from is Git. A manual rollback and the reconciliation read the recorded revision from the provider that recorded it, even if the rules now choose another one: a commit SHA belongs to one repository. If that provider is no longer configured, the deploy fails with a permanent error.
+- **Compatibility.** `provider` with its `consul`, `git` or `file` section keeps working: it is a single provider named `default`. `provider` and `providers` cannot be used together. A tenant naming a provider that does not exist is logged at startup, and its deploys fail.
+
 ## When it is read
 
 The configuration is read at the start of every deploy, in the `config` step. Two consequences follow:

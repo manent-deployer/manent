@@ -94,6 +94,10 @@ type Tenant struct {
 	ArtifactSources []string `json:"artifact_sources,omitempty" yaml:"artifact_sources,omitempty"`
 	// CallbackHosts, if set, are the only hosts the callbacks of the tenant's deploys can reach.
 	CallbackHosts []string `json:"callback_hosts,omitempty" yaml:"callback_hosts,omitempty"`
+	// EnvConfig, if set, is the name of the environment configuration provider
+	// (envconfig.providers) the tenant's deploys read first, before the providers whose match
+	// applies.
+	EnvConfig string `json:"envconfig,omitempty" yaml:"envconfig,omitempty"`
 	// Disabled tenants cannot deploy their applications.
 	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 	// Source and Revision identify the registry the tenant was read from (not in the YAML).
@@ -168,6 +172,9 @@ func (t *Tenant) Validate() error {
 	}
 	if t.Queue != "" && !descriptor.ValidArtifactName(t.Queue) {
 		errs = append(errs, fmt.Errorf("tenant %s: invalid queue name %q", t.Name, t.Queue))
+	}
+	if t.EnvConfig != "" && !descriptor.ValidArtifactName(t.EnvConfig) {
+		errs = append(errs, fmt.Errorf("tenant %s: invalid envconfig provider name %q", t.Name, t.EnvConfig))
 	}
 	return errors.Join(errs...)
 }

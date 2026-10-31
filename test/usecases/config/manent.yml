@@ -53,11 +53,24 @@ logging:
 
 workdir: /tmp/manent-work
 
+# UC31: several providers. The uc31team tenant names its own (tenant_only), the uc31-* applications
+# are read first from the "legacy" files (on_missing: next while they move), every other release
+# from the default path of the cases.
 envconfig:
-  provider: file
   required: false
-  file:
-    path: /etc/manent/envconfig/{tenant}/{application}/{artifact}/{environment}.yml
+  providers:
+    - name: uc31-team
+      type: file
+      file: {path: "/etc/manent/envconfig/uc31/team/{application}/{environment}.yml"}
+      tenant_only: true
+    - name: uc31-legacy
+      type: file
+      file: {path: "/etc/manent/envconfig/uc31/legacy/{application}/{environment}.yml"}
+      match: {applications: ["uc31-*"]}
+      on_missing: next
+    - name: default
+      type: file
+      file: {path: "/etc/manent/envconfig/{tenant}/{application}/{artifact}/{environment}.yml"}
 
 # UC24: registry of the teams that own the applications; the applications it does not list are
 # deployed as the tenant "untenanted" (tenants.untenanted: allow, the default).

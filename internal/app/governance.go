@@ -113,7 +113,7 @@ func newPolicySource(cfg *config.Config, sp secrets.Provider, log *slog.Logger) 
 		}
 		return src, nil
 	case config.PolicySourceConsul:
-		addr, token, err := consulAccess(cfg)
+		addr, token, err := consulAccess(cfg.EnvConfig.Consul)
 		if err != nil {
 			return nil, err
 		}
@@ -123,10 +123,9 @@ func newPolicySource(cfg *config.Config, sp secrets.Provider, log *slog.Logger) 
 	return nil, nil
 }
 
-// consulAccess returns address and ACL token of Consul (envconfig.consul, CONSUL_HTTP_ADDR,
+// consulAccess returns address and ACL token of Consul (a consul section, CONSUL_HTTP_ADDR,
 // CONSUL_HTTP_TOKEN or token_file).
-func consulAccess(cfg *config.Config) (addr, token string, err error) {
-	c := cfg.EnvConfig.Consul
+func consulAccess(c config.ConsulConfig) (addr, token string, err error) {
 	addr = c.Address
 	if addr == "" {
 		addr = cmp.Or(os.Getenv("CONSUL_HTTP_ADDR"), "http://127.0.0.1:8500")

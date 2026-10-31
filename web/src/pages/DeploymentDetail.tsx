@@ -80,6 +80,7 @@ function Facts({ d }: { d: Status }) {
       {d.config_revision && (
         <Fact label={t("detail.configRevision")}>
           <span className="font-mono text-sm" title={d.config_revision}>
+            {d.config_provider ? `${d.config_provider}@` : ""}
             {d.config_revision.slice(0, 12)}
           </span>
         </Fact>

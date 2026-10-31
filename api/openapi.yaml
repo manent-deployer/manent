@@ -924,6 +924,7 @@ components:
         version: {type: string}
         sha256: {type: string}
         config_revision: {type: string, description: Commit SHA of the environment configuration (git provider)}
+        config_provider: {type: string, description: Environment configuration provider that recorded config_revision (envconfig.providers)}
         kind: {type: string, enum: [deploy, promotion, rollback]}
         source: {type: string, description: Source deploy of a promotion or a rollback}
         dry_run: {type: boolean}

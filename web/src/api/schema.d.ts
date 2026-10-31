@@ -932,6 +932,8 @@ export interface components {
             sha256?: string;
             /** @description Commit SHA of the environment configuration (git provider) */
             config_revision?: string;
+            /** @description Environment configuration provider that recorded config_revision (envconfig.providers) */
+            config_provider?: string;
             /** @enum {string} */
             kind?: "deploy" | "promotion" | "rollback";
             /** @description Source deploy of a promotion or a rollback */

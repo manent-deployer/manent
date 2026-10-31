@@ -1,0 +1,11 @@
+# UC31: the same environment in the default provider: never read, legacy comes first.
+plugin: remote-copy
+targets:
+  - {host: eu1-c, user: deploy}
+params:
+  dest_dir: /home/deploy/apps/uc31-web
+  layout: releases
+  ssh_key_secret: deploy-key
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

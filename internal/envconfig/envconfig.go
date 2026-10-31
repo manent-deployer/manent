@@ -64,6 +64,10 @@ type Document struct {
 	Revision string
 	// Ref is the ref the revision was resolved from (git provider), if any.
 	Ref string
+	// Provider is the name of the router's provider the configuration was read from, and
+	// Skipped those passed over because they had none (on_missing: next).
+	Provider string
+	Skipped  []string
 }
 
 // Revision is the configuration revision a read asks for.
@@ -83,20 +87,30 @@ type Versioned interface {
 // pinnedKey is the context key of the pinned revision.
 type pinnedKey struct{}
 
+// pinned is a revision with the provider that recorded it.
+type pinned struct{ provider, revision string }
+
 // WithRevision pins the configuration revision of the resolutions made with ctx (the one a
-// rollback goes back to, the one of the release a reconciliation reads); it takes precedence
+// rollback goes back to, the one of the release a reconciliation reads), with the provider
+// that recorded it (empty for the deploys made before named providers); it takes precedence
 // over config.ref and only applies to versioned providers.
-func WithRevision(ctx context.Context, revision string) context.Context {
+func WithRevision(ctx context.Context, provider, revision string) context.Context {
 	if revision == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, pinnedKey{}, revision)
+	return context.WithValue(ctx, pinnedKey{}, pinned{provider, revision})
 }
 
 // PinnedRevision returns the revision pinned with WithRevision, if any.
 func PinnedRevision(ctx context.Context) string {
-	s, _ := ctx.Value(pinnedKey{}).(string)
-	return s
+	p, _ := ctx.Value(pinnedKey{}).(pinned)
+	return p.revision
+}
+
+// PinnedProvider returns the provider of the revision pinned with WithRevision, if any.
+func PinnedProvider(ctx context.Context) string {
+	p, _ := ctx.Value(pinnedKey{}).(pinned)
+	return p.provider
 }
 
 // errRefUnsupported is returned for config.ref without a versioned provider.
@@ -412,6 +426,12 @@ func (r Resolver) Resolve(ctx context.Context, d descriptor.Descriptor) (descrip
 			}
 			if doc.Ref != "" {
 				meta["ref"] = doc.Ref
+			}
+			if doc.Provider != "" {
+				meta["provider"] = doc.Provider
+			}
+			if len(doc.Skipped) > 0 {
+				meta["skipped"] = strings.Join(doc.Skipped, ",")
 			}
 		}
 	}

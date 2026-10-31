@@ -65,6 +65,7 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `provider` | `none` | `none`, `consul`, `file` oppure `git`. |
+| `providers` | `[]` | Più provider con nome, in alternativa a `provider` ([Più provider](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), la sezione del tipo con le stesse chiavi elencate sotto, `match` (`applications`, `artifacts`, `environments`) oppure `tenant_only`, e `on_missing` (`fail`, `next`). |
 | `required` | `false` | Fa fallire il deploy se per l'ambiente non esiste configurazione. |
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
 | `consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |

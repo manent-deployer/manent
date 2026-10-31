@@ -1,0 +1,11 @@
+# UC31: the provider of the uc31team tenant, named in the registry.
+plugin: remote-copy
+targets:
+  - {host: eu1-c, user: deploy}
+params:
+  dest_dir: /home/deploy/apps/uc31-team-web
+  layout: releases
+  ssh_key_secret: deploy-key
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id

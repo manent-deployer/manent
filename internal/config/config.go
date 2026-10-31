@@ -3,6 +3,7 @@ package config
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -16,7 +17,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/manent-deployer/manent/internal/customspec"
+	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/labels"
+	"github.com/manent-deployer/manent/internal/tenant"
 )
 
 // Modes of a pipeline step.
@@ -287,10 +290,14 @@ const (
 	EnvProviderGit    = "git"
 )
 
-// EnvConfig configures the system the deploy configuration of every environment is read from.
+// EnvConfig configures the systems the deploy configuration of every environment is read from:
+// one (provider with its section) or several (providers).
 type EnvConfig struct {
-	// Provider is none, consul, file or git.
+	// Provider is none, consul, file or git; with Providers it must stay none.
 	Provider string `yaml:"provider"`
+	// Providers are several named providers: a deploy reads from the one its tenant names in the
+	// registry, then from those whose match applies, in order.
+	Providers []EnvProvider `yaml:"providers"`
 	// Required fails the deploy if the environment has no configuration.
 	Required bool `yaml:"required"`
 	// MaxRetries are the extra attempts on a read error.
@@ -331,6 +338,52 @@ type GitConfig struct {
 	CacheDir string `yaml:"cache_dir"`
 	// RefTTL is how long a ref resolution is reused before fetching again (default 30s).
 	RefTTL time.Duration `yaml:"ref_ttl"`
+}
+
+// EnvProvider is a named environment configuration provider of envconfig.providers.
+type EnvProvider struct {
+	Name string `yaml:"name"`
+	// Type is consul, file or git, configured by the section of the same name.
+	Type   string       `yaml:"type"`
+	Consul ConsulConfig `yaml:"consul"`
+	File   FileConfig   `yaml:"file"`
+	Git    GitConfig    `yaml:"git"`
+	// Match selects the releases the provider serves; empty: all.
+	Match EnvMatch `yaml:"match"`
+	// OnMissing is fail (default: the deploy has no environment configuration) or next (the
+	// next matching provider is read).
+	OnMissing string `yaml:"on_missing"`
+	// TenantOnly serves only the tenants that name the provider in the registry (envconfig).
+	TenantOnly bool `yaml:"tenant_only"`
+}
+
+// EnvMatch selects releases by patterns; an empty list matches everything.
+type EnvMatch struct {
+	// Applications are application patterns qualified with the tenant ("payments/*").
+	Applications []string `yaml:"applications"`
+	Artifacts    []string `yaml:"artifacts"`
+	Environments []string `yaml:"environments"`
+}
+
+// Values of envconfig.providers[].on_missing.
+const (
+	EnvOnMissingFail = "fail"
+	EnvOnMissingNext = "next"
+)
+
+// DefaultEnvProvider is the name of the provider configured by envconfig.provider.
+const DefaultEnvProvider = "default"
+
+// EffectiveProviders returns the configured providers: envconfig.providers, or the single
+// provider of envconfig.provider named "default"; none without a provider.
+func (e EnvConfig) EffectiveProviders() []EnvProvider {
+	if len(e.Providers) > 0 {
+		return e.Providers
+	}
+	if e.Provider == "" || e.Provider == EnvProviderNone {
+		return nil
+	}
+	return []EnvProvider{{Name: DefaultEnvProvider, Type: e.Provider, Consul: e.Consul, File: e.File, Git: e.Git}}
 }
 
 // GitSigners are the keys commit signatures are verified with.
@@ -861,6 +914,15 @@ func (c *Config) applyDefaults() {
 		t := true
 		c.Artifacts.AllowUnlisted = &t
 	}
+	def := Default().EnvConfig
+	for i := range c.EnvConfig.Providers {
+		p := &c.EnvConfig.Providers[i]
+		p.Consul.Key = cmp.Or(p.Consul.Key, def.Consul.Key)
+		p.File.Path = cmp.Or(p.File.Path, def.File.Path)
+		p.Git.Ref = cmp.Or(p.Git.Ref, def.Git.Ref)
+		p.Git.Path = cmp.Or(p.Git.Path, def.Git.Path)
+		p.Git.RefTTL = cmp.Or(p.Git.RefTTL, def.Git.RefTTL)
+	}
 	c.Pipeline.applyDefaults()
 }
 
@@ -937,6 +999,51 @@ func Load(path string) (*Config, error) {
 	return cfg, cfg.Validate()
 }
 
+// validateProviders checks envconfig.providers.
+func (e EnvConfig) validateProviders() []error {
+	if len(e.Providers) == 0 {
+		return nil
+	}
+	var errs []error
+	if e.Provider != EnvProviderNone {
+		errs = append(errs, errors.New("envconfig: provider and providers are alternatives (set provider: none, or leave it out, with providers)"))
+	}
+	seen := map[string]bool{}
+	for i, p := range e.Providers {
+		at := fmt.Sprintf("envconfig.providers[%d]", i)
+		switch {
+		case !descriptor.ValidArtifactName(p.Name):
+			errs = append(errs, fmt.Errorf("%s.name %q is invalid: %s", at, p.Name, descriptor.ArtifactNameRule))
+		case seen[p.Name]:
+			errs = append(errs, fmt.Errorf("%s.name %q is repeated", at, p.Name))
+		}
+		seen[p.Name] = true
+		switch p.Type {
+		case EnvProviderConsul, EnvProviderFile:
+		case EnvProviderGit:
+			if p.Git.Repository == "" {
+				errs = append(errs, fmt.Errorf("%s.git.repository is required with type git", at))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("%s.type %q not supported (consul|file|git)", at, p.Type))
+		}
+		switch p.OnMissing {
+		case "", EnvOnMissingFail, EnvOnMissingNext:
+		default:
+			errs = append(errs, fmt.Errorf("%s.on_missing %q not supported (fail|next)", at, p.OnMissing))
+		}
+		if p.TenantOnly && (len(p.Match.Applications) > 0 || len(p.Match.Artifacts) > 0 || len(p.Match.Environments) > 0) {
+			errs = append(errs, fmt.Errorf("%s: tenant_only and match are alternatives", at))
+		}
+		for _, a := range p.Match.Applications {
+			if err := tenant.CheckAppPattern(a); err != nil {
+				errs = append(errs, fmt.Errorf("%s.match.applications: %w", at, err))
+			}
+		}
+	}
+	return errs
+}
+
 // Validate checks the consistency of the configuration.
 func (c *Config) Validate() error {
 	var errs []error
@@ -955,6 +1062,7 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file|git)", c.EnvConfig.Provider))
 	}
+	errs = append(errs, c.EnvConfig.validateProviders()...)
 	switch c.Tenants.Untenanted {
 	case "", UntenantedAllow, UntenantedReject:
 	default:

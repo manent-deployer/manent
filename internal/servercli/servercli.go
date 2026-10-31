@@ -133,12 +133,13 @@ func (c *ValidateCmd) Execute([]string) error {
 	}
 	out["governance"] = g
 	if !c.Offline {
-		resolver, err := app.NewResolver(cfg, sp)
+		tenants := app.NewTenantCache(cfg, log)
+		resolver, err := app.NewResolver(cfg, sp, tenants)
 		if err != nil {
 			return err
 		}
 		// The tenant is part of the configuration key: resolved as the engine does.
-		owner, err := tenant.Resolve(context.Background(), app.NewTenantCache(cfg, log), d.Application, d.Tenant, cfg.Tenants.Untenanted != config.UntenantedReject)
+		owner, err := tenant.Resolve(context.Background(), tenants, d.Application, d.Tenant, cfg.Tenants.Untenanted != config.UntenantedReject)
 		if err != nil {
 			return err
 		}

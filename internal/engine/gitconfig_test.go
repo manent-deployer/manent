@@ -66,15 +66,27 @@ func (r *gitConfigRepo) commit(color string, envs ...string) string {
 // gitEngine starts a worker that reads the environment configuration from the repository.
 func gitEngine(t *testing.T, dir, configRef string) (*Engine, *provisionStep) {
 	t.Helper()
+	return providerEngine(t, gitProvider(t, dir), configRef)
+}
+
+// gitProvider reads the environment configuration from the repository.
+func gitProvider(t *testing.T, dir string) envconfig.Provider {
+	t.Helper()
 	repo, err := gitsrc.New(gitsrc.Options{Repository: dir, AllowedRefs: []string{"refs/tags/env-*"}, CacheDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return &envconfig.GitProvider{Repo: repo, PathTemplate: "{application}/{artifact}/{environment}.yml"}
+}
+
+// providerEngine starts a worker that reads the environment configuration from the provider.
+func providerEngine(t *testing.T, provider envconfig.Provider, configRef string) (*Engine, *provisionStep) {
+	t.Helper()
 	step := &provisionStep{seen: map[string]descriptor.Deploy{}}
 	reg, planner := testRegistry(t, artifactStep{}, step)
 	opts := workerOpts(testdb.URL(t), "w1", reg)
 	resolver := envconfig.Resolver{
-		Provider: &envconfig.GitProvider{Repo: repo, PathTemplate: "{application}/{artifact}/{environment}.yml"},
+		Provider: provider,
 		Policy:   &envconfig.DescriptorPolicy{Targets: true, ConfigRef: configRef},
 	}
 	opts.Resolver = resolver
@@ -196,7 +208,48 @@ func TestConfigRefSenzaProviderGit(t *testing.T) {
 	// A pinned revision (rollback of a deploy made with another provider) is ignored.
 	d = appVersion("app", "prod", "1.0.0", "")
 	d.Deploy.Targets = []descriptor.Target{{Host: "prod-1"}}
-	if _, _, err := r.Resolve(envconfig.WithRevision(context.Background(), "abc"), *d); err != nil {
+	if _, _, err := r.Resolve(envconfig.WithRevision(context.Background(), "", "abc"), *d); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRollbackDalProviderRegistrato(t *testing.T) {
+	ctx := context.Background()
+	repoA, repoB := newGitConfigRepo(t), newGitConfigRepo(t)
+	blueA := repoA.commit("blue-a", "prod")
+	repoB.commit("blue-b", "prod")
+	router := &envconfig.Router{Routes: []envconfig.Route{
+		{Name: "a", Provider: gitProvider(t, repoA.dir), Match: envconfig.Match{Environments: []string{"prod"}}},
+		{Name: "b", Provider: gitProvider(t, repoB.dir)},
+	}}
+	e, step := providerEngine(t, router, envconfig.ConfigRefNone)
+
+	id := deploy(t, e, ctx, appVersion("app", "prod", "1.0.0", "multi-1"))
+	st, err := e.Status(ctx, id)
+	if err != nil || st.ConfigProvider != "a" || st.ConfigRevision != blueA || step.deployOf(id).Params["color"] != "blue-a" {
+		t.Fatalf("first deploy: %+v %v", st, err)
+	}
+	res, err := e.Wait(ctx, id)
+	if err != nil || res.Steps[0].Output["provider"] != "a" {
+		t.Fatalf("config step: %+v %v", res.Steps[0], err)
+	}
+
+	// The routes change: prod now reads from b. A new deploy follows them, the rollback reads
+	// the revision recorded in a, which b does not have.
+	repoA.commit("green-a", "prod")
+	router.Routes[0].Match.Environments = []string{"none"}
+	id = deploy(t, e, ctx, appVersion("app", "prod", "1.1.0", "multi-2"))
+	if st, _ := e.Status(ctx, id); st.ConfigProvider != "b" || step.deployOf(id).Params["color"] != "blue-b" {
+		t.Fatalf("after the change: %+v %v", st, step.deployOf(id).Params)
+	}
+	sub, err := e.Rollback(ctx, RollbackRequest{Application: "app", Environment: "prod", Version: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Wait(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := e.Status(ctx, sub.ID); st.ConfigProvider != "a" || st.ConfigRevision != blueA || step.deployOf(sub.ID).Params["color"] != "blue-a" {
+		t.Fatalf("rollback: %+v %v", st, step.deployOf(sub.ID).Params)
 	}
 }

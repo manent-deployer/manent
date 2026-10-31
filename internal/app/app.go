@@ -453,28 +453,69 @@ func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 		MaxParallel: dp.MaxParallel}
 }
 
-// NewResolver creates the environment configuration resolver for the configured provider;
-// secrets resolves the credentials of the git provider.
-func NewResolver(cfg *config.Config, secrets gitsrc.Secrets) (envconfig.Resolver, error) {
+// NewResolver creates the environment configuration resolver for the configured providers;
+// secrets resolves the credentials of the git providers, tenants (optional) is the registry
+// where a tenant names its provider.
+func NewResolver(cfg *config.Config, secrets gitsrc.Secrets, tenants tenant.Directory) (envconfig.Resolver, error) {
 	ec := cfg.EnvConfig
 	r := envconfig.Resolver{Required: ec.Required, Policy: NewDescriptorPolicy(cfg)}
-	switch ec.Provider {
-	case config.EnvProviderConsul:
-		addr, token, err := consulAccess(cfg)
+	providers := ec.EffectiveProviders()
+	if len(providers) == 0 {
+		return r, nil
+	}
+	router := &envconfig.Router{Tenants: tenants}
+	for _, p := range providers {
+		prov, err := newEnvProvider(cfg, p, secrets)
 		if err != nil {
-			return r, err
+			return r, fmt.Errorf("envconfig provider %s: %w", p.Name, err)
 		}
-		r.Provider = &envconfig.ConsulProvider{
+		router.Routes = append(router.Routes, envconfig.Route{Name: p.Name, Provider: prov, OnMissing: p.OnMissing, TenantOnly: p.TenantOnly,
+			Match: envconfig.Match{Applications: p.Match.Applications, Artifacts: p.Match.Artifacts, Environments: p.Match.Environments}})
+	}
+	r.Provider = router
+	return r, nil
+}
+
+// warnTenantProviders logs the tenants of the registry that name an environment configuration
+// provider not configured: their deploys fail until the registry or manent.yml is fixed.
+func warnTenantProviders(cfg *config.Config, tenants tenant.Directory, log *slog.Logger) {
+	if tenants == nil {
+		return
+	}
+	ts, err := tenants.Tenants(context.Background())
+	if err != nil {
+		return
+	}
+	names := map[string]bool{}
+	for _, p := range cfg.EnvConfig.EffectiveProviders() {
+		names[p.Name] = true
+	}
+	for _, t := range ts {
+		if t.EnvConfig != "" && !names[t.EnvConfig] {
+			log.Warn("tenant names an environment configuration provider that is not configured: its deploys will fail", "component", "envconfig", "tenant", t.Name, "provider", t.EnvConfig)
+		}
+	}
+}
+
+// newEnvProvider creates the provider of an envconfig.providers entry.
+func newEnvProvider(cfg *config.Config, p config.EnvProvider, secrets gitsrc.Secrets) (envconfig.Provider, error) {
+	switch p.Type {
+	case config.EnvProviderConsul:
+		addr, token, err := consulAccess(p.Consul)
+		if err != nil {
+			return nil, err
+		}
+		return &envconfig.ConsulProvider{
 			Address:     addr,
 			Token:       token,
-			Datacenter:  ec.Consul.Datacenter,
-			KeyTemplate: ec.Consul.Key,
+			Datacenter:  p.Consul.Datacenter,
+			KeyTemplate: p.Consul.Key,
 			Client:      &http.Client{Timeout: 10 * time.Second},
-		}
+		}, nil
 	case config.EnvProviderFile:
-		r.Provider = &envconfig.FileProvider{PathTemplate: ec.File.Path}
+		return &envconfig.FileProvider{PathTemplate: p.File.Path}, nil
 	case config.EnvProviderGit:
-		g := ec.Git
+		g := p.Git
 		repo, err := gitsrc.New(gitsrc.Options{
 			Repository: g.Repository, DefaultRef: g.Ref, AllowedRefs: g.AllowedRefs,
 			Username: g.Username, PasswordRef: g.PasswordRef, SSHKeyRef: g.SSHKeyRef, KnownHosts: g.KnownHosts, CAFile: g.CAFile,
@@ -482,11 +523,11 @@ func NewResolver(cfg *config.Config, secrets gitsrc.Secrets) (envconfig.Resolver
 			MaxAge: g.MaxAge, CacheDir: cmp.Or(g.CacheDir, filepath.Join(cfg.WorkDir, ".git-cache")), RefTTL: g.RefTTL, Secrets: secrets,
 		})
 		if err != nil {
-			return r, err
+			return nil, err
 		}
-		r.Provider = &envconfig.GitProvider{Repo: repo, PathTemplate: g.Path}
+		return &envconfig.GitProvider{Repo: repo, PathTemplate: g.Path}, nil
 	}
-	return r, nil
+	return nil, fmt.Errorf("type %q not supported", p.Type)
 }
 
 // NewTenantCache returns the tenant registry (tenants.file) with a cache for owners,
@@ -676,10 +717,12 @@ func newComponents(cfg *config.Config, worker bool) (*components, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := NewResolver(cfg, sp)
+	tenants := NewTenantCache(cfg, log)
+	resolver, err := NewResolver(cfg, sp, tenants)
 	if err != nil {
 		return nil, err
 	}
+	warnTenantProviders(cfg, tenants, log)
 	sources, err := NewArtifactSources(cfg, sp)
 	if err != nil {
 		return nil, err
@@ -751,7 +794,7 @@ func newComponents(cfg *config.Config, worker bool) (*components, error) {
 		authzOPA:         cfg.RBAC.Engine == config.RBACOPA && cfg.Auth.Mode != config.AuthModeNone,
 		audit:            auditRec,
 		governance:       gov,
-		tenants:          NewTenantCache(cfg, log),
+		tenants:          tenants,
 		tenantRoles:      cfg.RBAC.TenantRoles,
 		crossTenant:      cfg.RBAC.CrossTenant(),
 		rejectUntenanted: cfg.Tenants.Untenanted == config.UntenantedReject,

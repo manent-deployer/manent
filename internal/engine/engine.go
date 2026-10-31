@@ -78,6 +78,9 @@ type Request struct {
 	// one recorded by the deploy a manual rollback goes back to. Chosen by the server, it is not
 	// subject to descriptor_policy.config_ref.
 	ConfigRevision string `json:"config_revision,omitempty"`
+	// ConfigProvider is the environment configuration provider that recorded ConfigRevision
+	// (envconfig.providers): the pinned revision is read from it.
+	ConfigProvider string `json:"config_provider,omitempty"`
 }
 
 // ServiceOptions configures the service.
@@ -227,8 +230,9 @@ func (e *Engine) Plan(_ context.Context, d *descriptor.Descriptor) (pipeline.Pla
 // submitMeta describes the origin of a deploy request.
 type submitMeta struct {
 	kind, source, release string
-	// configRevision pins the environment configuration revision (manual rollback).
-	configRevision string
+	// configRevision pins the environment configuration revision (manual rollback), read from
+	// configProvider.
+	configRevision, configProvider string
 	// prechecked skips the policy and environment configuration check (check), already done by
 	// whoever accepted the request (deploy of a release).
 	prechecked bool
@@ -275,7 +279,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 		return nil, err
 	}
 	var eff *descriptor.Descriptor
-	ctx = envconfig.WithRevision(ctx, meta.configRevision)
+	ctx = envconfig.WithRevision(ctx, meta.configProvider, meta.configRevision)
 	if !meta.prechecked {
 		if eff, err = e.check(ctx, d); err != nil {
 			return nil, err
@@ -285,6 +289,7 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	req := Request{
 		Descriptor: *d, Plan: plan, RequestedBy: p.String(), Kind: meta.kind, Source: meta.source,
 		Release: meta.release, TraceParent: telemetry.TraceParent(ctx), ConfigRevision: meta.configRevision,
+		ConfigProvider: meta.configProvider,
 	}
 	if p != nil {
 		req.RequestedGroups = p.Groups
@@ -703,6 +708,8 @@ const (
 	attrSHA256      = "sha256"
 	// attrConfigRevision is the commit SHA of the environment configuration (git provider).
 	attrConfigRevision = "config_revision"
+	// attrConfigProvider is the environment configuration provider that recorded it.
+	attrConfigProvider = "config_provider"
 	attrRollback       = "rollback"
 	// attrChange and attrChangeURL are number and link of the change ticket.
 	attrChange    = "change"
@@ -1060,7 +1067,7 @@ func toStatus(st dbos.WorkflowStatus) Status {
 	s := Status{
 		ID: st.ID, State: string(st.Status), CreatedAt: st.CreatedAt, UpdatedAt: st.UpdatedAt, RequestedBy: st.AuthenticatedUser,
 		Application: attr(st, attrApplication), Environment: attr(st, attrEnvironment),
-		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256), ConfigRevision: attr(st, attrConfigRevision),
+		Artifact: attr(st, attrArtifact), Version: attr(st, attrVersion), SHA256: attr(st, attrSHA256), ConfigRevision: attr(st, attrConfigRevision), ConfigProvider: attr(st, attrConfigProvider),
 		Kind: attr(st, attrKind), Source: attr(st, attrSource), DryRun: attr(st, attrDryRun) == "true",
 		Rollback: attr(st, attrRollback), RolloutProgress: attr(st, attrRolloutProgress), Change: changeTicket(st),
 		Exports: exportsAttr(attr(st, attrExports)), PublicExports: strings.Fields(attr(st, attrPublicExports)),

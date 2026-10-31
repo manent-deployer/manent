@@ -21,6 +21,7 @@ tenants:
     secret_refs: ["vault:secret/payments/*"] # riferimenti ai segreti ammessi (facoltativo)
     artifact_sources: ["oci://registry.example.com/payments/"]   # sorgenti ammesse (facoltativo)
     callback_hosts: [hooks.payments.example.com]                 # host dei callback ammessi (facoltativo)
+    envconfig: payments-git                  # provider della configurazione di ambiente letto per primo (facoltativo, envconfig.providers)
   retail:
     applications:
       shop: {tags: {product: storefront}}   # un altro shop: la release retail/shop

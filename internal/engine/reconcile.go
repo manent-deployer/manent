@@ -176,7 +176,7 @@ func (w *Worker) reconcileEnv(ctx context.Context, ie InventoryEntry) (service.T
 	// The environment configuration valid now: targets may have been added or removed since the
 	// deploy. With the git provider the revision of the release in service is read instead: the
 	// difference with the default ref is a configuration change not yet deployed.
-	ctx = envconfig.WithRevision(ctx, cur.ConfigRevision)
+	ctx = envconfig.WithRevision(ctx, cur.ConfigProvider, cur.ConfigRevision)
 	d := req.Descriptor
 	if w.resolver != nil || d.HasImports() {
 		// Imports too are read again: the targets of a release in service may have changed.

@@ -1,0 +1,11 @@
+# UC31: prod is no longer in the legacy provider: on_missing next reads it from the default one.
+plugin: remote-copy
+targets:
+  - {host: eu1-b, user: deploy}
+params:
+  dest_dir: /home/deploy/apps/uc31-web
+  layout: releases
+  ssh_key_secret: deploy-key
+secrets:
+  - name: deploy-key
+    ref: file:/keys/id
