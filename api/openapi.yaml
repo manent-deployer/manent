@@ -301,7 +301,7 @@ paths:
   /api/v1/freezes:
     get:
       tags: [governance]
-      summary: Active and future freeze windows
+      summary: Active and future freeze windows (deployment.read on at least one application)
       operationId: listFreezes
       parameters:
         - {name: application, in: query, schema: {type: string}}

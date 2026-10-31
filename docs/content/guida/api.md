@@ -47,7 +47,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/promotions` | Promotes an artifact from one environment to another. |
 | `POST` | `/api/v1/rollbacks` | Goes back to a previous version. |
 | `GET` | `/api/v1/inventory` | Live releases per application and environment. |
-| `GET` | `/api/v1/freezes` | Active and upcoming freeze windows. |
+| `GET` | `/api/v1/freezes` | Active and upcoming freeze windows (`deployment.read` on at least one application). |
 | `GET` | `/api/v1/tenants?application=&selector=` | [Tenants](tenant.md) of the registry (the teams owning the applications), filtered by permissions. |
 | `GET` | `/api/v1/tenants/{name}` | A tenant with its applications and their tags. |
 | `POST` | `/api/v1/freezes` | Creates a freeze window at runtime (`freeze.write`). |

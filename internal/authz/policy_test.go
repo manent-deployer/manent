@@ -55,6 +55,13 @@ func TestPermessiDellaPolicy(t *testing.T) {
 		return auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "u", Groups: groups, Method: auth.MethodOIDC})
 	}
 	freeze := engine.FreezeRequest{Name: "f", Applications: []string{"*"}, Environments: []string{"prod"}}
+	// Reading the windows requires deployment.read somewhere, not on the window's applications.
+	if _, err := g.Freezes(as("team-a"), "", ""); err != nil {
+		t.Errorf("windows for a deployer: %v", err)
+	}
+	if _, err := g.Freezes(as("nobody"), "", ""); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("windows for an identity without permissions: %v", err)
+	}
 	if _, err := g.CreateFreeze(as("team-a"), freeze); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("deployer senza freeze.write: %v", err)
 	}

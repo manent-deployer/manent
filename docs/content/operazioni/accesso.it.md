@@ -169,7 +169,7 @@ rbac:
 - **Piano.** `POST /deployments/plan` richiede `deployment.read`, perché rivela la pipeline dell'applicazione e dell'ambiente.
 - **Promozione.** Richiede `deployment.read` sull'ambiente di origine e `deployment.submit` su quello di destinazione.
 - **Approvazioni.** Chi ha richiesto un deploy non può approvarlo, salvo `allow_self` nella regola.
-- **Freeze.** Le finestre di freeze sono visibili a ogni identità autenticata.
+- **Freeze.** Le finestre di freeze sono visibili a ogni identità con `deployment.read` su almeno un'applicazione, anche quelle sulle altre applicazioni (una finestra su `*` blocca anche le sue). Un'identità autenticata senza permessi riceve `403`.
 - **Dipendenze e release.** Un deploy con [`after`](../guida/catene.md) richiede `deployment.read` sulle sue dipendenze. Una release composta richiede i permessi di ogni deploy (più `deployment.rollback` con `onFailure: rollback`); leggerla o annullarla richiede `deployment.read` o `deployment.cancel` su tutti i suoi deploy.
 - **Attività e worker.** `GET /activity` elenca solo i deploy che l'identità può leggere. `GET /workers` richiede `platform.read`; dei workflow in esecuzione mostra solo quelli di applicazioni e ambienti leggibili e conta gli altri in `hidden_tasks`.
 

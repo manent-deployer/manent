@@ -280,7 +280,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Active and future freeze windows */
+        /** Active and future freeze windows (deployment.read on at least one application) */
         get: operations["listFreezes"];
         put?: never;
         /** Creates a freeze window at runtime (freeze.write) */

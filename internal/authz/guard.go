@@ -546,8 +546,13 @@ func principalGroups(p *auth.Principal) []string {
 	return p.Groups
 }
 
-// Freezes requires only authentication: freeze windows are not restricted.
+// Freezes requires deployment.read somewhere: every window is shown, also those on other
+// applications, because a window on "*" blocks the caller's ones too, but an identity without
+// permissions (any user of the identity provider) does not read names and reasons.
 func (g *Guard) Freezes(ctx context.Context, application, environment string) ([]governance.WindowStatus, error) {
+	if err := g.checkPlatform(ctx, DeploymentRead, target{application: application, environment: environment}); err != nil {
+		return nil, err
+	}
 	return g.Next.Freezes(ctx, application, environment)
 }
 

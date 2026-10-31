@@ -169,7 +169,7 @@ rbac:
 - **Plan.** `POST /deployments/plan` requires `deployment.read`, because it reveals the pipeline of the application and environment.
 - **Promotion.** Requires `deployment.read` on the source environment and `deployment.submit` on the destination.
 - **Approvals.** Whoever requested a deploy cannot approve it, unless the rule has `allow_self`.
-- **Freezes.** Freeze windows are visible to every authenticated identity.
+- **Freezes.** Freeze windows are visible to every identity with `deployment.read` on at least one application, also the windows on other applications (a window on `*` blocks theirs too). An authenticated identity without permissions gets `403`.
 - **Dependencies and releases.** A deploy with [`after`](../guida/catene.md) requires `deployment.read` on its dependencies. A composite release requires the permissions of every deploy (plus `deployment.rollback` with `onFailure: rollback`); reading or cancelling it requires `deployment.read` or `deployment.cancel` on all its deploys.
 - **Activity and workers.** `GET /activity` lists only the deploys the identity can read. `GET /workers` requires `platform.read`; of the running workflows it shows only those of readable applications and environments, and counts the others in `hidden_tasks`.
 
