@@ -6,8 +6,10 @@
 #     ansible.posix and community.general collections and the external ansible plugin, for the
 #     workers that serve the ansible plugin's queue (dbos.plugins); not distroless;
 #   - client (--target client): only the manent client, which talks to the API.
+# Base images are pinned by digest: change tag and digest together (the digest of the
+# multi-platform index, from "docker buildx imagetools inspect <image>:<tag>").
 # Web interface: vite build writes to internal/webui/dist, embedded by go:embed.
-FROM node:22.11.0-bookworm-slim AS web
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -15,7 +17,7 @@ COPY api /src/api
 COPY web ./
 RUN npm run build
 
-FROM golang:1.27 AS build
+FROM golang:1.27.3@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 # Downloads from the module proxy are retried: a dropped stream (e.g. "INTERNAL_ERROR; received
@@ -45,17 +47,17 @@ RUN for i in 1 2 3; do \
     done
 
 # Static Helm binary, used only for "helm template" by the kubernetes plugin.
-FROM alpine/helm:4.3.0 AS helm
+FROM alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2 AS helm
 
 # Static OpenTofu binary, run by the terraform plugin.
-FROM ghcr.io/opentofu/opentofu:1.13.2-minimal AS tofu
+FROM ghcr.io/opentofu/opentofu:1.13.2-minimal@sha256:622dc6bb98b105c18f53cf419ab64a4f3b88bd9f8c16cc978cf89e4202f4613f AS tofu
 
-FROM gcr.io/distroless/static-debian12:nonroot AS client
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab AS client
 COPY --from=build /out/manent /usr/local/bin/
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/manent"]
 
-FROM gcr.io/distroless/static-debian12:nonroot AS server
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab AS server
 COPY --from=build /out/manent-server /out/manent /out/manent-plugin-remote-copy /out/manent-plugin-terraform /usr/local/bin/
 COPY --from=helm /usr/bin/helm /usr/local/bin/helm
 COPY --from=tofu /usr/local/bin/tofu /usr/local/bin/tofu
@@ -70,7 +72,7 @@ CMD ["serve"]
 # Workers that serve the ansible plugin: Python and ansible-core are needed on the machine that
 # runs the plugin. ANSIBLE_COLLECTIONS adds collections to the image; the artifacts can also
 # bring their own (collections/ in the project).
-FROM python:3.13-slim-bookworm AS server-ansible
+FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f AS server-ansible
 ARG ANSIBLE_CORE_VERSION=2.21.5
 ARG ANSIBLE_COLLECTIONS="ansible.posix:2.2.2 community.general:13.5.0"
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client \

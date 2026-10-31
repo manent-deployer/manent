@@ -11,7 +11,7 @@
 # demo/.bin (manent and manent-server, with the web interface embedded, and manent-demo-idp).
 ARG BINARIES=source
 
-FROM node:22.11.0-bookworm-slim AS web
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -19,7 +19,7 @@ COPY api /src/api
 COPY web ./
 RUN npm run build
 
-FROM golang:1.27 AS build-source
+FROM golang:1.27.3@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS build-source
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
