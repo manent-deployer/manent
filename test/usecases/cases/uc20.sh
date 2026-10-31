@@ -82,7 +82,7 @@ info "-- release già presenti e pulizia"
 manent rollback -a $APP -e prod --to 1.0.0 --timeout 3m >/dev/null
 rb=$(manent list -a $APP -e prod -n 1 | jq -r '.[0].id')
 expect_eq "rollback manuale alla 1.0.0" "$(iis_path)" "$(rel $APP 1.0.0)"
-expect_match "la release già estratta non viene copiata di nuovo" "$(manent logs "$rb")" "copia saltata"
+expect_match "la release già estratta non viene copiata di nuovo" "$(manent logs "$rb")" "copy skipped"
 for v in 1.3.0 1.4.0; do
   id=$(submit "$(desc "r$v" "uc20-$v" $APP $v "$checks")")
   expect_eq "deploy della $v riuscito" "$(wait_state "$id" terminal 120)" SUCCESS
