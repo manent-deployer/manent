@@ -44,6 +44,9 @@ envconfig:
     path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
+!!! note "E il tenant?"
+    Il percorso è un modello, uno solo per tutte le applicazioni dell'installazione. Il suo default inizia con il [tenant](../guida/tenant.md), il team proprietario dell'applicazione: `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml`, dove un'applicazione che nessun tenant elenca usa `untenanted`. In questo tutorial non ci sono tenant, quindi il modello omette `{tenant}` e i percorsi restano corti. Quando introduci i tenant, rimetti `{tenant}` all'inizio e sposta i file (o le chiavi di Consul) nella directory del tenant: ogni team possiede così il proprio sotto-albero.
+
 Riavvia `manent-server -c manent.yml serve`. Ora il descrittore dice solo cosa rilasciare:
 
 ```yaml title="hello-min.yml"

@@ -44,6 +44,9 @@ envconfig:
     path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
+!!! note "Where is the tenant?"
+    The path is a template, one for every application of the installation. Its default starts with the [tenant](../guida/tenant.md), the team that owns the application: `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml`, where an application no tenant lists uses `untenanted`. This tutorial has no tenants, so the template leaves `{tenant}` out and the paths stay short. When you introduce tenants, add `{tenant}` back at the start and move the files (or the Consul keys) under the tenant's directory: each team then owns its own subtree.
+
 Restart `manent-server -c manent.yml serve`. The descriptor now only says what to release:
 
 ```yaml title="hello-min.yml"
