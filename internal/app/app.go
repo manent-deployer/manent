@@ -1005,7 +1005,7 @@ func (a *App) Ready(ctx context.Context) error {
 func (a *App) OpsHandler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	api.AddProbes(r, a.Ready)
+	api.AddProbes(r, a.Ready, a.Logger.With("component", "ops"))
 	if a.metrics != nil {
 		r.GET("/metrics", gin.WrapH(a.metrics.Handler()))
 	}

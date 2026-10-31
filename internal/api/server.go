@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -86,7 +87,7 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	}
 	r.Use(gin.Recovery(), s.trace(), s.accessLog())
 
-	AddProbes(r, o.Ready)
+	AddProbes(r, o.Ready, s.logger)
 	if o.MetricsHandler != nil {
 		r.GET("/metrics", gin.WrapH(o.MetricsHandler))
 	}
@@ -581,17 +582,25 @@ func (s *Server) authenticate() gin.HandlerFunc {
 
 // accessLog logs every request on the application logger (and therefore to the SIEM).
 // AddProbes adds /healthz (process alive) and /readyz (ready to serve: ready, if set,
-// returns no error).
-func AddProbes(r gin.IRoutes, ready func(context.Context) error) {
+// returns no error). The probes require no authentication, so the reason of a failure goes
+// only to the log, once each time it changes: it may name databases, files or hosts.
+func AddProbes(r gin.IRoutes, ready func(context.Context) error, logger *slog.Logger) {
+	var last atomic.Value // string: the last reason logged
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	r.GET("/readyz", func(c *gin.Context) {
 		if ready != nil {
 			ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 			defer cancel()
 			if err := ready(ctx); err != nil {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "error": err.Error()})
+				if prev, _ := last.Swap(err.Error()).(string); prev != err.Error() {
+					logger.Warn("not ready", "error", err)
+				}
+				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable"})
 				return
 			}
+		}
+		if prev, _ := last.Swap("").(string); prev != "" {
+			logger.Info("ready again")
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})

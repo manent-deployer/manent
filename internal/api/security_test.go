@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -35,5 +37,23 @@ func TestXForwardedForSoloDaiProxyFidati(t *testing.T) {
 	}
 	if ip := clientIP(t, []string{"10.0.0.0/8"}, "10.1.2.3"); ip != "203.0.113.66" {
 		t.Errorf("proxy fidato ignorato: %s", ip)
+	}
+}
+
+func TestReadyzNonEsponeIlMotivo(t *testing.T) {
+	var buf bytes.Buffer
+	err := errors.New("dial tcp postgres.internal:5432: connection refused")
+	r := NewRouterWith(&mockService{}, nil, slog.New(slog.NewTextHandler(&buf, nil)), Options{
+		Ready: func(context.Context) error { return err },
+	})
+	for range 3 {
+		w := do(r, http.MethodGet, "/readyz", "")
+		if w.Code != http.StatusServiceUnavailable || strings.Contains(w.Body.String(), "postgres") {
+			t.Fatalf("readyz: %d %s", w.Code, w.Body)
+		}
+	}
+	// The reason is logged once, not at every probe.
+	if n := strings.Count(buf.String(), "postgres.internal"); n != 1 {
+		t.Errorf("motivo registrato %d volte:\n%s", n, buf.String())
 	}
 }
