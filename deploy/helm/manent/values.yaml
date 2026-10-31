@@ -49,6 +49,14 @@ api:
   service:
     type: ClusterIP
     port: 8080
+  # The API has its own service account: it never reaches the targets, so the permissions and
+  # cloud identities bound to the workers' account (annotations, RoleBindings) do not reach it.
+  # Its token is still mounted for Vault's kubernetes auth: bind both accounts to the Vault role.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    automountToken: true
   resources: {}
   nodeSelector: {}
   tolerations: []
@@ -73,6 +81,8 @@ podDisruptionBudget:
   enabled: true
   maxUnavailable: 1
 
+# The workers' service account: cloud identities (IRSA, workload identity) and RoleBindings
+# for the targets go here.
 serviceAccount:
   create: true
   name: ""

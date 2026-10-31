@@ -32,6 +32,14 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 {{- end -}}
 
+{{- define "manent.apiServiceAccountName" -}}
+{{- if .Values.api.serviceAccount.create -}}
+{{- default (printf "%s-api" (include "manent.fullname" .)) .Values.api.serviceAccount.name -}}
+{{- else -}}
+{{- default (include "manent.serviceAccountName" .) .Values.api.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "manent.image" -}}
 {{- printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) -}}
 {{- end -}}

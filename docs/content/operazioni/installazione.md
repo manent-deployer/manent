@@ -69,6 +69,7 @@ The chart installs:
 | Deployment `<release>-api` | `manent-server api`, behind the `<release>-api` Service (port 8080). |
 | StatefulSet `<release>-worker` | Workers. The pod name (`<release>-worker-0`, …) becomes the `executor_id` (`DBOS__VMID`): it is stable across restarts, so each worker resumes its own interrupted deploys. |
 | ConfigMap | `manent.yml` from the `config` key of the values, with `observability.listen: ":9090"` and the `workdir`. |
+| ServiceAccount | `<release>` for the workers (`serviceAccount`) and `<release>-api` for the API (`api.serviceAccount`). |
 | PodDisruptionBudget | One pod at a time for API and workers. |
 | ServiceMonitor | With `serviceMonitor.enabled`, scrape of `/metrics` of API and workers (Prometheus Operator). |
 
@@ -77,6 +78,7 @@ Things to consider:
 - **Database.** The database URL (with the password) comes from the `database.existingSecret` Secret through `DBOS_SYSTEM_DATABASE_URL`, never from the ConfigMap.
 - **Shutdown.** `worker.terminationGracePeriodSeconds` (default 360) must exceed `dbos.drain_timeout` (chart default 5m).
 - **Scale down.** A removed pod does not come back: its pending workflows are resumed by another worker after `recovery.auto_recover_after` (chart default 10m). See [Recovery](affidabilita.md#worker-perso).
+- **Service accounts.** Cloud identities (IRSA, workload identity) and RoleBindings for the targets go on the workers' account (`serviceAccount.annotations`); the API never reaches the targets. With Vault's kubernetes auth, bind both accounts to the role ([Vault](../integrazioni/vault.md)). `api.serviceAccount.automountToken: false` removes the token from the API pods when the API reads no secrets from Vault.
 - **Secrets and files.** API tokens, SSH keys, `known_hosts`, CAs and Vault/Consul tokens are mounted with `extraVolumes` and `extraVolumeMounts`; variables with `extraEnv`.
 - **Several regions.** For [wave rollouts](../guida/ondate.md#esecuzione-nelle-region) install one release per region in that region's cluster, with `api.enabled: false` (except where the API lives), `config.dbos.region: <region>` and `config.dbos.region_routing: true` on all of them, and the same database Secret.
 - **Read-only filesystem.** Containers have a read-only root filesystem; `workdir` and `/tmp` are `emptyDir` volumes.

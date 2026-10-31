@@ -41,7 +41,7 @@ Grant `read` only on what manent must read. For many applications use a glob suc
     vault auth enable kubernetes
     vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc
     vault write auth/kubernetes/role/manent \
-      bound_service_account_names=manent bound_service_account_namespaces=manent \
+      bound_service_account_names=manent,manent-api bound_service_account_namespaces=manent \
       token_policies=manent token_ttl=1h
     ```
 
@@ -57,7 +57,7 @@ Grant `read` only on what manent must read. For many applications use a glob suc
           # mount: kubernetes                                                # default
     ```
 
-    The Helm chart creates the `manent` service account the role is bound to.
+    The Helm chart creates two service accounts: `manent` for the workers and `manent-api` for the API, which never reaches the targets and so does not get the cloud identities and RoleBindings meant for the workers. Both read secrets from Vault, so the role is bound to both.
 
 === "AppRole (VMs)"
 

@@ -21,7 +21,8 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "manent.serviceAccountName" . }}
+      serviceAccountName: {{ include "manent.apiServiceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.api.serviceAccount.automountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

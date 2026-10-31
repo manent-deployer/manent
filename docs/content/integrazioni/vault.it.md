@@ -41,7 +41,7 @@ Concedi `read` solo su ciò che manent deve leggere. Con molte applicazioni usa 
     vault auth enable kubernetes
     vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc
     vault write auth/kubernetes/role/manent \
-      bound_service_account_names=manent bound_service_account_namespaces=manent \
+      bound_service_account_names=manent,manent-api bound_service_account_namespaces=manent \
       token_policies=manent token_ttl=1h
     ```
 
@@ -57,7 +57,7 @@ Concedi `read` solo su ciò che manent deve leggere. Con molte applicazioni usa 
           # mount: kubernetes                                                # default
     ```
 
-    Il chart Helm crea la service account `manent` a cui è legato il ruolo.
+    Il chart Helm crea due service account: `manent` per i worker e `manent-api` per l'API, che non raggiunge mai i target e quindi non riceve le identità cloud e i RoleBinding destinati ai worker. Entrambe leggono segreti da Vault, quindi il ruolo è legato a tutte e due.
 
 === "AppRole (VM)"
 

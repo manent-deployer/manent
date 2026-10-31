@@ -69,6 +69,7 @@ Il chart installa:
 | Deployment `<release>-api` | `manent-server api`, dietro il Service `<release>-api` (porta 8080). |
 | StatefulSet `<release>-worker` | Worker. Il nome del pod (`<release>-worker-0`, …) diventa l'`executor_id` (`DBOS__VMID`): è stabile tra i riavvii, quindi ogni worker riprende i propri deploy interrotti. |
 | ConfigMap | `manent.yml` dalla chiave `config` dei values, con `observability.listen: ":9090"` e la `workdir`. |
+| ServiceAccount | `<release>` per i worker (`serviceAccount`) e `<release>-api` per l'API (`api.serviceAccount`). |
 | PodDisruptionBudget | Un pod alla volta per API e worker. |
 | ServiceMonitor | Con `serviceMonitor.enabled`, scrape di `/metrics` di API e worker (Prometheus Operator). |
 
@@ -77,6 +78,7 @@ Punti da considerare:
 - **Database.** L'URL del database (con la password) arriva dal Secret `database.existingSecret` tramite `DBOS_SYSTEM_DATABASE_URL`, mai dalla ConfigMap.
 - **Arresto.** `worker.terminationGracePeriodSeconds` (default 360) deve superare `dbos.drain_timeout` (default del chart 5m).
 - **Scale down.** Un pod rimosso non torna: i suoi workflow in sospeso vengono ripresi da un altro worker dopo `recovery.auto_recover_after` (default del chart 10m). Vedi [Recovery](affidabilita.md#worker-perso).
+- **Service account.** Identità cloud (IRSA, workload identity) e RoleBinding per i target vanno sull'account dei worker (`serviceAccount.annotations`); l'API non raggiunge mai i target. Con l'autenticazione kubernetes di Vault, lega al ruolo entrambi gli account ([Vault](../integrazioni/vault.md)). `api.serviceAccount.automountToken: false` toglie il token dai pod dell'API quando l'API non legge segreti da Vault.
 - **Segreti e file.** Token dell'API, chiavi SSH, `known_hosts`, CA e token Vault/Consul si montano con `extraVolumes` ed `extraVolumeMounts`; le variabili con `extraEnv`.
 - **Più region.** Per i [rilasci a ondate](../guida/ondate.md#esecuzione-nelle-region) si installa una release per region nel cluster di quella region, con `api.enabled: false` (tranne dove sta l'API), `config.dbos.region: <region>` e `config.dbos.region_routing: true` su tutte, e lo stesso Secret del database.
 - **Filesystem in sola lettura.** I container hanno il root filesystem in sola lettura; `workdir` e `/tmp` sono volumi `emptyDir`.
