@@ -37,22 +37,24 @@ envconfig:
     - name: default
       type: file
       file:
-        path: "envconfig/{application}/{artifact}/{environment}.yml"
+        path: "envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
       # consul:
-      #   key: "manent/{application}/{artifact}/{environment}"
+      #   key: "manent/{tenant}/{application}/{artifact}/{environment}"
 ```
 
 ```text
 envconfig/
-  shop/
-    shop-api/prod.yml
-    shop-web/prod.yml
-    shop-db/prod.yml
+  untenanted/
+    shop/
+      shop-api/prod.yml
+      shop-web/prod.yml
+      shop-db/prod.yml
 ```
 
+- **Tenant:** `untenanted` is the [tenant](tenant.md) of the applications no tenant lists; the documents of a tenant's applications are under its name.
 - **Names:** an `artifact.name` that cannot be part of a path or key (e.g. `team/api`) is refused.
 - **A template without `{artifact}`** reads one document per application/environment, shared by all its artifacts.
-- **`descriptor_policy.secret_refs`** accepts `{artifact}`: `vault:secret/{application}/{artifact}/{environment}/*`.
+- **`descriptor_policy.secret_refs`** accepts `{artifact}`: `vault:secret/{tenant}/{application}/{artifact}/{environment}/*`.
 - **`manent env validate --artifact <name>`** checks a candidate document of an artifact.
 
 ## Rollback, promotion and inventory

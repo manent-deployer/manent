@@ -3,7 +3,7 @@
 # Short times (heartbeat, recovery, gate) so the scenarios last a few minutes.
 app:
   name: manent
-  version: 0.1.0
+  version: 0.2.0
 
 dbos:
   # The database comes from DBOS_SYSTEM_DATABASE_URL (compose.yml); the executor_id is the hostname.

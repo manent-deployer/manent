@@ -16,7 +16,7 @@ Nel tutorial 1 il descrittore contiene tutto: host, directory di destinazione, i
 
 Crea la configurazione di `hello` in `test`, con ciò che prima stava nel descrittore. Come nel tutorial 1, sostituisci `/home/you/manent-tutorial` con il tuo percorso: un file del segreto inesistente fa fallire lo step `secrets`.
 
-```yaml title="envconfig/hello/hello/test.yml"
+```yaml title="envconfig/untenanted/hello/hello/test.yml"
 plugin: remote-copy
 targets:
   - {host: 127.0.0.1, port: 2222, user: deploy}
@@ -43,11 +43,11 @@ envconfig:
     - name: default
       type: file
       file:
-        path: "./envconfig/{application}/{artifact}/{environment}.yml"
+        path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
 ```
 
-!!! note "E il tenant?"
-    Il percorso è un modello, uno solo per tutte le applicazioni dell'installazione. Il suo default inizia con il [tenant](../guida/tenant.md), il team proprietario dell'applicazione: `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml`, dove un'applicazione che nessun tenant elenca usa `untenanted`. In questo tutorial non ci sono tenant, quindi il modello omette `{tenant}` e i percorsi restano corti. Quando introduci i tenant, rimetti `{tenant}` all'inizio e sposta i file (o le chiavi di Consul) nella directory del tenant: ogni team possiede così il proprio sotto-albero.
+!!! note "Perché `untenanted`?"
+    Il percorso è un modello, uno solo per tutte le applicazioni dell'installazione, e inizia con il [tenant](../guida/tenant.md), il team proprietario dell'applicazione. In questo tutorial non c'è un registro dei tenant, quindi ogni applicazione appartiene al tenant riservato `untenanted` e i suoi file stanno sotto `envconfig/untenanted/`. Quando introduci i tenant, le applicazioni che un tenant elenca passano nella directory (o nel prefisso di Consul) di quel tenant: ogni team possiede così il proprio sotto-albero.
 
 Riavvia `manent-server -c manent.yml serve`. Ora il descrittore dice solo cosa rilasciare:
 
@@ -69,7 +69,7 @@ manent validate -f hello-min.yml | jq '{valid, config, rollback}'
 ```json
 {
   "valid": true,
-  "config": {"source": "file:./envconfig/hello/hello/test.yml", "targets": "1"},
+  "config": {"source": "file:./envconfig/untenanted/hello/hello/test.yml", "targets": "1"},
   "rollback": {"enabled": true, "on": ["deploy", "post-test", "activation"], "locator": "plugin"}
 }
 ```
@@ -142,11 +142,11 @@ Il riferimento al segreto punterà a Vault (passo successivo). La versione per C
 
 ```sh
 sed 's#ref: file:.*#ref: "vault:secret/data/hello/test\#ssh_key"#' \
-  envconfig/hello/hello/test.yml > envconfig/hello/test-consul.yml
-tail -5 envconfig/hello/test-consul.yml
+  envconfig/untenanted/hello/hello/test.yml > envconfig/untenanted/hello/test-consul.yml
+tail -5 envconfig/untenanted/hello/test-consul.yml
 ```
 
-```yaml title="envconfig/hello/test-consul.yml (fine)"
+```yaml title="envconfig/untenanted/hello/test-consul.yml (fine)"
 secrets:
   - name: deploy-key
     ref: "vault:secret/data/hello/test#ssh_key"
@@ -157,8 +157,8 @@ rollback:
 La chiave in Consul contiene l'intera configurazione: target, parametri, riferimenti ai segreti e rollback. Un file con la sola sezione `secrets` lascerebbe l'ambiente senza target.
 
 ```sh
-docker cp envconfig/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
-docker exec manent-tutorial-consul consul kv put manent/hello/hello/test @/tmp/test.yml
+docker cp envconfig/untenanted/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
+docker exec manent-tutorial-consul consul kv put manent/untenanted/hello/hello/test @/tmp/test.yml
 ```
 
 ## 5. Metti la chiave SSH in Vault
@@ -194,7 +194,7 @@ envconfig:
       type: consul
       consul:
         address: http://127.0.0.1:8500
-        key: "manent/{application}/{artifact}/{environment}"
+        key: "manent/{tenant}/{application}/{artifact}/{environment}"
 secrets:
   vault:
     enabled: true
@@ -216,7 +216,7 @@ manent validate -f hello-min.yml | jq -c '{valid, config, secrets}'
 ```
 
 ```json
-{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
+{"valid": true, "config": {"revision": "18", "source": "consul:manent/untenanted/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
 ```
 
 `revision` è il `ModifyIndex` della chiave in Consul: cambia ogni volta che qualcuno scrive la configurazione. Rilascia:

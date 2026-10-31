@@ -17,7 +17,7 @@ artifact:
 
 La configurazione di un ambiente è un documento YAML o JSON:
 
-```yaml title="manent/myapp/myapp/test"
+```yaml title="manent/untenanted/myapp/myapp/test"
 plugin: remote-copy
 targets:
   - host: 192.168.1.10
@@ -60,7 +60,7 @@ Si configura in `manent.yml`, sezione `envconfig`: ogni voce di `providers` ha u
     La configurazione è il valore della chiave KV. Il token ACL si legge da `CONSUL_HTTP_TOKEN` oppure da `token_file`, mai dal file di configurazione.
 
     ```sh
-    consul kv put manent/untenanted/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
+    consul kv put manent/untenanted/myapp/myapp/test @examples/envconfig/untenanted/myapp/myapp/test.yml
     ```
 
 === "Git"

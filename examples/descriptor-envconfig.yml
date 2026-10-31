@@ -1,5 +1,6 @@
 # Minimal descriptor: plugin, targets, parameters and secrets come from the environment
-# configuration (Consul: manent/myapp/test, or examples/envconfig/myapp/test.yml).
+# configuration (Consul: manent/untenanted/myapp/myapp/test, or
+# examples/envconfig/untenanted/myapp/myapp/test.yml).
 # Show the effective deploy with: manent-server -c <config> validate -f examples/descriptor-envconfig.yml
 apiVersion: manent/v1
 application: myapp

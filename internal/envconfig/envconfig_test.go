@@ -167,7 +167,7 @@ func TestFileProviderEResolver(t *testing.T) {
 }
 
 func TestEsempio(t *testing.T) {
-	p := &FileProvider{PathTemplate: "../../examples/envconfig/{application}/{artifact}/{environment}.yml"}
+	p := &FileProvider{PathTemplate: "../../examples/envconfig/{tenant}/{application}/{artifact}/{environment}.yml"}
 	doc, err := p.Get(context.Background(), Key{Tenant: "untenanted", Application: "myapp", Artifact: "myapp", Environment: "test"})
 	if err != nil {
 		t.Fatal(err)

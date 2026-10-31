@@ -244,16 +244,16 @@ envconfig:
       type: consul
       consul:
         address: http://consul:8500         # default: CONSUL_HTTP_ADDR
-        key: "manent/{application}/{artifact}/{environment}"
+        key: "manent/{tenant}/{application}/{artifact}/{environment}"
         # ACL token: CONSUL_HTTP_TOKEN or token_file
 ```
 
 Several providers can serve different applications, environments or tenants at the same time ([several providers](docs/content/guida/configurazione-ambiente.md#piu-provider)).
 
-The value of the Consul key is YAML or JSON ([example](examples/envconfig/myapp/myapp/test.yml)):
+The value of the Consul key is YAML or JSON ([example](examples/envconfig/untenanted/myapp/myapp/test.yml); `untenanted` is the tenant of the applications no [tenant](docs/content/guida/tenant.md) lists):
 
 ```sh
-consul kv put manent/myapp/myapp/test @examples/envconfig/myapp/myapp/test.yml
+consul kv put manent/untenanted/myapp/myapp/test @examples/envconfig/untenanted/myapp/myapp/test.yml
 manent-server -c configs/manent.yml validate -f examples/descriptor-envconfig.yml   # shows the effective deploy
 ```
 

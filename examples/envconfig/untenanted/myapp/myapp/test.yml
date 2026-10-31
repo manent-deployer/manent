@@ -1,5 +1,5 @@
 # Deploy configuration of myapp in the test environment.
-# With the consul provider the content is the value of the manent/myapp/test key (YAML or JSON).
+# With the consul provider the content is the value of the manent/untenanted/myapp/myapp/test key (YAML or JSON).
 # Only secret references, never values: the configuration is saved in the deploy history.
 plugin: remote-copy
 targets:

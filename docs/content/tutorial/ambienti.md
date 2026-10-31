@@ -16,7 +16,7 @@ In tutorial 1 the descriptor holds everything: hosts, the destination directory,
 
 Create the configuration of `hello` in `test`, with what used to be in the descriptor. As in tutorial 1, replace `/home/you/manent-tutorial` with your path: a secret file that does not exist makes the `secrets` step fail.
 
-```yaml title="envconfig/hello/hello/test.yml"
+```yaml title="envconfig/untenanted/hello/hello/test.yml"
 plugin: remote-copy
 targets:
   - {host: 127.0.0.1, port: 2222, user: deploy}
@@ -43,11 +43,11 @@ envconfig:
     - name: default
       type: file
       file:
-        path: "./envconfig/{application}/{artifact}/{environment}.yml"
+        path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
 ```
 
-!!! note "Where is the tenant?"
-    The path is a template, one for every application of the installation. Its default starts with the [tenant](../guida/tenant.md), the team that owns the application: `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml`, where an application no tenant lists uses `untenanted`. This tutorial has no tenants, so the template leaves `{tenant}` out and the paths stay short. When you introduce tenants, add `{tenant}` back at the start and move the files (or the Consul keys) under the tenant's directory: each team then owns its own subtree.
+!!! note "Why `untenanted`?"
+    The path is a template, one for every application of the installation, and it starts with the [tenant](../guida/tenant.md), the team that owns the application. This tutorial has no tenant registry, so every application belongs to the reserved tenant `untenanted` and its files are under `envconfig/untenanted/`. When you introduce tenants, the applications a tenant lists move under that tenant's directory (or Consul prefix): each team then owns its own subtree.
 
 Restart `manent-server -c manent.yml serve`. The descriptor now only says what to release:
 
@@ -69,7 +69,7 @@ manent validate -f hello-min.yml | jq '{valid, config, rollback}'
 ```json
 {
   "valid": true,
-  "config": {"source": "file:./envconfig/hello/hello/test.yml", "targets": "1"},
+  "config": {"source": "file:./envconfig/untenanted/hello/hello/test.yml", "targets": "1"},
   "rollback": {"enabled": true, "on": ["deploy", "post-test", "activation"], "locator": "plugin"}
 }
 ```
@@ -142,11 +142,11 @@ The secret reference will point to Vault (next step). The Consul version of the 
 
 ```sh
 sed 's#ref: file:.*#ref: "vault:secret/data/hello/test\#ssh_key"#' \
-  envconfig/hello/hello/test.yml > envconfig/hello/test-consul.yml
-tail -5 envconfig/hello/test-consul.yml
+  envconfig/untenanted/hello/hello/test.yml > envconfig/untenanted/hello/test-consul.yml
+tail -5 envconfig/untenanted/hello/test-consul.yml
 ```
 
-```yaml title="envconfig/hello/test-consul.yml (end)"
+```yaml title="envconfig/untenanted/hello/test-consul.yml (end)"
 secrets:
   - name: deploy-key
     ref: "vault:secret/data/hello/test#ssh_key"
@@ -157,8 +157,8 @@ rollback:
 The key in Consul holds the whole configuration: targets, parameters, secret references and rollback. A file with only the `secrets` section would leave the environment without targets.
 
 ```sh
-docker cp envconfig/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
-docker exec manent-tutorial-consul consul kv put manent/hello/hello/test @/tmp/test.yml
+docker cp envconfig/untenanted/hello/test-consul.yml manent-tutorial-consul:/tmp/test.yml
+docker exec manent-tutorial-consul consul kv put manent/untenanted/hello/hello/test @/tmp/test.yml
 ```
 
 ## 5. Put the SSH key in Vault
@@ -194,7 +194,7 @@ envconfig:
       type: consul
       consul:
         address: http://127.0.0.1:8500
-        key: "manent/{application}/{artifact}/{environment}"
+        key: "manent/{tenant}/{application}/{artifact}/{environment}"
 secrets:
   vault:
     enabled: true
@@ -216,7 +216,7 @@ manent validate -f hello-min.yml | jq -c '{valid, config, secrets}'
 ```
 
 ```json
-{"valid": true, "config": {"revision": "18", "source": "consul:manent/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
+{"valid": true, "config": {"revision": "18", "source": "consul:manent/untenanted/hello/hello/test", "targets": "1"}, "secrets": ["deploy-key"]}
 ```
 
 `revision` is Consul's `ModifyIndex` of the key: it changes every time someone writes the configuration. Release:

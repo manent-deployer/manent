@@ -3,7 +3,7 @@
 # SQLite database and no authentication: only the case talks to it.
 app:
   name: manent
-  version: 0.1.0
+  version: 0.2.0
 
 dbos:
   database_url: sqlite:/tmp/manent-git.db

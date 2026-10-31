@@ -120,7 +120,7 @@ spec:
 
 Sostituisci `/home/you/manent-tutorial` con il tuo percorso nei riferimenti ai segreti e nel descrittore.
 
-```yaml title="envconfig/hello/hello/test.yml"
+```yaml title="envconfig/untenanted/hello/hello/test.yml"
 plugin: kubernetes
 targets:
   - {host: <host-api>, port: <porta-api>}     # dall'indirizzo del server, es. 127.0.0.1 e 6443
@@ -151,7 +151,7 @@ envconfig:
     - name: default
       type: file
       file:
-        path: "./envconfig/{application}/{artifact}/{environment}.yml"
+        path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
 ```
 
 ```yaml title="hello.yml"
@@ -226,7 +226,7 @@ Passata la scadenza, il plugin ha dichiarato il rollout bloccato e il rollback h
 
 Lo stesso plugin rilascia un chart impacchettato con `helm package` (un `.tgz` con `<nome>/Chart.yaml`, riconosciuto in automatico). manent lo **renderizza** soltanto, con `helm template` e le capability del cluster di destinazione, e ne applica il risultato come un manifest: Helm non tiene stato nel cluster, e storico e rollback funzionano come sopra.
 
-```yaml title="envconfig/shop/shop/prod.yml"
+```yaml title="envconfig/untenanted/shop/shop/prod.yml"
 plugin: kubernetes
 targets:
   - {host: k8s-eu1.example.com, labels: {region: eu-1}}
