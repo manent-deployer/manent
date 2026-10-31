@@ -81,17 +81,21 @@ func (e *Engine) checkLimits(ctx context.Context, d *descriptor.Descriptor) erro
 	return nil
 }
 
-// checkOwnership refuses a deploy ID already used by another tenant: a team cannot take or,
-// by resubmitting it, read the deploy of another one. The error does not say whose it is.
+// checkOwnership refuses a deploy ID already used by another release (tenant, application,
+// artifact or environment): resubmitting the ID would return the existing deploy as if the
+// new request had been accepted, and a team could take the ID of another one. The error does
+// not say whose it is. Resubmitting the same release stays idempotent.
 func (e *Engine) checkOwnership(ctx context.Context, d *descriptor.Descriptor, owner *tenant.Ref) error {
-	if d.ID == "" || e.tenants == nil {
+	if d.ID == "" {
 		return nil
 	}
 	st, err := e.Status(ctx, workflowID(d))
 	if err != nil {
 		return nil
 	}
-	if st.Tenant != tenantName(owner) {
+	other := st.Application != d.Application || st.Environment != d.Environment ||
+		(st.Artifact != "" && d.Artifact.Name != "" && st.Artifact != d.Artifact.Name)
+	if other || (e.tenants != nil && st.Tenant != tenantName(owner)) {
 		return fmt.Errorf("%w: deployment id %s is already in use", ErrInvalidRequest, d.ID)
 	}
 	return nil

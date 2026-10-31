@@ -74,7 +74,7 @@ Il descrittore dichiara **cosa** rilasciare e **dove**. La CLI lo legge in YAML,
 | Campo | Obbligatorio | Descrizione |
 |---|---|---|
 | `apiVersion` | sì | Sempre `manent/v1`. |
-| `id` | no | ID del deploy e chiave di idempotenza: lo stesso `id` non viene eseguito due volte. Non ammesso con `schedule.cron`. |
+| `id` | no | ID del deploy e chiave di idempotenza: lo stesso `id` non viene eseguito due volte. Un `id` già usato per un'altra applicazione, un altro artefatto o un altro ambiente viene rifiutato. Non ammesso con `schedule.cron`. |
 | `tenant` | no | Sceglie tra i [tenant](tenant.md) che elencano l'applicazione; obbligatorio solo se più di uno la elenca. Non assegna mai l'applicazione: decide il registro. |
 | `application` | sì | Nome dell'applicazione. |
 | `environment` | sì | Ambiente di destinazione (es. `test`, `prod`). |
