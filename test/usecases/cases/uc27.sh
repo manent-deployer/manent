@@ -1,4 +1,4 @@
-# UC27: environment configuration from a Git repository (envconfig.provider: git). A second
+# UC27: environment configuration from a Git repository (a git provider). A second
 # manent server reads uc27-web/uc27-web/prod.yml from the lab Git server with a token: every
 # deploy records the commit SHA; a new commit on main reaches the next deploy; an unsigned commit
 # is refused; config.ref (--config-ref) chooses a tag, a branch outside allowed_refs or an

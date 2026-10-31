@@ -146,10 +146,12 @@ workdir: ./work
 plugins:
   kubernetes: {}
 envconfig:
-  provider: file
   required: true
-  file:
-    path: "./envconfig/{application}/{artifact}/{environment}.yml"
+  providers:
+    - name: default
+      type: file
+      file:
+        path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
 ```yaml title="hello.yml"

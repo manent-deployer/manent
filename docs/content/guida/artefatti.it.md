@@ -32,12 +32,14 @@ I template dei provider contengono `{artifact}`: un documento per artefatto, sen
 
 ```yaml title="manent.yml"
 envconfig:
-  provider: file
   required: true                                   # un documento mancante è un errore: intercetta un artefatto scritto male
-  file:
-    path: "envconfig/{application}/{artifact}/{environment}.yml"
-  # consul:
-  #   key: "manent/{application}/{artifact}/{environment}"
+  providers:
+    - name: default
+      type: file
+      file:
+        path: "envconfig/{application}/{artifact}/{environment}.yml"
+      # consul:
+      #   key: "manent/{application}/{artifact}/{environment}"
 ```
 
 ```text

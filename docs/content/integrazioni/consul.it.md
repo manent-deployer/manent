@@ -11,7 +11,7 @@ La [configurazione di ambiente](../guida/configurazione-ambiente.md) di ogni app
 |---|---|
 | `manent/<tenant>/<applicazione>/<artefatto>/<ambiente>` | Configurazione di ambiente, YAML o JSON. |
 
-Il modello si può cambiare (`envconfig.consul.key`).
+Il modello si può cambiare (`consul.key` del provider).
 
 !!! danger "Riferimenti, mai valori"
     La configurazione che manent legge viene salvata nello storico dei deploy. Deve contenere solo riferimenti ai segreti (`vault:…`, `file:…`), mai password o chiavi.
@@ -41,14 +41,16 @@ key_prefix "manent/untenanted/shop/" {
 
 ```yaml title="manent.yml"
 envconfig:
-  provider: consul
   required: true               # un ambiente senza configurazione fallisce invece di usare solo il descrittore
   max_retries: 3               # tentativi aggiuntivi se Consul non risponde
-  consul:
-    address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR o http://127.0.0.1:8500
-    datacenter: ""
-    key: "manent/{tenant}/{application}/{artifact}/{environment}"
-    token_file: /run/secrets/consul-token        # oppure CONSUL_HTTP_TOKEN
+  providers:
+    - name: default
+      type: consul
+      consul:
+        address: https://consul.example.com:8501    # default CONSUL_HTTP_ADDR o http://127.0.0.1:8500
+        datacenter: ""
+        key: "manent/{tenant}/{application}/{artifact}/{environment}"
+        token_file: /run/secrets/consul-token        # oppure CONSUL_HTTP_TOKEN
 ```
 
 Il token ACL non si scrive mai in `manent.yml`: arriva da `CONSUL_HTTP_TOKEN` o da `token_file`. Serve sia all'API (per verificare gli invii) sia ai worker (per eseguire i deploy).

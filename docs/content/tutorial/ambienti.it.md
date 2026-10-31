@@ -38,10 +38,12 @@ Indica a manent dove trovarla e rendila obbligatoria, così un deploy verso un a
 
 ```yaml title="manent.yml (aggiunta)"
 envconfig:
-  provider: file
   required: true
-  file:
-    path: "./envconfig/{application}/{artifact}/{environment}.yml"
+  providers:
+    - name: default
+      type: file
+      file:
+        path: "./envconfig/{application}/{artifact}/{environment}.yml"
 ```
 
 !!! note "E il tenant?"
@@ -186,11 +188,13 @@ plugins:
   remote-copy:
     known_hosts: ./lab/known_hosts
 envconfig:
-  provider: consul
   required: true
-  consul:
-    address: http://127.0.0.1:8500
-    key: "manent/{application}/{artifact}/{environment}"
+  providers:
+    - name: default
+      type: consul
+      consul:
+        address: http://127.0.0.1:8500
+        key: "manent/{application}/{artifact}/{environment}"
 secrets:
   vault:
     enabled: true

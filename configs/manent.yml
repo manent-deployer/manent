@@ -86,17 +86,24 @@ workdir: ./work
 # read at the start of every deploy and merged with the descriptor: the descriptor can only add
 # what is not defined here, conflicting values fail the deploy.
 envconfig:
-  provider: none          # none | consul | file
   required: false         # true: fails if the environment has no configuration
   max_retries: 3
-  consul:
-    address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
-    datacenter: ""
-    key: "manent/{application}/{artifact}/{environment}"
-    # token: from CONSUL_HTTP_TOKEN or from a file
-    # token_file: /run/secrets/consul-token
-  file:
-    path: "./examples/envconfig/{application}/{artifact}/{environment}.yml"
+  # Providers read in order (with on_missing: next) or chosen by match and by the tenant
+  # registry; none: no environment configuration.
+  providers: []
+  # providers:
+  #   - name: default
+  #     type: consul                         # consul | file | git
+  #     consul:
+  #       address: http://127.0.0.1:8500     # default: CONSUL_HTTP_ADDR
+  #       datacenter: ""
+  #       key: "manent/{application}/{artifact}/{environment}"
+  #       # token: from CONSUL_HTTP_TOKEN or from a file
+  #       # token_file: /run/secrets/consul-token
+  #   - name: files
+  #     type: file
+  #     file:
+  #       path: "./examples/envconfig/{application}/{artifact}/{environment}.yml"
 
 # HTTP callbacks named in descriptors (callbacks section): they receive the outcome of steps and deploy.
 callbacks:

@@ -459,7 +459,7 @@ func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 func NewResolver(cfg *config.Config, secrets gitsrc.Secrets, tenants tenant.Directory) (envconfig.Resolver, error) {
 	ec := cfg.EnvConfig
 	r := envconfig.Resolver{Required: ec.Required, Policy: NewDescriptorPolicy(cfg)}
-	providers := ec.EffectiveProviders()
+	providers := ec.Providers
 	if len(providers) == 0 {
 		return r, nil
 	}
@@ -487,7 +487,7 @@ func warnTenantProviders(cfg *config.Config, tenants tenant.Directory, log *slog
 		return
 	}
 	names := map[string]bool{}
-	for _, p := range cfg.EnvConfig.EffectiveProviders() {
+	for _, p := range cfg.EnvConfig.Providers {
 		names[p.Name] = true
 	}
 	for _, t := range ts {

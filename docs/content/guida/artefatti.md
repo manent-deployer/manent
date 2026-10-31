@@ -32,12 +32,14 @@ The templates of the providers contain `{artifact}`: one document per artifact, 
 
 ```yaml title="manent.yml"
 envconfig:
-  provider: file
   required: true                                   # a missing document is an error: it catches a misspelled artifact
-  file:
-    path: "envconfig/{application}/{artifact}/{environment}.yml"
-  # consul:
-  #   key: "manent/{application}/{artifact}/{environment}"
+  providers:
+    - name: default
+      type: file
+      file:
+        path: "envconfig/{application}/{artifact}/{environment}.yml"
+      # consul:
+      #   key: "manent/{application}/{artifact}/{environment}"
 ```
 
 ```text

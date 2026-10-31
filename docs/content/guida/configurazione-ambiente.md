@@ -40,20 +40,22 @@ rollback:                 # optional: see Rollback
 
 ## Providers
 
-Configured in `manent.yml`, section `envconfig`:
+Configured in `manent.yml`, section `envconfig`: each entry of `providers` has a `name`, a `type` and the section of the type. With one provider, call it as you like (`default` below); for several see [Several providers](#piu-provider).
 
 === "Consul"
 
     ```yaml
     envconfig:
-      provider: consul
       required: true
       max_retries: 3
-      consul:
-        address: http://consul:8500            # default: CONSUL_HTTP_ADDR or http://127.0.0.1:8500
-        datacenter: ""
-        key: "manent/{tenant}/{application}/{artifact}/{environment}"
-        # token_file: /run/secrets/consul-token
+      providers:
+        - name: default
+          type: consul
+          consul:
+            address: http://consul:8500            # default: CONSUL_HTTP_ADDR or http://127.0.0.1:8500
+            datacenter: ""
+            key: "manent/{tenant}/{application}/{artifact}/{environment}"
+            # token_file: /run/secrets/consul-token
     ```
 
     The configuration is the value of the KV key. The ACL token is read from `CONSUL_HTTP_TOKEN` or from `token_file`, never from the configuration file.
@@ -66,12 +68,14 @@ Configured in `manent.yml`, section `envconfig`:
 
     ```yaml
     envconfig:
-      provider: git
-      git:
-        repository: https://git.example.com/platform/envconfig.git
-        ref: refs/heads/main
-        path: "{tenant}/{application}/{artifact}/{environment}.yml"
-        password_ref: vault:secret/manent/git#token
+      providers:
+        - name: default
+          type: git
+          git:
+            repository: https://git.example.com/platform/envconfig.git
+            ref: refs/heads/main
+            path: "{tenant}/{application}/{artifact}/{environment}.yml"
+            password_ref: vault:secret/manent/git#token
     ```
 
     The file is read at a commit: its SHA is recorded on the deploy, and a descriptor can choose a revision within `descriptor_policy.config_ref`. See [Git repository](../integrazioni/git.md).
@@ -80,9 +84,11 @@ Configured in `manent.yml`, section `envconfig`:
 
     ```yaml
     envconfig:
-      provider: file
-      file:
-        path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
+      providers:
+        - name: default
+          type: file
+          file:
+            path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
     ```
 
     Useful for development and testing.
@@ -91,7 +97,7 @@ Configured in `manent.yml`, section `envconfig`:
 
     ```yaml
     envconfig:
-      provider: none
+      providers: []
     ```
 
     Everything comes from the descriptor.
@@ -101,11 +107,11 @@ Configured in `manent.yml`, section `envconfig`:
 | `required` | `true`: the deploy fails if there is no configuration for the environment. `false`: only the descriptor is used. |
 | `max_retries` | Additional attempts if the provider does not respond (e.g. Consul unreachable). |
 
-Templates (`consul.key`, `file.path`, `git.path`) contain `{tenant}` (the [tenant](tenant.md) of the release, `untenanted` for the applications no tenant lists) and `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application of a tenant. See [Applications with several artifacts](artefatti.md).
+Templates (`consul.key`, `file.path`, `git.path` of each provider) contain `{tenant}` (the [tenant](tenant.md) of the release, `untenanted` for the applications no tenant lists) and `{artifact}`, the descriptor's `artifact.name`: one document per artifact of an application of a tenant. See [Applications with several artifacts](artefatti.md).
 
 ## Several providers { #piu-provider }
 
-One installation can read from several systems at once: for example the payments team from its own Git repository, the applications not migrated yet from the old Consul, everyone else from the default Consul. `envconfig.providers` replaces `provider` and its section:
+One installation can read from several systems at once: for example the payments team from its own Git repository, the applications not migrated yet from the old Consul, everyone else from the default Consul. Every system is an entry of `envconfig.providers`:
 
 ```yaml title="manent.yml"
 envconfig:
@@ -145,7 +151,8 @@ tenants:
 - **Own settings.** Each provider has its template, address and credentials. `CONSUL_HTTP_TOKEN` and `CONSUL_HTTP_ADDR` are only the defaults of the Consul providers without `token_file` and `address`.
 - **Traceability.** The `config` step records `provider` (and `skipped`, the providers passed over with `on_missing: next`) next to `source` and `revision`; with Git the deploy also records `config_provider`, shown in the status next to `config_revision`.
 - **Revisions.** `config.ref` requires that the provider the deploy reads from is Git. A manual rollback and the reconciliation read the recorded revision from the provider that recorded it, even if the rules now choose another one: a commit SHA belongs to one repository. If that provider is no longer configured, the deploy fails with a permanent error.
-- **Compatibility.** `provider` with its `consul`, `git` or `file` section keeps working: it is a single provider named `default`. `provider` and `providers` cannot be used together. A tenant naming a provider that does not exist is logged at startup, and its deploys fail.
+- **Unknown names.** A tenant naming a provider that does not exist is logged at startup, and its deploys fail.
+- **Earlier versions.** `envconfig.provider` with the `consul`, `git` or `file` section next to it is no longer accepted: manent does not start and the error shows the `providers` form. Move the section into an entry, e.g. `providers: [{name: default, type: consul, consul: {...}}]`.
 
 ## When it is read
 

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -113,11 +114,17 @@ func newPolicySource(cfg *config.Config, sp secrets.Provider, log *slog.Logger) 
 		}
 		return src, nil
 	case config.PolicySourceConsul:
-		addr, token, err := consulAccess(cfg.EnvConfig.Consul)
+		agent := config.ConsulConfig{Address: o.Consul.Address, Datacenter: o.Consul.Datacenter, TokenFile: o.Consul.TokenFile}
+		if agent.Address == "" && agent.TokenFile == "" {
+			if i := slices.IndexFunc(cfg.EnvConfig.Providers, func(p config.EnvProvider) bool { return p.Type == config.EnvProviderConsul }); i >= 0 {
+				agent = cfg.EnvConfig.Providers[i].Consul
+			}
+		}
+		addr, token, err := consulAccess(agent)
 		if err != nil {
 			return nil, err
 		}
-		return &policy.ConsulSource{Address: addr, Token: token, Datacenter: cfg.EnvConfig.Consul.Datacenter,
+		return &policy.ConsulSource{Address: addr, Token: token, Datacenter: agent.Datacenter,
 			Prefix: cmp.Or(o.Consul.Prefix, "manent/policies"), Client: &http.Client{Timeout: 10 * time.Second}}, nil
 	}
 	return nil, nil

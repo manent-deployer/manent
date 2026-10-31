@@ -64,26 +64,25 @@ Default `./work`. Local directory into which each deploy downloads the artifact 
 
 | Key | Default | Description |
 |---|---|---|
-| `provider` | `none` | `none`, `consul`, `file` or `git`. |
-| `providers` | `[]` | Several named providers, alternative to `provider` ([Several providers](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), the section of the type with the same keys as below, `match` (`applications`, `artifacts`, `environments`) or `tenant_only`, and `on_missing` (`fail`, `next`). |
+| `providers` | `[]` | The named providers, none = no environment configuration ([Several providers](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), the section of the type with the keys below, `match` (`applications`, `artifacts`, `environments`) or `tenant_only`, and `on_missing` (`fail`, `next`). |
 | `required` | `false` | Makes the deploy fail if there is no configuration for the environment. |
 | `max_retries` | `3` | Additional read attempts. |
-| `consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
-| `consul.datacenter` | | Consul datacenter. |
-| `consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | KV key template. |
-| `consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
-| `git.repository` | | Git repository of the configurations (`https://`, `ssh://`, `git://`, `file://` or a path). See [Git repository](../integrazioni/git.md). |
-| `git.ref` | `refs/heads/main` | Default ref. |
-| `git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | File template in the repository. |
-| `git.allowed_refs` | `[]` | Other refs (patterns with `*`) `config.ref` may name; a SHA must be reachable from them or from `git.ref`. |
-| `git.username`, `git.password_ref` | | HTTPS credentials (the password is a secret reference). |
-| `git.ssh_key_ref`, `git.known_hosts` | | SSH key (secret reference) and known hosts file, required together. |
-| `git.ca_file` | | Additional CA bundle for HTTPS. |
-| `git.require_signed` | `false` | Refuses commits without a valid signature of `git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
-| `git.max_age` | `0` | Maximum age of a commit (`0` = none); manual rollbacks are exempt. |
-| `git.cache_dir` | `<workdir>/.git-cache` | Local copies of the repository. |
-| `git.ref_ttl` | `30s` | How long a ref resolution is reused before fetching again. |
+| `providers[].consul.address` | `CONSUL_HTTP_ADDR` or `http://127.0.0.1:8500` | Address of the Consul agent. |
+| `providers[].consul.datacenter` | | Consul datacenter. |
+| `providers[].consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | KV key template. |
+| `providers[].consul.token_file` | | File with the ACL token (alternative to `CONSUL_HTTP_TOKEN`). |
+| `providers[].file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Path template for the `file` provider. |
+| `providers[].git.repository` | | Git repository of the configurations (`https://`, `ssh://`, `git://`, `file://` or a path). See [Git repository](../integrazioni/git.md). |
+| `providers[].git.ref` | `refs/heads/main` | Default ref. |
+| `providers[].git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | File template in the repository. |
+| `providers[].git.allowed_refs` | `[]` | Other refs (patterns with `*`) `config.ref` may name; a SHA must be reachable from them or from `providers[].git.ref`. |
+| `providers[].git.username`, `providers[].git.password_ref` | | HTTPS credentials (the password is a secret reference). |
+| `providers[].git.ssh_key_ref`, `providers[].git.known_hosts` | | SSH key (secret reference) and known hosts file, required together. |
+| `providers[].git.ca_file` | | Additional CA bundle for HTTPS. |
+| `providers[].git.require_signed` | `false` | Refuses commits without a valid signature of `providers[].git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
+| `providers[].git.max_age` | `0` | Maximum age of a commit (`0` = none); manual rollbacks are exempt. |
+| `providers[].git.cache_dir` | `<workdir>/.git-cache` | Local copies of the repository. |
+| `providers[].git.ref_ttl` | `30s` | How long a ref resolution is reused before fetching again. |
 
 See [Environment configuration](../guida/configurazione-ambiente.md).
 
@@ -147,7 +146,8 @@ See [Authentication, permissions and audit](accesso.md).
 | `governance.opa.store.tests` | `run` | `run`: the revision's tests run if present; `required`: revisions without tests are refused. |
 | `governance.opa.file.dir` | | Directory of the policy with `source: file`. |
 | `governance.opa.bundle.*` | | `url`, `ca_file`, `credentials_ref`, `signing` (`public_key_ref`, `algorithm`, `key_id`, `scope`), `insecure_skip_verify`. |
-| `governance.opa.consul.prefix` | `manent/policies` | KV prefix with `source: consul` (address and token of `envconfig.consul`). |
+| `governance.opa.consul.prefix` | `manent/policies` | KV prefix with `source: consul` (address and token of `governance.opa.consul.address`/`token_file`, otherwise of the first `consul` provider of `envconfig.providers`). |
+| `governance.opa.consul.address`, `datacenter`, `token_file` | | Consul agent of the policies; empty: that of the first `consul` provider of `envconfig.providers`. |
 | `governance.opa.query` | `data.manent.governance.decision` | Query of the decision. |
 | `governance.opa.eval_timeout` | `200ms` | Limit of one evaluation. |
 
@@ -304,7 +304,7 @@ Periodic reading of the release in service on the targets, to report in the inve
 | `MANENT_CONFIG` | Configuration file, alternative to `-c`. |
 | `DBOS_SYSTEM_DATABASE_URL` | Overrides `dbos.database_url`. |
 | `DBOS__VMID` | Overrides `dbos.executor_id`. |
-| `CONSUL_HTTP_ADDR` | Consul address, if `envconfig.consul.address` is empty. |
+| `CONSUL_HTTP_ADDR` | Consul address, if the `address` of a Consul provider is empty. |
 | `CONSUL_HTTP_TOKEN` | Consul ACL token. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Trace collector, if `observability.tracing.endpoint` is empty. The other `OTEL_EXPORTER_OTLP_*` variables (headers, certificates) also apply. |
 

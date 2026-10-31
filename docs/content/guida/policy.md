@@ -199,7 +199,7 @@ Without any active revision the default policy applies the rules of `manent.yml`
 |---|---|---|
 | `file` | `opa.file.dir`: *.rego and data files, hidden files excluded (e.g. a Kubernetes ConfigMap) | names, sizes or modification times changed |
 | `bundle` | `opa.bundle.url` (OPA bundle, tar.gz), `ca_file`, `credentials_ref` (bearer token), `signing.public_key_ref`, `algorithm` (default RS256), `key_id`, `scope` | the ETag changed (`If-None-Match`) |
-| `consul` | `opa.consul.prefix` (default `manent/policies`): every key under the prefix is a file; address and token of `envconfig.consul` | the index of the prefix changed |
+| `consul` | `opa.consul.prefix` (default `manent/policies`): every key under the prefix is a file; address and token of `opa.consul.address`/`token_file`, otherwise of the first `consul` provider of `envconfig.providers` | the index of the prefix changed |
 
 The **signature** of the bundle (`.signatures.json`, as produced by `opa build --signing-key`) is required: an unsigned bundle is accepted only with `insecure_skip_verify: true`, for development. With these sources revisions are versioned outside manent (Git, CI, `opa test`): `manent policy push` and `approve` are not available, `policy list` shows the revision in force.
 

@@ -238,13 +238,17 @@ Plugin, targets, plugin parameters and secret references of each environment can
 ```yaml
 # configs/manent.yml
 envconfig:
-  provider: consul                          # none | consul | git | file
   required: true
-  consul:
-    address: http://consul:8500             # default: CONSUL_HTTP_ADDR
-    key: "manent/{application}/{artifact}/{environment}"
-    # ACL token: CONSUL_HTTP_TOKEN or token_file
+  providers:                                # one or more: consul | git | file
+    - name: default
+      type: consul
+      consul:
+        address: http://consul:8500         # default: CONSUL_HTTP_ADDR
+        key: "manent/{application}/{artifact}/{environment}"
+        # ACL token: CONSUL_HTTP_TOKEN or token_file
 ```
+
+Several providers can serve different applications, environments or tenants at the same time ([several providers](docs/content/guida/configurazione-ambiente.md#piu-provider)).
 
 The value of the Consul key is YAML or JSON ([example](examples/envconfig/myapp/myapp/test.yml)):
 

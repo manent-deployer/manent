@@ -32,10 +32,12 @@ logging:
 workdir: /var/lib/manent/work
 
 envconfig:
-  provider: file
   required: true
-  file:
-    path: /demo/envconfig/{application}/{environment}.yml
+  providers:
+    - name: default
+      type: file
+      file:
+        path: /demo/envconfig/{application}/{environment}.yml
 
 artifacts:
   allow_unlisted: false

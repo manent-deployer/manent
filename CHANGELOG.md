@@ -14,6 +14,14 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Più provider della configurazione di ambiente insieme (`envconfig.providers`): ogni voce ha
+  `name`, `type` (`consul`, `file`, `git`) e la sua sezione, `match` su applicazioni (con il
+  tenant), artefatti e ambienti oppure `tenant_only`, e `on_missing` (`fail`, `next`). Un tenant
+  può indicare il proprio provider nel registro (`envconfig`), letto per primo. Lo step `config`
+  riporta `provider` e `skipped`; con Git il deploy registra `config_provider`
+  (`Status.config_provider`), e rollback e riconciliazione rileggono la revisione dal provider
+  che l'ha registrata.
+
 - Export e import tra deploy: un deploy dichiara come `exports` alcuni suoi output (`from:
   <step>.<chiave>`, `format: string|targets`, `pattern` ancorato), verificati quando riesce
   (un valore non valido fa fallire il deploy) e registrati con l'esito (`Status.exports`,
@@ -211,6 +219,12 @@ ne usa il contenuto come note.
 - Dry-run, callback firmati, plugin esterni su gRPC, documentazione MkDocs.
 
 ### Modificato
+
+- **Incompatibile:** `envconfig.provider` con le sezioni `envconfig.consul`, `envconfig.file` ed
+  `envconfig.git` non è più accettato: manent non parte e l'errore indica la forma
+  `envconfig.providers: [{name: default, type: <tipo>, <tipo>: {...}}]`. La sorgente `consul`
+  delle policy Rego legge l'agent da `governance.opa.consul.address`/`datacenter`/`token_file`,
+  altrimenti dal primo provider `consul` di `envconfig.providers`.
 
 - `Grant` in `GET /api/v1/me`: nuovi campi `name` e `until`; `role` è facoltativo, perché un permesso della policy può elencare direttamente le azioni (l'interfaccia web mostra il nome quando manca il ruolo).
 - Documentazione riorganizzata: sezioni Inizia, Concetti, Guide, Integrazioni, Plugin, Operazioni e Riferimento. Nuove pagine di concetti (panoramica, tipologie di deploy, ciclo di vita di un deploy, modello di configurazione, glossario), sette tutorial in sequenza (primo deploy via SSH, ambienti e segreti con Consul e Vault, promozione con approvazioni e freeze, Kubernetes, rilascio progressivo con health gate, deploy dalla CI, manent in produzione) e una guida passo passo per ogni integrazione: Slack, Teams, ServiceNow, Jira, GitHub Actions, GitLab CI, Terraform, Consul, Vault, repository degli artefatti, identity provider OIDC, Prometheus, sistemi di metriche e SIEM. In inglese e in italiano.

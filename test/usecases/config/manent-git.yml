@@ -1,5 +1,5 @@
 # UC27: manent server (API and worker, "serve") whose environment configuration comes from a Git
-# repository (envconfig.provider: git) served by the lab Git server with a token. It has its own
+# repository (a git provider in envconfig.providers) served by the lab Git server with a token. It has its own
 # SQLite database and no authentication: only the case talks to it.
 app:
   name: manent
@@ -22,21 +22,23 @@ logging:
 workdir: /tmp/manent-work
 
 envconfig:
-  provider: git
   required: true
   max_retries: 2
-  git:
-    repository: http://gitserver:8080/envconfig.git
-    ref: refs/heads/main
-    path: "{application}/{artifact}/{environment}.yml"
-    username: manent
-    password_ref: file:/keys/git-token
-    allowed_refs: [refs/tags/env-*]
-    # Commits signed with the SSH key of the lab (.work/keys/git-sign).
-    require_signed: true
-    signers:
-      ssh_allowed_signers: /keys/git-allowed-signers
-    ref_ttl: 1s
+  providers:
+    - name: default
+      type: git
+      git:
+        repository: http://gitserver:8080/envconfig.git
+        ref: refs/heads/main
+        path: "{application}/{artifact}/{environment}.yml"
+        username: manent
+        password_ref: file:/keys/git-token
+        allowed_refs: [refs/tags/env-*]
+        # Commits signed with the SSH key of the lab (.work/keys/git-sign).
+        require_signed: true
+        signers:
+          ssh_allowed_signers: /keys/git-allowed-signers
+        ref_ttl: 1s
 
 # The descriptor (and --config-ref) can choose a ref or a commit SHA reachable from the allowed refs.
 descriptor_policy:

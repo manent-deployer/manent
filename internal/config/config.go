@@ -284,28 +284,31 @@ func (s SIEM) Targets() []SIEMDestination {
 
 // Supported environment configuration providers.
 const (
-	EnvProviderNone   = "none"
 	EnvProviderConsul = "consul"
 	EnvProviderFile   = "file"
 	EnvProviderGit    = "git"
 )
 
-// EnvConfig configures the systems the deploy configuration of every environment is read from:
-// one (provider with its section) or several (providers).
+// EnvConfig configures the systems the deploy configuration of every environment is read from.
 type EnvConfig struct {
-	// Provider is none, consul, file or git; with Providers it must stay none.
-	Provider string `yaml:"provider"`
-	// Providers are several named providers: a deploy reads from the one its tenant names in the
-	// registry, then from those whose match applies, in order.
+	// Providers are the named providers (none: no environment configuration). A deploy reads
+	// from the one its tenant names in the registry, then from those whose match applies, in
+	// order.
 	Providers []EnvProvider `yaml:"providers"`
 	// Required fails the deploy if the environment has no configuration.
 	Required bool `yaml:"required"`
 	// MaxRetries are the extra attempts on a read error.
-	MaxRetries int          `yaml:"max_retries"`
-	Consul     ConsulConfig `yaml:"consul"`
-	File       FileConfig   `yaml:"file"`
-	Git        GitConfig    `yaml:"git"`
+	MaxRetries int `yaml:"max_retries"`
 }
+
+// Defaults of the provider sections.
+const (
+	defaultConsulKey = "manent/{tenant}/{application}/{artifact}/{environment}"
+	defaultFilePath  = "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"
+	defaultGitRef    = "refs/heads/main"
+	defaultGitPath   = "{tenant}/{application}/{artifact}/{environment}.yml"
+	defaultGitRefTTL = 30 * time.Second
+)
 
 // GitConfig configures reading from a Git repository at a revision. Credentials are secret
 // references, resolved at every fetch.
@@ -370,21 +373,6 @@ const (
 	EnvOnMissingFail = "fail"
 	EnvOnMissingNext = "next"
 )
-
-// DefaultEnvProvider is the name of the provider configured by envconfig.provider.
-const DefaultEnvProvider = "default"
-
-// EffectiveProviders returns the configured providers: envconfig.providers, or the single
-// provider of envconfig.provider named "default"; none without a provider.
-func (e EnvConfig) EffectiveProviders() []EnvProvider {
-	if len(e.Providers) > 0 {
-		return e.Providers
-	}
-	if e.Provider == "" || e.Provider == EnvProviderNone {
-		return nil
-	}
-	return []EnvProvider{{Name: DefaultEnvProvider, Type: e.Provider, Consul: e.Consul, File: e.File, Git: e.Git}}
-}
 
 // GitSigners are the keys commit signatures are verified with.
 type GitSigners struct {
@@ -673,6 +661,12 @@ type BundleSigning struct {
 // token of envconfig.consul.
 type PolicyConsulConfig struct {
 	Prefix string `yaml:"prefix"`
+	// Address, Datacenter and TokenFile reach the agent; without address and token file those
+	// of the first consul provider of envconfig.providers (then CONSUL_HTTP_ADDR and
+	// CONSUL_HTTP_TOKEN).
+	Address    string `yaml:"address"`
+	Datacenter string `yaml:"datacenter"`
+	TokenFile  string `yaml:"token_file"`
 }
 
 // GovernanceRule are the release rules of applications and environments ("*" patterns).
@@ -843,17 +837,11 @@ func Default() *Config {
 			DatabaseURL: "sqlite:manent.db", Queue: "deployments", Concurrency: 4, EnvironmentConcurrency: 1,
 			DrainTimeout: 2 * time.Minute,
 		},
-		HTTP:    HTTP{Listen: ":8080"},
-		Logging: Logging{Level: "info", Format: "text"},
-		SIEM:    SIEM{Network: "udp"},
-		WorkDir: "./work",
-		EnvConfig: EnvConfig{
-			Provider:   EnvProviderNone,
-			MaxRetries: 3,
-			Consul:     ConsulConfig{Key: "manent/{tenant}/{application}/{artifact}/{environment}"},
-			File:       FileConfig{Path: "./envconfig/{tenant}/{application}/{artifact}/{environment}.yml"},
-			Git:        GitConfig{Ref: "refs/heads/main", Path: "{tenant}/{application}/{artifact}/{environment}.yml", RefTTL: 30 * time.Second},
-		},
+		HTTP:      HTTP{Listen: ":8080"},
+		Logging:   Logging{Level: "info", Format: "text"},
+		SIEM:      SIEM{Network: "udp"},
+		WorkDir:   "./work",
+		EnvConfig: EnvConfig{MaxRetries: 3},
 		Tenants:   Tenants{Cache: 30 * time.Second},
 		RBAC:      RBAC{TenantRoles: TenantRoles{Members: "deployer", Admins: "admin"}},
 		Callbacks: Callbacks{Timeout: 10 * time.Second, MaxRetries: 3},
@@ -914,14 +902,13 @@ func (c *Config) applyDefaults() {
 		t := true
 		c.Artifacts.AllowUnlisted = &t
 	}
-	def := Default().EnvConfig
 	for i := range c.EnvConfig.Providers {
 		p := &c.EnvConfig.Providers[i]
-		p.Consul.Key = cmp.Or(p.Consul.Key, def.Consul.Key)
-		p.File.Path = cmp.Or(p.File.Path, def.File.Path)
-		p.Git.Ref = cmp.Or(p.Git.Ref, def.Git.Ref)
-		p.Git.Path = cmp.Or(p.Git.Path, def.Git.Path)
-		p.Git.RefTTL = cmp.Or(p.Git.RefTTL, def.Git.RefTTL)
+		p.Consul.Key = cmp.Or(p.Consul.Key, defaultConsulKey)
+		p.File.Path = cmp.Or(p.File.Path, defaultFilePath)
+		p.Git.Ref = cmp.Or(p.Git.Ref, defaultGitRef)
+		p.Git.Path = cmp.Or(p.Git.Path, defaultGitPath)
+		p.Git.RefTTL = cmp.Or(p.Git.RefTTL, defaultGitRefTTL)
 	}
 	c.Pipeline.applyDefaults()
 }
@@ -979,6 +966,9 @@ func Load(path string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := checkRemovedKeys(data); err != nil {
+			return nil, err
+		}
 		dec := yaml.NewDecoder(bytes.NewReader(data))
 		dec.KnownFields(true)
 		if err := dec.Decode(cfg); err != nil {
@@ -1001,13 +991,7 @@ func Load(path string) (*Config, error) {
 
 // validateProviders checks envconfig.providers.
 func (e EnvConfig) validateProviders() []error {
-	if len(e.Providers) == 0 {
-		return nil
-	}
 	var errs []error
-	if e.Provider != EnvProviderNone {
-		errs = append(errs, errors.New("envconfig: provider and providers are alternatives (set provider: none, or leave it out, with providers)"))
-	}
 	seen := map[string]bool{}
 	for i, p := range e.Providers {
 		at := fmt.Sprintf("envconfig.providers[%d]", i)
@@ -1044,6 +1028,28 @@ func (e EnvConfig) validateProviders() []error {
 	return errs
 }
 
+// checkRemovedKeys explains the keys of earlier versions that are no longer accepted, instead
+// of the generic "field not found" of the decoder.
+func checkRemovedKeys(data []byte) error {
+	var doc struct {
+		EnvConfig map[string]yaml.Node `yaml:"envconfig"`
+	}
+	if yaml.Unmarshal(data, &doc) != nil {
+		return nil // the decoder reports the error
+	}
+	var removed []string
+	for _, k := range []string{"provider", "consul", "file", "git"} {
+		if _, ok := doc.EnvConfig[k]; ok {
+			removed = append(removed, "envconfig."+k)
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid configuration: %s no longer supported: declare the provider in envconfig.providers, e.g. providers: [{name: default, type: consul, consul: {address: ...}}]",
+		strings.Join(removed, ", "))
+}
+
 // Validate checks the consistency of the configuration.
 func (c *Config) Validate() error {
 	var errs []error
@@ -1052,15 +1058,6 @@ func (c *Config) Validate() error {
 	}
 	if c.DBOS.Concurrency < 1 || c.DBOS.EnvironmentConcurrency < 1 || c.DBOS.GlobalConcurrency < 0 {
 		errs = append(errs, errors.New("dbos: concurrency and environment_concurrency must be >= 1, global_concurrency >= 0"))
-	}
-	switch c.EnvConfig.Provider {
-	case EnvProviderNone, EnvProviderConsul, EnvProviderFile:
-	case EnvProviderGit:
-		if c.EnvConfig.Git.Repository == "" {
-			errs = append(errs, errors.New("envconfig.git.repository is required with provider git"))
-		}
-	default:
-		errs = append(errs, fmt.Errorf("envconfig.provider %q not supported (none|consul|file|git)", c.EnvConfig.Provider))
 	}
 	errs = append(errs, c.EnvConfig.validateProviders()...)
 	switch c.Tenants.Untenanted {

@@ -64,26 +64,25 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `provider` | `none` | `none`, `consul`, `file` oppure `git`. |
-| `providers` | `[]` | Più provider con nome, in alternativa a `provider` ([Più provider](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), la sezione del tipo con le stesse chiavi elencate sotto, `match` (`applications`, `artifacts`, `environments`) oppure `tenant_only`, e `on_missing` (`fail`, `next`). |
+| `providers` | `[]` | I provider con nome, nessuno = nessuna configurazione di ambiente ([Più provider](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), la sezione del tipo con le chiavi elencate sotto, `match` (`applications`, `artifacts`, `environments`) oppure `tenant_only`, e `on_missing` (`fail`, `next`). |
 | `required` | `false` | Fa fallire il deploy se per l'ambiente non esiste configurazione. |
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
-| `consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
-| `consul.datacenter` | | Datacenter Consul. |
-| `consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | Modello della chiave KV. |
-| `consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
-| `file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
-| `git.repository` | | Repository Git delle configurazioni (`https://`, `ssh://`, `git://`, `file://` o un percorso). Vedi [Repository Git](../integrazioni/git.md). |
-| `git.ref` | `refs/heads/main` | Ref di default. |
-| `git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | Modello del file nel repository. |
-| `git.allowed_refs` | `[]` | Altri ref (pattern con `*`) che `config.ref` può indicare; uno SHA deve essere raggiungibile da essi o da `git.ref`. |
-| `git.username`, `git.password_ref` | | Credenziali HTTPS (la password è un riferimento a un segreto). |
-| `git.ssh_key_ref`, `git.known_hosts` | | Chiave SSH (riferimento a un segreto) e file dei known hosts, obbligatori insieme. |
-| `git.ca_file` | | CA aggiuntive per HTTPS. |
-| `git.require_signed` | `false` | Rifiuta i commit senza una firma valida di `git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
-| `git.max_age` | `0` | Età massima di un commit (`0` = nessuna); i rollback manuali ne sono esenti. |
-| `git.cache_dir` | `<workdir>/.git-cache` | Copie locali del repository. |
-| `git.ref_ttl` | `30s` | Per quanto si riusa la risoluzione di un ref prima di un nuovo fetch. |
+| `providers[].consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
+| `providers[].consul.datacenter` | | Datacenter Consul. |
+| `providers[].consul.key` | `manent/{tenant}/{application}/{artifact}/{environment}` | Modello della chiave KV. |
+| `providers[].consul.token_file` | | File con il token ACL (in alternativa a `CONSUL_HTTP_TOKEN`). |
+| `providers[].file.path` | `./envconfig/{tenant}/{application}/{artifact}/{environment}.yml` | Modello del percorso per il provider `file`. |
+| `providers[].git.repository` | | Repository Git delle configurazioni (`https://`, `ssh://`, `git://`, `file://` o un percorso). Vedi [Repository Git](../integrazioni/git.md). |
+| `providers[].git.ref` | `refs/heads/main` | Ref di default. |
+| `providers[].git.path` | `{tenant}/{application}/{artifact}/{environment}.yml` | Modello del file nel repository. |
+| `providers[].git.allowed_refs` | `[]` | Altri ref (pattern con `*`) che `config.ref` può indicare; uno SHA deve essere raggiungibile da essi o da `providers[].git.ref`. |
+| `providers[].git.username`, `providers[].git.password_ref` | | Credenziali HTTPS (la password è un riferimento a un segreto). |
+| `providers[].git.ssh_key_ref`, `providers[].git.known_hosts` | | Chiave SSH (riferimento a un segreto) e file dei known hosts, obbligatori insieme. |
+| `providers[].git.ca_file` | | CA aggiuntive per HTTPS. |
+| `providers[].git.require_signed` | `false` | Rifiuta i commit senza una firma valida di `providers[].git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
+| `providers[].git.max_age` | `0` | Età massima di un commit (`0` = nessuna); i rollback manuali ne sono esenti. |
+| `providers[].git.cache_dir` | `<workdir>/.git-cache` | Copie locali del repository. |
+| `providers[].git.ref_ttl` | `30s` | Per quanto si riusa la risoluzione di un ref prima di un nuovo fetch. |
 
 Vedi [Configurazione di ambiente](../guida/configurazione-ambiente.md).
 
@@ -147,7 +146,8 @@ Vedi [Autenticazione, permessi e audit](accesso.md).
 | `governance.opa.store.tests` | `run` | `run`: i test della revisione girano se presenti; `required`: le revisioni senza test sono rifiutate. |
 | `governance.opa.file.dir` | | Directory della policy con `source: file`. |
 | `governance.opa.bundle.*` | | `url`, `ca_file`, `credentials_ref`, `signing` (`public_key_ref`, `algorithm`, `key_id`, `scope`), `insecure_skip_verify`. |
-| `governance.opa.consul.prefix` | `manent/policies` | Prefisso del KV con `source: consul` (indirizzo e token di `envconfig.consul`). |
+| `governance.opa.consul.prefix` | `manent/policies` | Prefisso del KV con `source: consul` (indirizzo e token di `governance.opa.consul.address`/`token_file`, altrimenti del primo provider `consul` di `envconfig.providers`). |
+| `governance.opa.consul.address`, `datacenter`, `token_file` | | Agent Consul delle policy; vuoti: quello del primo provider `consul` di `envconfig.providers`. |
 | `governance.opa.query` | `data.manent.governance.decision` | Query della decisione. |
 | `governance.opa.eval_timeout` | `200ms` | Limite di una valutazione. |
 
@@ -304,7 +304,7 @@ Lettura periodica della release in esercizio sui target, per segnalare nell'inve
 | `MANENT_CONFIG` | File di configurazione, in alternativa a `-c`. |
 | `DBOS_SYSTEM_DATABASE_URL` | Sovrascrive `dbos.database_url`. |
 | `DBOS__VMID` | Sovrascrive `dbos.executor_id`. |
-| `CONSUL_HTTP_ADDR` | Indirizzo Consul, se `envconfig.consul.address` è vuoto. |
+| `CONSUL_HTTP_ADDR` | Indirizzo Consul, se l'`address` di un provider Consul è vuoto. |
 | `CONSUL_HTTP_TOKEN` | Token ACL Consul. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector delle tracce, se `observability.tracing.endpoint` è vuoto. Valgono anche le altre variabili `OTEL_EXPORTER_OTLP_*` (intestazioni, certificati). |
 

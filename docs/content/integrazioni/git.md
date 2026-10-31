@@ -11,7 +11,7 @@ The [environment configuration](../guida/configurazione-ambiente.md) can live in
 |---|---|
 | `<tenant>/<application>/<artifact>/<environment>.yml` | Environment configuration, same format as the other providers. |
 
-The template can be changed (`envconfig.git.path`). It never comes from the request: a descriptor cannot point to another application's file.
+The template can be changed (`git.path` of the provider). It never comes from the request: a descriptor cannot point to another application's file.
 
 !!! danger "References, never values"
     The configuration is saved in the deploy history, like with Consul. It must contain only secret references (`vault:…`, `file:…`), never passwords or keys.
@@ -20,25 +20,27 @@ The template can be changed (`envconfig.git.path`). It never comes from the requ
 
 ```yaml title="manent.yml"
 envconfig:
-  provider: git
   required: true
-  git:
-    repository: https://git.example.com/platform/envconfig.git
-    ref: refs/heads/main                      # default ref
-    path: "{tenant}/{application}/{artifact}/{environment}.yml"
-    username: x-access-token                  # HTTPS
-    password_ref: vault:secret/manent/git#token
-    # ssh_key_ref: file:/run/secrets/git-key  # ssh:// instead of HTTPS
-    # known_hosts: /etc/manent/known_hosts    # required with ssh_key_ref
-    # ca_file: /etc/manent/git-ca.pem
-    allowed_refs: [refs/tags/env-*]           # other refs a descriptor may name
-    require_signed: true
-    signers:
-      ssh_allowed_signers: /etc/manent/allowed_signers
-      # openpgp_keyring: /etc/manent/git-keys.asc
-    max_age: 0                                # maximum age of a commit (0 = none)
-    cache_dir: /var/lib/manent/git            # default <workdir>/.git-cache
-    ref_ttl: 30s                              # how long a ref resolution is reused
+  providers:
+    - name: default
+      type: git
+      git:
+        repository: https://git.example.com/platform/envconfig.git
+        ref: refs/heads/main                      # default ref
+        path: "{tenant}/{application}/{artifact}/{environment}.yml"
+        username: x-access-token                  # HTTPS
+        password_ref: vault:secret/manent/git#token
+        # ssh_key_ref: file:/run/secrets/git-key  # ssh:// instead of HTTPS
+        # known_hosts: /etc/manent/known_hosts    # required with ssh_key_ref
+        # ca_file: /etc/manent/git-ca.pem
+        allowed_refs: [refs/tags/env-*]           # other refs a descriptor may name
+        require_signed: true
+        signers:
+          ssh_allowed_signers: /etc/manent/allowed_signers
+          # openpgp_keyring: /etc/manent/git-keys.asc
+        max_age: 0                                # maximum age of a commit (0 = none)
+        cache_dir: /var/lib/manent/git            # default <workdir>/.git-cache
+        ref_ttl: 30s                              # how long a ref resolution is reused
 ```
 
 | Key | Meaning |

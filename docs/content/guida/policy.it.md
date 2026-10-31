@@ -199,7 +199,7 @@ Senza alcuna revisione attiva, la policy predefinita applica le regole di `manen
 |---|---|---|
 | `file` | `opa.file.dir`: file *.rego e di dati, file nascosti esclusi (ad esempio una ConfigMap di Kubernetes) | cambiano nomi, dimensioni o date di modifica |
 | `bundle` | `opa.bundle.url` (bundle OPA, tar.gz), `ca_file`, `credentials_ref` (bearer token), `signing.public_key_ref`, `algorithm` (default RS256), `key_id`, `scope` | cambia l'ETag (`If-None-Match`) |
-| `consul` | `opa.consul.prefix` (default `manent/policies`): ogni chiave sotto il prefisso è un file; indirizzo e token di `envconfig.consul` | cambia l'indice del prefisso |
+| `consul` | `opa.consul.prefix` (default `manent/policies`): ogni chiave sotto il prefisso è un file; indirizzo e token di `opa.consul.address`/`token_file`, altrimenti del primo provider `consul` di `envconfig.providers` | cambia l'indice del prefisso |
 
 La **firma** del bundle (`.signatures.json`, come la produce `opa build --signing-key`) è obbligatoria. Un bundle non firmato è accettato solo con `insecure_skip_verify: true`, per lo sviluppo. Con queste sorgenti le revisioni sono versionate fuori da manent (Git, CI, `opa test`): `manent policy push` e `approve` non sono disponibili, e `policy list` mostra la revisione in vigore.
 

@@ -376,26 +376,18 @@ envconfig:
 	if err != nil {
 		t.Fatal(err)
 	}
-	ps := cfg.EnvConfig.EffectiveProviders()
+	ps := cfg.EnvConfig.Providers
 	if len(ps) != 3 || ps[0].Git.Path != "{tenant}/{application}/{artifact}/{environment}.yml" || ps[0].Git.Ref != "refs/heads/main" ||
 		ps[1].Consul.Key != "manent/{application}/{environment}" || ps[2].File.Path == "" {
 		t.Errorf("providers with defaults: %+v", ps)
 	}
-
-	// The single provider becomes "default", with its section.
-	cfg, err = load(t, "envconfig:\n  provider: consul\n  consul: {key: \"kv/{application}/{environment}\"}\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ps := cfg.EnvConfig.EffectiveProviders(); len(ps) != 1 || ps[0].Name != DefaultEnvProvider || ps[0].Type != EnvProviderConsul || ps[0].Consul.Key != "kv/{application}/{environment}" {
-		t.Errorf("single provider: %+v", ps)
-	}
-	if ps := Default().EnvConfig.EffectiveProviders(); len(ps) != 0 {
+	if ps := Default().EnvConfig.Providers; len(ps) != 0 {
 		t.Errorf("no provider: %+v", ps)
 	}
 
 	for yml, want := range map[string]string{
-		"envconfig:\n  provider: consul\n  providers: [{name: a, type: file}]\n":                            "provider and providers are alternatives",
+		"envconfig:\n  provider: consul\n  consul: {address: x}\n":                                          "envconfig.provider, envconfig.consul no longer supported",
+		"envconfig:\n  git: {repository: x}\n":                                                              "envconfig.git no longer supported: declare the provider in envconfig.providers",
 		"envconfig:\n  providers: [{name: a, type: file}, {name: a, type: file}]\n":                         `name "a" is repeated`,
 		"envconfig:\n  providers: [{name: \"-a\", type: file}]\n":                                           `name "-a" is invalid`,
 		"envconfig:\n  providers: [{name: a, type: vault}]\n":                                               `type "vault" not supported`,
