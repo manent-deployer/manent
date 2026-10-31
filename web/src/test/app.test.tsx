@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 
 import { AppWithConfig } from "@/App";
 import type { Api } from "@/api/client";
@@ -15,7 +15,7 @@ const config: UIConfig = { auth_mode: "none", version: "1.2.3" };
 function renderApp(api: Api, path: string, lang: Lang = "en") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter initialEntries={[path]}>
       <AppWithConfig config={config} api={api} queryClient={qc} lang={lang} />
     </MemoryRouter>,
   );

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleSlash, Rocket, ShieldCheck, ShieldX, Undo2, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import { TERMINAL, unwrap, type Status } from "@/api/client";
 import { useApi, useMe } from "@/api/context";

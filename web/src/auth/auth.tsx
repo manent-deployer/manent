@@ -1,6 +1,6 @@
 import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 import type { UIConfig } from "@/lib/config";
 import { safeReturnPath } from "@/lib/returnPath";

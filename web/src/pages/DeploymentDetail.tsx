@@ -1,6 +1,6 @@
 import { ArrowLeft, Radio, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 
 import { ApiError, type Status, type StepRecord } from "@/api/client";
 import { CancelButton, DecisionButtons } from "@/components/actions";

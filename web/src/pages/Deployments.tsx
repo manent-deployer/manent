@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router";
 
 import { unwrap, type Status } from "@/api/client";
 import { useApi } from "@/api/context";

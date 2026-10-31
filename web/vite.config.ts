@@ -16,7 +16,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
-        manualChunks: { react: ["react", "react-dom", "react-router-dom"] },
+        manualChunks: { react: ["react", "react-dom", "react-router"] },
       },
     },
   },

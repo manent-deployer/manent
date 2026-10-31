@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertOctagon, Clock, GitPullRequestArrow } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { unwrap, type DORAMetrics } from "@/api/client";

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { unwrap, type ScheduleInfo, type WindowStatus } from "@/api/client";
 import { useApi, useMe } from "@/api/context";

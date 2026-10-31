@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Ban, RefreshCw } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { unwrap, type InventoryEntry, type TenantInfo } from "@/api/client";
 import { useApi } from "@/api/context";

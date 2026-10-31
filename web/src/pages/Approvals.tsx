@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { unwrap, type Status } from "@/api/client";
 import { useApi } from "@/api/context";

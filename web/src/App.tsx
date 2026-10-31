@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AlertTriangle, KeyRound } from "lucide-react";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { ApiError, type Api } from "@/api/client";
 import { ApiProvider, useUIConfig } from "@/api/context";
@@ -183,7 +183,7 @@ export function App() {
     );
   }
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter>
       <AppWithConfig config={config} />
     </BrowserRouter>
   );

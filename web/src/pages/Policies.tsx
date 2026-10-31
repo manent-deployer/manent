@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, History, Scale, XCircle } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { ApiError, unwrap, type PolicyRevision } from "@/api/client";
 import { useApi, useMe } from "@/api/context";

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleDashed, Cpu, HardDrive, Hourglass, MemoryStick, PauseCircle, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { unwrap, type Queue, type Worker, type WorkerResources } from "@/api/client";
 import { useApi } from "@/api/context";

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CircleSlash, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 
 import { ApiError, TERMINAL, unwrap, type ReleaseStatus } from "@/api/client";
 import { useApi, useMe } from "@/api/context";

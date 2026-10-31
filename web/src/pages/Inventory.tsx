@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, HelpCircle, Rocket, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { unwrap, type InventoryEntry } from "@/api/client";
 import { useApi, useMe } from "@/api/context";

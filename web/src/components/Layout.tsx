@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity as ActivityIcon, BarChart3, Building2, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, Scale, Server, ShieldAlert, Sun } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router";
 
 import { unwrap, type Status, type TenantInfo } from "@/api/client";
 import { useApi, useMe, useUIConfig } from "@/api/context";
