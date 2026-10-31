@@ -398,6 +398,11 @@ func (d *Descriptor) Validate() error {
 	}
 	for i, c := range d.Callbacks {
 		errs = append(errs, c.validate(i))
+		// The descriptor chooses the callback URL: it may send only its own secrets, never
+		// those of the environment configuration (SSH keys, cluster tokens).
+		if c.Auth != nil && c.Auth.Secret != "" && !seen[c.Auth.Secret] {
+			errs = append(errs, fmt.Errorf("callbacks[%d].auth.secret %q must be declared in the secrets section of the descriptor", i, c.Auth.Secret))
+		}
 	}
 	if d.Rollback != nil {
 		errs = append(errs, d.Rollback.validate())

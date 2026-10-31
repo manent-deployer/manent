@@ -67,7 +67,8 @@ Callback URLs are chosen by whoever requests the deploy. To prevent a descriptor
 - by default only `https` URLs are allowed (`callbacks.allow_http`);
 - `callbacks.allowed_hosts` limits the reachable hosts;
 - redirects are not followed;
-- a URL cannot contain credentials.
+- a URL cannot contain credentials;
+- `auth.secret` can only name a secret declared in the descriptor itself, so a callback never sends the secrets of the environment configuration (SSH keys, cluster tokens).
 
 See [Callbacks](../guida/callback.md#limiti-sugli-url).
 

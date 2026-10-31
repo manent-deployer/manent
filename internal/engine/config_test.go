@@ -3,11 +3,13 @@ package engine
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/manent-deployer/manent/internal/callback"
 	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/pipeline"
 	"github.com/manent-deployer/manent/internal/testdb"
@@ -135,5 +137,64 @@ func TestConfigNonDisponibileFermaIlDeploy(t *testing.T) {
 	}
 	if n.Load() != 0 {
 		t.Errorf("nessuno step doveva essere eseguito, eseguiti %d", n.Load())
+	}
+}
+
+// secretResolver adds a secret of the environment configuration to the descriptor.
+type secretResolver struct{}
+
+func (secretResolver) Resolve(_ context.Context, d descriptor.Descriptor) (descriptor.Descriptor, map[string]string, error) {
+	d.Secrets = append(slices.Clone(d.Secrets), descriptor.SecretRef{Name: "kube-token", Ref: "env:KUBE_TOKEN"})
+	return d, map[string]string{"source": "fake"}, nil
+}
+
+// secretsNotifier records the secrets a callback could resolve.
+type secretsNotifier struct {
+	mu   sync.Mutex
+	seen [][]string
+}
+
+func (n *secretsNotifier) Notify(_ context.Context, d *descriptor.Descriptor, _ descriptor.Callback, _ callback.Event) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	var names []string
+	for _, s := range d.Secrets {
+		names = append(names, s.Name)
+	}
+	n.seen = append(n.seen, names)
+	return nil
+}
+
+func TestCallbackSoloSegretiDelDescrittore(t *testing.T) {
+	var runs []string
+	reg, planner := testRegistry(t, recordStep{name: "a", runs: &runs})
+	n := &secretsNotifier{}
+	opts := workerOpts(testdb.URL(t), "w1", reg)
+	opts.Resolver = secretResolver{}
+	opts.Notifier = n
+	w := startWorker(t, opts)
+	svc := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
+	ctx := context.Background()
+
+	d := testDescriptor("cb-secrets")
+	d.Secrets = []descriptor.SecretRef{{Name: "hook", Ref: "env:HOOK"}}
+	d.Callbacks = []descriptor.Callback{{URL: "https://ci.example.com/hook", Auth: &descriptor.CallbackAuth{Type: descriptor.CallbackAuthBearer, Secret: "hook"}}}
+	sub, err := svc.Submit(ctx, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Wait(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if len(n.seen) < 3 {
+		t.Fatalf("eventi inviati: %d", len(n.seen))
+	}
+	// After the config step the steps see kube-token, the callbacks never.
+	for i, names := range n.seen {
+		if !slices.Equal(names, []string{"hook"}) {
+			t.Errorf("evento %d: segreti risolvibili dal callback %v, attesi solo [hook]", i, names)
+		}
 	}
 }

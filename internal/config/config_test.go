@@ -25,8 +25,8 @@ func TestDefaultSviluppo(t *testing.T) {
 	if cfg.Auth.Mode != AuthModeNone || cfg.DescriptorPolicy.Params["*"][0] != "*" || !*cfg.Artifacts.AllowUnlisted {
 		t.Errorf("default inattesi: %+v", cfg)
 	}
-	if n := len(cfg.SecurityWarnings()); n != 4 {
-		t.Errorf("attesi 4 avvisi di sicurezza, trovati %d", n)
+	if n := len(cfg.SecurityWarnings()); n != 6 {
+		t.Errorf("attesi 6 avvisi di sicurezza, trovati %d", n)
 	}
 }
 
@@ -46,6 +46,8 @@ artifacts:
   allow_unlisted: false
   sources:
     - prefix: https://nexus.example.com/repository/releases/
+callbacks:
+  allowed_hosts: ["*.example.com"]
 `)
 	if err != nil {
 		t.Fatal(err)

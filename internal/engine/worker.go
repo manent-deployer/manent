@@ -545,7 +545,7 @@ func (w *Worker) deployWorkflow(ctx dbos.Context, req Request) (Result, error) {
 			attribute.String("manent.artifact.version", d0.Artifact.Version), attribute.Bool("manent.dry_run", d0.DryRun),
 		))
 	defer span.End()
-	ev := &events{w: w, ctx: ctx, id: id, requestedBy: req.RequestedBy, tenant: tenantName(req.Tenant), span: span.SpanContext()}
+	ev := &events{w: w, ctx: ctx, id: id, requestedBy: req.RequestedBy, declared: req.Descriptor.Secrets, tenant: tenantName(req.Tenant), span: span.SpanContext()}
 	ev.send(&req.Descriptor, callback.Event{Type: descriptor.CallbackEventDeployment, Status: callback.StatusStarted})
 	chatRefs := w.notifyChat(ctx, id, req.Notify, w.chatMessage(id, req, chat.EventStarted), nil)
 	res, d, runErr := w.run(ctx, id, req, ev)
@@ -677,6 +677,9 @@ type events struct {
 	ctx         dbos.Context
 	id          string
 	requestedBy string
+	// declared are the secrets of the submitted descriptor, the only ones callbacks can send:
+	// the effective descriptor also holds those of the environment configuration.
+	declared []descriptor.SecretRef
 	// tenant is the owner of the application, in the events.
 	tenant string
 	seq    int
@@ -697,6 +700,9 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 	ev.ID = fmt.Sprintf("%s:%d", e.id, e.seq)
 	ev.DeploymentID, ev.Application, ev.Environment, ev.Tenant, ev.DryRun = e.id, d.Application, d.Environment, e.tenant, d.DryRun
 	ev.RequestedBy = e.requestedBy
+	// Secrets are resolved only among those the submitted descriptor declared.
+	auth := *d
+	auth.Secrets = e.declared
 	for i, cb := range d.Callbacks {
 		if !cb.Wants(ev.Type) {
 			continue
@@ -704,7 +710,7 @@ func (e *events) send(d *descriptor.Descriptor, ev callback.Event) {
 		_, err := dbos.RunAsStep(e.ctx, func(c context.Context) (string, error) {
 			out := ev
 			out.Timestamp = time.Now().UTC()
-			return "", e.w.notifier.Notify(c, d, cb, out)
+			return "", e.w.notifier.Notify(c, &auth, cb, out)
 		}, dbos.WithStepName(fmt.Sprintf("callback:%s:%d", ev.Type, i)), dbos.WithStepMaxRetries(e.w.callbackRetries))
 		if err != nil {
 			e.w.logger.Warn("callback not delivered", "deployment", e.id, "delivery", ev.ID, "callback", i, "error", err)

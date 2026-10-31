@@ -87,7 +87,7 @@ The final event is sent after the working directory is cleaned up. If a step fai
 
 ## Authentication
 
-`auth.secret` is the **name** of a secret in the `secrets` section, never the value: the descriptor is saved in the database, while the secret is read only at send time. The `secrets` step checks that the secret is declared.
+`auth.secret` is the **name** of a secret in the `secrets` section, never the value: the descriptor is saved in the database, while the secret is read only at send time. The secret must be declared in the `secrets` section of the descriptor itself: the callback URL is chosen by whoever requests the deploy, so the secrets of the environment configuration (SSH keys, cluster tokens) can never be sent to it. A descriptor that names any other secret is rejected.
 
 | `type` | Extra fields | Effect |
 |---|---|---|

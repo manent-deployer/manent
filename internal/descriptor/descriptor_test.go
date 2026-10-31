@@ -124,16 +124,18 @@ func TestCallbacks(t *testing.T) {
 		yaml    string
 		wantErr bool
 	}{
-		"senza auth":         {yaml: "callbacks: [{url: https://ci.example.com/hook}]\n"},
-		"bearer con eventi":  {yaml: "callbacks: [{url: https://ci.example.com/hook, events: [step], auth: {type: bearer, secret: tok}}]\n"},
-		"url relativo":       {yaml: "callbacks: [{url: /hook}]\n", wantErr: true},
-		"schema non http":    {yaml: "callbacks: [{url: \"file:///etc/passwd\"}]\n", wantErr: true},
-		"credenziali in url": {yaml: "callbacks: [{url: \"https://u:p@ci.example.com/\"}]\n", wantErr: true},
-		"evento sconosciuto": {yaml: "callbacks: [{url: https://ci.example.com, events: [tutto]}]\n", wantErr: true},
-		"auth senza secret":  {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: bearer}}]\n", wantErr: true},
-		"basic senza user":   {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: basic, secret: tok}}]\n", wantErr: true},
-		"header senza nome":  {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: header, secret: tok}}]\n", wantErr: true},
-		"tipo sconosciuto":   {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: oauth, secret: tok}}]\n", wantErr: true},
+		"senza auth":        {yaml: "callbacks: [{url: https://ci.example.com/hook}]\n"},
+		"bearer con eventi": {yaml: "secrets: [{name: tok, ref: \"env:TOK\"}]\ncallbacks: [{url: https://ci.example.com/hook, events: [step], auth: {type: bearer, secret: tok}}]\n"},
+		// The secrets of the environment configuration must never leave through a callback.
+		"segreto non dichiarato": {yaml: "callbacks: [{url: https://ci.example.com/hook, auth: {type: bearer, secret: kube-token}}]\n", wantErr: true},
+		"url relativo":           {yaml: "callbacks: [{url: /hook}]\n", wantErr: true},
+		"schema non http":        {yaml: "callbacks: [{url: \"file:///etc/passwd\"}]\n", wantErr: true},
+		"credenziali in url":     {yaml: "callbacks: [{url: \"https://u:p@ci.example.com/\"}]\n", wantErr: true},
+		"evento sconosciuto":     {yaml: "callbacks: [{url: https://ci.example.com, events: [tutto]}]\n", wantErr: true},
+		"auth senza secret":      {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: bearer}}]\n", wantErr: true},
+		"basic senza user":       {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: basic, secret: tok}}]\n", wantErr: true},
+		"header senza nome":      {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: header, secret: tok}}]\n", wantErr: true},
+		"tipo sconosciuto":       {yaml: "callbacks: [{url: https://ci.example.com, auth: {type: oauth, secret: tok}}]\n", wantErr: true},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

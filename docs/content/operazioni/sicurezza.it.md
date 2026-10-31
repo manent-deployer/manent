@@ -67,7 +67,8 @@ Gli URL dei callback li sceglie chi richiede il deploy. Per evitare che un descr
 - di default sono ammessi solo URL `https` (`callbacks.allow_http`);
 - `callbacks.allowed_hosts` limita gli host raggiungibili;
 - i redirect non vengono seguiti;
-- un URL non può contenere credenziali.
+- un URL non può contenere credenziali;
+- `auth.secret` può indicare solo un segreto dichiarato nel descrittore stesso, così un callback non invia mai i segreti della configurazione di ambiente (chiavi SSH, token dei cluster).
 
 Vedi [Callback](../guida/callback.md#limiti-sugli-url).
 

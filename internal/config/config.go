@@ -869,6 +869,12 @@ func (c *Config) SecurityWarnings() []string {
 	if slices.Contains(dp.SecretRefs, "*") {
 		w = append(w, "descriptor_policy.secret_refs: the descriptor can declare any secret (the worker's environment variables too)")
 	}
+	if dp.Targets != nil && *dp.Targets {
+		w = append(w, "descriptor_policy.targets: in environments without targets the descriptor chooses the hosts, and the worker connects to them with the environment credentials")
+	}
+	if len(c.Callbacks.AllowedHosts) == 0 {
+		w = append(w, "callbacks.allowed_hosts: callbacks can reach any host, internal services too")
+	}
 	if g := c.Governance; g.Engine == GovernanceOPA && g.OPA.Source == PolicySourceBundle && g.OPA.Bundle.InsecureSkipVerify {
 		w = append(w, "governance.opa.bundle.insecure_skip_verify: unsigned policy bundles accepted")
 	}

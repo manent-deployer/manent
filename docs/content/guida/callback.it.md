@@ -87,7 +87,7 @@ L'evento finale viene inviato dopo la pulizia della directory di lavoro. Se uno 
 
 ## Autenticazione
 
-`auth.secret` è il **nome** di un segreto della sezione `secrets`, mai il valore: il descrittore viene salvato nel database, mentre il segreto viene letto solo al momento dell'invio. Lo step `secrets` verifica che il segreto sia dichiarato.
+`auth.secret` è il **nome** di un segreto della sezione `secrets`, mai il valore: il descrittore viene salvato nel database, mentre il segreto viene letto solo al momento dell'invio. Il segreto deve essere dichiarato nella sezione `secrets` del descrittore stesso: l'URL del callback lo sceglie chi richiede il deploy, quindi i segreti della configurazione di ambiente (chiavi SSH, token dei cluster) non possono mai essergli inviati. Un descrittore che indica un altro segreto viene rifiutato.
 
 | `type` | Campi aggiuntivi | Effetto |
 |---|---|---|
