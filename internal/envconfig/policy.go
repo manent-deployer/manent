@@ -28,6 +28,9 @@ type DescriptorPolicy struct {
 	SecretRefs []string
 	// Targets allows targets given by the descriptor when the environment does not define them.
 	Targets bool
+	// PostTestHosts are the patterns of the hosts the descriptor's postTest.http checks can
+	// reach: the worker sends them from its network. Empty: none.
+	PostTestHosts []string
 	// StepParams lists, per custom step, the patterns of the parameters the descriptor can set;
 	// the "*" key applies to all steps. Empty: none.
 	StepParams map[string][]string
@@ -106,6 +109,15 @@ func (p *DescriptorPolicy) Check(d descriptor.Descriptor, c EnvConfig) error {
 			if !glob.Any(allowed, k) {
 				errs = append(errs, fmt.Errorf("stepParams.%s.%s cannot be set by the descriptor: it must be defined in the environment configuration (descriptor_policy.step_params)", step, k))
 			}
+		}
+	}
+	for i, h := range d.PostTest.HTTP {
+		u, err := url.Parse(h.URL)
+		switch {
+		case err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "":
+			errs = append(errs, fmt.Errorf("postTest.http[%d].url: an http(s) URL is required", i))
+		case !glob.Any(p.PostTestHosts, strings.ToLower(u.Hostname())):
+			errs = append(errs, fmt.Errorf("postTest.http[%d].url: host %s not allowed in descriptors (descriptor_policy.post_test_hosts)", i, u.Hostname()))
 		}
 	}
 	errs = append(errs, p.checkParallel(d, c)...)

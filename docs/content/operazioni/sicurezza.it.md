@@ -48,6 +48,7 @@ descriptor_policy:
   secret_refs:                  # pattern con {application} e {environment}
     - "vault:secret/data/{application}/*"
   targets: false
+  post_test_hosts: ["*.example.com"]
 ```
 
 | Chiave | Default | Descrizione |
@@ -55,8 +56,9 @@ descriptor_policy:
 | `params` | `{"*": ["*"]}` | Pattern dei parametri di `deploy.params` impostabili dal descrittore, per plugin. Si applicano le voci del plugin indicato (`deploy.plugin`, dall'ambiente o dal descrittore) e quelle di `"*"`. |
 | `secret_refs` | `["*"]` | Pattern dei riferimenti che il descrittore può dichiarare in `secrets`. `*` corrisponde anche a `/`, quindi un riferimento con un segmento `.` o `..` nel percorso, anche codificato, è sempre rifiutato. |
 | `targets` | `true` | Ammette `deploy.targets` nel descrittore quando l'ambiente non li definisce. |
+| `post_test_hosts` | `["*"]` | Pattern degli host che i controlli `postTest.http` del descrittore possono raggiungere. Il worker li invia dalla sua rete: con `*` un descrittore può sondare i servizi interni e leggerne i codici di stato. |
 
-Ciò che arriva dalla configurazione di ambiente non è soggetto alla policy: comandi, segreti e target restano sotto il controllo di chi la amministra. Se la sezione è indicata, i campi omessi mantengono il default; in produzione vanno impostati tutti e tre.
+Ciò che arriva dalla configurazione di ambiente non è soggetto alla policy: comandi, segreti e target restano sotto il controllo di chi la amministra. Se la sezione è indicata, i campi omessi mantengono il default; in produzione vanno impostati tutti.
 
 La policy viene verificata all'accodamento (`422`), di nuovo nello step `config` insieme alla fusione con la configurazione di ambiente, e da `manent validate`. Nello step `config` una violazione fa fallire il deploy subito, senza i retry dello step.
 

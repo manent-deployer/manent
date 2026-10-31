@@ -263,6 +263,20 @@ func TestDescriptorPolicy(t *testing.T) {
 		t.Errorf("valori della configurazione di ambiente rifiutati: %v", err)
 	}
 
+	// postTest checks reach only the allowed hosts: the worker sends them from its network.
+	web := &DescriptorPolicy{PostTestHosts: []string{"*.example.com"}}
+	dd = baseDescriptor()
+	dd.PostTest.HTTP = []descriptor.HTTPCheck{{URL: "https://shop.Example.com:8443/health"}}
+	if err := web.Check(dd, env); err != nil {
+		t.Errorf("allowed postTest host rejected: %v", err)
+	}
+	for _, u := range []string{"http://169.254.169.254/latest/meta-data/", "http://localhost:8500/v1/kv/", "https://shop.example.com.evil.example/", "https://x@internal/", "file:///etc/passwd", "://bad"} {
+		dd.PostTest.HTTP = []descriptor.HTTPCheck{{URL: u}}
+		if err := web.Check(dd, env); err == nil || !strings.Contains(err.Error(), "postTest.http[0].url") {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+
 	// No policy: no limits.
 	if err := (*DescriptorPolicy)(nil).Check(d, EnvConfig{}); err != nil {
 		t.Error(err)

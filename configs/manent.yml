@@ -276,6 +276,7 @@ governance:
 #     jboss: [suspend, suspend_timeout, reload, restart, wait_timeout]   # user, secrets and server groups only from the envconfig
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
+#   post_test_hosts: ["*.example.com"]
 
 # Secret providers besides env: and file:.
 secrets:

@@ -48,6 +48,7 @@ descriptor_policy:
   secret_refs:                  # patterns with {application} and {environment}
     - "vault:secret/data/{application}/*"
   targets: false
+  post_test_hosts: ["*.example.com"]
 ```
 
 | Key | Default | Description |
@@ -55,8 +56,9 @@ descriptor_policy:
 | `params` | `{"*": ["*"]}` | Patterns of the `deploy.params` parameters the descriptor may set, per plugin. The entries of the selected plugin (`deploy.plugin`, from the environment or the descriptor) and those of `"*"` apply. |
 | `secret_refs` | `["*"]` | Patterns of the references the descriptor may declare in `secrets`. `*` also matches `/`, so a reference whose path has a `.` or `..` segment, even percent-encoded, is always refused. |
 | `targets` | `true` | Allows `deploy.targets` in the descriptor when the environment does not define them. |
+| `post_test_hosts` | `["*"]` | Patterns of the hosts the descriptor's `postTest.http` checks may reach. The worker sends them from its network: with `*` a descriptor can probe internal services and read their status codes. |
 
-What comes from the environment configuration is not subject to the policy: commands, secrets and targets stay under the control of whoever administers it. If the section is present, omitted fields keep the default; in production set all three.
+What comes from the environment configuration is not subject to the policy: commands, secrets and targets stay under the control of whoever administers it. If the section is present, omitted fields keep the default; in production set all of them.
 
 The policy is checked at enqueue time (`422`), again in the `config` step together with the merge with the environment configuration, and by `manent validate`. In the `config` step a violation makes the deploy fail immediately, without the step's retries.
 

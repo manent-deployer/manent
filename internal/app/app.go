@@ -449,7 +449,7 @@ func NewHealthChecker(cfg *config.Config, sp secrets.Provider) (rollout.Checker,
 // NewDescriptorPolicy returns the descriptor policy of the configuration.
 func NewDescriptorPolicy(cfg *config.Config) *envconfig.DescriptorPolicy {
 	dp := cfg.DescriptorPolicy
-	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, StepParams: dp.StepParams, ConfigRef: cmp.Or(dp.ConfigRef, envconfig.ConfigRefNone),
+	return &envconfig.DescriptorPolicy{Params: dp.Params, SecretRefs: dp.SecretRefs, Targets: dp.Targets == nil || *dp.Targets, PostTestHosts: dp.PostTestHosts, StepParams: dp.StepParams, ConfigRef: cmp.Or(dp.ConfigRef, envconfig.ConfigRefNone),
 		MaxParallel: dp.MaxParallel}
 }
 

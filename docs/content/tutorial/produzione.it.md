@@ -157,6 +157,7 @@ descriptor_policy:
     kubernetes: [wait_timeout, "helm_value.*"]
   secret_refs: ["vault:secret/data/{application}/*"]
   targets: false
+  post_test_hosts: ["*.example.com"]
 secrets:
   vault:
     enabled: true

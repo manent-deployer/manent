@@ -159,6 +159,7 @@ See [Release governance](../guida/governance.md) and [Policies in Rego](../guida
 | `params` | `{"*": ["*"]}` | Parameters the descriptor may set, per plugin. |
 | `secret_refs` | `["*"]` | Secret references the descriptor may declare. |
 | `targets` | `true` | Targets given by the descriptor. |
+| `post_test_hosts` | `["*"]` | Hosts the descriptor's `postTest.http` checks may reach (patterns). |
 | `step_params` | `{}` | Parameters of [custom steps](../guida/step-personalizzati.md) the descriptor may set, per step (`"*"` = all). Default: none. |
 | `config_ref` | `none` | Revision of the environment configuration the descriptor may choose with `config.ref` ([git provider](../integrazioni/git.md)): `none`, `ref` (allowed refs only) or `sha` (also commit SHAs). |
 | `max_parallel` | `0` (no limit) | Maximum [parallelism](../guida/ondate.md#parallel-targets) a descriptor may ask for (`deploy.parallel`, `rollout.waves[].parallel`); a percentage is resolved against all the targets. The environment configuration is not subject to it. |

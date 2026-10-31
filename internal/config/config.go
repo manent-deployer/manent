@@ -690,6 +690,9 @@ type DescriptorPolicy struct {
 	SecretRefs []string `yaml:"secret_refs"`
 	// Targets allows targets given by the descriptor.
 	Targets *bool `yaml:"targets"`
+	// PostTestHosts are the patterns of the hosts the descriptor's postTest.http checks can
+	// reach from the worker's network (default "*").
+	PostTestHosts []string `yaml:"post_test_hosts"`
 	// StepParams lists per custom step the patterns of the parameters a descriptor can set.
 	// Default: none, parameters come from the environment configuration.
 	StepParams map[string][]string `yaml:"step_params"`
@@ -851,6 +854,9 @@ func (c *Config) applyDefaults() {
 		t := true
 		dp.Targets = &t
 	}
+	if dp.PostTestHosts == nil {
+		dp.PostTestHosts = []string{"*"}
+	}
 	if c.Artifacts.AllowUnlisted == nil {
 		t := true
 		c.Artifacts.AllowUnlisted = &t
@@ -876,6 +882,9 @@ func (c *Config) SecurityWarnings() []string {
 	}
 	if dp.Targets != nil && *dp.Targets {
 		w = append(w, "descriptor_policy.targets: in environments without targets the descriptor chooses the hosts, and the worker connects to them with the environment credentials")
+	}
+	if slices.Contains(dp.PostTestHosts, "*") {
+		w = append(w, "descriptor_policy.post_test_hosts: the descriptor's postTest checks can reach any host from the worker's network, internal services too")
 	}
 	if len(c.Callbacks.AllowedHosts) == 0 {
 		w = append(w, "callbacks.allowed_hosts: callbacks can reach any host, internal services too")

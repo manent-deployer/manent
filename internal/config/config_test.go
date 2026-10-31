@@ -25,8 +25,8 @@ func TestDefaultSviluppo(t *testing.T) {
 	if cfg.Auth.Mode != AuthModeNone || cfg.DescriptorPolicy.Params["*"][0] != "*" || !*cfg.Artifacts.AllowUnlisted {
 		t.Errorf("default inattesi: %+v", cfg)
 	}
-	if n := len(cfg.SecurityWarnings()); n != 6 {
-		t.Errorf("attesi 6 avvisi di sicurezza, trovati %d", n)
+	if n := len(cfg.SecurityWarnings()); n != 7 {
+		t.Errorf("attesi 7 avvisi di sicurezza, trovati %d", n)
 	}
 }
 
@@ -42,6 +42,7 @@ descriptor_policy:
     remote-copy: [dest_dir]
   secret_refs: ["vault:secret/data/{application}/*"]
   targets: false
+  post_test_hosts: ["*.example.com"]
 artifacts:
   allow_unlisted: false
   sources:

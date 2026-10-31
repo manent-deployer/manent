@@ -159,6 +159,7 @@ Vedi [Governance dei rilasci](../guida/governance.md) e [Policy in Rego](../guid
 | `params` | `{"*": ["*"]}` | Parametri impostabili dal descrittore, per plugin. |
 | `secret_refs` | `["*"]` | Riferimenti ai segreti dichiarabili dal descrittore. |
 | `targets` | `true` | Target indicati dal descrittore. |
+| `post_test_hosts` | `["*"]` | Host raggiungibili dai controlli `postTest.http` del descrittore (pattern). |
 | `step_params` | `{}` | Parametri degli [step personalizzati](../guida/step-personalizzati.md) impostabili dal descrittore, per step (`"*"` = tutti). Default: nessuno. |
 | `config_ref` | `none` | Revisione della configurazione di ambiente che il descrittore può scegliere con `config.ref` ([provider git](../integrazioni/git.md)): `none`, `ref` (solo ref ammessi) o `sha` (anche SHA di commit). |
 | `max_parallel` | `0` (nessun limite) | [Parallelismo](../guida/ondate.md#target-in-parallelo) massimo che un descrittore può chiedere (`deploy.parallel`, `rollout.waves[].parallel`); una percentuale si calcola su tutti i target. La configurazione di ambiente non vi è soggetta. |
