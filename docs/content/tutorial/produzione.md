@@ -106,6 +106,8 @@ The chart creates a Deployment for the API, a StatefulSet for the workers (the p
 
 manent serves plain HTTP: terminate TLS in front of it, on your Ingress, Gateway or load balancer, and publish it as `https://manent.example.com`. Route every path to the API Service (the web interface is served at `/`), and block `/metrics` from outside: probes and metrics require no authentication.
 
+So that logs and audit show the users' addresses instead of the proxy's, list the proxy in `http.trusted_proxies` (for example the pod network, `10.42.0.0/16`): `X-Forwarded-For` is believed only from there.
+
 Users and CI then point the client at it:
 
 ```yaml title="~/.config/manent/client.yml"

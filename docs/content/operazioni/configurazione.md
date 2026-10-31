@@ -33,6 +33,7 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 |---|---|---|
 | `listen` | `:8080` | API address (can be overridden with `serve --listen`). |
 | `ui.enabled` | `true` | Serves the [web interface](../guida/interfaccia-web.md) at `/`. |
+| `trusted_proxies` | `[]` | Addresses or CIDRs of the reverse proxies whose `X-Forwarded-For` gives the client address in logs and audit. Empty: the header is ignored, so nobody can forge the address. |
 
 ### `logging` and `siem`
 

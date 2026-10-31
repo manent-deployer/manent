@@ -1015,7 +1015,7 @@ func (a *App) OpsHandler() http.Handler {
 // APIOptions are the options of the API router: metrics, /metrics, /readyz and, if enabled,
 // the web interface with its configuration.
 func (a *App) APIOptions() api.Options {
-	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready, SlackInteractions: a.slack}
+	o := api.Options{Metrics: recorder(a.metrics), Ready: a.Ready, SlackInteractions: a.slack, TrustedProxies: a.Config.HTTP.TrustedProxies}
 	if a.metrics != nil {
 		o.MetricsHandler = a.metrics.Handler()
 	}

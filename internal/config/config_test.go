@@ -67,6 +67,7 @@ func TestConfigurazioneSicurezzaErrata(t *testing.T) {
 		"modo sconosciuto":          "auth: {mode: ldap}\n",
 		"token in chiaro":           "auth: {mode: enabled, tokens: [{name: ci, sha256: s3cr3t}]}\n",
 		"oidc incompleto":           "auth: {mode: enabled, oidc: {issuer: https://idp}}\n",
+		"proxy non valido":          "http: {trusted_proxies: [qualcuno]}\n",
 		"oidc senza username_claim": "auth: {mode: enabled, oidc: {issuer: https://idp, audience: manent}}\n",
 		"vault auth":                "secrets: {vault: {enabled: true, auth: ldap}}\n",
 	} {

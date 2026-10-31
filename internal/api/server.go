@@ -56,6 +56,9 @@ type Options struct {
 	// SlackInteractions, if set, receives Slack message button clicks on
 	// /integrations/slack/interactions: authentication is Slack's signature, not a bearer.
 	SlackInteractions http.Handler
+	// TrustedProxies are the proxies whose X-Forwarded-For is believed (addresses or CIDRs);
+	// none by default, so the client address cannot be forged with a header.
+	TrustedProxies []string
 }
 
 // NewRouter creates the Gin router with all routes. With a nil authn authentication is
@@ -75,6 +78,12 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 		s.eventInterval = time.Second
 	}
 	r := gin.New()
+	// Gin trusts every proxy by default: anyone could set the client address with
+	// X-Forwarded-For. The configuration is validated, so the error is not expected.
+	if err := r.SetTrustedProxies(o.TrustedProxies); err != nil {
+		s.logger.Error("invalid trusted proxies: X-Forwarded-For ignored", "error", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(gin.Recovery(), s.trace(), s.accessLog())
 
 	AddProbes(r, o.Ready)

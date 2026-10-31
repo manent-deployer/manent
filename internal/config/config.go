@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/netip"
 	"os"
 	"regexp"
 	"slices"
@@ -227,6 +228,10 @@ type DBOS struct {
 type HTTP struct {
 	Listen string `yaml:"listen"`
 	UI     UI     `yaml:"ui"`
+	// TrustedProxies are the addresses or CIDRs of the reverse proxies whose
+	// X-Forwarded-For gives the client address in logs and audit. Empty (default): the
+	// header is ignored and the address is the one of the connection.
+	TrustedProxies []string `yaml:"trusted_proxies"`
 }
 
 // UI configures the web interface served by the API.
@@ -1087,6 +1092,13 @@ var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 // validateSecurity checks authentication, secrets and artifact sources.
 func (c *Config) validateSecurity() []error {
 	var errs []error
+	for i, p := range c.HTTP.TrustedProxies {
+		if _, err := netip.ParsePrefix(p); err != nil {
+			if _, err := netip.ParseAddr(p); err != nil {
+				errs = append(errs, fmt.Errorf("http.trusted_proxies[%d]: %q is not an address or a CIDR", i, p))
+			}
+		}
+	}
 	switch c.Auth.Mode {
 	case AuthModeNone:
 	case AuthModeEnabled:

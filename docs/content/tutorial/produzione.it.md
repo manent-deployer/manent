@@ -106,6 +106,8 @@ Il chart crea un Deployment per l'API, uno StatefulSet per i worker (il nome del
 
 manent serve HTTP in chiaro: termina il TLS davanti, sull'Ingress, sul Gateway o sul load balancer, e pubblicalo come `https://manent.example.com`. Instrada tutti i percorsi al Service dell'API (l'interfaccia web è servita su `/`) e blocca `/metrics` dall'esterno: sonde e metriche non richiedono autenticazione.
 
+Perché log e audit mostrino l'indirizzo degli utenti invece di quello del proxy, elenca il proxy in `http.trusted_proxies` (per esempio la rete dei pod, `10.42.0.0/16`): `X-Forwarded-For` viene creduto solo da lì.
+
 Utenti e CI poi puntano il client lì:
 
 ```yaml title="~/.config/manent/client.yml"
