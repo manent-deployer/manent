@@ -90,7 +90,9 @@ func ParseSince(v string, now time.Time) (time.Time, error) {
 	}
 	if days, ok := strings.CutSuffix(v, "d"); ok {
 		if n, err := strconv.Atoi(days); err == nil && n > 0 {
-			return now.AddDate(0, 0, -n), nil
+			// Exactly 24h per day: calendar days would depend on the server's time zone and
+			// stretch by an hour across a daylight saving change.
+			return now.Add(-time.Duration(n) * 24 * time.Hour), nil
 		}
 	}
 	if d, err := time.ParseDuration(v); err == nil && d > 0 {
