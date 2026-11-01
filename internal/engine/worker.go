@@ -939,7 +939,7 @@ func (w *Worker) resolveConfig(ctx context.Context, req Request) (resolvedConfig
 		if err != nil {
 			return resolvedConfig{}, pipeline.Permanent(fmt.Errorf("rollout: %w", err))
 		}
-		meta["rollout"] = strconv.Itoa(len(p.Stages)) + " stadi, " + strconv.Itoa(p.TotalPasses()) + " passi"
+		meta["rollout"] = strconv.Itoa(len(p.Stages)) + " stages, " + strconv.Itoa(p.TotalPasses()) + " passes"
 		if d.Rollout.IsTraffic() {
 			meta["rollout"] = "traffic by steps: " + fmt.Sprint(d.Rollout.Traffic.Steps)
 		}

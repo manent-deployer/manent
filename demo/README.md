@@ -24,7 +24,7 @@ docker exec -it manent-demo manent rollback -a shop -e prod
 | Path | What it is |
 |---|---|
 | `manent.yml` | Server configuration: SQLite, one user (John Doe: a static token for the CLI, OIDC for the web interface), environment configuration from files, remote-copy plugin. |
-| `envconfig/<app>/<env>.yml` | Targets, plugin parameters and, for `shop` in prod, the wave rollout with its health gate. |
+| `envconfig/untenanted/<app>/<app>/<env>.yml` | Targets, plugin parameters and, for `shop` in prod, the wave rollout with its health gate. |
 | `deploys/` | The descriptors you submit: just application, environment and artifact. |
 | `entrypoint.sh` | Starts the identity provider (`test/usecases/oidc` with `-user`) and creates the hosts (`staging-1`, `web-eu-1a`, `web-eu-1b`, `web-us-1a`, `web-us-1b`): one loopback address, one SSH user and one HTTP server on port 8081 each. |
 | `artifacts.sh` | Builds the artifacts: a page and `/healthz` per version; `shop` 1.4.0 has no `/healthz`. |

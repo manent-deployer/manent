@@ -37,7 +37,7 @@ envconfig:
     - name: default
       type: file
       file:
-        path: /demo/envconfig/{application}/{environment}.yml
+        path: /demo/envconfig/{tenant}/{application}/{artifact}/{environment}.yml
 
 artifacts:
   allow_unlisted: false

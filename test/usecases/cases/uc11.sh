@@ -12,7 +12,7 @@ weights() { route | jq -r '[.spec.rules[] | select([.matches[]?.headers] | map(s
 # testers: backend of the rule matching the testers' header.
 testers() { route | jq -r '[.spec.rules[] | select([.matches[]?.headers] | map(select(. != null)) | length > 0) | .backendRefs[].name] | join(" ")'; }
 replicas() { kube -n uc11-prod get deploy "$1" -o jsonpath='{.spec.replicas}/{.status.readyReplicas}' 2>/dev/null; }
-pointer() { kube -n uc11-prod get cm manent-$APP-prod -o jsonpath='{.data.version} {.data.slot}' 2>/dev/null; }
+pointer() { history_pointer uc11-prod $APP prod '{.data.version} {.data.slot}' 2>/dev/null; }
 
 info "-- cluster, Gateway API e HTTPRoute dell'infrastruttura"
 k3s_up && pass "cluster pronto" || fail "cluster k3s non pronto"

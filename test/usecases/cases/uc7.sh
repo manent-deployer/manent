@@ -34,7 +34,7 @@ id=$(submit "$(desc uc7-a uc7-100-test test 1.0.0)")
 expect_eq "deploy dei manifest in test" "$(wait_state "$id" terminal 180)" SUCCESS
 expect_eq "il Deployment usa l'immagine per digest" "$(k8s_image uc7-test $APP)" "$a100"
 expect_eq "una replica pronta in test" "$(k8s_ready uc7-test $APP)" 1
-expect_eq "lo storico indica la release in esercizio" "$(kube -n uc7-test get cm manent-$APP-test -o jsonpath='{.data.version}')" 1.0.0
+expect_eq "lo storico indica la release in esercizio" "$(history_pointer uc7-test $APP test '{.data.version}')" 1.0.0
 expect_eq "gli oggetti hanno le etichette di manent" "$(kube -n uc7-test get deploy $APP -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}')" manent
 
 info "-- promozione in prod: stessi manifest, configurazione di ambiente diversa"
@@ -57,7 +57,7 @@ expect_eq "rollback completato" "$(printf '%s' "$st" | jq -r .rollback)" complet
 expect_match "l'errore indica il rollout bloccato" "$(printf '%s' "$st" | jq -r .error)" "rollout"
 expect_eq "il Deployment torna all'immagine 1.1.0" "$(k8s_image uc7-prod $APP)" "$a110"
 expect_eq "due repliche pronte dopo il rollback" "$(k8s_ready uc7-prod $APP)" 2
-expect_eq "lo storico indica di nuovo la 1.1.0" "$(kube -n uc7-prod get cm manent-$APP-prod -o jsonpath='{.data.version}')" 1.1.0
+expect_eq "lo storico indica di nuovo la 1.1.0" "$(history_pointer uc7-prod $APP prod '{.data.version}')" 1.1.0
 
 info "-- 1.2.0 senza la ConfigMap: prune"
 id=$(submit "$(desc uc7-d uc7-120 prod 1.2.0)")

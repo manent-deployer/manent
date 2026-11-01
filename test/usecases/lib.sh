@@ -188,6 +188,13 @@ vm_get() { dcp exec -T "$1" wget -q -O - "http://127.0.0.1:$2$3" 2>/dev/null | t
 # kube <arguments>: kubectl in the lab's k3s cluster.
 kube() { dcp exec -T k3s kubectl "$@"; }
 
+# history_pointer <namespace> <app> <env> <jsonpath>: field of the plugin's history pointer
+# (ConfigMap found by its labels: its name is a hash of tenant/application/artifact/environment).
+history_pointer() {
+  kube -n "$1" get cm -l "manent.io/role=current,manent.io/application=$2,manent.io/environment=$3" \
+    -o jsonpath="{range .items[*]}$4{end}"
+}
+
 # k8s_manifest <app> <version> <digest> [extra]: writes the <app>-<version>.yaml manifests to
 # .work/artifacts (Namespace, Deployment with readinessProbe, Service; with "extra" also one
 # more ConfigMap) and prints their sha256. The image is pinned to the digest; namespace and
