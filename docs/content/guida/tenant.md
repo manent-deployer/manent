@@ -198,3 +198,4 @@ plugins:
 - With region routing the passes of a tenant's deploy run on `<queue>.<region>`.
 - A queue added to the registry is registered by the workers at their next start: until then its deploys stay queued.
 - Approvals, dependency waits and releases stay on the shared approvals queue: they run no plugin code.
+- For a queue per application, artifact or environment, within a tenant or across tenants, see [Routed queues](../operazioni/scalabilita.md#routed-queues): such a queue wins over the tenant's.

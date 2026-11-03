@@ -556,6 +556,9 @@ func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (a
 		return nil, nil, fmt.Errorf("reading the tenant registry: %w", err)
 	}
 	for _, t := range ts {
+		if t.Queue != "" && cfg.QueueRoute(t.Queue) != nil {
+			return nil, nil, fmt.Errorf("tenant %s: queue %s is also in queues", t.Name, t.Queue)
+		}
 		if t.Queue != "" {
 			all = append(all, engine.QueueOptions{Name: t.Queue, GlobalConcurrency: t.Concurrency})
 		}
@@ -603,6 +606,27 @@ func servedPluginQueues(cfg *config.Config) []engine.QueueOptions {
 		q := cfg.PluginQueue(name)
 		if q != "" && !slices.ContainsFunc(qs, func(o engine.QueueOptions) bool { return o.Name == q }) {
 			qs = append(qs, engine.QueueOptions{Name: q})
+		}
+	}
+	return qs
+}
+
+// queueRoutes converts the queues section for the engine.
+func queueRoutes(cfg *config.Config) []engine.QueueRoute {
+	var out []engine.QueueRoute
+	for _, r := range cfg.Queues {
+		out = append(out, engine.QueueRoute{Queue: r.Name, Applications: r.Match.Applications,
+			Artifacts: r.Match.Artifacts, Environments: r.Match.Environments, Concurrency: r.Concurrency})
+	}
+	return out
+}
+
+// servedRouteQueues are the queues of the queues section this worker serves (dbos.queues).
+func servedRouteQueues(cfg *config.Config) []engine.QueueOptions {
+	var qs []engine.QueueOptions
+	for _, name := range cfg.DBOS.Queues {
+		if r := cfg.QueueRoute(name); r != nil {
+			qs = append(qs, engine.QueueOptions{Name: name, GlobalConcurrency: r.Concurrency})
 		}
 	}
 	return qs
@@ -669,6 +693,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		},
 	}
 	opts.PluginQueues, opts.TypeQueues = pluginRouting(cfg)
+	opts.QueueRoutes = queueRoutes(cfg)
 	if r, ok := executors.(engine.TargetStateReader); ok {
 		opts.TargetStates = r
 	}
@@ -870,7 +895,9 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		RejectUntenanted:     c.rejectUntenanted,
 		Listen:               listen,
 		PluginQueues:         servedPluginQueues(cfg),
-		ListenExplicitly:     hasPluginQueues(cfg),
+		ListenExplicitly:     hasPluginQueues(cfg) || len(cfg.Queues) > 0,
+		RouteQueues:          servedRouteQueues(cfg),
+		Exclusive:            cfg.DBOS.Exclusive,
 		ChainPollInterval:    cfg.Chains.PollInterval,
 		Build:                version.Version,
 		Hostname:             host,

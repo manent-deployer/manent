@@ -25,6 +25,17 @@ dbos:
   # Plugins with their own queue (plugins.<name>.queue) served by this worker: only on the pool
   # with their runtime, e.g. the server-ansible image (docs: Scalability, Plugin queues).
   # plugins: [ansible]
+  # Queues of the queues section served by this worker; with exclusive it dequeues only those
+  # (and its plugins'), not the default and tenant queues (docs: Scalability, Routed queues).
+  # queues: [gpu]
+  # exclusive: true
+
+# Dedicated queues for some applications, artifacts and environments: the first matching entry
+# wins over the tenant's queue, a plugin's queue wins over both.
+# queues:
+#   - name: gpu
+#     match: {applications: ["ml/*"], artifacts: [trainer], environments: [prod]}
+#     concurrency: 2            # global limit of the queue (default: dbos.global_concurrency)
 
 # Health gate of wave rollouts.
 rollout:

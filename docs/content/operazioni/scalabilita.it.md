@@ -64,6 +64,32 @@ dbos:
 - La coda ha i limiti della coda di default (`concurrency`, `environment_concurrency`, `global_concurrency`) e compare con tipo `plugin` in `manent queues` e nella pagina Piattaforma.
 - `dbos.plugins` non è ancora supportato insieme a `dbos.region_routing`.
 
+## Code instradate { #routed-queues }
+
+Alcuni deploy hanno bisogno di un worker che gli altri non richiedono: una GPU, un segmento di rete raggiunto solo da alcune macchine, le credenziali di un team. Instradateli su una coda dedicata per tenant/applicazione, artefatto e ambiente, e fatela servire solo a un gruppo di worker:
+
+```yaml title="manent.yml (tutti i processi)"
+queues:
+  - name: gpu
+    match:
+      applications: ["ml/*"]          # qualificate con il tenant, come nei permessi
+      artifacts: [trainer, scorer]
+      environments: [prod]
+    concurrency: 2                    # limite globale della coda (default: dbos.global_concurrency)
+```
+
+```yaml title="manent.yml (solo i worker del gruppo)"
+dbos:
+  queues: [gpu]
+  exclusive: true                     # facoltativo: solo gpu, non la coda di default né quelle dei tenant
+```
+
+- Le voci sono configurazione degli operatori: un descrittore non può scegliere la propria coda. All'accodamento vince la prima voce il cui `match` corrisponde; `match` richiede almeno un pattern, e le liste vuote corrispondono a tutto. La coda instradata prevale su quella di un [tenant](../guida/tenant.md), la coda di un [plugin](#plugin-queues) prevale su entrambe, perché solo i suoi worker hanno il runtime del plugin.
+- Solo i worker che elencano la coda in `dbos.queues` la registrano e la prelevano, oltre alle proprie; con `dbos.exclusive` prelevano solo le code di `dbos.queues` e `dbos.plugins` (e le approvazioni, che non occupano slot di deploy). Come per le code dei plugin, appena `queues` è impostato ogni worker preleva solo dalle code che conosce.
+- La coda ha `concurrency` ed `environment_concurrency` della coda di default; la sua `concurrency` è il limite globale, e limita anche i deploy della coda su ogni worker. Compare con tipo `routed` in `manent queues` e nella pagina Piattaforma, anche vuota: una coda instradata senza worker lascia i suoi deploy in coda.
+- L'instradamento si decide all'accodamento e resta nella richiesta: tick delle schedule, approvazioni, attese delle dipendenze e recovery mantengono la coda anche se `queues` cambia in seguito. Un nome di coda presente anche nel registro dei tenant ferma i worker all'avvio.
+- `queues` non è ancora supportato insieme a `dbos.region_routing`.
+
 ## Concorrenza
 
 La coda è partizionata per `<application>/<environment>`.

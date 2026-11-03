@@ -138,6 +138,12 @@ type WorkerOptions struct {
 	// plugins have their own queues: DBOS keeps the registered queues in the database, and a
 	// worker without a listen filter would dequeue every queue there, a plugin's included.
 	ListenExplicitly bool
+	// RouteQueues are the queues of the queues section this worker serves (dbos.queues),
+	// registered and dequeued besides the others; a GlobalConcurrency of 0 is that of Queue.
+	RouteQueues []QueueOptions
+	// Exclusive makes the worker dequeue only PluginQueues and RouteQueues, not Queue and
+	// TenantQueues (dbos.exclusive).
+	Exclusive bool
 }
 
 // ConfigResolver fetches the environment configuration and merges it with the descriptor.
@@ -318,13 +324,21 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 	if opts.ListenExplicitly {
 		w.listenOnly = true
 	}
-	for _, pq := range opts.PluginQueues {
+	if opts.Exclusive {
+		w.deployQueues, w.listenOnly = nil, true
+	}
+	for _, pq := range slices.Concat(opts.PluginQueues, opts.RouteQueues) {
 		if slices.Contains(w.deployQueues, pq.Name) {
 			continue
 		}
-		popts := []dbos.QueueOption{dbos.WithWorkerConcurrency(q.WorkerConcurrency), dbos.WithPartitionConcurrency(q.PartitionConcurrency)}
-		if q.GlobalConcurrency > 0 {
-			popts = append(popts, dbos.WithGlobalConcurrency(q.GlobalConcurrency))
+		// DBOS wants the global limit >= the worker's: a queue's lower quota caps both.
+		wc, g := q.WorkerConcurrency, cmp.Or(pq.GlobalConcurrency, q.GlobalConcurrency)
+		if g > 0 {
+			wc = min(wc, g)
+		}
+		popts := []dbos.QueueOption{dbos.WithWorkerConcurrency(wc), dbos.WithPartitionConcurrency(q.PartitionConcurrency)}
+		if g > 0 {
+			popts = append(popts, dbos.WithGlobalConcurrency(g))
 		}
 		if _, err = dbos.RegisterQueue(ctx, pq.Name, popts...); err != nil {
 			return nil, fmt.Errorf("registering queue %q: %w", pq.Name, err)
@@ -882,7 +896,8 @@ func (w *Worker) execStep(ctx dbos.Context, id string, ev *events, d *descriptor
 // span child of the deploy's. Steps already ended, read again after a recovery, do not run
 // again and so are not repeated.
 func instrument[R any](w *Worker, c context.Context, ev *events, name string, fn func(context.Context) (R, error)) (R, error) {
-	c = deploylog.WithStep(c, name)
+	c, end := deploylog.WithStep(c, name)
+	defer end()
 	c, span := telemetry.Tracer().Start(trace.ContextWithSpanContext(c, ev.span), "step "+name,
 		trace.WithAttributes(attribute.String("manent.step", name), attribute.String("manent.deployment.id", ev.id)))
 	defer span.End()

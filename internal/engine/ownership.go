@@ -111,5 +111,36 @@ func (e *Engine) pluginQueue(d *descriptor.Descriptor) string {
 	return e.typeQueues[d.Artifact.Type]
 }
 
+// QueueRoute routes the deploys of the matching releases to Queue; an empty list matches
+// everything.
+type QueueRoute struct {
+	Queue string
+	// Applications are application patterns qualified with the tenant ("payments/*").
+	Applications []string
+	// Artifacts and Environments are patterns on artifact.name and on the environment.
+	Artifacts    []string
+	Environments []string
+	// Concurrency is the global limit of the queue (0: that of the deploy queue), reported by
+	// Queues.
+	Concurrency int
+}
+
+func (r QueueRoute) matches(d *descriptor.Descriptor) bool {
+	return (len(r.Applications) == 0 || tenant.AnyApp(r.Applications, tenantOf(d), d.Application)) &&
+		(len(r.Artifacts) == 0 || glob.Any(r.Artifacts, d.Artifact.Name)) &&
+		(len(r.Environments) == 0 || glob.Any(r.Environments, d.Environment))
+}
+
+// routeQueue returns the queue of the first route matching the release, or "". d.Tenant is
+// the resolved tenant.
+func (e *Engine) routeQueue(d *descriptor.Descriptor) string {
+	for _, r := range e.queueRoutes {
+		if r.matches(d) {
+			return r.Queue
+		}
+	}
+	return ""
+}
+
 // deployQueue is the queue a deploy request runs on: the owner's, or def.
 func deployQueue(req Request, def string) string { return cmp.Or(req.Queue, def) }

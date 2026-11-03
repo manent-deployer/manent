@@ -198,3 +198,4 @@ plugins:
 - Con il routing per region i passi di un deploy del tenant girano su `<coda>.<region>`.
 - Una coda aggiunta al registro viene registrata dai worker al loro avvio successivo: fino ad allora i suoi deploy restano in coda.
 - Approvazioni, attese delle dipendenze e release restano sulla coda condivisa delle approvazioni: non eseguono codice dei plugin.
+- Per una coda per applicazione, artefatto o ambiente, dentro un tenant o tra tenant diversi, vedi [Code instradate](../operazioni/scalabilita.md#routed-queues): una coda del genere prevale su quella del tenant.

@@ -110,10 +110,11 @@ La timeline riporta ogni step registrato con orari, durata, output ed errore:
 manent steps 7c0e…
 ```
 
-Via API: `GET /api/v1/deployments/{id}/logs?offset=N` (con `next` e `done` per proseguire) e `GET /api/v1/deployments/{id}/steps`. Richiedono `deployment.read`.
+Via API: `GET /api/v1/deployments/{id}/logs?offset=N` (per proseguire si ripassa `next`, che conta i lotti salvati e non le righe; `done` alla fine) e `GET /api/v1/deployments/{id}/steps`. Richiedono `deployment.read`.
 
 !!! note
     - Sono salvate al più 500 righe per step, di livello `INFO` o superiore, anche se `logging.level` è più alto. Il log applicativo e il SIEM restano completi.
+    - Le righe sono salvate a lotti: quando ce ne sono 50 in attesa, un secondo dopo la prima in attesa e alla fine dello step. Una riga compare nel log del deploy con al più un secondo di ritardo, e un worker lontano dal database paga un round trip per lotto invece che per riga.
     - Come gli output, i log non devono contenere segreti.
     - I log dei [plugin esterni](../plugins/esterni.md) arrivano al log applicativo e al SIEM, ma non al log del deploy.
     - Log e timeline vengono eliminati con il deploy dalla [retention](affidabilita.md#retention-dello-storico).

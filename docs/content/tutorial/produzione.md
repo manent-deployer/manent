@@ -33,7 +33,7 @@ On a laptop `serve` runs both in one process, and that stays the right choice fo
 - **Independent scaling.** API replicas follow requests and the web interface; workers follow how many deploys run together (`dbos.concurrency`, `dbos.environment_concurrency`).
 - **Restarts without impact.** An API pod can be replaced at any time. A worker stops taking deploys, waits for the running ones up to `dbos.drain_timeout` and resumes its own interrupted deploys when it comes back with the same `executor_id`: that is why workers are a StatefulSet.
 - **Smaller exposed surface.** The API is what users and CI reach; only the workers reach the targets and read SSH keys, cluster tokens and cloud credentials. The API needs no network path to the targets, no `helm` and no external plugins.
-- **Specialized workers.** Workers per region (`dbos.region`), per plugin (`dbos.plugins`, for example an image with Ansible) or per tenant queue are only possible as separate processes.
+- **Specialized workers.** Workers per region (`dbos.region`), per plugin (`dbos.plugins`, for example an image with Ansible), per tenant queue or per routed queue (`dbos.queues`) are only possible as separate processes.
 
 What each process must reach:
 

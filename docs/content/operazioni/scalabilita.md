@@ -64,6 +64,32 @@ dbos:
 - The queue has the limits of the default queue (`concurrency`, `environment_concurrency`, `global_concurrency`) and shows as kind `plugin` in `manent queues` and in the Platform page.
 - `dbos.plugins` is not supported together with `dbos.region_routing` yet.
 
+## Routed queues { #routed-queues }
+
+Some deploys need a worker the others do not: a GPU, a network segment only some machines reach, a team's credentials. Route them to a dedicated queue by tenant/application, artifact and environment, and let only a pool of workers serve it:
+
+```yaml title="manent.yml (every process)"
+queues:
+  - name: gpu
+    match:
+      applications: ["ml/*"]          # qualified with the tenant, as in permissions
+      artifacts: [trainer, scorer]
+      environments: [prod]
+    concurrency: 2                    # global limit of the queue (default: dbos.global_concurrency)
+```
+
+```yaml title="manent.yml (only the workers of the pool)"
+dbos:
+  queues: [gpu]
+  exclusive: true                     # optional: only gpu, not the default and tenant queues
+```
+
+- The entries are operator configuration: a descriptor cannot choose its queue. At submission the first entry whose `match` applies wins; `match` needs at least one pattern, and the empty lists match everything. The routed queue wins over a [tenant's](../guida/tenant.md) queue, a [plugin's](#plugin-queues) queue wins over both, because only its workers have the plugin's runtime.
+- Only the workers that list the queue in `dbos.queues` register and dequeue it, besides their own; with `dbos.exclusive` they dequeue only the queues of `dbos.queues` and `dbos.plugins` (and the approvals, which take no deploy slot). As with plugin queues, as soon as `queues` is set every worker dequeues only the queues it knows.
+- The queue has the `concurrency` and `environment_concurrency` of the default queue; its own `concurrency` is the global limit, and also caps the deploys of the queue on each worker. It shows as kind `routed` in `manent queues` and in the Platform page, also while empty: a routed queue without workers keeps its deploys queued.
+- The route is decided at submission and recorded in the request: scheduled ticks, approvals, dependency waits and recoveries keep the queue even if `queues` changes later. A queue name also in the tenant registry stops the workers at startup.
+- `queues` is not supported together with `dbos.region_routing` yet.
+
 ## Concurrency
 
 The queue is partitioned by `<application>/<environment>`.

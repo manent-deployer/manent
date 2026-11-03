@@ -110,10 +110,11 @@ The timeline reports every recorded step with times, duration, output and error:
 manent steps 7c0e…
 ```
 
-Through the API: `GET /api/v1/deployments/{id}/logs?offset=N` (with `next` and `done` to continue) and `GET /api/v1/deployments/{id}/steps`. They require `deployment.read`.
+Through the API: `GET /api/v1/deployments/{id}/logs?offset=N` (pass back `next` to continue: it counts the saved batches, not the lines; `done` at the end) and `GET /api/v1/deployments/{id}/steps`. They require `deployment.read`.
 
 !!! note
     - At most 500 lines per step are saved, at `INFO` level or above, even if `logging.level` is higher. The application log and the SIEM remain complete.
+    - Lines are saved in batches: when 50 are pending, one second after the first pending one and when the step ends. A line shows up in the deploy log at most a second late, and a worker far from the database pays one round trip per batch instead of one per line.
     - Like outputs, logs must not contain secrets.
     - Logs of [external plugins](../plugins/esterni.md) reach the application log and the SIEM, but not the deploy log.
     - Logs and timeline are deleted together with the deploy by [retention](affidabilita.md#retention-dello-storico).

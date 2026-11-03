@@ -3,6 +3,9 @@
 //
 // The worker marks the context of every step with WithStep; Handler, part of the slog chain,
 // writes to the stream the records emitted with that context (InfoContext, WarnContext, ...).
+// Lines are written in batches (every maxBatch lines, flushInterval after the first pending
+// one and when the step ends): every write is a round trip to the system database, which a
+// worker in another region pays at every log line otherwise.
 // Logs still go to the application log and the SIEM too. Like those, they must not contain
 // secrets: the stream is persisted in the system database.
 package deploylog
@@ -11,7 +14,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dbos-inc/dbos-transact-golang/dbos"
 
@@ -28,29 +33,90 @@ const (
 	maxAttrValue    = 500
 )
 
+// Batching of the stream writes: a stream entry holds up to maxBatch lines, and a pending
+// line waits at most flushInterval before being written.
+const (
+	maxBatch      = 50
+	flushInterval = time.Second
+)
+
 // Line is a line of a deploy log (contract in internal/service).
 type Line = service.LogLine
 
 // stepKey is the context key of the running step.
 type stepKey struct{}
 
-// stepInfo identifies the running step. ctx is the DBOS context of the step: it stays
-// reachable even if the step code creates derived contexts (timeouts, tracing).
+// stepInfo identifies the running step and holds its pending lines. ctx is the DBOS context
+// of the step: it stays reachable even if the step code creates derived contexts (timeouts,
+// tracing).
 type stepInfo struct {
 	ctx   dbos.Context
 	step  string
 	lines atomic.Int32
+
+	// mu serializes the writes too, so batches reach the stream in order.
+	mu      sync.Mutex
+	pending []Line
+	timer   *time.Timer
+	ended   bool
 }
 
 // WithStep marks the context of a DBOS step: logs emitted with the returned context (or a
 // derived one) go to the deploy stream. ctx must be the context received by the step
-// function; otherwise it is returned unchanged.
-func WithStep(ctx context.Context, step string) context.Context {
+// function; otherwise it is returned unchanged. end writes the pending lines and must be
+// called before the step function returns: the stream can be written only within the step.
+func WithStep(ctx context.Context, step string) (_ context.Context, end func()) {
 	dc, ok := ctx.(dbos.Context)
 	if !ok {
-		return ctx
+		return ctx, func() {}
 	}
-	return context.WithValue(ctx, stepKey{}, &stepInfo{ctx: dc, step: step})
+	si := &stepInfo{ctx: dc, step: step}
+	return context.WithValue(ctx, stepKey{}, si), si.end
+}
+
+// add queues a line, writing the batch when it is full.
+func (si *stepInfo) add(l Line) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	if si.ended {
+		// Logged by a goroutine that outlived the step: only in the application log.
+		return
+	}
+	si.pending = append(si.pending, l)
+	switch {
+	case len(si.pending) >= maxBatch:
+		si.flushLocked()
+	case si.timer == nil:
+		si.timer = time.AfterFunc(flushInterval, si.flush)
+	}
+}
+
+func (si *stepInfo) flush() {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.flushLocked()
+}
+
+// flushLocked writes the pending lines as one stream entry. A write error does not block
+// logging: the lines are still in the application log.
+func (si *stepInfo) flushLocked() {
+	if si.timer != nil {
+		si.timer.Stop()
+		si.timer = nil
+	}
+	if len(si.pending) == 0 {
+		return
+	}
+	b := si.pending
+	si.pending = nil
+	_ = dbos.WriteStream(si.ctx, StreamKey, b)
+}
+
+func (si *stepInfo) end() {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.flushLocked()
+	si.ended = true
 }
 
 // Handler wraps a slog handler and copies to the deploy stream the records emitted in the
@@ -73,7 +139,7 @@ func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 	return h.next.Enabled(ctx, l)
 }
 
-// Handle implements slog.Handler. A stream write error does not block logging.
+// Handle implements slog.Handler.
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	if si, ok := ctx.Value(stepKey{}).(*stepInfo); ok && r.Level >= slog.LevelInfo {
 		h.write(si, r)
@@ -111,7 +177,7 @@ func (h *Handler) write(si *stepInfo, r slog.Record) {
 	if len(attrs) > 0 {
 		line.Attrs = attrs
 	}
-	_ = dbos.WriteStream(si.ctx, StreamKey, line)
+	si.add(line)
 }
 
 // WithAttrs implements slog.Handler.
@@ -143,17 +209,19 @@ func truncate(s string, n int) string {
 // Page is a portion of a deploy log.
 type Page = service.LogPage
 
-// Read reads the log lines from the given offset, without waiting for new ones. Done is set
-// only if the stream was closed: the workflow state must be checked separately.
+// Read reads the log lines from the given offset, without waiting for new ones. The offset
+// counts stream entries (batches), not lines: callers pass back Page.Next. Done is set only if
+// the stream was closed: the workflow state must be checked separately.
 func Read(c dbos.Client, workflowID string, offset int) (Page, error) {
-	lines, done, err := dbos.ReadStream[Line](c, workflowID, StreamKey, dbos.WithReadStreamSnapshot(), dbos.WithReadStreamFromOffset(offset))
+	batches, done, err := dbos.ReadStream[[]Line](c, workflowID, StreamKey, dbos.WithReadStreamSnapshot(), dbos.WithReadStreamFromOffset(offset))
 	if err != nil {
 		return Page{}, err
 	}
-	if lines == nil {
-		lines = []Line{}
+	lines := []Line{}
+	for _, b := range batches {
+		lines = append(lines, b...)
 	}
-	return Page{Lines: lines, Next: offset + len(lines), Done: done}, nil
+	return Page{Lines: lines, Next: offset + len(batches), Done: done}, nil
 }
 
 // Copy appends to the current workflow's stream the log lines of another workflow (e.g. the
@@ -164,14 +232,16 @@ func Copy(ctx context.Context, src dbos.Client, workflowID string) (int, error) 
 	if !ok {
 		return 0, fmt.Errorf("deploylog.Copy: requires the context of a DBOS step")
 	}
-	lines, _, err := dbos.ReadStream[Line](src, workflowID, StreamKey, dbos.WithReadStreamSnapshot())
+	batches, _, err := dbos.ReadStream[[]Line](src, workflowID, StreamKey, dbos.WithReadStreamSnapshot())
 	if err != nil {
 		return 0, err
 	}
-	for _, l := range lines {
-		if err := dbos.WriteStream(dc, StreamKey, l); err != nil {
+	n := 0
+	for _, b := range batches {
+		if err := dbos.WriteStream(dc, StreamKey, b); err != nil {
 			return 0, err
 		}
+		n += len(b)
 	}
-	return len(lines), nil
+	return n, nil
 }

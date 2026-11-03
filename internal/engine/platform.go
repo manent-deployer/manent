@@ -74,6 +74,10 @@ func (e *Engine) Queues(ctx context.Context) ([]QueueInfo, error) {
 	}
 	get(e.queueName)
 	get(approvalQueue(e.queueName))
+	for _, r := range e.queueRoutes {
+		// Listed even when empty: a routed queue without workers is worth seeing.
+		get(r.Queue)
+	}
 	if e.executors != nil {
 		es, err := e.executors.Executors(ctx, e.staleAfter)
 		if err != nil {
@@ -138,6 +142,7 @@ func (e *Engine) Queues(ctx context.Context) ([]QueueInfo, error) {
 func (e *Engine) describeQueue(name string) *QueueInfo {
 	q := &QueueInfo{Name: name, Kind: service.QueueOther, Workers: []string{}}
 	l := e.queueLimits
+	route := slices.IndexFunc(e.queueRoutes, func(r QueueRoute) bool { return r.Queue == name })
 	switch {
 	case name == e.queueName:
 		q.Kind = service.QueueDeployments
@@ -147,6 +152,10 @@ func (e *Engine) describeQueue(name string) *QueueInfo {
 	case slices.Contains(slices.Collect(maps.Values(e.pluginQueues)), name):
 		q.Kind = service.QueuePlugin
 		q.WorkerConcurrency, q.GlobalConcurrency, q.PartitionConcurrency = l.WorkerConcurrency, l.GlobalConcurrency, l.PartitionConcurrency
+	case route >= 0:
+		r := e.queueRoutes[route]
+		q.Kind = service.QueueRouted
+		q.WorkerConcurrency, q.GlobalConcurrency, q.PartitionConcurrency = l.WorkerConcurrency, cmp.Or(r.Concurrency, l.GlobalConcurrency), l.PartitionConcurrency
 	case strings.HasPrefix(name, e.queueName+"."):
 		q.Kind, q.Region = service.QueueRegion, strings.TrimPrefix(name, e.queueName+".")
 		q.WorkerConcurrency, q.PartitionConcurrency = l.WorkerConcurrency, 1

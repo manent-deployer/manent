@@ -102,6 +102,9 @@ const (
 	// QueuePlugin is the queue of a plugin (plugins.<name>.queue), run only by the workers
 	// that serve it.
 	QueuePlugin = "plugin"
+	// QueueRouted is a queue of the queues section (applications, artifacts, environments),
+	// run only by the workers that list it in dbos.queues.
+	QueueRouted = "routed"
 	// QueueOther is a queue not created by manent (for example DBOS's internal queue).
 	QueueOther = "other"
 )

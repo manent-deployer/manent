@@ -33,7 +33,7 @@ Sul portatile `serve` esegue entrambi in un solo processo, e resta la scelta giu
 - **Scalabilità indipendente.** Le repliche dell'API seguono le richieste e l'interfaccia web; i worker seguono quanti deploy girano insieme (`dbos.concurrency`, `dbos.environment_concurrency`).
 - **Riavvii senza impatto.** Un pod dell'API si può sostituire in qualunque momento. Un worker smette di prendere deploy, attende quelli in corso fino a `dbos.drain_timeout` e riprende i propri deploy interrotti quando torna con lo stesso `executor_id`: per questo i worker sono uno StatefulSet.
 - **Superficie esposta ridotta.** L'API è ciò che raggiungono utenti e CI; solo i worker raggiungono i target e leggono chiavi SSH, token dei cluster e credenziali cloud. All'API non servono la rete verso i target, `helm` né i plugin esterni.
-- **Worker specializzati.** Worker per region (`dbos.region`), per plugin (`dbos.plugins`, per esempio un'immagine con Ansible) o per coda di un tenant sono possibili solo come processi separati.
+- **Worker specializzati.** Worker per region (`dbos.region`), per plugin (`dbos.plugins`, per esempio un'immagine con Ansible), per coda di un tenant o per coda instradata (`dbos.queues`) sono possibili solo come processi separati.
 
 Cosa deve raggiungere ogni processo:
 

@@ -396,3 +396,47 @@ envconfig:
 		}
 	}
 }
+
+func TestCodeInstradate(t *testing.T) {
+	loadRaw := func(yaml string) (*Config, error) {
+		p := filepath.Join(t.TempDir(), "manent.yml")
+		if err := os.WriteFile(p, []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(p)
+	}
+	cfg, err := loadRaw(`
+queues:
+  - name: gpu
+    match: {applications: ["ml/*"], artifacts: [trainer]}
+    concurrency: 2
+dbos:
+  executor_id: w1
+  queues: [gpu]
+  exclusive: true
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := cfg.QueueRoute("gpu"); r == nil || r.Concurrency != 2 || cfg.QueueRoute("other") != nil {
+		t.Errorf("queue routes: %+v", cfg.Queues)
+	}
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"bad name":       {"queues: [{name: 'a b', match: {environments: [prod]}}]", "invalid queue name"},
+		"manent's queue": {"queues: [{name: deployments-approvals, match: {environments: [prod]}}]", "is a queue of manent"},
+		"plugin's queue": {"plugins: {ansible: {artifact_types: [ansible], queue: q}}\nqueues: [{name: q, match: {environments: [prod]}}]", "queue of a plugin"},
+		"repeated":       {"queues: [{name: q, match: {environments: [prod]}}, {name: q, match: {environments: [test]}}]", "is repeated"},
+		"empty match":    {"queues: [{name: q}]", "at least one of"},
+		"bad pattern":    {"queues: [{name: q, match: {applications: [a/b/c]}}]", "match.applications"},
+		"concurrency":    {"queues: [{name: q, match: {environments: [prod]}, concurrency: -1}]", "concurrency must be >= 0"},
+		"unknown":        {"dbos: {executor_id: w1, queues: [gpu]}", "queue gpu is not in queues"},
+		"exclusive":      {"dbos: {executor_id: w1, exclusive: true}", "requires dbos.queues or dbos.plugins"},
+		"with tenants": {"queues: [{name: q, match: {environments: [prod]}}]\ndbos: {executor_id: w1, queues: [q], exclusive: true, tenants: [x]}",
+			"alternatives"},
+		"region routing": {"queues: [{name: q, match: {environments: [prod]}}]\ndbos: {executor_id: w1, region_routing: true}", "region_routing"},
+	} {
+		if _, err := loadRaw(tc.yaml); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

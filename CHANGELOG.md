@@ -14,6 +14,14 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Code instradate per applicazione, artefatto e ambiente (sezione `queues` di `manent.yml`):
+  ogni voce ha `name`, `match` (`applications` qualificate con il tenant, `artifacts`,
+  `environments`, almeno un pattern) e `concurrency` (limite globale). All'accodamento vince la
+  prima voce che corrisponde: prevale sulla coda del tenant, la coda di un plugin prevale su
+  entrambe. Solo i worker con `dbos.queues` registrano e prelevano la coda; con `dbos.exclusive`
+  prelevano solo le code di `dbos.queues` e `dbos.plugins`, non quella di default né quelle dei
+  tenant. Tipo `routed` in `GET /api/v1/queues`, `manent queues` e nella pagina Piattaforma.
+  Non ancora supportato con `dbos.region_routing`.
 - Più provider della configurazione di ambiente insieme (`envconfig.providers`): ogni voce ha
   `name`, `type` (`consul`, `file`, `git`) e la sua sezione, `match` su applicazioni (con il
   tenant), artefatti e ambienti oppure `tenant_only`, e `on_missing` (`fail`, `next`). Un tenant
@@ -219,6 +227,12 @@ ne usa il contenuto come note.
 - Dry-run, callback firmati, plugin esterni su gRPC, documentazione MkDocs.
 
 ### Modificato
+
+- **Incompatibile:** log del deploy scritti a lotti: le righe di uno step vanno nello stream ogni 50, un secondo dopo
+  la prima in attesa e alla fine dello step, invece che una scrittura sul database per riga (un
+  worker in un'altra region pagava un round trip a ogni riga). L'`offset` di
+  `GET /api/v1/deployments/{id}/logs` e l'id degli eventi `log` contano i lotti: si ripassa
+  `next`. I log dei deploy precedenti, salvati una riga per voce, non sono più leggibili.
 
 - **Incompatibile:** `siem.network` e `siem.address` non sono più accettati: ogni destinazione
   sta in `siem.destinations` (`[{network: tcp, address: siem.example.com:6514}]`).

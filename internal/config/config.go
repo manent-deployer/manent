@@ -49,14 +49,17 @@ type Config struct {
 	Artifacts        Artifacts                 `yaml:"artifacts"`
 	Pipeline         Pipeline                  `yaml:"pipeline"`
 	Plugins          map[string]map[string]any `yaml:"plugins"`
-	Observability    Observability             `yaml:"observability"`
-	Rollout          RolloutConfig             `yaml:"rollout"`
-	Chains           Chains                    `yaml:"chains"`
-	Recovery         Recovery                  `yaml:"recovery"`
-	Retention        Retention                 `yaml:"retention"`
-	Reconcile        Reconcile                 `yaml:"reconcile"`
-	Integrations     Integrations              `yaml:"integrations"`
-	Tenants          Tenants                   `yaml:"tenants"`
+	// Queues route the deploys of some applications, artifacts and environments to dedicated
+	// queues, served by the workers that list them in dbos.queues.
+	Queues        []QueueRoute  `yaml:"queues"`
+	Observability Observability `yaml:"observability"`
+	Rollout       RolloutConfig `yaml:"rollout"`
+	Chains        Chains        `yaml:"chains"`
+	Recovery      Recovery      `yaml:"recovery"`
+	Retention     Retention     `yaml:"retention"`
+	Reconcile     Reconcile     `yaml:"reconcile"`
+	Integrations  Integrations  `yaml:"integrations"`
+	Tenants       Tenants       `yaml:"tenants"`
 }
 
 // Observability configures metrics, tracing and probes of long-running processes.
@@ -222,6 +225,12 @@ type DBOS struct {
 	// it registers and dequeues their queues besides its own. A worker that does not list a
 	// plugin never runs its deploys, and needs neither its binary nor its runtime.
 	Plugins []string `yaml:"plugins"`
+	// Queues are the queues of the queues section this worker serves: it registers and
+	// dequeues them besides its own. A worker that does not list a queue never runs its deploys.
+	Queues []string `yaml:"queues"`
+	// Exclusive makes the worker dequeue only the queues of Queues and Plugins, not the default
+	// and tenant queues: a pool reserved to those deploys.
+	Exclusive bool `yaml:"exclusive"`
 	// DrainTimeout is how long a stopping worker waits for the running deploys after it stopped
 	// dequeuing (0 = no wait).
 	DrainTimeout time.Duration `yaml:"drain_timeout"`
@@ -1085,6 +1094,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateGovernance()...)
 	errs = append(errs, c.validateRBACEngine()...)
 	errs = append(errs, c.validatePluginQueues()...)
+	errs = append(errs, c.validateQueueRoutes()...)
 	errs = append(errs, c.validatePluginParallel()...)
 	errs = append(errs, c.Pipeline.validateCustom()...)
 	if g := c.DBOS.GlobalConcurrency; g > 0 && c.DBOS.EnvironmentConcurrency > g {

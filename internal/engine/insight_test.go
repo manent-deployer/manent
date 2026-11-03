@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -73,7 +74,8 @@ func TestLogETimelineDelDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Lines) != 2 || !p.Done || p.Next != 2 {
+	// Both lines of the step are in one batch: one stream entry.
+	if len(p.Lines) != 2 || !p.Done || p.Next != 1 {
 		t.Fatalf("log inatteso: %+v", p)
 	}
 	l := p.Lines[0]
@@ -83,7 +85,7 @@ func TestLogETimelineDelDeploy(t *testing.T) {
 	if p.Lines[1].Message != "target lento" {
 		t.Errorf("riga da context derivato mancante: %+v", p.Lines[1])
 	}
-	if p, _ := e.Logs(ctx, "log-1", 1); len(p.Lines) != 1 {
+	if p, _ := e.Logs(ctx, "log-1", p.Next); len(p.Lines) != 0 || p.Next != 1 {
 		t.Errorf("offset non applicato: %+v", p)
 	}
 
@@ -105,6 +107,76 @@ func TestLogETimelineDelDeploy(t *testing.T) {
 	}
 	if _, err := e.Logs(ctx, "inesistente", 0); !errors.Is(err, ErrNotFound) {
 		t.Errorf("atteso ErrNotFound, ricevuto %v", err)
+	}
+}
+
+// chattyStep logs n lines, then one more and waits for release before ending.
+type chattyStep struct {
+	log     *slog.Logger
+	n       int
+	release chan struct{}
+}
+
+func (chattyStep) Name() string { return "chatty" }
+
+func (s chattyStep) Run(ctx context.Context, _ pipeline.Input) (pipeline.Output, error) {
+	for i := range s.n {
+		s.log.InfoContext(ctx, "riga", "n", strconv.Itoa(i))
+	}
+	s.log.InfoContext(ctx, "in attesa")
+	<-s.release
+	s.log.InfoContext(ctx, "fine")
+	return pipeline.Output{}, nil
+}
+
+func TestLogScrittiALotti(t *testing.T) {
+	log := slog.New(deploylog.NewHandler(slog.NewTextHandler(io.Discard, nil)))
+	done := make(chan struct{})
+	reg, planner := testRegistry(t, chattyStep{log: log, n: 120, release: done})
+	w := startWorker(t, workerOpts(testdb.URL(t), "w1", reg))
+	e := NewService(ServiceOptions{Client: w.Client(), QueueName: "deployments", Planner: planner, Logger: discard})
+	ctx := context.Background()
+	sub, err := e.Submit(ctx, release("lotti-1", "test", "1.0.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Two full batches are written at once, the line after them within the flush interval,
+	// while the step is still running.
+	var p *deploylog.Page
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if p, err = e.Logs(ctx, sub.ID, 0); err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Lines) == 121 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if len(p.Lines) != 121 || p.Next != 3 || p.Done {
+		t.Fatalf("log durante lo step: %d righe, next %d, done %v", len(p.Lines), p.Next, p.Done)
+	}
+	for i := range 120 {
+		if p.Lines[i].Attrs["n"] != strconv.Itoa(i) {
+			t.Fatalf("riga %d fuori ordine: %+v", i, p.Lines[i])
+		}
+	}
+	if p.Lines[120].Message != "in attesa" {
+		t.Errorf("ultima riga: %+v", p.Lines[120])
+	}
+
+	close(done)
+	if _, err := e.Wait(ctx, sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	// The end of the step writes the pending line.
+	rest, err := e.Logs(ctx, sub.ID, p.Next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rest.Lines) != 1 || rest.Lines[0].Message != "fine" || rest.Next != 4 || !rest.Done {
+		t.Errorf("righe finali: %+v", rest)
 	}
 }
 

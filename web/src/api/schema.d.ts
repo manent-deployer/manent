@@ -1104,7 +1104,7 @@ export interface components {
         Queue: {
             name: string;
             /** @enum {string} */
-            kind: "deployments" | "approvals" | "region" | "plugin" | "other";
+            kind: "deployments" | "approvals" | "region" | "plugin" | "routed" | "other";
             region?: string;
             /** @description Workflows run together by one worker (absent = no limit) */
             worker_concurrency?: number;
@@ -1214,6 +1214,7 @@ export interface components {
         };
         LogPage: {
             lines: components["schemas"]["LogLine"][];
+            /** @description Offset to pass to read the following lines */
             next: number;
             done: boolean;
         };
@@ -1812,6 +1813,7 @@ export interface operations {
     getDeploymentLogs: {
         parameters: {
             query?: {
+                /** @description Cursor: the next of the previous page (it counts stored batches of lines, not lines) */
                 offset?: number;
             };
             header?: never;

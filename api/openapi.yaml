@@ -176,7 +176,7 @@ paths:
       operationId: getDeploymentLogs
       parameters:
         - {$ref: '#/components/parameters/id'}
-        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+        - {name: offset, in: query, description: "Cursor: the next of the previous page (it counts stored batches of lines, not lines)", schema: {type: integer, minimum: 0, default: 0}}
       responses:
         '200': {description: Log page, content: {application/json: {schema: {$ref: '#/components/schemas/LogPage'}}}}
         '404': {$ref: '#/components/responses/Error'}
@@ -1054,7 +1054,7 @@ components:
       required: [name, kind, enqueued, running, delayed, workers]
       properties:
         name: {type: string}
-        kind: {type: string, enum: [deployments, approvals, region, plugin, other]}
+        kind: {type: string, enum: [deployments, approvals, region, plugin, routed, other]}
         region: {type: string}
         worker_concurrency: {type: integer, description: Workflows run together by one worker (absent = no limit)}
         global_concurrency: {type: integer, description: Workflows run together across all workers}
@@ -1148,7 +1148,7 @@ components:
       required: [lines, next, done]
       properties:
         lines: {type: array, items: {$ref: '#/components/schemas/LogLine'}}
-        next: {type: integer}
+        next: {type: integer, description: Offset to pass to read the following lines}
         done: {type: boolean}
     EnvironmentCheck:
       type: object

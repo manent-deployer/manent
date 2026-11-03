@@ -132,6 +132,9 @@ type ServiceOptions struct {
 	// the tenant's queue (plugins.<name>.queue).
 	PluginQueues map[string]string
 	TypeQueues   map[string]string
+	// QueueRoutes route the deploys of some releases to dedicated queues (queues): the first
+	// matching route wins over the tenant's queue, a plugin's queue wins over both.
+	QueueRoutes []QueueRoute
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
@@ -181,6 +184,7 @@ type Engine struct {
 	queueLimits      QueueOptions
 	pluginQueues     map[string]string
 	typeQueues       map[string]string
+	queueRoutes      []QueueRoute
 	logger           *slog.Logger
 	now              func() time.Time
 	// inv is the process inventory, updated incrementally.
@@ -214,6 +218,7 @@ func NewService(opts ServiceOptions) *Engine {
 		queueLimits:      opts.QueueLimits,
 		pluginQueues:     opts.PluginQueues,
 		typeQueues:       opts.TypeQueues,
+		queueRoutes:      opts.QueueRoutes,
 		logger:           opts.Logger.With("component", "engine"),
 		now:              opts.Now,
 	}
@@ -297,8 +302,12 @@ func (e *Engine) prepare(ctx context.Context, d *descriptor.Descriptor, meta sub
 	{
 		req.Tenant, req.Queue, req.Limits = owner.Ref(d.Application), owner.Queue, limitsOf(owner)
 	}
+	if q := e.routeQueue(d); q != "" {
+		req.Queue = q
+	}
 	if q := e.pluginQueue(cmp.Or(eff, d)); q != "" {
-		// The plugin's queue wins over the tenant's: only its workers can run the deploy.
+		// The plugin's queue wins over the tenant's and the routes': only its workers can run
+		// the deploy.
 		req.Queue = q
 	}
 	if err := e.checkOwnership(ctx, d, req.Tenant); err != nil {
