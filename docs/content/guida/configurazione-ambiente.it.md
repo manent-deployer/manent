@@ -23,6 +23,10 @@ targets:
   - host: 192.168.1.10
     port: 22
     user: deploy
+    labels: {az: a}
+  - host: 192.168.1.11
+    user: deploy
+    labels: {az: b}
 params:
   dest_dir: /opt/myapp/releases
   ssh_key_secret: deploy-key
@@ -32,10 +36,36 @@ secrets:
     ref: env:DEPLOY_SSH_KEY
 rollback:                 # opzionale: vedi Rollback
   enabled: true
+rollout:                  # opzionale: vedi Rilasci a ondate
+  waves:
+    - {name: first, select: "az=a", bake: 5m}
+    - {name: rest, select: "az=b"}
 ```
 
 !!! danger "Solo riferimenti ai segreti"
     La configurazione letta viene salvata nello storico del deploy. Deve contenere solo **riferimenti** ai segreti (`env:…`, `file:…`), mai i valori.
+
+## Proprietà { #proprieta }
+
+Un documento accetta solo queste chiavi: una chiave sconosciuta (un errore di battitura, o una chiave del descrittore come `deploy` o `artifact`) rende il documento non valido, e il deploy fallisce nello step `config` (con Consul e file dopo i tentativi di `max_retries`). Tutte le chiavi sono facoltative; come ciascuna si combina con il descrittore è in [Regole di fusione](#regole-di-fusione).
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `plugin` | stringa | Plugin di deploy (`deploy.plugin` del descrittore). Assente: il primo plugin attivo che supporta `artifact.type`, in ordine alfabetico. |
+| `targets` | lista | Destinazioni del deploy: `host` (obbligatorio), `port`, `user`, `labels` (mappa di stringhe; `region` e `az` sono usate dai [rilasci a ondate](ondate.md), `slot` dal router dei [rilasci per percentuale](traffico.md)). |
+| `params` | mappa di stringhe | Parametri del plugin; vedi la pagina di ciascun [plugin](../plugins/remote-copy.md). I nomi dei segreti (`*_secret`) si riferiscono a `secrets`. |
+| `secrets` | lista | Segreti usabili dal plugin: `name` (usato in `params`) e `ref`, un riferimento come `env:…`, `file:…` o `vault:…`, mai un valore. |
+| `parallel` | stringa | Target di un lotto che il plugin aggiorna nello stesso momento: un numero (`"4"`) o una percentuale del lotto (`"25%"`). Vedi [target in parallelo](ondate.md#target-in-parallelo). |
+| `rollback` | oggetto | [Rollback](rollback.md) automatico: `enabled`, `on` (step il cui fallimento lo avvia), `locator`; entro quanto ammette il tipo di artefatto. |
+| `rollout` | oggetto | Strategia dei [rilasci a ondate](ondate.md): `waves`, `maxUnavailable`, `bake`, `health`, `onFailure`, `strategy` e gli altri campi del `rollout` del descrittore, con gli stessi nomi. |
+| `step_params` | mappa di mappe di stringhe | Parametri degli [step personalizzati](step-personalizzati.md), per nome dello step: `{migrate: {schema: shop}}`. |
+| `traffic` | oggetto | Load balancer e router dell'ambiente: `pool` per lo [svuotamento](svuotamento.md), `router` per i [rilasci per percentuale](traffico.md). Solo qui: un descrittore non può impostarlo. |
+| `imports` | mappa | Release in esercizio di cui l'ambiente usa gli export: `{infra: {current: {application: infra}}}` (con `tenant`, `artifact`, `environment` facoltativi). Solo `current`: un import `deployment` appartiene al descrittore. Vedi [Export e import](catene.md#export-import). |
+| `targets_from` | lista | Target dagli export `targets` degli import: `[{import: infra, export: vms}]`. |
+| `params_from` | mappa | Parametri del plugin dagli export stringa degli import: `{db_host: {import: infra, export: db_host}}`. |
+| `exports` | mappa | Output dei deploy che altri deploy possono importare: `from` (`<step>.<chiave>`), `format` (`string` o `targets`), `pattern` (obbligatorio per `string`), `public` (leggibile da altri tenant). |
+
+Le chiavi della configurazione di ambiente sono in `snake_case` (`step_params`, `targets_from`, `params_from`), quelle del descrittore in `camelCase` (`stepParams`, `deploy.targetsFrom`): i valori hanno la stessa struttura. La coda su cui gira un deploy non è tra le proprietà (vedi la fine delle [Regole di fusione](#regole-di-fusione)).
 
 ## Provider
 
@@ -162,13 +192,13 @@ La configurazione viene letta all'inizio di ogni deploy, nello step `config`. Ne
 
 L'output dello step `config` riporta la fonte (`source`, es. `consul:manent/untenanted/myapp/myapp/test`) e la revisione (`revision`: il `ModifyIndex` di Consul, o lo SHA del commit con Git), così ogni deploy è riconducibile alla configurazione esatta che ha usato.
 
-## Regole di fusione
+## Regole di fusione { #regole-di-fusione }
 
 La configurazione di ambiente è **autorevole**: il descrittore può solo aggiungere ciò che non vi è definito.
 
 | Campo | Regola |
 |---|---|
-| `policy`, `plugin`, `parallel` | Se definiti in entrambi devono coincidere. `parallel` è `deploy.parallel`: i target di un lotto aggiornati nello stesso momento ([target in parallelo](ondate.md#target-in-parallelo)); un valore definito qui non è soggetto a `descriptor_policy.max_parallel`. |
+| `plugin`, `parallel` | Se definiti in entrambi devono coincidere. `parallel` è `deploy.parallel`: i target di un lotto aggiornati nello stesso momento ([target in parallelo](ondate.md#target-in-parallelo)); un valore definito qui non è soggetto a `descriptor_policy.max_parallel`. |
 | `targets` | Se la configurazione li definisce, il descrittore può ometterli o ripeterli identici, etichette comprese. |
 | `params` | Il descrittore può aggiungere chiavi; una chiave presente in entrambi deve avere lo stesso valore. |
 | `secrets` | Il descrittore può aggiungere segreti; lo stesso nome deve avere lo stesso riferimento. |

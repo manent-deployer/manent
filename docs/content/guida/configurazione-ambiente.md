@@ -23,6 +23,10 @@ targets:
   - host: 192.168.1.10
     port: 22
     user: deploy
+    labels: {az: a}
+  - host: 192.168.1.11
+    user: deploy
+    labels: {az: b}
 params:
   dest_dir: /opt/myapp/releases
   ssh_key_secret: deploy-key
@@ -32,10 +36,36 @@ secrets:
     ref: env:DEPLOY_SSH_KEY
 rollback:                 # optional: see Rollback
   enabled: true
+rollout:                  # optional: see Wave rollouts
+  waves:
+    - {name: first, select: "az=a", bake: 5m}
+    - {name: rest, select: "az=b"}
 ```
 
 !!! danger "Secret references only"
     The configuration that is read is saved in the deploy history. It must contain only **references** to secrets (`env:…`, `file:…`), never the values.
+
+## Properties { #properties }
+
+A document accepts only these keys: an unknown key (a typo, or a key of the descriptor such as `deploy` or `artifact`) makes the document invalid, and the deploy fails at the `config` step (with Consul and file after the `max_retries` attempts). Every key is optional; how each one combines with the descriptor is in [Merge rules](#regole-di-fusione).
+
+| Key | Type | Description |
+|---|---|---|
+| `plugin` | string | Deploy plugin (`deploy.plugin` of the descriptor). Absent: the first active plugin that supports `artifact.type`, in alphabetical order. |
+| `targets` | list | Destinations of the deploy: `host` (required), `port`, `user`, `labels` (string map; `region` and `az` are used by [wave rollouts](ondate.md), `slot` by the router of [percentage rollouts](traffico.md)). |
+| `params` | string map | Parameters of the plugin; see the page of each [plugin](../plugins/remote-copy.md). Names of secrets (`*_secret`) refer to `secrets`. |
+| `secrets` | list | Secrets usable by the plugin: `name` (used in `params`) and `ref`, a reference such as `env:…`, `file:…` or `vault:…`, never a value. |
+| `parallel` | string | Targets of a batch the plugin updates at the same time: a number (`"4"`) or a percentage of the batch (`"25%"`). See [parallel targets](ondate.md#parallel-targets). |
+| `rollback` | object | Automatic [rollback](rollback.md#in-the-environment-and-in-the-descriptor): `enabled`, `on` (steps whose failure starts it), `locator`; within what the artifact type allows. |
+| `rollout` | object | [Wave rollout](ondate.md#the-strategy) strategy: `waves`, `maxUnavailable`, `bake`, `health`, `onFailure`, `strategy` and the other fields of the descriptor's `rollout`, with the same names. |
+| `step_params` | map of string maps | Parameters of the [custom steps](step-personalizzati.md), per step name: `{migrate: {schema: shop}}`. |
+| `traffic` | object | Load balancer and router of the environment: `pool` for [draining](svuotamento.md), `router` for [percentage rollouts](traffico.md). Only here: a descriptor cannot set it. |
+| `imports` | map | Releases in service whose exports this environment uses: `{infra: {current: {application: infra}}}` (with `tenant`, `artifact`, `environment` optional). Only `current`: a `deployment` import belongs to the descriptor. See [Exports and imports](catene.md#export-import). |
+| `targets_from` | list | Targets from `targets` exports of the imports: `[{import: infra, export: vms}]`. |
+| `params_from` | map | Plugin parameters from string exports of the imports: `{db_host: {import: infra, export: db_host}}`. |
+| `exports` | map | Outputs of the deploys that other deploys can import: `from` (`<step>.<key>`), `format` (`string` or `targets`), `pattern` (required for `string`), `public` (readable by other tenants). |
+
+The keys of the environment configuration are in `snake_case` (`step_params`, `targets_from`, `params_from`), those of the descriptor in `camelCase` (`stepParams`, `deploy.targetsFrom`): the values have the same structure. The queue a deploy runs on is not among the properties (see the end of [Merge rules](#regole-di-fusione)).
 
 ## Providers
 
@@ -168,7 +198,7 @@ The environment configuration is **authoritative**: the descriptor can only add 
 
 | Field | Rule |
 |---|---|
-| `policy`, `plugin`, `parallel` | If defined in both they must match. `parallel` is `deploy.parallel`: the targets of a batch updated at the same time ([parallel targets](ondate.md#parallel-targets)); a value set here is not subject to `descriptor_policy.max_parallel`. |
+| `plugin`, `parallel` | If defined in both they must match. `parallel` is `deploy.parallel`: the targets of a batch updated at the same time ([parallel targets](ondate.md#parallel-targets)); a value set here is not subject to `descriptor_policy.max_parallel`. |
 | `targets` | If the configuration defines them, the descriptor can omit them or repeat them identically, labels included. |
 | `params` | The descriptor can add keys; a key present in both must have the same value. |
 | `secrets` | The descriptor can add secrets; the same name must have the same reference. |
