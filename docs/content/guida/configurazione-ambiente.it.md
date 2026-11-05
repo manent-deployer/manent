@@ -183,6 +183,8 @@ Un valore in conflitto fa fallire il deploy: non viene mai sovrascritto in silen
 
 Oltre a queste regole, `descriptor_policy` in `manent.yml` limita ciò che il descrittore può aggiungere: ad esempio può vietare comandi (`post_command`), riferimenti a segreti fuori dal perimetro dell'applicazione e target non definiti dall'ambiente. Vedi [Sicurezza](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
+La coda su cui gira un deploy non fa parte della configurazione di ambiente: si decide all'accodamento, prima che questa configurazione venga letta, con la sezione [`queues`](../operazioni/configurazione.md#queues) di `manent.yml` (per tenant/applicazione, artefatto e ambiente), con il [tenant](tenant.md) o con il plugin. Vedi [code instradate](../operazioni/scalabilita.md#routed-queues).
+
 ## Verificare il deploy effettivo
 
 ```sh

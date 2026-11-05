@@ -57,6 +57,18 @@ envconfig/
 - **`descriptor_policy.secret_refs`** accetta `{artifact}`: `vault:secret/{tenant}/{application}/{artifact}/{environment}/*`.
 - **`manent env validate --artifact <nome>`** verifica un documento candidato di un artefatto.
 
+## Una coda per artefatto { #coda-per-artefatto }
+
+Un artefatto che ha bisogno di worker particolari (una GPU, un segmento di rete, un runtime che gli altri worker non hanno) può essere eseguito su una coda dedicata. La coda la scelgono gli operatori in `manent.yml`, mai nel descrittore né nella configurazione di ambiente dell'artefatto:
+
+```yaml title="manent.yml"
+queues:
+  - name: shop-db
+    match: {applications: [shop], artifacts: [shop-db]}   # shop untenanted; "retail/shop" per quella di un tenant
+```
+
+Solo i worker con `dbos.queues: [shop-db]` eseguono i deploy di `shop-db`; `shop-api` e `shop-web` restano sulla coda di default (o su quella del tenant). Vedi [code instradate](../operazioni/scalabilita.md#routed-queues).
+
 ## Rollback, promozione e inventario
 
 ```sh

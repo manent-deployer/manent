@@ -183,6 +183,8 @@ A conflicting value makes the deploy fail: it is never silently overwritten. Aft
 
 On top of these rules, `descriptor_policy` in `manent.yml` limits what the descriptor can add: for example it can forbid commands (`post_command`), secret references outside the application's scope and targets not defined by the environment. See [Security](../operazioni/sicurezza.md#cosa-puo-chiedere-un-descrittore).
 
+The queue a deploy runs on is not part of the environment configuration: it is decided when the deploy is queued, before this configuration is read, by the [`queues`](../operazioni/configurazione.md#queues) section of `manent.yml` (by tenant/application, artifact and environment), by the [tenant](tenant.md) or by the plugin. See [routed queues](../operazioni/scalabilita.md#routed-queues).
+
 ## Checking the effective deploy
 
 ```sh

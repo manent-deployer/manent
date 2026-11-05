@@ -25,6 +25,9 @@ manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Ever
 | `region` | | Worker region: with `region_routing` it runs the [wave rollout](../guida/ondate.md#esecuzione-nelle-region) passes for that region. |
 | `region_routing` | `false` | Runs rollout passes on the workers of the targets' region, as child workflows. In multi-region setups it must be enabled on all workers. |
 | `tenants` | `[]` | Restricts the worker to the deploy queues of these [tenants](../guida/tenant.md#queues-and-workers-per-tenant) (the default queue for those without one). Empty: every queue of the registry. |
+| `plugins` | `[]` | Plugins with their own queue (`plugins.<name>.queue`) this worker serves: it registers and dequeues their queues besides its own. See [plugin queues](scalabilita.md#plugin-queues). |
+| `queues` | `[]` | Queues of the [`queues`](#queues) section this worker serves: it registers and dequeues them besides its own. See [routed queues](scalabilita.md#routed-queues). |
+| `exclusive` | `false` | The worker dequeues only the queues of `queues` and `plugins` (and the approvals), not the default and tenant queues: a pool reserved to those deploys. Requires `queues` or `plugins`; not with `tenants`. |
 | `drain_timeout` | `2m` | On shutdown the worker stops picking up deploys and waits for those in progress up to this time (`0` = does not wait). See [drain](affidabilita.md#arresto-ordinato-drain). |
 
 ### `http`
@@ -213,6 +216,28 @@ plugins:
 Two keys are read by manent and not passed to the plugin: `queue` (the plugin's [own queue](scalabilita.md#plugin-queues)) and `max_parallel`, the cap on the targets of a batch the plugin updates at the same time, whatever the deploy asks for (default `16`): it protects workers and destinations, such as SSH connections or the rate limits of a cloud API. See [parallel targets](../guida/ondate.md#parallel-targets).
 
 Plugins compiled into manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md). See also [External plugins](../plugins/esterni.md).
+
+### `queues` { #queues }
+
+Dedicated queues for the deploys of some applications, artifacts and environments, decided by the operators: neither the descriptor nor the environment configuration can choose a queue. The first matching entry wins; only the workers that list the queue in `dbos.queues` run its deploys.
+
+```yaml
+queues:
+  - name: gpu
+    match:
+      applications: ["ml/*"]         # tenant/application patterns, as in permissions
+      artifacts: [trainer]           # patterns on artifact.name
+      environments: [prod]
+    concurrency: 2
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `name` | | Queue name: letters, digits, `.`, `_`, `-`. Not `dbos.queue`, its approvals queue or a plugin's queue. |
+| `match` | | `applications`, `artifacts`, `environments`: at least one pattern; an empty list matches everything. |
+| `concurrency` | `0` | Global limit of the queue (`0`: `dbos.global_concurrency`). It also caps the queue's deploys on each worker. |
+
+A plugin's queue wins over a routed queue, which wins over the tenant's. Not supported with `dbos.region_routing` yet. See [routed queues](scalabilita.md#routed-queues).
 
 ### `rollout`
 

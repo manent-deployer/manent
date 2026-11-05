@@ -25,6 +25,9 @@ manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`)
 | `region` | | Region del worker: con `region_routing` esegue i passi dei [rilasci a ondate](../guida/ondate.md#esecuzione-nelle-region) su quella region. |
 | `region_routing` | `false` | Esegue i passi dei rollout sui worker della region dei target, come workflow figli. In multi-region va attivato su tutti i worker. |
 | `tenants` | `[]` | Limita il worker alle code dei deploy di questi [tenant](../guida/tenant.md#code-e-worker-per-tenant) (la coda di default per quelli che non ne hanno). Vuoto: tutte le code del registro. |
+| `plugins` | `[]` | Plugin con una coda propria (`plugins.<nome>.queue`) serviti da questo worker: ne registra e preleva le code oltre alla propria. Vedi [code dei plugin](scalabilita.md#plugin-queues). |
+| `queues` | `[]` | Code della sezione [`queues`](#queues) servite da questo worker: le registra e le preleva oltre alla propria. Vedi [code instradate](scalabilita.md#routed-queues). |
+| `exclusive` | `false` | Il worker preleva solo le code di `queues` e `plugins` (e le approvazioni), non quella di default né quelle dei tenant: un gruppo riservato a quei deploy. Richiede `queues` o `plugins`; non con `tenants`. |
 | `drain_timeout` | `2m` | All'arresto il worker smette di prelevare deploy e attende quelli in corso fino a questo tempo (`0` = non attende). Vedi [drain](affidabilita.md#arresto-ordinato-drain). |
 
 ### `http`
@@ -213,6 +216,28 @@ plugins:
 Due chiavi sono lette da manent e non passate al plugin: `queue` (la [coda propria](scalabilita.md#plugin-queues) del plugin) e `max_parallel`, il limite ai target di un lotto che il plugin aggiorna nello stesso momento, qualunque cosa chieda il deploy (default `16`): protegge worker e destinazioni, come le connessioni SSH o i rate limit di un'API cloud. Vedi [target in parallelo](../guida/ondate.md#target-in-parallelo).
 
 Plugin compilati in manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md). Vedi anche [Plugin esterni](../plugins/esterni.md).
+
+### `queues` { #queues }
+
+Code dedicate ai deploy di alcune applicazioni, artefatti e ambienti, decise dagli operatori: né il descrittore né la configurazione di ambiente possono scegliere una coda. Vince la prima voce che corrisponde; solo i worker che elencano la coda in `dbos.queues` ne eseguono i deploy.
+
+```yaml
+queues:
+  - name: gpu
+    match:
+      applications: ["ml/*"]         # pattern tenant/applicazione, come nei permessi
+      artifacts: [trainer]           # pattern su artifact.name
+      environments: [prod]
+    concurrency: 2
+```
+
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `name` | | Nome della coda: lettere, cifre, `.`, `_`, `-`. Non `dbos.queue`, la sua coda delle approvazioni o la coda di un plugin. |
+| `match` | | `applications`, `artifacts`, `environments`: almeno un pattern; una lista vuota corrisponde a tutto. |
+| `concurrency` | `0` | Limite globale della coda (`0`: `dbos.global_concurrency`). Limita anche i deploy della coda su ogni worker. |
+
+La coda di un plugin prevale su una coda instradata, che prevale su quella del tenant. Non ancora supportato con `dbos.region_routing`. Vedi [code instradate](scalabilita.md#routed-queues).
 
 ### `rollout`
 

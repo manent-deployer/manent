@@ -57,6 +57,18 @@ envconfig/
 - **`descriptor_policy.secret_refs`** accepts `{artifact}`: `vault:secret/{tenant}/{application}/{artifact}/{environment}/*`.
 - **`manent env validate --artifact <name>`** checks a candidate document of an artifact.
 
+## A queue per artifact { #queue-per-artifact }
+
+An artifact that needs particular workers (a GPU, a network segment, a runtime the other workers lack) can run on a dedicated queue. The queue is chosen by the operators in `manent.yml`, never in the descriptor or in the artifact's environment configuration:
+
+```yaml title="manent.yml"
+queues:
+  - name: shop-db
+    match: {applications: [shop], artifacts: [shop-db]}   # untenanted shop; "retail/shop" for a tenant's
+```
+
+Only the workers with `dbos.queues: [shop-db]` run the deploys of `shop-db`; `shop-api` and `shop-web` stay on the default (or the tenant's) queue. See [routed queues](../operazioni/scalabilita.md#routed-queues).
+
 ## Rollback, promotion and inventory
 
 ```sh
