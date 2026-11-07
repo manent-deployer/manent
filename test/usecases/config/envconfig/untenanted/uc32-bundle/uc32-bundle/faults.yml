@@ -1,0 +1,7 @@
+# UC32: no script in the environment, the descriptor chooses one (the lab's descriptor_policy
+# allows every parameter): the catalog still decides what can run.
+plugin: script
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+secrets:
+  - {name: deploy-key, ref: "file:/keys/id"}

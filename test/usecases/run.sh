@@ -86,6 +86,7 @@ printf 'uc-dd-app' >"$WORK/keys/dd-app"
 printf 'uc-nr-key' >"$WORK/keys/nr-key"
 printf 'uc-es-key' >"$WORK/keys/es-key"
 printf 'AKIDUCTEST' >"$WORK/keys/aws-id"
+printf 'uc32-api-t0ken' >"$WORK/keys/script-token"
 printf 'uc-aws-secret' >"$WORK/keys/aws-secret"
 # UC27: token of the lab Git server and SSH key that signs the configuration commits.
 printf 'uc-git-token' >"$WORK/keys/git-token"
@@ -102,8 +103,8 @@ region_config() {
 printf 'uc-k8s-token\n' >"$WORK/k3s/token"
 printf 'uc-k8s-token,manent,manent,system:masters\n' >"$WORK/k3s/tokens.csv"
 
-# Worker that serves the ansible plugin's queue (UC29).
-awk '{ print } /^dbos:/ { print "  plugins: [ansible]" }' config/manent.yml >"$WORK/config/worker-ansible.yml"
+# Worker that serves the queues of the ansible (UC29) and script (UC32) plugins.
+awk '{ print } /^dbos:/ { print "  plugins: [ansible, script]" }' config/manent.yml >"$WORK/config/worker-ansible.yml"
 
 region_config orchestrator ""
 region_config worker-eu1 eu-1

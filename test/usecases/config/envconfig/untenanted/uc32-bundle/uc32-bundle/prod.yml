@@ -1,0 +1,15 @@
+# UC32: script plugin. The environment chooses the script of the catalog in manent.yml and
+# passes its declared parameters: never a command. Automatic rollback on a failed deploy.
+plugin: script
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  script: uc32-bundle
+  dest: /home/deploy/uc32/prod
+rollback:
+  enabled: true
+  on: [deploy]
+secrets:
+  - {name: deploy-key, ref: "file:/keys/id"}
+  - {name: api-token, ref: "file:/keys/script-token"}

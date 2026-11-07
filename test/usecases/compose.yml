@@ -172,6 +172,7 @@ services:
       - ./config/envconfig:/etc/manent/envconfig:ro
       - ./.work/keys:/keys:ro
       - ./.work/artifacts:/srv/artifacts:ro
+      - ./scripts:/opt/manent/scripts:ro   # UC32: catalog of the script plugin
     networks: [core, eu1, us1]
 
   client:

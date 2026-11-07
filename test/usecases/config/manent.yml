@@ -89,6 +89,10 @@ artifacts:
 rollback:
   locator: plugin
   artifact_types:
+    bundle:                          # UC32: script plugin
+      allowed: true
+      enabled: false
+      on: [deploy]
     application:
       allowed: true
       enabled: false
@@ -326,6 +330,44 @@ plugins:
     artifact_types: [ansible]
     queue: ansible
     insecure_ignore_host_key: true   # lab: host keys regenerated at every start
+  # UC32: deploy scripts on the worker, only from this catalog. Own queue: only worker-ansible
+  # (dbos.plugins) runs them, because the distroless workers have no shell; it mounts
+  # test/usecases/scripts in /opt/manent/scripts.
+  script:
+    artifact_types: [bundle]
+    queue: scripts
+    scripts:
+      uc32-bundle:
+        timeout: 2m
+        params:
+          dest: {pattern: "/home/deploy/[a-z0-9/-]+", required: true}
+        secrets: [deploy-key, api-token]
+        outputs:
+          endpoint: {pattern: "http://[a-z0-9.-]+:[0-9]+/[a-z0-9-]+"}
+          parallelism: {pattern: "[0-9]+"}
+        run: {command: [/opt/manent/scripts/uc32.sh]}
+        dry_run: {command: [/opt/manent/scripts/uc32.sh]}
+        current: {command: [/opt/manent/scripts/uc32.sh]}
+        rollback: {command: [/opt/manent/scripts/uc32.sh]}
+      uc32-each:
+        per_target: true
+        params:
+          dest: {pattern: "/home/deploy/[a-z0-9/-]+", required: true}
+        secrets: [deploy-key, api-token]
+        outputs:
+          endpoint: {pattern: "http://[a-z0-9.-]+:[0-9]+/[a-z0-9-]+"}
+          parallelism: {pattern: "[0-9]+"}
+        run: {command: [/opt/manent/scripts/uc32.sh]}
+        current: {command: [/opt/manent/scripts/uc32.sh]}
+      uc32-slow:
+        timeout: 3s
+        secrets: [deploy-key]
+        run: {command: [/opt/manent/scripts/uc32.sh]}
+      uc32-tampered:
+        secrets: [deploy-key]
+        run:
+          command: [/opt/manent/scripts/uc32.sh]
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000"
   # UC28: external Terraform plugin (repository manent-plugin-terraform) with OpenTofu.
   terraform:
     external:

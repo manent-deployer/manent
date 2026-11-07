@@ -120,6 +120,9 @@ The `current` command writes `version=<version>` in `$MANENT_OUTPUT`, plus the d
 
 The `rollback` command receives the release to go back to in `MANENT_PREVIOUS_VERSION`. As for every plugin, automatic rollback also needs the artifact type in [`rollback.artifact_types`](../guida/rollback.md#per-artifact-type) with `allowed: true`. A deploy that asks for rollback with a script without `rollback` or `current` fails at the checkpoint, before changing anything.
 
+!!! note "Reconciliation and the plugin queue"
+    The reconciliation runs on the worker that holds its lease, not on the plugin's queue. If that worker does not serve the plugin, it cannot run `current`, and the environment is recorded as not readable. Without a plugin queue every worker runs the scripts, and the reconciliation reads them.
+
 ## Example script
 
 ```sh title="/opt/manent/scripts/f5-deploy.sh"

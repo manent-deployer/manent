@@ -1,0 +1,12 @@
+# UC32: a run per target (per_target), two targets updated together.
+plugin: script
+parallel: "2"
+targets:
+  - {host: eu1-a, user: deploy, labels: {region: eu-1, az: eu-1a}}
+  - {host: eu1-b, user: deploy, labels: {region: eu-1, az: eu-1b}}
+params:
+  script: uc32-each
+  dest: /home/deploy/uc32/test
+secrets:
+  - {name: deploy-key, ref: "file:/keys/id"}
+  - {name: api-token, ref: "file:/keys/script-token"}
