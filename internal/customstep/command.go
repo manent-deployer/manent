@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/manent-deployer/manent/internal/cmdout"
 	"github.com/manent-deployer/manent/internal/descriptor"
 )
 
@@ -83,7 +84,7 @@ func (r *run) command(ctx context.Context) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	budget := &logBudget{left: maxLogBytes}
+	budget := cmdout.NewBudget(maxLogBytes)
 	var out map[string]string
 	for _, t := range targets {
 		r.targets = append(r.targets, safeHost(t))
@@ -114,7 +115,7 @@ func (r *run) sshAuth(ctx context.Context) (SSHAuth, error) {
 
 // onTarget runs the protocol on a target: attempt directory, environment and secrets files,
 // binary check, command, output reading and cleanup.
-func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, auth SSHAuth, budget *logBudget) (map[string]string, error) {
+func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, auth SSHAuth, budget *cmdout.Budget) (map[string]string, error) {
 	user := t.User
 	if r.s.doc.SSH.User != "" {
 		user = r.s.doc.SSH.User
@@ -164,12 +165,12 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 		cmd += " " + Quote(a)
 	}
 	attrs := []any{"target", t.Host}
-	stdout := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stdout")}
-	stderr := &lineWriter{ctx: ctx, log: r.log, red: r.red, budget: budget, attrs: append(attrs, "stream", "stderr")}
+	stdout := &cmdout.LineWriter{Ctx: ctx, Log: r.log, Red: r.red, Budget: budget, Attrs: append(attrs, "stream", "stdout")}
+	stderr := &cmdout.LineWriter{Ctx: ctx, Log: r.log, Red: r.red, Budget: budget, Attrs: append(attrs, "stream", "stderr")}
 	r.log.InfoContext(ctx, "command started", "target", t.Host, "command", args[0], "args", len(args)-1, "dry_run", r.dry)
 	code, err := conn.Exec(ctx, cmd, nil, stdout, stderr)
-	stdout.flush()
-	stderr.flush()
+	stdout.Flush()
+	stderr.Flush()
 	switch {
 	case ctx.Err() != nil:
 		return nil, temporary("command interrupted: %w", ctx.Err())
@@ -194,7 +195,11 @@ func (r *run) onTarget(ctx context.Context, t descriptor.Target, args []string, 
 	if buf.Len() > maxOutputFile {
 		return nil, permanent("output over %d bytes", maxOutputFile)
 	}
-	return parseOutputs(buf.String())
+	out, err := cmdout.ParseOutputs(buf.String())
+	if err != nil {
+		return nil, permanent("%w", err)
+	}
+	return out, nil
 }
 
 // exec runs a service command; a non-zero code is a permanent error with the given
@@ -206,7 +211,7 @@ func (r *run) exec(ctx context.Context, conn Conn, cmd string, stdin io.Reader, 
 	case err != nil:
 		return temporary("%s: %w", what, err)
 	case code != 0:
-		return permanent("%s: code %d: %s", what, code, strings.TrimSpace(r.red.apply(stderr.String())))
+		return permanent("%s: code %d: %s", what, code, strings.TrimSpace(r.red.Apply(stderr.String())))
 	}
 	return nil
 }
@@ -277,26 +282,6 @@ func pathSafe(s string) string {
 // Quote quotes an argument for a POSIX shell: in single quotes, with ' as '\”.
 func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-// parseOutputs reads the key=value lines of the outputs file.
-func parseOutputs(s string) (map[string]string, error) {
-	out := map[string]string{}
-	for _, line := range strings.Split(s, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok || k == "" {
-			return nil, permanent("invalid output: key=value lines")
-		}
-		if _, dup := out[k]; dup {
-			return nil, permanent("output %q repeated", k)
-		}
-		out[k] = v
-	}
-	return out, nil
 }
 
 // limitedWriter discards whatever exceeds the limit.

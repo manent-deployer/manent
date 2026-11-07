@@ -169,6 +169,7 @@ Un plugin supporta il rollback se implementa `plugin.Rollbacker`; per il locator
 | Plugin | Rollback |
 |---|---|
 | [`remote-copy`](../plugins/remote-copy.md#rollback) | Sì, con `layout: releases`: riporta il symlink `current` alla release precedente ed esegue `rollback_command`. |
+| [`script`](../plugins/script.md#rollback-e-release-in-esercizio) | Se lo script del catalogo ha i comandi `rollback` e `current`. |
 | [Plugin esterni](../plugins/esterni.md) | Se il plugin implementa le interfacce. manent lo sa dalle capacità dichiarate all'avvio del processo. |
 
 ## Attivazione

@@ -169,6 +169,7 @@ A plugin supports rollback if it implements `plugin.Rollbacker`; for the `plugin
 | Plugin | Rollback |
 |---|---|
 | [`remote-copy`](../plugins/remote-copy.md#rollback) | Yes, with `layout: releases`: points the `current` symlink back to the previous release and runs `rollback_command`. |
+| [`script`](../plugins/script.md#rollback-and-release-in-service) | If the script of the catalog has the `rollback` and `current` commands. |
 | [External plugins](../plugins/esterni.md) | If the plugin implements the interfaces. manent knows from the capabilities declared when the process starts. |
 
 ## Activation

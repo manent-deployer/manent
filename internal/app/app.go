@@ -66,6 +66,7 @@ import (
 	"github.com/manent-deployer/manent/plugins/kubernetes"
 	"github.com/manent-deployer/manent/plugins/lambda"
 	"github.com/manent-deployer/manent/plugins/remotecopy"
+	"github.com/manent-deployer/manent/plugins/script"
 	"github.com/manent-deployer/manent/plugins/windows"
 )
 
@@ -164,6 +165,7 @@ func NewPlugins(cfg *config.Config, log *slog.Logger, worker bool) (*plugin.Regi
 		windows.Name:       windows.Factory,
 		appservice.Name:    appservice.Factory,
 		containerapps.Name: containerapps.Factory,
+		script.Name:        script.Factory,
 	} {
 		if !cfg.ServesPlugin(name, worker) {
 			continue

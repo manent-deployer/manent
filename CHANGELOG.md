@@ -14,6 +14,17 @@ ne usa il contenuto come note.
 
 ### Aggiunto
 
+- Plugin `script`: esegue sul worker uno script di un catalogo in `manent.yml`
+  (`plugins.script.scripts`), per i sistemi che nessun plugin copre. La configurazione di
+  ambiente sceglie lo script con il parametro `script` e passa solo i parametri dichiarati, con
+  il loro pattern: mai un comando. Ogni esecuzione ha una directory propria (`work_dir`, `0700`)
+  con i segreti come file, i target in JSON e il file degli output, e un ambiente con solo
+  `PATH`, `HOME`, `TZ`, `LANG`, le `env` del catalogo e le variabili `MANENT_*`. Comando senza
+  shell con `sha256` facoltativo, `timeout` che ferma anche i processi figli, exit 75 e timeout
+  temporanei, gli altri codici permanenti, output dichiarati con pattern (diventano export) e
+  log redatti. `per_target` per un'esecuzione per target con il parallelismo del deploy; comandi
+  facoltativi `dry_run`, `current` (rollback con il locator `plugin` e riconciliazione) e
+  `rollback`.
 - Code instradate per applicazione, artefatto e ambiente (sezione `queues` di `manent.yml`):
   ogni voce ha `name`, `match` (`applications` qualificate con il tenant, `artifacts`,
   `environments`, almeno un pattern) e `concurrency` (limite globale). All'accodamento vince la

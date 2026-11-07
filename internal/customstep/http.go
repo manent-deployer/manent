@@ -176,7 +176,7 @@ func (r *run) poll(ctx context.Context, p *customspec.Poll, first any) (any, err
 			return nil, err
 		case err != nil:
 			// A temporary error during the wait does not stop it.
-			r.log.WarnContext(ctx, "state read failed, retrying", "error", r.red.apply(err.Error()))
+			r.log.WarnContext(ctx, "state read failed, retrying", "error", r.red.Apply(err.Error()))
 			continue
 		}
 		if f := p.Fail; f != nil {

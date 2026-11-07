@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/manent-deployer/manent/internal/audit"
+	"github.com/manent-deployer/manent/internal/cmdout"
 	"github.com/manent-deployer/manent/internal/customspec"
 	"github.com/manent-deployer/manent/internal/descriptor"
 	"github.com/manent-deployer/manent/internal/pipeline"
@@ -108,7 +109,7 @@ type run struct {
 	dry     bool
 	data    templateData
 	secrets map[string]string // logical name → value, only the action's ones
-	red     *redactor
+	red     *cmdout.Redactor
 	log     *slog.Logger
 	targets []string
 }
@@ -146,7 +147,7 @@ func (s *step) exec(ctx context.Context, in pipeline.Input, dry bool) (pipeline.
 		out, err = r.outputs(raw)
 	}
 	if err != nil {
-		err = r.red.err(err)
+		err = redactErr(r.red, err)
 	}
 	r.audit(ctx, err)
 	if err != nil {
@@ -214,7 +215,7 @@ func (s *step) prepare(ctx context.Context, in pipeline.Input, dry bool, log *sl
 			r.secrets[n] = v
 		}
 	}
-	r.red = newRedactor(values)
+	r.red = cmdout.NewRedactor(values)
 	sha := d.Artifact.SHA256
 	if o := in.Outputs["artifacts"]; o["sha256"] != "" {
 		sha = o["sha256"]
@@ -242,7 +243,7 @@ func (r *run) outputs(raw map[string]string) (pipeline.Output, error) {
 			return nil, pipeline.Permanent(err)
 		}
 		v := raw[k]
-		if r.red.contains(v) {
+		if r.red.Contains(v) {
 			return nil, pipeline.Permanent(fmt.Errorf("output %q contains a secret: rejected", k))
 		}
 		if !re.MatchString(v) {

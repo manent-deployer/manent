@@ -150,6 +150,7 @@ plugins:
             Cloud services: Servizi cloud
             Application servers and Windows: Application server e Windows
             Infrastructure and configuration: Infrastruttura e configurazione
+            Other systems: Altri sistemi
             External plugins: Plugin esterni
             Operations: Operazioni
             Installation: Installazione
@@ -282,6 +283,8 @@ nav:
       - Infrastructure and configuration:
           - terraform: plugins/terraform.md
           - ansible: plugins/ansible.md
+      - Other systems:
+          - script: plugins/script.md
       - External plugins: plugins/esterni.md
   - Operations:
       - Installation: operazioni/installazione.md

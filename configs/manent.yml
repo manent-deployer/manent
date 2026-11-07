@@ -293,6 +293,7 @@ governance:
 #     lambda: [wait_timeout]
 #     cloudrun: [wait_timeout]
 #     jboss: [suspend, suspend_timeout, reload, restart, wait_timeout]   # user, secrets and server groups only from the envconfig
+#     script: []                                                  # the script and its parameters only from the envconfig
 #   secret_refs: ["vault:secret/data/{application}/*"]
 #   targets: false
 #   post_test_hosts: ["*.example.com"]
@@ -400,6 +401,26 @@ plugins:
     # ca_file: /etc/manent/jboss-ca.pem
     # insecure_skip_tls_verify: false
     # request_timeout: 10m   # maximum duration of a call, upload included
+  # Scripts run on the worker, from this catalog only: the environment configuration chooses
+  # a script by name (params.script) and passes its declared parameters, never a command. The
+  # manent-server image has no shell: give the plugin a queue served by workers of an image
+  # with the scripts and their interpreters.
+  # script:
+  #   artifact_types: [tgz]
+  #   queue: scripts
+  #   work_dir: /var/lib/manent/script
+  #   scripts:
+  #     f5-legacy:
+  #       timeout: 20m
+  #       params:
+  #         partition: {pattern: "[a-z0-9-]+", required: true}
+  #       secrets: [f5-password]
+  #       outputs:
+  #         vip: {pattern: "[0-9.]+"}
+  #       run: {command: [/opt/manent/scripts/f5-deploy.sh], sha256: "<sha256 of the script>"}
+  #       dry_run: {command: [/opt/manent/scripts/f5-deploy.sh, --check]}
+  #       current: {command: [/opt/manent/scripts/f5-current.sh]}
+  #       rollback: {command: [/opt/manent/scripts/f5-rollback.sh]}
   # External plugin: separate binary started by manent at the first deploy (make plugins).
   # The other keys, besides external, are the configuration passed to the plugin.
   # remote-copy-ext:

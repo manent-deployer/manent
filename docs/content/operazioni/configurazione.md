@@ -215,7 +215,7 @@ plugins:
 
 Two keys are read by manent and not passed to the plugin: `queue` (the plugin's [own queue](scalabilita.md#plugin-queues)) and `max_parallel`, the cap on the targets of a batch the plugin updates at the same time, whatever the deploy asks for (default `16`): it protects workers and destinations, such as SSH connections or the rate limits of a cloud API. See [parallel targets](../guida/ondate.md#parallel-targets).
 
-Plugins compiled into manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md). See also [External plugins](../plugins/esterni.md).
+Plugins compiled into manent: [remote-copy](../plugins/remote-copy.md), [container](../plugins/container.md), [kubernetes](../plugins/kubernetes.md), [ecs](../plugins/ecs.md), [lambda](../plugins/lambda.md), [cloudrun](../plugins/cloudrun.md), [jboss](../plugins/jboss.md), [windows](../plugins/windows.md), [appservice](../plugins/appservice.md), [containerapps](../plugins/containerapps.md), [script](../plugins/script.md) (scripts on the worker, from a catalog). See also [External plugins](../plugins/esterni.md).
 
 ### `queues` { #queues }
 

@@ -474,21 +474,6 @@ func TestHTTP(t *testing.T) {
 	}
 }
 
-func TestRedazione(t *testing.T) {
-	r := newRedactor([]string{"topsecret\n", "abc", "-----BEGIN KEY-----\nMIIEvQIBADANBgkqhkiG9w0\n-----END KEY-----"})
-	for _, in := range []string{"topsecret", "dG9wc2VjcmV0", "x=topsecret;", "MIIEvQIBADANBgkqhkiG9w0"} {
-		if out := r.apply(in); strings.Contains(out, "topsecret") || strings.Contains(out, "dG9wc2VjcmV0") || strings.Contains(out, "MIIEvQ") {
-			t.Errorf("%q → %q", in, out)
-		}
-	}
-	if out := r.apply("abc def"); out != "abc def" {
-		t.Errorf("i valori troppo corti non vanno redatti: %q", out)
-	}
-	if !r.contains("a topsecret b") || r.contains("nulla") {
-		t.Error("contains")
-	}
-}
-
 func TestQuotatura(t *testing.T) {
 	for _, s := range []string{"", "a b", "it's", `"$HOME"`, "$(id)", "`id`", "a\\b", "'''"} {
 		out, err := exec.Command("/bin/sh", "-c", "printf %s "+Quote(s)).Output()
