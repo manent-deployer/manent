@@ -119,7 +119,14 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 
 | Chiave | Default | Descrizione |
 |---|---|---|
-| `providers` | `[]` | I provider con nome, nessuno = nessuna configurazione di ambiente ([Più provider](../guida/configurazione-ambiente.md#piu-provider)): `name`, `type` (`consul`, `file`, `git`), la sezione del tipo con le chiavi elencate sotto, `match` (`applications`, `artifacts`, `environments`) oppure `tenant_only`, e `on_missing` (`fail`, `next`). |
+| `providers` | `[]` | I provider con nome, nessuno = nessuna configurazione di ambiente. Un deploy legge prima il provider che il suo [tenant](../guida/tenant.md) indica nel registro, poi quelli il cui `match` corrisponde, in ordine ([Più provider](../guida/configurazione-ambiente.md#piu-provider)). |
+| `providers[].name` | | Obbligatorio e univoco: lettere, cifre, `.`, `_`, `:`, `-`, al più 128 caratteri, il primo una lettera o una cifra (le regole di `artifact.name`). Compare come `config_provider` nello stato del deploy e i tenant lo indicano nel registro (`envconfig`). |
+| `providers[].type` | | Obbligatorio: `consul`, `file` o `git`, configurato dalla sezione omonima qui sotto. |
+| `providers[].match.applications` | `[]` | Pattern delle applicazioni qualificati con il tenant (`payments/*`, `*/*`; senza `/` solo untenanted). Vuoto: tutte. |
+| `providers[].match.artifacts` | `[]` | Pattern su `artifact.name`. Vuoto: tutti. |
+| `providers[].match.environments` | `[]` | Pattern degli ambienti. Vuoto: tutti. |
+| `providers[].tenant_only` | `false` | Il provider serve solo i tenant che lo indicano nel registro, mai tramite `match`. Alternativo a `match`. |
+| `providers[].on_missing` | `fail` | Quando il provider non ha la configurazione della release: `fail` (il deploy non ha configurazione di ambiente) o `next` (si legge il provider successivo che corrisponde). Ogni altro errore ferma la lettura. |
 | `required` | `false` | Fa fallire il deploy se per l'ambiente non esiste configurazione. |
 | `max_retries` | `3` | Tentativi aggiuntivi di lettura. |
 | `providers[].consul.address` | `CONSUL_HTTP_ADDR` o `http://127.0.0.1:8500` | Indirizzo dell'agent Consul. |
@@ -134,7 +141,9 @@ Default `./work`. Directory locale in cui ogni deploy scarica l'artefatto (`work
 | `providers[].git.username`, `providers[].git.password_ref` | | Credenziali HTTPS (la password è un riferimento a un segreto). |
 | `providers[].git.ssh_key_ref`, `providers[].git.known_hosts` | | Chiave SSH (riferimento a un segreto) e file dei known hosts, obbligatori insieme. |
 | `providers[].git.ca_file` | | CA aggiuntive per HTTPS. |
-| `providers[].git.require_signed` | `false` | Rifiuta i commit senza una firma valida di `providers[].git.signers` (`openpgp_keyring`, `ssh_allowed_signers`). |
+| `providers[].git.require_signed` | `false` | Rifiuta i commit senza una firma valida di `providers[].git.signers`. |
+| `providers[].git.signers.openpgp_keyring` | | Keyring pubblico OpenPGP in formato armored. |
+| `providers[].git.signers.ssh_allowed_signers` | | File `allowed_signers` nel formato di `ssh-keygen`, per le firme SSH. |
 | `providers[].git.max_age` | `0` | Età massima di un commit (`0` = nessuna); i rollback manuali ne sono esenti. |
 | `providers[].git.cache_dir` | `<workdir>/.git-cache` | Copie locali del repository. |
 | `providers[].git.ref_ttl` | `30s` | Per quanto si riusa la risoluzione di un ref prima di un nuovo fetch. |
@@ -157,10 +166,12 @@ Vedi [Callback](../guida/callback.md).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `locator` | `plugin` | Strategia di default per individuare la release a cui tornare. |
-| `artifact_types.<tipo>.allowed` | `application`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`: `true`; `migration`: `false` | Il rollback è possibile per il tipo. I tipi non elencati non lo ammettono. |
+| `artifact_types.<tipo>.allowed` | `application`, `container`, `kubernetes`, `ecs`, `lambda`, `cloudrun`, `war`, `ear`, `windows`, `appservice`, `containerapps`: `true`; `migration`: `false` | Il rollback è possibile per il tipo. I tipi non elencati non lo ammettono. |
 | `artifact_types.<tipo>.enabled` | `false` | Default per i deploy del tipo. Richiede `allowed`. |
 | `artifact_types.<tipo>.on` | `[deploy, post-test, activation]` | Step il cui fallimento avvia il rollback. |
 | `artifact_types.<tipo>.locator` | | Locator specifico del tipo. |
+
+I tipi scritti nel file si aggiungono a quelli di default, ma ogni voce sostituisce per intero il default del suo tipo: per abilitare il rollback di `application` si scrive `application: {allowed: true, enabled: true}`, non solo `enabled`.
 
 Vedi [Rollback](../guida/rollback.md).
 
@@ -169,14 +180,33 @@ Vedi [Rollback](../guida/rollback.md).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `auth.mode` | `none` | `none`: nessuna autenticazione né permessi (solo sviluppo). `enabled`: token bearer obbligatorio e RBAC. |
-| `auth.oidc` | | `issuer`, `audience`, `username_claim`, `groups_claim`, `ca_file`, `policy_claims` (default `[email, name]`: claim esposti alla [policy dei permessi](../guida/permessi.md)). |
-| `auth.tokens` | `[]` | Token statici: `name`, `sha256` (mai il token), `groups`, `expires_at`. |
+| `auth.oidc.issuer` | | Issuer OIDC: la discovery avviene all'avvio dell'API. |
+| `auth.oidc.audience` | | Audience che i token di accesso devono avere. |
+| `auth.oidc.username_claim` | | Obbligatorio: il claim che dà il nome all'identità (`oidc:<valore>`). Un token che non lo ha viene rifiutato, `sub` non lo sostituisce mai. |
+| `auth.oidc.groups_claim` | | Claim con i gruppi usati dai binding. |
+| `auth.oidc.ca_file` | | Bundle di CA aggiuntive per raggiungere l'issuer. |
+| `auth.oidc.policy_claims` | `[email, name]` | Claim esposti alla [policy dei permessi](../guida/permessi.md); gli altri restano nascosti. |
+| `auth.oidc.ui.client_id` | | Client OIDC pubblico (Authorization Code + PKCE) dell'[interfaccia web](../guida/interfaccia-web.md). Senza `ui` l'interfaccia non può fare il login. I suoi token devono avere l'audience e il claim dei gruppi indicati sopra. |
+| `auth.oidc.ui.scopes` | `[openid, profile]` | Scope richiesti dall'interfaccia. |
+| `auth.oidc.ui.redirect_path` | `/auth/callback` | Percorso di ritorno dopo il login. |
+| `auth.tokens` | `[]` | Token statici per i sistemi automatici. |
+| `auth.tokens[].name` | | Nome dell'identità (`token:<nome>`). |
+| `auth.tokens[].sha256` | | SHA-256 del token, mai il token. |
+| `auth.tokens[].groups` | `[]` | Gruppi usati dai binding. |
+| `auth.tokens[].expires_at` | | Scadenza (RFC 3339); vuoto: nessuna scadenza. |
 | `auth.tokens_file` | | File YAML con altri token (stesso formato, chiave `tokens`), riletto quando cambia: revoca senza riavvio. |
 | `rbac.engine` | `builtin` | `builtin` (i binding qui sotto) o `opa` (la [policy dei permessi](../guida/permessi.md) delle revisioni; richiede `governance.engine: opa`). Le `policy.*` arrivano sempre da `rbac.bindings`. |
 | `rbac.opa.cache` | `30s` | Per quanto si riusano i permessi di un'identità con `opa`. |
 | `rbac.opa.cache_size` | `10000` | Identità nella cache dei permessi. |
-| `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. |
-| `rbac.bindings` | `[]` | `subjects` o `groups`, `role`, `applications` (pattern qualificati: `shop` solo untenanted, `payments/*`, `*/*` ogni [tenant](../guida/tenant.md#pattern-delle-applicazioni-qualificati)), `environments` (pattern con `*`), `artifacts`, `tenants` (selettore sul tenant proprietario) e `selector` (selettore sui tag dell'applicazione). |
+| `rbac.roles` | `{}` | Ruoli aggiuntivi: nome → elenco di azioni. Quelli predefiniti sono `viewer`, `tester`, `deployer`, `operator`, `admin`. |
+| `rbac.bindings` | `[]` | Ruoli assegnati alle identità su applicazioni e ambienti. |
+| `rbac.bindings[].subjects`, `groups` | `[]` | Chi riceve il ruolo: identità (`oidc:alice`, `token:ci`) o gruppi. |
+| `rbac.bindings[].role` | | Ruolo predefinito o uno di `rbac.roles`. |
+| `rbac.bindings[].applications` | `[]` | Pattern qualificati: `shop` solo untenanted, `payments/*`, `*/*` ogni [tenant](../guida/tenant.md#pattern-delle-applicazioni-qualificati). |
+| `rbac.bindings[].environments` | `[]` | Pattern degli ambienti con `*`. |
+| `rbac.bindings[].artifacts` | `[]` | Limita il binding ad alcuni artefatti (pattern su `artifact.name`). Con questo filtro il binding non vale per le azioni sull'intero ambiente. |
+| `rbac.bindings[].tenants` | | Selettore sul tenant proprietario (i suoi tag e `name`). |
+| `rbac.bindings[].selector` | | Selettore sui tag dell'applicazione (chiavi limitate da `rbac.selector_keys`). |
 | `rbac.tenant_roles` | `{members: deployer, admins: admin}` | Ruoli impliciti di `members` e `admins` di un [tenant](../guida/tenant.md) sulle sue applicazioni. Mai `policy.*`. |
 | `rbac.selector_keys` | `[]` | Chiavi che il `selector` di binding e grant può leggere (vuoto: nessun selettore nei permessi). |
 | `rbac.cross_tenant_inventory` | `true` | Chi appartiene a un tenant legge l'inventario di tutti i tenant. |
@@ -191,8 +221,29 @@ Vedi [Autenticazione, permessi e audit](accesso.md).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `governance.engine` | `builtin` | `builtin`: le regole e le finestre di questo file. `opa`: policy Rego valutate da OPA, modificabili a runtime. |
-| `governance.rules` | `[]` | Regole per applicazione e ambiente (vale la prima che corrisponde): `name`, `applications`, `environments`, `requires` (ambienti da cui promuovere), `approvals` (`required`, `allow_self`, `timeout`, default `72h`, `when`, `approvers` con `groups` e `subjects`), `change` (`approval`, `timeout`, default `72h`: ticket di change, vedi [Chat e change management](../guida/integrazioni.md#change-management)). Con `opa` sono i dati della policy predefinita. |
-| `governance.freezes` | `[]` | Finestre di freeze: `name`, `reason`, `applications`, `environments` e `from`/`to` oppure `cron` (5 campi), `duration`, `timezone`, `hard`. Le finestre si possono creare anche a runtime (`manent freeze add`). |
+| `governance.rules` | `[]` | Regole per applicazione e ambiente: vale la prima che corrisponde. Con `opa` sono i dati della policy predefinita. |
+| `governance.rules[].name` | | Nome della regola, riportato nelle decisioni e nell'audit. |
+| `governance.rules[].applications`, `environments` | `[]` | Pattern qualificati delle applicazioni e pattern degli ambienti. |
+| `governance.rules[].artifacts` | `[]` | Limita la regola ad alcuni artefatti (pattern su `artifact.name`). |
+| `governance.rules[].tenants` | | Selettore sul tenant proprietario. |
+| `governance.rules[].selector` | | Selettore sui tag dell'applicazione. |
+| `governance.rules[].requires` | `[]` | Ambienti in cui lo stesso artefatto deve essere già stato rilasciato (promozione). |
+| `governance.rules[].approvals.required` | `0` | Approvazioni necessarie prima del deploy. |
+| `governance.rules[].approvals.allow_self` | `false` | Chi richiede il deploy può approvarlo. |
+| `governance.rules[].approvals.timeout` | `72h` | Oltre questo tempo la richiesta scade. |
+| `governance.rules[].approvals.when` | `before` | `before`, prima del deploy, oppure `rollout`: nei punti di approvazione del rollout. |
+| `governance.rules[].approvals.approvers.groups`, `subjects` | `[]` | Chi può approvare (pattern con `*`); vuoto: chiunque abbia il permesso. |
+| `governance.rules[].change.approval` | `false` | Apre un ticket di change per ogni deploy e attende che venga approvato nell'ITSM (vedi [Chat e change management](../guida/integrazioni.md#change-management)). |
+| `governance.rules[].change.timeout` | `72h` | Limite dell'attesa dell'approvazione del change. |
+| `governance.freezes` | `[]` | Finestre di freeze. Le finestre si possono creare anche a runtime (`manent freeze add`). |
+| `governance.freezes[].name`, `reason` | | Nome e motivo mostrati a chi viene bloccato. |
+| `governance.freezes[].applications`, `environments` | `[]` | Pattern qualificati delle applicazioni e pattern degli ambienti. |
+| `governance.freezes[].artifacts` | `[]` | Limita la finestra ad alcuni artefatti. |
+| `governance.freezes[].tenants`, `selector` | | Selettori sul tenant proprietario e sui tag dell'applicazione. |
+| `governance.freezes[].regions` | `[]` | Limita la finestra ai passi dei [rilasci a ondate](../guida/ondate.md#approvazioni-e-freeze) in queste region: non blocca l'accodamento, il rollout si ferma prima della region. |
+| `governance.freezes[].from`, `to` | | Finestra assoluta (RFC 3339). |
+| `governance.freezes[].cron`, `duration`, `timezone` | | Finestra ricorrente: inizio come cron a 5 campi, durata e fuso orario. Alternativa a `from`/`to`. |
+| `governance.freezes[].hard` | `false` | La finestra non può essere esentata dalla policy né superata con `freezeOverride`. |
 | `governance.refresh` | `10s` | Ogni quanto ogni processo rilegge la policy e i freeze a runtime. |
 | `governance.max_staleness` | `10m` | Oltre questo tempo senza una lettura riuscita, i deploy reali sono rifiutati (`503`). |
 | `governance.start` | `deny` | Cosa ricontrolla l'avvio del deploy: `deny` (divieti e freeze) o `strict` (anche approvazioni e change aumentati dopo l'accodamento). |
@@ -227,18 +278,49 @@ Vedi [Sicurezza](sicurezza.md#cosa-puo-chiedere-un-descrittore).
 | Chiave | Default | Descrizione |
 |---|---|---|
 | `secrets.vault.enabled` | `false` | Abilita lo schema `vault:`. |
-| `secrets.vault.address`, `namespace`, `auth`, `token_file`, `approle`, `kubernetes`, `ca_file`, `timeout` | | Connessione e login a Vault. |
+| `secrets.vault.address` | `VAULT_ADDR` | Indirizzo di Vault. |
+| `secrets.vault.namespace` | | Namespace di Vault Enterprise. |
+| `secrets.vault.auth` | `token` | Login: `token`, `approle` o `kubernetes`. |
+| `secrets.vault.token_file` | | File con il token (`auth: token`); vuoto: `VAULT_TOKEN`. |
+| `secrets.vault.approle.role_id`, `secret_id_file`, `mount` | mount `approle` | Login AppRole: role ID, file con il secret ID, percorso di mount. |
+| `secrets.vault.kubernetes.role`, `jwt_file`, `mount` | `jwt_file` `/var/run/secrets/kubernetes.io/serviceaccount/token`, mount `kubernetes` | Login con il service account di Kubernetes. |
+| `secrets.vault.ca_file` | | Bundle di CA aggiuntive. |
+| `secrets.vault.timeout` | `10s` | Timeout di ogni chiamata. |
 | `artifacts.timeout` | `30m` | Durata massima di un download. |
 | `artifacts.allow_unlisted` | `true` | Ammette sorgenti non elencate in `artifacts.sources`. |
-| `artifacts.sources` | `[]` | `prefix`, `auth` (`type`, `username`, `header`, `secret_ref`), `ca_file`. |
+| `artifacts.sources` | `[]` | Sorgenti note; per un URL vince il prefisso corrispondente più lungo. |
+| `artifacts.sources[].prefix` | | Prefisso dell'URL (`https://`, `http://`, `file:///`, `oci://`, `oci+http://`). |
+| `artifacts.sources[].auth.type` | | `basic` (`username` + segreto), `bearer` oppure `header` (segreto nell'header `header`, es. `X-JFrog-Art-Api`). |
+| `artifacts.sources[].auth.username`, `header` | | Utente per `basic`, nome dell'header per `header`. |
+| `artifacts.sources[].auth.secret_ref` | | Riferimento al segreto (`vault:...`), risolto a ogni download; mai il valore. |
+| `artifacts.sources[].ca_file` | | Bundle di CA dedicato. |
 
 Vedi [Segreti e sorgenti degli artefatti](segreti-artefatti.md).
 
 ### `pipeline`
 
-Elenco ordinato degli step, con `name`, `mode` (`mandatory` oppure `optional`), `enabled` (default degli step opzionali) e `max_retries`. Vedi [Pipeline e step](../concetti/pipeline.md).
+`pipeline.steps` è l'elenco ordinato degli step: il piano segue sempre questo ordine. Un elenco nel file sostituisce per intero quello di default. Vedi [Pipeline e step](../concetti/pipeline.md).
 
-Uno step con `type` (`command` o `http`) è uno [step personalizzato](../guida/step-personalizzati.md), definito da `timeout`, `secrets`, `params`, `outputs`, `ssh`, `run` e `dry_run`. Si configurano in `pipeline.custom`:
+| Chiave | Default | Descrizione |
+|---|---|---|
+| `steps[].name` | | Nome dello step: uno degli step standard o uno step personalizzato. `drain` e `restore` sono riservati ai [pool di traffico](../guida/svuotamento.md). |
+| `steps[].mode` | | `mandatory` (non disattivabile) oppure `optional`. |
+| `steps[].enabled` | `false` | Default di uno step opzionale; il descrittore può cambiarlo con `steps:`. |
+| `steps[].max_retries` | `0` | Tentativi aggiuntivi dello step dopo un errore transitorio. |
+| `steps[].type` | | `command` o `http`: lo step è uno [step personalizzato](../guida/step-personalizzati.md#riferimento), definito da `timeout`, `secrets`, `params`, `outputs`, `ssh`, `run` e `dry_run`. |
+
+Pipeline di default:
+
+| Step | `mode` | `enabled` | `max_retries` |
+|---|---|---|---|
+| `secrets` | `mandatory` | | `0` |
+| `artifacts` | `mandatory` | | `3` |
+| `qa` | `optional` | `true` | `0` |
+| `deploy` | `mandatory` | | `2` |
+| `post-test` | `optional` | `false` | `5` |
+| `activation` | `optional` | `true` | `0` |
+
+Gli step personalizzati si configurano in `pipeline.custom`:
 
 | Chiave | Default | Descrizione |
 |---|---|---|
@@ -264,6 +346,8 @@ plugins:
       sha256: "3f1c…"
     artifact_types: [container]
 ```
+
+`remote-copy` è sempre attivo, anche quando il file elenca solo altri plugin: scrivere `remote-copy:` serve solo a dargli una configurazione.
 
 Due chiavi sono lette da manent e non passate al plugin: `queue` (la [coda propria](scalabilita.md#plugin-queues) del plugin) e `max_parallel`, il limite ai target di un lotto che il plugin aggiorna nello stesso momento, qualunque cosa chieda il deploy (default `16`): protegge worker e destinazioni, come le connessioni SSH o i rate limit di un'API cloud. Vedi [target in parallelo](../guida/ondate.md#target-in-parallelo).
 
@@ -299,11 +383,22 @@ Health gate dei [rilasci a ondate](../guida/ondate.md#health-gate).
 |---|---|---|
 | `prometheus_url` | | API di Prometheus per `rollout.health.metrics` (es. `http://prometheus:9090`). Senza, un rollout con metriche Prometheus è rifiutato; lo stesso vale per gli altri sistemi. |
 | `alertmanager_url` | | API di Alertmanager per `rollout.health.alerts`. |
-| `datadog` | | Datadog per le metriche con `provider: datadog`: `url` (sito dell'API, default `https://api.datadoghq.com`), `api_key_ref`, `app_key_ref`. |
-| `newrelic` | | New Relic NerdGraph: `url` (default `https://api.newrelic.com/graphql`), `account_id`, `api_key_ref` (chiave utente). |
-| `elastic` | | Elasticsearch ES\|QL: `url`, `api_key_ref` oppure `username` e `password_ref`, `ca_file`. |
-| `cloudwatch` | | Amazon CloudWatch: `region`, `endpoint` (facoltativo), credenziali dalla catena dell'SDK o da `access_key_id_ref` e `secret_access_key_ref`, `role_arn` ed `external_id` per assumere un ruolo. |
-| `azure_monitor` | | Azure Monitor Logs (`provider: azure-monitor`): `workspace_id`, un service principal con `tenant_id`, `client_id` e `client_secret_ref` oppure, senza, l'identità del worker (workload o managed identity); `endpoint` e `authority` per i cloud sovrani. |
+| `datadog.url` | `https://api.datadoghq.com` | Sito dell'API di Datadog, per le metriche con `provider: datadog` (es. `https://api.datadoghq.eu`). |
+| `datadog.api_key_ref`, `app_key_ref` | | Riferimenti ai segreti delle chiavi API e applicazione, letti a ogni chiamata. |
+| `newrelic.url` | `https://api.newrelic.com/graphql` | Endpoint NerdGraph di New Relic (`provider: newrelic`). |
+| `newrelic.account_id` | | Account di cui si leggono i dati. |
+| `newrelic.api_key_ref` | | Riferimento al segreto della chiave utente. |
+| `elastic.url` | | API ES\|QL di Elasticsearch (`provider: elastic`). |
+| `elastic.api_key_ref` | | Riferimento al segreto di una API key; alternativo a `username` e `password_ref`. |
+| `elastic.username`, `password_ref` | | Credenziali basic. |
+| `elastic.ca_file` | | Bundle di CA aggiuntive. |
+| `cloudwatch.region` | | Region di Amazon CloudWatch (`provider: cloudwatch`). |
+| `cloudwatch.endpoint` | | Endpoint alternativo (facoltativo). |
+| `cloudwatch.access_key_id_ref`, `secret_access_key_ref` | | Riferimenti ai segreti di credenziali statiche; vuoti: la catena di default dell'SDK. |
+| `cloudwatch.role_arn`, `external_id` | | Ruolo da assumere. |
+| `azure_monitor.workspace_id` | | Workspace Log Analytics di Azure Monitor Logs (`provider: azure-monitor`). |
+| `azure_monitor.tenant_id`, `client_id`, `client_secret_ref` | | Service principal; senza, l'identità del worker (workload o managed identity). |
+| `azure_monitor.endpoint`, `authority` | | Endpoint delle query e del login per i cloud sovrani. |
 | `check_timeout` | `30s` | Tempo massimo di ogni lettura del gate. |
 
 ### `integrations`
@@ -316,12 +411,21 @@ Notifiche in Slack e Teams, approvazioni da Slack e ticket di change. Vedi [Chat
 | `integrations.language` | `en` | Lingua dei messaggi: `en` o `it`. |
 | `integrations.timeout` | `15s` | Timeout delle chiamate a Slack, Teams e ITSM. |
 | `integrations.slack.bot_token_ref`, `signing_secret_ref` | | Segreti dell'app Slack: messaggi aggiornabili e pulsanti di approvazione. |
-| `integrations.slack.identities` | | ID utente Slack → `subject` (`oidc:alice`) e `groups` dell'identità di manent. |
-| `integrations.slack.email_identity` | | Identità degli utenti non elencati dalla loro email, es. `oidc:{email}`. |
-| `integrations.notifications` | `[]` | Destinazioni: `name`, `applications`, `environments`, `events`, `dry_run` e `slack` (`channel` o `webhook_ref`) oppure `teams` (`webhook_ref`). |
+| `integrations.slack.identities.<ID utente>.subject`, `groups` | | Identità di manent (`oidc:alice`) e gruppi di un utente Slack (ID come `U024BE7LH`): le sue approvazioni valgono come quelle di quell'identità. |
+| `integrations.slack.email_identity` | | Identità degli utenti non elencati dalla loro email di Slack, es. `oidc:{email}` (scope `users:read.email`). |
+| `integrations.slack.api_url` | `https://slack.com/api` | Indirizzo dell'API di Slack; lo cambiano solo i test. |
+| `integrations.notifications` | `[]` | Destinazioni dei messaggi. |
+| `integrations.notifications[].name` | | Nome della destinazione: lettere minuscole, cifre e `-`, al più 40 caratteri. Compare nei nomi degli step (`notify:<nome>:<evento>`). |
+| `integrations.notifications[].applications`, `environments` | `[]` | Pattern qualificati delle applicazioni e pattern degli ambienti. |
+| `integrations.notifications[].events` | `[deployment, approval]` | `deployment` (avvio ed esito) e `approval` (richieste ed esiti). |
+| `integrations.notifications[].dry_run` | `false` | Notifica anche i dry-run. |
+| `integrations.notifications[].slack.channel` | | Canale, con il bot token: messaggi aggiornati e pulsanti di approvazione. |
+| `integrations.notifications[].slack.webhook_ref` | | Riferimento al segreto di un incoming webhook (solo notifiche); alternativo a `channel`. |
+| `integrations.notifications[].teams.webhook_ref` | | Riferimento al segreto di un webhook di Teams (flusso Workflows o canale). |
 | `integrations.change.provider` | | `servicenow` o `jira`. |
 | `integrations.change.poll_interval` | `1m` | Intervallo iniziale di lettura dell'approvazione del change (fino a 5 minuti). |
-| `integrations.change.servicenow`, `jira` | | Connessione e campi del sistema ITSM. |
+| `integrations.change.servicenow.*` | | `url`, `username` con `password_ref` oppure `token_ref`, `table`, `fields`, `start_state`, `close_states`, `close_codes`: vedi [ServiceNow](../guida/integrazioni.md#servicenow). |
+| `integrations.change.jira.*` | | `url`, `username`, `token_ref`, `project`, `issue_type`, `fields`, `approved_statuses`, `rejected_statuses`, `transitions`: vedi [Jira](../guida/integrazioni.md#jira). |
 
 ### `chains`
 
