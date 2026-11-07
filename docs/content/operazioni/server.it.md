@@ -12,6 +12,8 @@ manent-server [-c <manent.yml>] <comando> [opzioni]
 
 ## Processi
 
+Tutti i processi leggono lo stesso file di configurazione; quali sezioni usa ognuno, e quali valori devono coincidere tra loro, è in [Cosa usa ogni processo](configurazione.md#processes).
+
 ### `serve`
 
 Avvia l'API HTTP e, nello stesso processo, un worker. È il modo più semplice per lo sviluppo e per installazioni con un solo nodo.

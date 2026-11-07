@@ -2,6 +2,58 @@
 
 manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Every value not set takes the default listed below; unknown keys are an error. The complete example file is `configs/manent.yml`.
 
+## What each process uses { #processes }
+
+Every [`manent-server` process](server.md) loads and checks the whole file and builds all its components at startup. The simplest choice is one file shared by API, workers and operators, with only the per-process keys changed (see below). The processes differ in which sections they actually use:
+
+- `api` accepts and checks requests, computes the plan and enqueues it; it never runs a deploy.
+- `worker` runs the deploys it dequeues; it has no API, so it does not authenticate anyone.
+- `serve` is both in one process and uses the union of the two columns.
+- `admin` works on the database without the API (see [Platform operations](server.md#platform-operations)).
+
+| Section | `api` | `worker` | `admin` |
+|---|---|---|---|
+| [`app`](#app) | `name` | ✓ | ✓ (`version` is the default of `recover --to-version`) |
+| [`dbos`](#dbos) | `database_url`, `queue` and the concurrency limits (shown by `manent queues`) | ✓ | `database_url` |
+| [`http`](#http) | ✓ | — | — |
+| [`logging` and `siem`](#logging-and-siem) | ✓ | ✓ | ✓ |
+| [`workdir`](#workdir) | only as the default `cache_dir` of the `git` provider | ✓ | — |
+| [`tenants`](#tenants) | ✓ | ✓ | — |
+| [`envconfig`](#envconfig) | ✓ (check at submission, `env validate`, imports) | ✓ (`config` step) | — |
+| [`callbacks`](#callbacks) | `allow_http`, `allowed_hosts` | ✓ | — |
+| [`rollback`](#rollback) | ✓ | ✓ | — |
+| [`auth`, `rbac`](#auth-rbac-audit) | ✓ | — (permissions are checked at submission) | — (identity `cli:<user>`, no permissions) |
+| [`audit`](#auth-rbac-audit) | ✓ (actions and denials) | ✓ (outcome of deploys, custom step runs) | ✓ (`audit verify`, break-glass actions) |
+| [`governance`](#governance) | ✓ | ✓ (checks at start, freezes during rollout, schedule ticks) | `policy-activate`, `freeze-delete` |
+| [`descriptor_policy`](#descriptor_policy) | ✓ | ✓ | — |
+| [`secrets`](#secrets-and-artifacts) | ✓ | ✓ | ✓ (references resolved at startup) |
+| [`artifacts`](#secrets-and-artifacts) | ✓ (allowlist, `--check-artifact`) | ✓ (download) | — |
+| [`pipeline`](#pipeline) | `steps`, `custom.spec_key_refs` (plan and signature of custom steps) | ✓ | `custom.revoked_specs` (`admin specs`) |
+| [`plugins`](#plugins) | `artifact_types`, `queue`: plugin choice and routing; plugins without their own queue are also activated with their configuration | ✓ (a plugin with its own queue only if listed in `dbos.plugins`, see [plugin queues](scalabilita.md#plugin-queues)) | — |
+| [`queues`](#queues) | ✓ (routing) | the queues listed in `dbos.queues` | — |
+| [`rollout`](#rollout) | ✓ (a rollout reading a system that is not configured is refused) | ✓ (gate readings) | — |
+| [`integrations`](#integrations) | `notifications` (destinations chosen at submission), `slack.signing_secret_ref`, `identities`, `email_identity` (approvals from Slack) | ✓ (sending messages, change tickets) | — |
+| [`chains`](#chains) | — | ✓ | — |
+| [`observability`](#observability) | ✓ (`/metrics` also on the API port) | ✓ (`listen` is the only way to expose probes and metrics) | — |
+| [`recovery`](#recovery) | `stale_after` (`manent workers`) | ✓ | `stale_after` (`admin executors`) |
+| [`retention`](#retention) | — | ✓ | `max_age`, `keep_releases` (`admin prune`) |
+| [`reconcile`](#reconcile) | — | ✓ | — |
+
+**Values that must be the same everywhere.** The API checks a request with its own configuration and the worker checks it again with its own, so different values give deploys accepted and then refused, or queued where nobody picks them up:
+
+- `app.name` and `dbos.database_url`: the DBOS application and its database.
+- `dbos.queue`, `queues`, `plugins.<name>.queue` and `artifact_types`: the API chooses the queue, the worker must serve it.
+- `pipeline.steps` and `pipeline.custom.spec_key_refs`: the API signs the custom steps of the plan, the worker verifies the signature. To rotate a key, first add it to every process, then make it the first one.
+- `tenants`, `envconfig`, `descriptor_policy`, `governance`, `rollback`, `callbacks.allow_http`/`allowed_hosts`, the systems of `rollout`.
+
+**Values set per process.**
+
+- Workers: `dbos.executor_id` (unique and stable), `dbos.region`, `dbos.tenants`, `dbos.plugins`, `dbos.queues`, `dbos.exclusive`, `dbos.concurrency`, `dbos.drain_timeout`, `workdir`.
+- API: `http.listen` (or `serve --listen`).
+- All: `observability.listen` and `audit.file`, one file per process: two processes on the same disk need different paths.
+
+The secrets referenced by `pipeline.custom.spec_key_refs` and `audit.hmac_key_ref` are read at startup: every process with the key in its configuration, `admin` included, must be able to resolve them.
+
 ## Reference
 
 ### `app`

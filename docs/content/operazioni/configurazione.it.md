@@ -2,6 +2,58 @@
 
 manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`). Ogni valore non indicato prende il default riportato sotto; le chiavi sconosciute sono un errore. Il file d'esempio completo è `configs/manent.yml`.
 
+## Cosa usa ogni processo { #processes }
+
+Ogni [processo di `manent-server`](server.md) carica e verifica l'intero file e costruisce all'avvio tutti i suoi componenti. La scelta più semplice è un solo file condiviso da API, worker e operatori, in cui cambiano solo le chiavi del singolo processo (vedi sotto). I processi differiscono per le sezioni che usano davvero:
+
+- `api` accetta e verifica le richieste, calcola il piano e lo accoda; non esegue mai un deploy.
+- `worker` esegue i deploy che preleva; non ha API, quindi non autentica nessuno.
+- `serve` è entrambi in un solo processo e usa l'unione delle due colonne.
+- `admin` lavora sul database senza passare dall'API (vedi [Operazioni di piattaforma](server.md#operazioni-di-piattaforma)).
+
+| Sezione | `api` | `worker` | `admin` |
+|---|---|---|---|
+| [`app`](#app) | `name` | ✓ | ✓ (`version` è il default di `recover --to-version`) |
+| [`dbos`](#dbos) | `database_url`, `queue` e i limiti di concorrenza (mostrati da `manent queues`) | ✓ | `database_url` |
+| [`http`](#http) | ✓ | — | — |
+| [`logging` e `siem`](#logging-e-siem) | ✓ | ✓ | ✓ |
+| [`workdir`](#workdir) | solo come `cache_dir` di default del provider `git` | ✓ | — |
+| [`tenants`](#tenants) | ✓ | ✓ | — |
+| [`envconfig`](#envconfig) | ✓ (verifica all'accodamento, `env validate`, import) | ✓ (step `config`) | — |
+| [`callbacks`](#callbacks) | `allow_http`, `allowed_hosts` | ✓ | — |
+| [`rollback`](#rollback) | ✓ | ✓ | — |
+| [`auth`, `rbac`](#auth-rbac-audit) | ✓ | — (i permessi sono verificati all'accodamento) | — (identità `cli:<utente>`, nessun permesso) |
+| [`audit`](#auth-rbac-audit) | ✓ (azioni e divieti) | ✓ (esito dei deploy, esecuzioni degli step personalizzati) | ✓ (`audit verify`, azioni break-glass) |
+| [`governance`](#governance) | ✓ | ✓ (controlli all'avvio, freeze durante il rollout, tick delle schedule) | `policy-activate`, `freeze-delete` |
+| [`descriptor_policy`](#descriptor_policy) | ✓ | ✓ | — |
+| [`secrets`](#secrets-e-artifacts) | ✓ | ✓ | ✓ (riferimenti risolti all'avvio) |
+| [`artifacts`](#secrets-e-artifacts) | ✓ (allowlist, `--check-artifact`) | ✓ (download) | — |
+| [`pipeline`](#pipeline) | `steps`, `custom.spec_key_refs` (piano e firma degli step personalizzati) | ✓ | `custom.revoked_specs` (`admin specs`) |
+| [`plugins`](#plugins) | `artifact_types`, `queue`: scelta del plugin e instradamento; i plugin senza coda propria vengono anche attivati con la loro configurazione | ✓ (un plugin con coda propria solo se elencato in `dbos.plugins`, vedi [code dei plugin](scalabilita.md#plugin-queues)) | — |
+| [`queues`](#queues) | ✓ (instradamento) | le code elencate in `dbos.queues` | — |
+| [`rollout`](#rollout) | ✓ (un rollout che legge un sistema non configurato viene rifiutato) | ✓ (letture del gate) | — |
+| [`integrations`](#integrations) | `notifications` (destinazioni scelte all'accodamento), `slack.signing_secret_ref`, `identities`, `email_identity` (approvazioni da Slack) | ✓ (invio dei messaggi, ticket di change) | — |
+| [`chains`](#chains) | — | ✓ | — |
+| [`observability`](#observability) | ✓ (`/metrics` anche sulla porta dell'API) | ✓ (`listen` è l'unico modo di esporre sonde e metriche) | — |
+| [`recovery`](#recovery) | `stale_after` (`manent workers`) | ✓ | `stale_after` (`admin executors`) |
+| [`retention`](#retention) | — | ✓ | `max_age`, `keep_releases` (`admin prune`) |
+| [`reconcile`](#reconcile) | — | ✓ | — |
+
+**Valori che devono essere uguali ovunque.** L'API verifica una richiesta con la propria configurazione e il worker la verifica di nuovo con la sua: valori diversi danno deploy accettati e poi rifiutati, o accodati dove nessuno li preleva.
+
+- `app.name` e `dbos.database_url`: l'applicazione DBOS e il suo database.
+- `dbos.queue`, `queues`, `plugins.<nome>.queue` e `artifact_types`: l'API sceglie la coda, il worker deve servirla.
+- `pipeline.steps` e `pipeline.custom.spec_key_refs`: l'API firma gli step personalizzati del piano, il worker verifica la firma. Per ruotare una chiave, prima la si aggiunge a tutti i processi, poi la si mette per prima.
+- `tenants`, `envconfig`, `descriptor_policy`, `governance`, `rollback`, `callbacks.allow_http`/`allowed_hosts`, i sistemi di `rollout`.
+
+**Valori del singolo processo.**
+
+- Worker: `dbos.executor_id` (univoco e stabile), `dbos.region`, `dbos.tenants`, `dbos.plugins`, `dbos.queues`, `dbos.exclusive`, `dbos.concurrency`, `dbos.drain_timeout`, `workdir`.
+- API: `http.listen` (o `serve --listen`).
+- Tutti: `observability.listen` e `audit.file`, un file per processo: due processi sullo stesso disco richiedono percorsi diversi.
+
+I segreti riferiti da `pipeline.custom.spec_key_refs` e `audit.hmac_key_ref` vengono letti all'avvio: ogni processo che ha la chiave nella configurazione, `admin` compreso, deve poterli risolvere.
+
 ## Riferimento
 
 ### `app`
