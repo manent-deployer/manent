@@ -85,10 +85,10 @@ func adminPolicyCommands(g *GlobalOptions) []cliutil.Command {
 // loadOptionalConfig reads the configuration if given (rules of manent.yml as data), the
 // defaults otherwise.
 func loadOptionalConfig(g *GlobalOptions) (*config.Config, error) {
-	if g.Config == "" {
+	if len(g.Config) == 0 {
 		return config.Default(), nil
 	}
-	return config.Load(g.Config)
+	return config.Load(g.Config...)
 }
 
 // compileDir compiles a directory of policies with the options of the configuration.
@@ -138,10 +138,10 @@ type PolicyExportRBACCmd struct {
 
 // Execute implements flags.Commander.
 func (c *PolicyExportRBACCmd) Execute([]string) error {
-	if c.global.Config == "" {
+	if len(c.global.Config) == 0 {
 		return errors.New("export-rbac needs the configuration (-c manent.yml)")
 	}
-	cfg, err := config.Load(c.global.Config)
+	cfg, err := config.Load(c.global.Config...)
 	if err != nil {
 		return err
 	}

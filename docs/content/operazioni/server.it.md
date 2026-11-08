@@ -8,7 +8,7 @@ manent-server [-c <manent.yml>] <comando> [opzioni]
 
 | Opzione globale | Descrizione |
 |---|---|
-| `-c`, `--config` | [Configurazione di manent](configurazione.md). Si può indicare anche con `MANENT_CONFIG`. Senza file valgono i default. |
+| `-c`, `--config` | [Configurazione di manent](configurazione.md). Ripetuta applica [più file a strati](configurazione.md#layers) (`-c base.yml -c worker.yml`); si può indicare anche con `MANENT_CONFIG`, file separati da virgole. Senza file valgono i default. |
 
 ## Processi
 

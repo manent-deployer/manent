@@ -1,10 +1,10 @@
 # Configurazione di manent
 
-manent legge un file YAML indicato con `-c` (o con la variabile `MANENT_CONFIG`). Ogni valore non indicato prende il default riportato sotto; le chiavi sconosciute sono un errore. Il file d'esempio completo è `configs/manent.yml`.
+manent legge i file YAML indicati con `-c` (o con la variabile `MANENT_CONFIG`): di solito uno, oppure [più file a strati](#layers), come una base condivisa da API e worker più il file di ogni ruolo. Ogni valore non indicato prende il default riportato sotto; le chiavi sconosciute sono un errore. Il file d'esempio completo è `configs/manent.yml`.
 
 ## Cosa usa ogni processo { #processes }
 
-Ogni [processo di `manent-server`](server.md) carica e verifica l'intero file e costruisce all'avvio tutti i suoi componenti. La scelta più semplice è un solo file condiviso da API, worker e operatori, in cui cambiano solo le chiavi del singolo processo (vedi sotto). I processi differiscono per le sezioni che usano davvero:
+Ogni [processo di `manent-server`](server.md) carica e verifica l'intera configurazione e costruisce all'avvio tutti i suoi componenti. La scelta più semplice è un file base condiviso da API, worker e operatori, con le chiavi del singolo processo in un secondo file per ogni ruolo ([più file](#layers)). I processi differiscono per le sezioni che usano davvero:
 
 - `api` accetta e verifica le richieste, calcola il piano e lo accoda; non esegue mai un deploy.
 - `worker` esegue i deploy che preleva; non ha API, quindi non autentica nessuno.
@@ -53,6 +53,48 @@ Ogni [processo di `manent-server`](server.md) carica e verifica l'intero file e 
 - Tutti: `observability.listen` e `audit.file`, un file per processo: due processi sullo stesso disco richiedono percorsi diversi.
 
 I segreti riferiti da `pipeline.custom.spec_key_refs` e `audit.hmac_key_ref` vengono letti all'avvio: ogni processo che ha la chiave nella configurazione, `admin` compreso, deve poterli risolvere.
+
+## Più file { #layers }
+
+`-c` si può ripetere: i file vengono applicati in ordine, ognuno sopra i precedenti, e la configurazione è il risultato di tutti. `MANENT_CONFIG` accetta lo stesso elenco separato da virgole.
+
+```sh
+manent-server -c base.yml -c api.yml api
+manent-server -c base.yml -c worker.yml worker
+MANENT_CONFIG=base.yml,worker.yml manent-server worker
+```
+
+Nella base va ciò che [deve essere uguale ovunque](#processes) (database, code, tenant, configurazione di ambiente, policy, governance, pipeline), nel file di ogni ruolo solo le sue chiavi: `http` e `auth` per l'API, `workdir` e le code servite per un worker. Così i valori che devono coincidere sono scritti una volta sola.
+
+```yaml title="base.yml"
+app: {name: manent}
+dbos: {database_url: postgres://manent@db:5432/manent}
+tenants: {file: /etc/manent/tenants.yml}
+queues:
+  - name: gpu
+    match: {environments: [prod]}
+# envconfig, governance, descriptor_policy, artifacts, ...
+```
+
+```yaml title="worker.yml"
+workdir: /var/lib/manent/work
+dbos:
+  queues: [gpu]
+```
+
+Un file successivo cambia solo ciò che scrive:
+
+| Valore | Base | File successivo | Risultato |
+|---|---|---|---|
+| Scalare | `timeout: 15s` | non scritto | `15s` |
+| Sezione | `oidc: {issuer: …}` | `oidc: {audience: manent}` | entrambe le chiavi: le sezioni si fondono chiave per chiave |
+| Lista | `allowed_hosts: [a, b]` | `allowed_hosts: [c]` | `[c]`: le liste si sostituiscono, `[]` ne svuota una |
+| Mappa | `plugins: {jboss: …}` | `plugins: {script: {}}` | entrambi i plugin: le chiavi si sommano |
+| Voce di una mappa | `application: {allowed: true, enabled: true}` | `application: {enabled: false}` | `allowed: false`: una voce si sostituisce per intero |
+
+L'ultima riga è quella a cui fare attenzione: una voce di `rollback.artifact_types`, `plugins`, `rbac.roles` o `integrations.slack.identities` modificata da un file successivo va riscritta lì per intero.
+
+Default, variabili d'ambiente e validazione si applicano una volta sola, al risultato: il file di un ruolo può riferirsi a ciò che definisce la base (`dbos.queues` che nomina una coda di `queues`) e può essere vuoto. Un errore in un file viene segnalato con il suo nome.
 
 ## Riferimento
 

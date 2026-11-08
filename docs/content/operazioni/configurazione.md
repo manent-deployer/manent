@@ -1,10 +1,10 @@
 # Configuring manent
 
-manent reads a YAML file given with `-c` (or the `MANENT_CONFIG` variable). Every value not set takes the default listed below; unknown keys are an error. The complete example file is `configs/manent.yml`.
+manent reads the YAML files given with `-c` (or the `MANENT_CONFIG` variable): usually one, or [several in layers](#layers), such as a base shared by API and workers plus the file of each role. Every value not set takes the default listed below; unknown keys are an error. The complete example file is `configs/manent.yml`.
 
 ## What each process uses { #processes }
 
-Every [`manent-server` process](server.md) loads and checks the whole file and builds all its components at startup. The simplest choice is one file shared by API, workers and operators, with only the per-process keys changed (see below). The processes differ in which sections they actually use:
+Every [`manent-server` process](server.md) loads and checks the whole configuration and builds all its components at startup. The simplest choice is a base file shared by API, workers and operators, with the per-process keys in a second file for each role ([several files](#layers)). The processes differ in which sections they actually use:
 
 - `api` accepts and checks requests, computes the plan and enqueues it; it never runs a deploy.
 - `worker` runs the deploys it dequeues; it has no API, so it does not authenticate anyone.
@@ -53,6 +53,48 @@ Every [`manent-server` process](server.md) loads and checks the whole file and b
 - All: `observability.listen` and `audit.file`, one file per process: two processes on the same disk need different paths.
 
 The secrets referenced by `pipeline.custom.spec_key_refs` and `audit.hmac_key_ref` are read at startup: every process with the key in its configuration, `admin` included, must be able to resolve them.
+
+## Several files { #layers }
+
+`-c` can be repeated: the files are applied in order, each one on top of the previous ones, and the configuration is the result of all of them. `MANENT_CONFIG` takes the same list separated by commas.
+
+```sh
+manent-server -c base.yml -c api.yml api
+manent-server -c base.yml -c worker.yml worker
+MANENT_CONFIG=base.yml,worker.yml manent-server worker
+```
+
+Put in the base what [must be the same everywhere](#processes) (database, queues, tenants, environment configuration, policies, governance, pipeline) and in each role's file only its own keys: `http` and `auth` for the API, `workdir` and the queues it serves for a worker. This way the values that must match are written once.
+
+```yaml title="base.yml"
+app: {name: manent}
+dbos: {database_url: postgres://manent@db:5432/manent}
+tenants: {file: /etc/manent/tenants.yml}
+queues:
+  - name: gpu
+    match: {environments: [prod]}
+# envconfig, governance, descriptor_policy, artifacts, ...
+```
+
+```yaml title="worker.yml"
+workdir: /var/lib/manent/work
+dbos:
+  queues: [gpu]
+```
+
+A later file changes only what it writes:
+
+| Value | Base | Later file | Result |
+|---|---|---|---|
+| Scalar | `timeout: 15s` | not written | `15s` |
+| Section | `oidc: {issuer: …}` | `oidc: {audience: manent}` | both keys: sections are merged key by key |
+| List | `allowed_hosts: [a, b]` | `allowed_hosts: [c]` | `[c]`: lists are replaced, `[]` empties one |
+| Map | `plugins: {jboss: …}` | `plugins: {script: {}}` | both plugins: keys are added |
+| Map entry | `application: {allowed: true, enabled: true}` | `application: {enabled: false}` | `allowed: false`: an entry is replaced whole |
+
+The last row is the one to watch: an entry of `rollback.artifact_types`, `plugins`, `rbac.roles` or `integrations.slack.identities` changed by a later file must be written in full there.
+
+Defaults, environment variables and validation apply once, to the result: a role file may refer to what the base defines (`dbos.queues` naming a queue of `queues`) and may be empty. An error in a file is reported with its name.
 
 ## Reference
 

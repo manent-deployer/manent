@@ -31,7 +31,9 @@ import (
 
 // GlobalOptions are the options shared by all commands.
 type GlobalOptions struct {
-	Config string `short:"c" long:"config" env:"MANENT_CONFIG" description:"YAML configuration file"`
+	// Config lists the configuration files, applied in order: a shared base, then the file of
+	// the role (e.g. -c base.yml -c worker.yml, or MANENT_CONFIG=base.yml,worker.yml).
+	Config []string `short:"c" long:"config" env:"MANENT_CONFIG" env-delim:"," description:"YAML configuration file; repeat to layer several files, later ones override earlier ones"`
 }
 
 // Run runs the CLI with the given arguments.
@@ -90,7 +92,7 @@ func (c *ValidateCmd) Execute([]string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(c.global.Config)
+	cfg, err := config.Load(c.global.Config...)
 	if err != nil {
 		return err
 	}
@@ -282,7 +284,7 @@ func cliContext() context.Context {
 
 // newClient creates the application in client mode: it enqueues and queries without running deploys.
 func newClient(g *GlobalOptions) (*app.App, error) {
-	cfg, err := config.Load(g.Config)
+	cfg, err := config.Load(g.Config...)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +294,7 @@ func newClient(g *GlobalOptions) (*app.App, error) {
 // newWorker creates the application in worker mode: it runs deploys and recovers its own
 // interrupted workflows.
 func newWorker(g *GlobalOptions) (*app.App, error) {
-	cfg, err := config.Load(g.Config)
+	cfg, err := config.Load(g.Config...)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +312,7 @@ type AuditVerifyCmd struct {
 
 // Execute implements flags.Commander.
 func (c *AuditVerifyCmd) Execute([]string) error {
-	cfg, err := config.Load(c.global.Config)
+	cfg, err := config.Load(c.global.Config...)
 	if err != nil {
 		return err
 	}

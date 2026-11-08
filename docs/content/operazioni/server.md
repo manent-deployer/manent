@@ -8,7 +8,7 @@ manent-server [-c <manent.yml>] <command> [options]
 
 | Global option | Description |
 |---|---|
-| `-c`, `--config` | [manent configuration](configurazione.md). It can also be given with `MANENT_CONFIG`. Without a file the defaults apply. |
+| `-c`, `--config` | [manent configuration](configurazione.md). Repeat it to apply [several files in layers](configurazione.md#layers) (`-c base.yml -c worker.yml`); it can also be given with `MANENT_CONFIG`, files separated by commas. Without a file the defaults apply. |
 
 ## Processes
 

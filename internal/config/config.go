@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/netip"
 	"os"
@@ -959,21 +960,26 @@ func (c *Config) SecurityWarnings() []string {
 	return w
 }
 
-// Load reads the YAML file (if given) on top of the defaults and applies environment variables.
-func Load(path string) (*Config, error) {
+// Load reads the YAML files, in order, on top of the defaults and applies environment
+// variables; with several files the configuration is the result of all of them (layers: a
+// shared base, then the file of the role).
+//
+// Every file is decoded on the same Config, so a later file overrides only what it sets:
+// scalars and lists are replaced (an empty list [] clears one), sections are merged field by
+// field, map keys are added, and a map entry (e.g. rollback.artifact_types.<type>,
+// plugins.<name>) is replaced whole. Defaults, environment variables and validation apply
+// once, to the result.
+func Load(paths ...string) (*Config, error) {
 	cfg := Default()
-	if path != "" {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
+	for _, path := range paths {
+		if path == "" {
+			continue
 		}
-		if err := checkRemovedKeys(data); err != nil {
+		if err := decodeFile(cfg, path); err != nil {
+			if len(paths) > 1 {
+				return nil, fmt.Errorf("%s: %w", path, err)
+			}
 			return nil, err
-		}
-		dec := yaml.NewDecoder(bytes.NewReader(data))
-		dec.KnownFields(true)
-		if err := dec.Decode(cfg); err != nil {
-			return nil, fmt.Errorf("invalid configuration: %w", err)
 		}
 	}
 	cfg.applyDefaults()
@@ -988,6 +994,23 @@ func Load(path string) (*Config, error) {
 		cfg.DBOS.ExecutorID = host
 	}
 	return cfg, cfg.Validate()
+}
+
+// decodeFile decodes one configuration file on top of cfg.
+func decodeFile(cfg *Config, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := checkRemovedKeys(data); err != nil {
+		return err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+	return nil
 }
 
 // validateProviders checks envconfig.providers.
