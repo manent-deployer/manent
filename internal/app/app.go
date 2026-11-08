@@ -549,7 +549,7 @@ func NewTenantCache(cfg *config.Config, log *slog.Logger) tenant.Directory {
 func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (all []engine.QueueOptions, listen []string, err error) {
 	if reg == nil {
 		if len(cfg.DBOS.Tenants) > 0 {
-			return nil, nil, errors.New("dbos.tenants requires a tenant registry (tenants.file)")
+			return nil, nil, errors.New("dbos.tenants requires a tenant registry (tenants.file): set tenants.file, or remove dbos.tenants")
 		}
 		return nil, nil, nil
 	}
@@ -559,7 +559,10 @@ func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (a
 	}
 	for _, t := range ts {
 		if t.Queue != "" && cfg.QueueRoute(t.Queue) != nil {
-			return nil, nil, fmt.Errorf("tenant %s: queue %s is also in queues", t.Name, t.Queue)
+			return nil, nil, fmt.Errorf("tenant %s: queue %s is also in queues: a queue belongs either to a tenant or to a queues entry, keep one: "+
+				"remove queue (and concurrency) from tenant %s in %s to route by the match of the queues entry, "+
+				"or remove the queues entry and %s from dbos.queues to send every deploy of the tenant to it",
+				t.Name, t.Queue, t.Name, cmp.Or(cfg.Tenants.File, "the tenant registry"), t.Queue)
 		}
 		if t.Queue != "" {
 			all = append(all, engine.QueueOptions{Name: t.Queue, GlobalConcurrency: t.Concurrency})
@@ -568,7 +571,12 @@ func tenantQueues(cfg *config.Config, reg tenant.Directory, log *slog.Logger) (a
 	for _, name := range cfg.DBOS.Tenants {
 		i := slices.IndexFunc(ts, func(t tenant.Tenant) bool { return t.Name == name })
 		if i < 0 {
-			return nil, nil, fmt.Errorf("dbos.tenants: tenant %s is not in the registry", name)
+			names := make([]string, len(ts))
+			for j, t := range ts {
+				names[j] = t.Name
+			}
+			return nil, nil, fmt.Errorf("dbos.tenants: tenant %s is not in the registry %s (tenants: %s): fix the name or add the tenant to the registry",
+				name, cfg.Tenants.File, strings.Join(names, ", "))
 		}
 		q := cmp.Or(ts[i].Queue, cfg.DBOS.Queue)
 		if !slices.Contains(listen, q) {

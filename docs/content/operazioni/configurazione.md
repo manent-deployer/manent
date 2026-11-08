@@ -60,7 +60,7 @@ The secrets referenced by `pipeline.custom.spec_key_refs` and `audit.hmac_key_re
 
 | Key | Default | Description |
 |---|---|---|
-| `name` | `manent` | Name of the DBOS application and `APP-NAME` of the messages sent to the SIEM. |
+| `name` | `manent` | Name of the DBOS application and `APP-NAME` of the messages sent to the SIEM. It must be the same on the API and on every worker of the same database: DBOS records which application owns each queue, and a worker with another name fails at startup with `Queue '…' is already registered by application '…'`. |
 | `version` | `0.2.0` | Workflow version recorded by DBOS: a worker resumes only the workflows of its own version. It is not the binary version and should be changed only when the release notes say so. See [Versions and upgrades](aggiornamenti.md). |
 
 ### `dbos`

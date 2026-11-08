@@ -32,10 +32,11 @@ func (c *Config) QueueRoute(name string) *QueueRoute {
 // validateQueueRoutes checks queues, dbos.queues and dbos.exclusive.
 func (c *Config) validateQueueRoutes() []error {
 	var errs []error
-	plugins := map[string]bool{}
+	// plugins maps the plugins' own queues to the plugin, to name it in the errors.
+	plugins := map[string]string{}
 	for name := range c.Plugins {
 		if q := c.PluginQueue(name); q != "" {
-			plugins[q] = true
+			plugins[q] = name
 		}
 	}
 	seen := map[string]bool{}
@@ -43,18 +44,22 @@ func (c *Config) validateQueueRoutes() []error {
 		at := fmt.Sprintf("queues[%d]", i)
 		switch {
 		case !queueRe.MatchString(r.Name):
-			errs = append(errs, fmt.Errorf("%s.name: invalid queue name %q", at, r.Name))
+			errs = append(errs, fmt.Errorf("%s.name: invalid queue name %q: %s", at, r.Name, queueNameRule))
 		case r.Name == c.DBOS.Queue || r.Name == c.DBOS.Queue+"-approvals":
-			errs = append(errs, fmt.Errorf("%s.name: %s is a queue of manent", at, r.Name))
-		case plugins[r.Name]:
-			errs = append(errs, fmt.Errorf("%s.name: %s is the queue of a plugin", at, r.Name))
+			errs = append(errs, fmt.Errorf("%s.name: %s is a queue of manent (dbos.queue or its approvals queue): choose another name; the deploys no entry matches already go to %s, every worker without dbos.exclusive serves it",
+				at, r.Name, c.DBOS.Queue))
+		case plugins[r.Name] != "":
+			p := plugins[r.Name]
+			errs = append(errs, fmt.Errorf("%s.name: %s is the queue of a plugin (plugins.%s.queue): choose another name, or remove the entry: the deploys of the artifact_types of plugin %s already go to %s",
+				at, r.Name, p, p, r.Name))
 		case seen[r.Name]:
-			errs = append(errs, fmt.Errorf("%s.name %q is repeated", at, r.Name))
+			errs = append(errs, fmt.Errorf("%s.name %q is repeated: a queue has one entry, merge the match patterns of the two entries or rename one", at, r.Name))
 		}
 		seen[r.Name] = true
 		if len(r.Match.Applications)+len(r.Match.Artifacts)+len(r.Match.Environments) == 0 {
 			// An empty match would take every deploy away from the default queue.
-			errs = append(errs, fmt.Errorf("%s.match: at least one of applications, artifacts, environments", at))
+			errs = append(errs, fmt.Errorf("%s.match: at least one of applications, artifacts, environments: an empty match would send every deploy to %s, add a pattern such as environments: [prod]",
+				at, r.Name))
 		}
 		for _, a := range r.Match.Applications {
 			if err := tenant.CheckAppPattern(a); err != nil {
@@ -62,26 +67,36 @@ func (c *Config) validateQueueRoutes() []error {
 			}
 		}
 		if r.Concurrency < 0 {
-			errs = append(errs, fmt.Errorf("%s.concurrency must be >= 0", at))
+			errs = append(errs, fmt.Errorf("%s.concurrency must be >= 0 (0 = dbos.global_concurrency)", at))
 		}
 	}
 	for _, q := range c.DBOS.Queues {
-		if !seen[q] {
-			errs = append(errs, fmt.Errorf("dbos.queues: queue %s is not in queues", q))
+		if seen[q] {
+			continue
 		}
+		var hint string
+		switch {
+		case q == c.DBOS.Queue:
+			hint = "it is the default queue, served by every worker without dbos.exclusive: remove it from dbos.queues"
+		case plugins[q] != "":
+			hint = fmt.Sprintf("it is the queue of plugin %s: move it to dbos.plugins as %s", plugins[q], plugins[q])
+		default:
+			hint = fmt.Sprintf("add an entry {name: %s, match: {...}} to queues, or remove it from dbos.queues (a tenant's queue needs no listing: dbos.tenants dedicates the worker to a tenant)", q)
+		}
+		errs = append(errs, fmt.Errorf("dbos.queues: queue %s is not in queues: %s", q, hint))
 	}
 	if c.DBOS.Exclusive {
 		if len(c.DBOS.Queues) == 0 && len(c.DBOS.Plugins) == 0 {
-			errs = append(errs, errors.New("dbos.exclusive requires dbos.queues or dbos.plugins"))
+			errs = append(errs, errors.New("dbos.exclusive requires dbos.queues or dbos.plugins: list the queues this worker reserves itself to, or remove dbos.exclusive"))
 		}
 		if len(c.DBOS.Tenants) > 0 {
-			errs = append(errs, errors.New("dbos.exclusive and dbos.tenants are alternatives"))
+			errs = append(errs, errors.New("dbos.exclusive and dbos.tenants are alternatives: dbos.tenants already limits the worker to those tenants' queues (plus dbos.queues and dbos.plugins), remove one of the two"))
 		}
 	}
 	if len(c.Queues) > 0 && c.DBOS.RegionRouting {
 		// The region passes would go to <queue>.<region>, registered only by the region workers
 		// that also serve the queue.
-		errs = append(errs, errors.New("queues is not supported with dbos.region_routing yet"))
+		errs = append(errs, errors.New("queues is not supported with dbos.region_routing yet: remove queues and dbos.queues (those deploys go back to their tenant's queue or to dbos.queue), or disable dbos.region_routing"))
 	}
 	return errs
 }

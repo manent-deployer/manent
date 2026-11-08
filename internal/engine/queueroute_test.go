@@ -1,10 +1,32 @@
 package engine
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/manent-deployer/manent/internal/testdb"
 )
+
+// A worker with a different app.name on the same database cannot take the queues of the
+// application that owns them: the error says that app.name must match.
+func TestCodaDiAltraApplicazione(t *testing.T) {
+	url := testdb.URL(t)
+	reg, _ := testRegistry(t, artifactStep{})
+	startWorker(t, workerOpts(url, "w1", reg))
+	other := workerOpts(url, "w2", reg)
+	other.AppName = "manent-other"
+	w, err := NewWorker(other)
+	if err == nil {
+		_ = w.Shutdown(5 * time.Second)
+		t.Fatal("a worker of another application must not register the same queue")
+	}
+	for _, want := range []string{`registering queue "deployments"`, "must have the same app.name", `"manent-other"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in: %v", want, err)
+		}
+	}
+}
 
 // A queue of the queues section: the matching deploys run only on the worker that serves it,
 // which with Exclusive leaves the others to the default queue; a plugin's queue wins.

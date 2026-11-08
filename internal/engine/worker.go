@@ -295,10 +295,10 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 		qopts = append(qopts, dbos.WithGlobalConcurrency(q.GlobalConcurrency))
 	}
 	if w.queue, err = dbos.RegisterQueue(ctx, q.Name, qopts...); err != nil {
-		return nil, fmt.Errorf("registering queue %q: %w", q.Name, err)
+		return nil, queueRegisterError(q.Name, opts.AppName, err)
 	}
 	if _, err = dbos.RegisterQueue(ctx, approvalQueue(q.Name)); err != nil {
-		return nil, fmt.Errorf("registering queue %q: %w", approvalQueue(q.Name), err)
+		return nil, queueRegisterError(approvalQueue(q.Name), opts.AppName, err)
 	}
 	w.deployQueues = []string{q.Name}
 	for _, tq := range opts.TenantQueues {
@@ -313,7 +313,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 			topts = append(topts, dbos.WithGlobalConcurrency(g))
 		}
 		if _, err = dbos.RegisterQueue(ctx, tq.Name, topts...); err != nil {
-			return nil, fmt.Errorf("registering queue %q: %w", tq.Name, err)
+			return nil, queueRegisterError(tq.Name, opts.AppName, err)
 		}
 		w.deployQueues = append(w.deployQueues, tq.Name)
 	}
@@ -341,7 +341,7 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 			popts = append(popts, dbos.WithGlobalConcurrency(g))
 		}
 		if _, err = dbos.RegisterQueue(ctx, pq.Name, popts...); err != nil {
-			return nil, fmt.Errorf("registering queue %q: %w", pq.Name, err)
+			return nil, queueRegisterError(pq.Name, opts.AppName, err)
 		}
 		w.deployQueues = append(w.deployQueues, pq.Name)
 	}
@@ -351,11 +351,23 @@ func NewWorker(opts WorkerOptions) (*Worker, error) {
 			rq := regionQueue(dq, w.region)
 			if _, err = dbos.RegisterQueue(ctx, rq, dbos.WithWorkerConcurrency(q.WorkerConcurrency),
 				dbos.WithPartitionConcurrency(1)); err != nil {
-				return nil, fmt.Errorf("registering queue %q: %w", rq, err)
+				return nil, queueRegisterError(rq, opts.AppName, err)
 			}
 		}
 	}
 	return w, nil
+}
+
+// queueRegisterError explains a failed queue registration. DBOS records which application owns
+// a queue: a different app.name on the same database (typically API and workers configured
+// differently, or a renamed application) is refused, and the fix is in manent's configuration.
+func queueRegisterError(name, appName string, err error) error {
+	var de *dbos.Error
+	if errors.As(err, &de) && de.Code == dbos.ErrorCodeConflictingRegistration {
+		return fmt.Errorf("registering queue %q: %w; in manent, API and every worker sharing dbos.database_url must have the same app.name (this process: %q): "+
+			"set app.name to the application that owns the queue, or, if the application was renamed on purpose, re-own its rows with dbos rename-application", name, err, appName)
+	}
+	return fmt.Errorf("registering queue %q: %w", name, err)
 }
 
 // initBackoff are the waits between DBOS initialization attempts.

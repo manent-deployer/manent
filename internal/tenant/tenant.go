@@ -171,7 +171,7 @@ func (t *Tenant) Validate() error {
 		errs = append(errs, fmt.Errorf("tenant %s: concurrency must be >= 0", t.Name))
 	}
 	if t.Queue != "" && !descriptor.ValidArtifactName(t.Queue) {
-		errs = append(errs, fmt.Errorf("tenant %s: invalid queue name %q", t.Name, t.Queue))
+		errs = append(errs, fmt.Errorf("tenant %s: invalid queue name %q: %s", t.Name, t.Queue, descriptor.ArtifactNameRule))
 	}
 	if t.EnvConfig != "" && !descriptor.ValidArtifactName(t.EnvConfig) {
 		errs = append(errs, fmt.Errorf("tenant %s: invalid envconfig provider name %q", t.Name, t.EnvConfig))
