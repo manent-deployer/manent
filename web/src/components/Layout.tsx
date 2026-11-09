@@ -1,7 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity as ActivityIcon, BarChart3, Building2, CalendarClock, GitBranch, ChevronDown, LayoutGrid, ListChecks, LogOut, Moon, Rocket, Scale, Server, ShieldAlert, Sun } from "lucide-react";
+import {
+  Activity as ActivityIcon,
+  BarChart3,
+  Building2,
+  CalendarClock,
+  ChevronDown,
+  GitBranch,
+  Landmark,
+  LayoutGrid,
+  ListChecks,
+  LogOut,
+  Moon,
+  Rocket,
+  Scale,
+  Server,
+  Settings2,
+  ShieldAlert,
+  Sun,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router";
+import clsx from "clsx";
 
 import { unwrap, type Status, type TenantInfo } from "@/api/client";
 import { useApi, useMe, useUIConfig } from "@/api/context";
@@ -48,12 +68,10 @@ function useHasTenants() {
   return (q.data?.length ?? 0) > 0;
 }
 
-function UserMenu() {
-  const { t } = useI18n();
-  const auth = useAuth();
-  const me = useMe();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+/** useDismiss closes a popup on Escape, on a click outside ref and on a page change. */
+function useDismiss(open: boolean, setOpen: (v: boolean) => void, ref: React.RefObject<HTMLElement>) {
+  const location = useLocation();
+  useEffect(() => setOpen(false), [location.pathname, location.search, setOpen]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -65,7 +83,117 @@ function UserMenu() {
       document.removeEventListener("mousedown", close);
       document.removeEventListener("keydown", close);
     };
-  }, [open]);
+  }, [open, setOpen, ref]);
+}
+
+interface NavItem {
+  to: string;
+  label: string;
+  hint?: string;
+  icon: LucideIcon;
+  count?: number;
+}
+
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
+
+const linkBase = "flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm transition-colors";
+const linkIdle = "text-muted hover:bg-raised/70 hover:text-fg";
+const linkActive = "bg-accent/10 font-medium text-accent";
+
+/** isUnder says whether path is the page to or one of its detail pages (/deployments/:id). */
+function isUnder(path: string, to: string) {
+  return path === to || path.startsWith(`${to}/`);
+}
+
+function Count({ count }: { count?: number }) {
+  const { t } = useI18n();
+  if (!count) return null;
+  return (
+    <span className="rounded-full bg-warn/20 px-1.5 text-xs font-semibold text-warn">
+      {count}
+      <span className="sr-only"> — {t("nav.approvalsWaiting", { count })}</span>
+    </span>
+  );
+}
+
+/** GroupMenu is a menu entry that opens the pages of its group; with one page it is a link. */
+function GroupMenu({ group }: { group: NavGroup }) {
+  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLLIElement>(null);
+  useDismiss(open, setOpen, ref);
+  const active = group.items.some((i) => isUnder(location.pathname, i.to));
+  const count = group.items.reduce((n, i) => n + (i.count ?? 0), 0);
+  const only = group.items.length === 1 ? group.items[0] : undefined;
+  if (only) {
+    const { to, label, icon: Icon } = only;
+    return (
+      <li>
+        <NavLink to={to} className={({ isActive }) => clsx(linkBase, isActive || active ? linkActive : linkIdle)}>
+          <Icon className="h-4 w-4" aria-hidden />
+          {label}
+          <Count count={count} />
+        </NavLink>
+      </li>
+    );
+  }
+  const Icon = group.icon;
+  const menuId = `nav-${group.id}`;
+  return (
+    <li className="relative" ref={ref}>
+      <button
+        type="button"
+        className={clsx(linkBase, active ? linkActive : linkIdle)}
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon className="h-4 w-4" aria-hidden />
+        {group.label}
+        <Count count={count} />
+        <ChevronDown className={clsx("h-3.5 w-3.5 transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <ul id={menuId} className="card absolute left-0 z-30 mt-2 w-72 bg-surface p-1.5 shadow-glow">
+          {group.items.map(({ to, label, hint, icon: ItemIcon, count: n }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
+                aria-current={isUnder(location.pathname, to) ? "page" : undefined}
+                className={clsx(
+                  "flex items-start gap-3 rounded-lg px-3 py-2 text-sm",
+                  isUnder(location.pathname, to) ? "bg-accent/10 text-accent" : "hover:bg-raised/70",
+                )}
+              >
+                <ItemIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 font-medium">
+                    {label}
+                    <Count count={n} />
+                  </span>
+                  {hint && <span className="block text-xs text-muted">{hint}</span>}
+                </span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function UserMenu() {
+  const { t } = useI18n();
+  const auth = useAuth();
+  const me = useMe();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(open, setOpen, ref);
   const id = me.data;
   const name = auth.name ?? id?.name ?? t("user.anonymous");
   return (
@@ -161,18 +289,57 @@ export function Layout({ children }: { children: ReactNode }) {
     };
   }, [location.pathname, callback]);
 
-  const nav = [
-    { to: "/deployments", label: t("nav.deployments"), icon: Rocket },
-    { to: "/activity", label: t("nav.activity"), icon: ActivityIcon },
-    { to: "/approvals", label: t("nav.approvals"), icon: ListChecks, count: canApprove ? waiting : 0 },
-    { to: "/inventory", label: t("nav.inventory"), icon: LayoutGrid },
-    ...(hasTenants ? [{ to: "/tenants", label: t("nav.tenants"), icon: Building2 }] : []),
-    { to: "/releases", label: t("nav.releases"), icon: GitBranch },
-    { to: "/calendar", label: t("nav.calendar"), icon: CalendarClock },
-    { to: "/metrics", label: t("nav.metrics"), icon: BarChart3 },
-    ...(canSomewhere(me.data, "policy.read") ? [{ to: "/policies", label: t("nav.policies"), icon: Scale }] : []),
-    ...(canSomewhere(me.data, "platform.read") ? [{ to: "/platform", label: t("nav.platform"), icon: Server }] : []),
-  ];
+  // The pages grouped by what they are for: few entries in the bar, the others in menus. A
+  // group with one visible page is a plain link, one with none is not shown.
+  const canPlatform = canSomewhere(me.data, "platform.read");
+  const groups: NavGroup[] = [
+    {
+      id: "deploy",
+      label: t("nav.deployments"),
+      icon: Rocket,
+      items: [
+        { to: "/deployments", label: t("nav.deployments"), hint: t("nav.hint.deployments"), icon: Rocket },
+        { to: "/activity", label: t("nav.activity"), hint: t("nav.hint.activity"), icon: ActivityIcon },
+        { to: "/releases", label: t("nav.releases"), hint: t("nav.hint.releases"), icon: GitBranch },
+        { to: "/metrics", label: t("nav.metrics"), hint: t("nav.hint.metrics"), icon: BarChart3 },
+      ],
+    },
+    {
+      id: "approvals",
+      label: t("nav.approvals"),
+      icon: ListChecks,
+      items: [{ to: "/approvals", label: t("nav.approvals"), icon: ListChecks, count: canApprove ? waiting : 0 }],
+    },
+    {
+      id: "inventory",
+      label: t("nav.inventory"),
+      icon: LayoutGrid,
+      items: [
+        { to: "/inventory", label: t("nav.inventory"), hint: t("nav.hint.inventory"), icon: LayoutGrid },
+        ...(hasTenants ? [{ to: "/tenants", label: t("nav.tenants"), hint: t("nav.hint.tenants"), icon: Building2 }] : []),
+      ],
+    },
+    {
+      id: "governance",
+      label: t("nav.governance"),
+      icon: Landmark,
+      items: [
+        { to: "/calendar", label: t("nav.calendar"), hint: t("nav.hint.calendar"), icon: CalendarClock },
+        ...(canSomewhere(me.data, "policy.read") ? [{ to: "/policies", label: t("nav.policies"), hint: t("nav.hint.policies"), icon: Scale }] : []),
+      ],
+    },
+    {
+      id: "platform",
+      label: t("nav.platform"),
+      icon: Server,
+      items: canPlatform
+        ? [
+            { to: "/platform", label: t("nav.workers"), hint: t("nav.hint.workers"), icon: Server },
+            { to: "/configuration", label: t("nav.configuration"), hint: t("nav.hint.configuration"), icon: Settings2 },
+          ]
+        : [],
+    },
+  ].filter((g) => g.items.length > 0);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -185,28 +352,10 @@ export function Layout({ children }: { children: ReactNode }) {
             <Logo />
             <span>manent</span>
           </NavLink>
-          <nav aria-label={t("nav.main")} className="order-last w-full overflow-x-auto md:order-none md:w-auto">
-            <ul className="flex gap-1">
-              {nav.map(({ to, label, icon: Icon, count }) => (
-                <li key={to}>
-                  <NavLink
-                    to={to}
-                    className={({ isActive }) =>
-                      `flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm transition-colors ${
-                        isActive ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-raised/70 hover:text-fg"
-                      }`
-                    }
-                  >
-                    <Icon className="h-4 w-4" aria-hidden />
-                    {label}
-                    {count ? (
-                      <span className="rounded-full bg-warn/20 px-1.5 text-xs font-semibold text-warn">
-                        {count}
-                        <span className="sr-only"> — {t("nav.approvalsWaiting", { count })}</span>
-                      </span>
-                    ) : null}
-                  </NavLink>
-                </li>
+          <nav aria-label={t("nav.main")} className="order-last w-full md:order-none md:w-auto">
+            <ul className="flex flex-wrap gap-1">
+              {groups.map((g) => (
+                <GroupMenu key={g.id} group={g} />
               ))}
             </ul>
           </nav>

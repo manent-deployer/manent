@@ -757,6 +757,18 @@ func (g *Guard) Queues(ctx context.Context) ([]engine.QueueInfo, error) {
 	return g.Next.Queues(ctx)
 }
 
+// Configuration requires platform.read, like Workers and Queues: the configuration describes
+// the whole platform, with the secrets already redacted.
+func (g *Guard) Configuration(ctx context.Context) (*engine.ConfigurationInfo, error) {
+	p := auth.FromContext(ctx)
+	if !g.permittedAnywhere(ctx, p, PlatformRead) {
+		err := fmt.Errorf("%w: %s cannot perform %s", engine.ErrForbidden, actor(p), PlatformRead)
+		g.record(ctx, PlatformRead, target{}, audit.OutcomeDenied, err)
+		return nil, err
+	}
+	return g.Next.Configuration(ctx)
+}
+
 // Activity returns only the deploys the identity can read.
 func (g *Guard) Activity(ctx context.Context, f engine.ActivityFilter) (*engine.Activity, error) {
 	p := auth.FromContext(ctx)

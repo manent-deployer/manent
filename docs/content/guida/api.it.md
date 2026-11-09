@@ -44,6 +44,7 @@ Authorization: Bearer <token>
 | `POST` | `/api/v1/releases/{id}/cancel` | Annulla i deploy non conclusi e la release. |
 | `GET` | `/api/v1/workers` | Worker registrati con stato, heartbeat, risorse, code e workflow in esecuzione (`platform.read`). |
 | `GET` | `/api/v1/queues` | Code con limiti, workflow in attesa, in esecuzione e pianificati e worker in ascolto (`platform.read`). |
+| `GET` | `/api/v1/configuration` | Configurazione effettiva del processo API, con i valori che possono essere segreti nascosti (`platform.read`). |
 | `POST` | `/api/v1/promotions` | Promuove un artefatto da un ambiente a un altro. |
 | `POST` | `/api/v1/rollbacks` | Torna a una versione precedente. |
 | `GET` | `/api/v1/inventory` | Release in esercizio per applicazione e ambiente. |
@@ -366,6 +367,8 @@ Un commento `: keep-alive` ogni 15 secondi tiene aperta la connessione attravers
 `GET /api/v1/workers` restituisce `{"workers": [...]}`: per ogni worker `id`, `state` (`alive`, `stale`, `stopped`, `unregistered`), `version` (versione dei workflow), `build`, `hostname`, `region`, `started_at`, `heartbeat_at`, `recovered_by`, `pending` (workflow in sospeso per versione) e `tasks`, i workflow in esecuzione (`kind`: `deploy`, `pass`, `gate`, `approval`, `schedule`, `after`, `release`, con `deployment_id`, applicazione, ambiente, region e `started_at`). Richiede `platform.read`; `hidden_tasks` conta i workflow delle applicazioni che il chiamante non può leggere. Ogni worker ha anche `queues`, le code da cui preleva, e `resources`, il campione che invia a ogni heartbeat: `cpus` e `cpu_limit` (CPU dell'host e utilizzabili dal processo, che segue la quota del container), `process_cpu_cores` (CPU usata dal campione precedente), `memory_total_bytes`, `memory_available_bytes` e `memory_limit_bytes` (host e container), `process_memory_bytes`, `load1`/`load5`/`load15`, `workdir_free_bytes`, `concurrency`, `goroutines` e `sampled_at`; i valori che il sistema operativo non fornisce mancano.
 
 `GET /api/v1/queues` restituisce `{"queues": [...]}`: per ogni coda `name`, `kind` (`deployments`, `approvals`, `region`, `other`), `region`, i limiti `worker_concurrency`, `partition_concurrency` e `global_concurrency`, i conteggi `enqueued`, `running` e `delayed`, `oldest_enqueued` e `workers`, i worker attivi in ascolto. Richiede `platform.read`.
+
+`GET /api/v1/configuration` restituisce la configurazione del processo che serve l'API: `version` (build), `executor` (`dbos.executor_id`), `files` (i file di configurazione letti, in ordine), `config` (ogni sezione, con le chiavi del file YAML, dopo default e variabili d'ambiente) e `redacted`, i percorsi (`dbos.database_url`, `auth.tokens[0].sha256`) dei valori sostituiti con `[redacted]` o con la password mascherata perché possono essere segreti. I worker possono usare altri file: la loro configurazione non è riportata. Richiede `platform.read`.
 
 La CLI li espone come `manent activity`, `manent workers` e `manent queues`.
 

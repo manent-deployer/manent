@@ -6,18 +6,31 @@ Mostra solo ciò che l'utente può vedere e offre solo le azioni che può esegui
 
 ## Viste
 
+La barra in alto raggruppa le viste per scopo, così resta corta:
+
+| Menu | Viste |
+|---|---|
+| **Deploy** | Deploy, Attività, Release, Metriche |
+| **Approvazioni** | Approvazioni, con il numero di decisioni che ti aspettano |
+| **Inventario** | Inventario, Tenant (se ci sono tenant che puoi leggere) |
+| **Governance** | Calendario, Policy (con `policy.read`) |
+| **Piattaforma** | Worker e code, Configurazione (con `platform.read`) |
+
+Un menu con una sola vista accessibile è un semplice link; uno senza viste non compare.
+
 | Vista | Cosa mostra | Cosa si può fare |
 |---|---|---|
 | **Deploy** | I deploy più recenti, filtrabili per applicazione, ambiente e stato, con tipo, avanzamento delle ondate, richiedente e durata. | Aprire un deploy. |
 | **Dettaglio di un deploy** | Stato, sha256, origine di una promozione o di un rollback, release, dipendenze con il loro stato, approvazioni con i commenti, ondate (stadi, region, AZ, health gate), step registrati, log. Stato e log si aggiornano in tempo reale. | Approvare o respingere, annullare. |
-| **Attività** | Cosa sta succedendo ora: deploy in esecuzione con worker, ultimo step e avanzamento delle ondate; deploy in attesa di approvazione, in attesa delle dipendenze, in coda e pianificati. Con `platform.read`, i worker con stato, region, heartbeat e workflow in esecuzione. Aggiornata ogni 5 secondi. | Aprire un deploy. |
-| **Approvazioni** | I deploy in attesa di una decisione che puoi prendere, prima dell'avvio o tra due ondate. | Approvare con un commento, respingere (commento obbligatorio). |
-| **Release** | [Release composte](catene.md#release-composte) con l'avanzamento di ogni deploy, le dipendenze e i rollback di `onFailure: rollback`. | Aprire una release o un deploy, annullare una release. |
+| **Attività** | Cosa sta succedendo ora: deploy in esecuzione con worker, ultimo step e avanzamento delle ondate; deploy in attesa di approvazione, in attesa delle dipendenze, in coda e pianificati, filtrabili per testo (applicazione, ambiente, tenant, versione, richiedente, worker) e per stato. Con `platform.read`, i worker con stato, region, heartbeat e workflow in esecuzione. Aggiornata ogni 5 secondi. | Aprire un deploy. |
+| **Approvazioni** | I deploy in attesa di una decisione che puoi prendere, prima dell'avvio o tra due ondate, filtrabili per testo. | Approvare con un commento, respingere (commento obbligatorio). |
+| **Release** | [Release composte](catene.md#release-composte) con l'avanzamento di ogni deploy, le dipendenze e i rollback di `onFailure: rollback`, filtrabili per stato e per testo (release, applicazioni, ambienti e versioni dei suoi deploy). | Aprire una release o un deploy, annullare una release. |
 | **Tenant** | Visibile quando il [registro dei tenant](tenant.md) ha tenant che puoi leggere: tag, applicazioni possedute, coda, filtri per applicazione e selettore. La pagina di un tenant mostra le sue applicazioni con i tag e la release in esercizio per applicazione, artefatto e ambiente. | Aprire il deploy in esercizio o lo storico dei deploy di un'applicazione. |
 | **Inventario** | Release in esercizio per applicazione e ambiente e artefatto (con il [tenant](tenant.md) proprietario), ultimo fallimento e drift. | Promuovere in un altro ambiente, fare rollback, sempre dopo un dry-run. |
 | **Calendario** | Finestre di freeze attive e future (anche per region, hard, create a runtime con il loro autore), schedule ricorrenti. | Con `freeze.write`, creare un freeze d'emergenza e chiudere quelli creati a runtime. Sospendere, riprendere ed eliminare le schedule. |
 | **Metriche** | Metriche DORA su 7, 30 o 90 giorni, per applicazione e ambiente, con i dati anche in tabella. | |
-| **Piattaforma** | Con `platform.read`: le code (deploy, approvazioni e attese, passi delle region) con i limiti, i workflow in attesa, in esecuzione e pianificati, l'attesa più lunga e i worker in ascolto; i worker con le loro risorse (CPU usata e disponibile, memoria del processo rispetto al limite del container o alla memoria dell'host, slot di deploy occupati, spazio libero della workdir, carico dell'host) e le code che ascoltano. Aggiornata ogni 5 secondi. | Aprire i deploy in esecuzione su un worker. |
+| **Piattaforma** | Con `platform.read`: le code (deploy, approvazioni e attese, passi delle region) con i limiti, i workflow in attesa, in esecuzione e pianificati, l'attesa più lunga e i worker in ascolto; i worker con le loro risorse (CPU usata e disponibile, memoria del processo rispetto al limite del container o alla memoria dell'host, slot di deploy occupati, spazio libero della workdir, carico dell'host) e le code che ascoltano. Code filtrabili per testo, tipo e "solo con lavoro"; worker per testo (ID, host, coda, build, applicazione in esecuzione), stato, region e "solo occupati". Aggiornata ogni 5 secondi. | Aprire i deploy in esecuzione su un worker. |
+| **Configurazione** | Con `platform.read`: la configurazione effettiva del processo server che risponde alla pagina (`GET /api/v1/configuration`): versione, executor, i [file](../operazioni/configurazione.md#layers) letti in ordine, poi ogni sezione dopo default e variabili d'ambiente. I valori che possono essere segreti sono nascosti e segnalati (password negli URL, chiavi come `password`, `secret`, `token` che non sono `_ref` o `_file`, hash dei token statici, `env` dei plugin esterni). I worker possono usare altri file: la loro configurazione non è mostrata. | Cercare per chiave o valore, mostrare i valori vuoti, passare al JSON e copiarlo. |
 | **Policy** | Con `policy.read`: motore, sorgente e revisione della [policy di governance](policy.md) in vigore, le revisioni con stato, autore, approvatore e test, i file di ogni revisione. | Con `policy.write` calcolare l'impatto sugli ultimi 7 giorni e, con `rbac.engine: opa`, simulare in **Accessi** i [permessi](permessi.md#simulazione-e-impatto) di un'identità; con `policy.approve` approvare una bozza o tornare a una revisione precedente. |
 
 Ogni vista ha un URL proprio con i filtri nella query string, così un link incollato in chat apre esattamente la stessa pagina.

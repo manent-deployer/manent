@@ -199,6 +199,10 @@ func (f *fakeService) Queues(context.Context) ([]engine.QueueInfo, error) {
 	return []engine.QueueInfo{{Name: "deployments", Kind: "deployments", Workers: []string{"w1"}}}, nil
 }
 
+func (f *fakeService) Configuration(context.Context) (*engine.ConfigurationInfo, error) {
+	return &engine.ConfigurationInfo{Version: "v1"}, nil
+}
+
 // Workers and Activity ignore Match, like a remote service: the Guard must filter anyway.
 func (f *fakeService) Workers(context.Context) ([]engine.WorkerInfo, error) {
 	return []engine.WorkerInfo{{ID: "w1", State: "alive", Tasks: []engine.WorkerTask{
@@ -353,6 +357,9 @@ func TestGuard(t *testing.T) {
 	if _, err := g.Queues(alice); !errors.Is(err, engine.ErrForbidden) {
 		t.Errorf("code senza platform.read: atteso ErrForbidden, ricevuto %v", err)
 	}
+	if _, err := g.Configuration(alice); !errors.Is(err, engine.ErrForbidden) {
+		t.Errorf("configurazione senza platform.read: atteso ErrForbidden, ricevuto %v", err)
+	}
 
 	// A schedule with the same name as another application's cannot be overwritten.
 	op := auth.WithPrincipal(context.Background(), &auth.Principal{Subject: "ops", Method: auth.MethodOIDC})
@@ -372,6 +379,9 @@ func TestGuard(t *testing.T) {
 	if qs, err := g.Queues(op); err != nil || len(qs) != 1 {
 		t.Errorf("code: %+v %v", qs, err)
 	}
+	if c, err := g.Configuration(op); err != nil || c.Version != "v1" {
+		t.Errorf("configurazione: %+v %v", c, err)
+	}
 
 	// Without an identity in the context everything is denied.
 	if _, err := g.Status(context.Background(), "a1"); !errors.Is(err, engine.ErrForbidden) {
@@ -388,7 +398,7 @@ func TestGuard(t *testing.T) {
 			denied++
 		}
 	}
-	if allowed != 5 || denied != 14 {
+	if allowed != 5 || denied != 15 {
 		t.Errorf("voci di audit inattese (allowed=%d denied=%d): %+v", allowed, denied, rec.entries)
 	}
 	if rec.entries[0].Actor != "oidc:alice" || rec.entries[0].Deployment != "new" || rec.entries[0].Action != string(DeploymentSubmit) {

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -316,6 +317,16 @@ func (e *Engine) lastStep(id string) string {
 		return ""
 	}
 	return steps[len(steps)-1].StepName
+}
+
+// Configuration implements PlatformService: the redacted configuration given by the process
+// (ServiceOptions.Configuration), ErrUnavailable without one.
+func (e *Engine) Configuration(context.Context) (*ConfigurationInfo, error) {
+	if e.configuration == nil {
+		return nil, fmt.Errorf("%w: the configuration of this process is not available", ErrUnavailable)
+	}
+	c := *e.configuration
+	return &c, nil
 }
 
 var _ service.PlatformService = (*Engine)(nil)

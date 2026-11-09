@@ -599,6 +599,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Effective configuration of the API process, with values that may be secrets redacted (platform.read permission) */
+        get: operations["getConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/activity": {
         parameters: {
             query?: never;
@@ -1100,6 +1117,21 @@ export interface components {
             concurrency?: number;
             /** Format: date-time */
             sampled_at: string;
+        };
+        /** @description Configuration of the process that serves the API, after files, defaults and environment variables. Workers may use other files. */
+        Configuration: {
+            /** @description Build version of the process */
+            version: string;
+            /** @description dbos.executor_id of the process */
+            executor: string;
+            /** @description Configuration files read, in order (later ones override earlier ones) */
+            files: string[];
+            /** @description The configuration */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description Paths (dotted, [i] for list items) of the values replaced because they may be secrets */
+            redacted: string[];
         };
         Queue: {
             name: string;
@@ -2578,6 +2610,29 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    getConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Configuration"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     getActivity: {

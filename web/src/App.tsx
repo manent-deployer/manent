@@ -15,6 +15,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { ActivityPage } from "@/pages/Activity";
 import { ApprovalsPage } from "@/pages/Approvals";
 import { CalendarPage } from "@/pages/Calendar";
+import { ConfigurationPage } from "@/pages/Configuration";
 import { DeploymentDetailPage } from "@/pages/DeploymentDetail";
 import { DeploymentsPage } from "@/pages/Deployments";
 import { InventoryPage } from "@/pages/Inventory";
@@ -73,6 +74,7 @@ export function AppRoutes() {
         <Route path="/tenants" element={<TenantsPage />} />
         <Route path="/tenants/:name" element={<TenantDetailPage />} />
         <Route path="/platform" element={<PlatformPage />} />
+        <Route path="/configuration" element={<ConfigurationPage />} />
         <Route
           path="/metrics"
           element={

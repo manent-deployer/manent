@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -61,6 +62,9 @@ type Config struct {
 	Reconcile     Reconcile     `yaml:"reconcile"`
 	Integrations  Integrations  `yaml:"integrations"`
 	Tenants       Tenants       `yaml:"tenants"`
+
+	// Files are the configuration files read by Load, in order (not part of the YAML).
+	Files []string `yaml:"-"`
 }
 
 // Observability configures metrics, tracing and probes of long-running processes.
@@ -981,6 +985,10 @@ func Load(paths ...string) (*Config, error) {
 			}
 			return nil, err
 		}
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		cfg.Files = append(cfg.Files, path)
 	}
 	cfg.applyDefaults()
 	if url := os.Getenv("DBOS_SYSTEM_DATABASE_URL"); url != "" {

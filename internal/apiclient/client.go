@@ -408,6 +408,15 @@ func (c *Client) Workers(ctx context.Context) ([]service.WorkerInfo, error) {
 	return out.Workers, err
 }
 
+// Configuration implements service.Service.
+func (c *Client) Configuration(ctx context.Context) (*service.ConfigurationInfo, error) {
+	var out service.ConfigurationInfo
+	if err := c.do(ctx, http.MethodGet, "/configuration", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Activity implements service.Service.
 func (c *Client) Activity(ctx context.Context, f service.ActivityFilter) (*service.Activity, error) {
 	q := url.Values{}

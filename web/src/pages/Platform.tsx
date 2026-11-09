@@ -5,6 +5,7 @@ import { Link } from "react-router";
 
 import { unwrap, type Queue, type Worker, type WorkerResources } from "@/api/client";
 import { useApi } from "@/api/context";
+import { distinct, FilterBar, matches, SearchFilter, SelectFilter, ToggleFilter, useClearParams, useParam } from "@/components/Filters";
 import { Badge, Button, EmptyState, ErrorState, Loading, PageHeader, Section } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
@@ -274,6 +275,104 @@ function Queues({ queues }: { queues: Queue[] }) {
   );
 }
 
+/** busyWorker says whether a worker is running deploys or region passes. */
+function busyWorker(w: Worker) {
+  return w.tasks.some((task) => task.kind === "deploy" || task.kind === "pass");
+}
+
+function WorkersSection({ workers }: { workers: Worker[] }) {
+  const { t } = useI18n();
+  const [query, setQuery] = useParam("worker");
+  const clear = useClearParams("worker", "state", "region", "busy");
+  const [state, setState] = useParam("state");
+  const [region, setRegion] = useParam("region");
+  const [busy, setBusy] = useParam("busy");
+  const regions = distinct(workers.map((w) => w.region));
+  const states = distinct(workers.map((w) => w.state));
+  const shown = workers.filter(
+    (w) =>
+      (!state || w.state === state) &&
+      (!region || w.region === region) &&
+      (!busy || busyWorker(w)) &&
+      matches(
+        query,
+        w.id,
+        w.hostname,
+        w.region,
+        w.build,
+        w.version,
+        ...(w.queues ?? []),
+        ...w.tasks.flatMap((task) => [task.application, task.environment, task.deployment_id]),
+      ),
+  );
+  const active = Boolean(query || state || region || busy);
+  return (
+    <>
+      <FilterBar
+        shown={shown.length}
+        total={workers.length}
+        active={active}
+        onReset={clear}
+      >
+        <SearchFilter label={t("filters.search")} placeholder={t("platform.filter.workers")} value={query} onChange={setQuery} />
+        <SelectFilter
+          label={t("platform.filter.state")}
+          value={state}
+          onChange={setState}
+          options={states.map((s) => {
+            const key = `worker.${s}` as MessageKey;
+            return { value: s, label: t(key) === key ? s : t(key) };
+          })}
+        />
+        {regions.length > 0 && <SelectFilter label={t("platform.filter.region")} value={region} onChange={setRegion} options={regions.map((r) => ({ value: r, label: r }))} />}
+        <ToggleFilter label={t("platform.filter.busy")} checked={Boolean(busy)} onChange={(v) => setBusy(v ? "1" : "")} />
+      </FilterBar>
+      {shown.length === 0 ? (
+        <EmptyState>{workers.length === 0 ? t("activity.noWorkers") : t("filters.none")}</EmptyState>
+      ) : (
+        <ul className="grid gap-4 lg:grid-cols-2">
+          {shown.map((w) => (
+            <WorkerCard key={w.id} w={w} />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function QueuesSection({ queues }: { queues: Queue[] }) {
+  const { t } = useI18n();
+  const [query, setQuery] = useParam("queue");
+  const clear = useClearParams("queue", "kind", "work");
+  const [kind, setKind] = useParam("kind");
+  const [work, setWork] = useParam("work");
+  const kinds = distinct(queues.map((q) => q.kind));
+  const shown = queues.filter(
+    (q) => (!kind || q.kind === kind) && (!work || q.enqueued + q.running + q.delayed > 0) && matches(query, q.name, q.region, ...q.workers),
+  );
+  const active = Boolean(query || kind || work);
+  return (
+    <>
+      <FilterBar
+        shown={shown.length}
+        total={queues.length}
+        active={active}
+        onReset={clear}
+      >
+        <SearchFilter label={t("filters.search")} placeholder={t("platform.filter.queues")} value={query} onChange={setQuery} />
+        <SelectFilter
+          label={t("platform.filter.kind")}
+          value={kind}
+          onChange={setKind}
+          options={kinds.map((k) => ({ value: k, label: t(`platform.kind.${k}` as MessageKey) }))}
+        />
+        <ToggleFilter label={t("platform.filter.withWork")} checked={Boolean(work)} onChange={(v) => setWork(v ? "1" : "")} />
+      </FilterBar>
+      {queues.length > 0 && shown.length === 0 ? <EmptyState>{t("filters.none")}</EmptyState> : <Queues queues={shown} />}
+    </>
+  );
+}
+
 export function PlatformPage() {
   const { t } = useI18n();
   const api = useApi();
@@ -312,7 +411,7 @@ export function PlatformPage() {
           ) : queues.isError ? (
             <ErrorState error={queues.error} onRetry={() => void queues.refetch()} />
           ) : (
-            <Queues queues={queues.data} />
+            <QueuesSection queues={queues.data} />
           )}
         </Section>
         <Section title={t("activity.workers")}>
@@ -320,14 +419,8 @@ export function PlatformPage() {
             <Loading />
           ) : workers.isError ? (
             <ErrorState error={workers.error} onRetry={() => void workers.refetch()} />
-          ) : workers.data.length === 0 ? (
-            <EmptyState>{t("activity.noWorkers")}</EmptyState>
           ) : (
-            <ul className="grid gap-4 lg:grid-cols-2">
-              {workers.data.map((w) => (
-                <WorkerCard key={w.id} w={w} />
-              ))}
-            </ul>
+            <WorkersSection workers={workers.data} />
           )}
         </Section>
       </div>

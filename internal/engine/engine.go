@@ -138,7 +138,10 @@ type ServiceOptions struct {
 	// TargetStates, if set, adds to the inventory the state read from the targets by the
 	// reconciliation.
 	TargetStates TargetStateReader
-	Logger       *slog.Logger
+	// Configuration, if set, is the redacted configuration of the process, returned by
+	// Configuration.
+	Configuration *ConfigurationInfo
+	Logger        *slog.Logger
 	// Now returns the current time; replaceable in tests.
 	Now func() time.Time
 }
@@ -185,6 +188,7 @@ type Engine struct {
 	pluginQueues     map[string]string
 	typeQueues       map[string]string
 	queueRoutes      []QueueRoute
+	configuration    *ConfigurationInfo
 	logger           *slog.Logger
 	now              func() time.Time
 	// inv is the process inventory, updated incrementally.
@@ -219,6 +223,7 @@ func NewService(opts ServiceOptions) *Engine {
 		pluginQueues:     opts.PluginQueues,
 		typeQueues:       opts.TypeQueues,
 		queueRoutes:      opts.QueueRoutes,
+		configuration:    opts.Configuration,
 		logger:           opts.Logger.With("component", "engine"),
 		now:              opts.Now,
 	}

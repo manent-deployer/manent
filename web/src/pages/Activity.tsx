@@ -5,6 +5,7 @@ import { Link } from "react-router";
 
 import { unwrap, type Activity, type Status, type Worker } from "@/api/client";
 import { useApi, useMe } from "@/api/context";
+import { FilterBar, matches, SearchFilter, SelectFilter, useClearParams, useParam } from "@/components/Filters";
 import { Badge, Button, EmptyState, ErrorState, Loading, PageHeader, Section, StatusBadge } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
@@ -290,6 +291,46 @@ function Workers() {
   );
 }
 
+// groups are the lists of Activity, in the order of the page.
+const groups = ["running", "awaiting_approval", "waiting_dependency", "queued", "delayed"] as const;
+const groupLabel: Record<(typeof groups)[number], MessageKey> = {
+  running: "activity.running",
+  awaiting_approval: "activity.awaiting",
+  waiting_dependency: "activity.waitingDependency",
+  queued: "activity.queued",
+  delayed: "activity.delayed",
+};
+
+/** FilteredActivity filters the active deploys by text (application, environment, tenant,
+ * version, requester, worker, ID) and by group. */
+function FilteredActivity({ a }: { a: Activity }) {
+  const { t } = useI18n();
+  const [query, setQuery] = useParam("q");
+  const [group, setGroup] = useParam("group");
+  const clear = useClearParams("q", "group");
+  const keep = (g: (typeof groups)[number]) => (d: Status) =>
+    (!group || group === g) && matches(query, d.application, d.artifact, d.environment, d.tenant, d.version, d.requested_by, d.executor, d.id);
+  const filtered: Activity = { ...a };
+  for (const g of groups) filtered[g] = a[g].filter(keep(g));
+  const total = groups.reduce((n, g) => n + a[g].length, 0);
+  const shown = groups.reduce((n, g) => n + filtered[g].length, 0);
+  const active = Boolean(query || group);
+  return (
+    <div>
+      <FilterBar
+        shown={shown}
+        total={total}
+        active={active}
+        onReset={clear}
+      >
+        <SearchFilter label={t("filters.search")} placeholder={t("activity.filter.placeholder")} value={query} onChange={setQuery} />
+        <SelectFilter label={t("activity.filter.group")} value={group} onChange={setGroup} options={groups.map((g) => ({ value: g, label: t(groupLabel[g]) }))} />
+      </FilterBar>
+      {active && total > 0 && shown === 0 ? <EmptyState>{t("filters.none")}</EmptyState> : <ActiveDeployments a={filtered} />}
+    </div>
+  );
+}
+
 export function ActivityPage() {
   const { t } = useI18n();
   const api = useApi();
@@ -311,7 +352,7 @@ export function ActivityPage() {
         }
       />
       <div className="flex flex-col gap-6">
-        {q.isPending ? <Loading /> : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : <ActiveDeployments a={q.data} />}
+        {q.isPending ? <Loading /> : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : <FilteredActivity a={q.data} />}
         {canSomewhere(me.data, "platform.read") && <Workers />}
       </div>
     </>

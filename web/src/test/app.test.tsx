@@ -375,7 +375,9 @@ describe("governance", () => {
     renderApp(api, "/calendar");
     expect(await screen.findByText("No active or upcoming freeze windows.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New freeze" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Policy" })).toBeNull();
+    // Without policy.read Governance has only the calendar: a plain link, no menu.
+    expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("href", "/calendar");
+    expect(screen.queryByRole("button", { name: /Governance/ })).toBeNull();
   });
 
   it("approva una revisione della policy", async () => {
@@ -405,7 +407,10 @@ describe("governance", () => {
     renderApp(api, "/policies");
     const table = await screen.findByRole("table", { name: "Revisions" });
     expect(within(table).getByText("1 of 1 passed")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Policy" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Governance/ }));
+    expect(screen.getByRole("link", { name: /^Policy/ })).toHaveAttribute("aria-current", "page");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("link", { name: /^Policy/ })).toBeNull();
     await user.click(within(table).getByRole("button", { name: "2" }));
     const dialog = await screen.findByRole("dialog", { name: "Revision 2" });
     expect(await within(dialog).findByText("package manent.governance")).toBeInTheDocument();
@@ -547,6 +552,7 @@ describe("piattaforma", () => {
   };
 
   it("mostra code, limiti, risorse e code ascoltate dai worker", async () => {
+    const user = userEvent.setup();
     const { api } = fakeApi(({ path }) => {
       if (path === "/api/v1/me") return { json: ops };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
@@ -554,7 +560,10 @@ describe("piattaforma", () => {
       if (path === "/api/v1/workers") return { json: workers };
     });
     renderApp(api, "/platform");
-    expect(await screen.findByRole("link", { name: "Platform" })).toHaveAttribute("href", "/platform");
+    await user.click(await screen.findByRole("button", { name: /Platform/ }));
+    expect(screen.getByRole("link", { name: /^Workers and queues/ })).toHaveAttribute("href", "/platform");
+    expect(screen.getByRole("link", { name: /^Configuration/ })).toHaveAttribute("href", "/configuration");
+    await user.keyboard("{Escape}");
     const table = await screen.findByRole("table", { name: "Queues" });
     const rows = within(table).getAllByRole("row");
     expect(rows[1]).toHaveTextContent("deployments");
@@ -566,6 +575,53 @@ describe("piattaforma", () => {
     expect(screen.getByRole("meter", { name: "Deploy slots" })).toHaveAttribute("aria-valuetext", "1 of 4 busy");
     expect(screen.getByText("deployments-approvals")).toBeInTheDocument();
     expect(screen.getByText("This worker has not reported its resources (older version).")).toBeInTheDocument();
+
+    // Filters: only busy workers, then a text search on the queues.
+    const workerFilters = screen.getAllByRole("search")[1]!;
+    expect(within(workerFilters).getByText("2 items")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "Only busy" }));
+    expect(within(workerFilters).getByText("1 of 2")).toBeInTheDocument();
+    expect(screen.queryByText("This worker has not reported its resources (older version).")).toBeNull();
+    await user.type(screen.getAllByRole("searchbox", { name: "Search" })[0]!, "us");
+    expect(within(screen.getByRole("table", { name: "Queues" })).getAllByRole("row")).toHaveLength(2);
+    await user.click(screen.getAllByRole("button", { name: "Reset" })[0]!);
+    expect(within(screen.getByRole("table", { name: "Queues" })).getAllByRole("row")).toHaveLength(3);
+  });
+
+  it("mostra la configurazione con i file, i segreti nascosti e la ricerca", async () => {
+    const user = userEvent.setup();
+    const { api } = fakeApi(({ path }) => {
+      if (path === "/api/v1/me") return { json: ops };
+      if (path === "/api/v1/approvals") return { json: { approvals: [] } };
+      if (path === "/api/v1/configuration")
+        return {
+          json: {
+            version: "1.2.3",
+            executor: "api-1",
+            files: ["/etc/manent/base.yml", "/etc/manent/api.yml"],
+            config: {
+              app: { name: "manent", version: "0.2.0" },
+              dbos: { database_url: "postgres://manent:xxxxx@db/manent", queue: "deployments", region: "", queues: [] },
+              queues: [{ name: "deployments.heros", concurrency: 4 }],
+            },
+            redacted: ["dbos.database_url"],
+          },
+        };
+    });
+    renderApp(api, "/configuration");
+    expect(await screen.findByText("/etc/manent/api.yml")).toBeInTheDocument();
+    expect(screen.getByText("Later files override earlier ones: scalars and lists are replaced, sections are merged.")).toBeInTheDocument();
+    expect(screen.getByText("postgres://manent:xxxxx@db/manent")).toHaveAttribute("title", "Hidden because it may be a secret");
+    // Empty values are hidden unless asked.
+    expect(screen.queryByText("region")).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Show empty values" }));
+    expect(screen.getByText("region")).toBeInTheDocument();
+    // The search keeps the matching keys and values only.
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "heros");
+    expect(screen.getByText("deployments.heros")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "app" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "JSON" }));
+    expect(screen.getByText(/"database_url": "postgres:\/\/manent:xxxxx@db\/manent"/)).toBeInTheDocument();
   });
 
   it("senza platform.read il menu non mostra la piattaforma", async () => {
@@ -575,9 +631,10 @@ describe("piattaforma", () => {
       if (path === "/api/v1/deployments") return { json: { deployments: [] } };
     });
     renderApp(api, "/deployments");
-    expect(await screen.findByRole("link", { name: "Deployments" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Platform" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Tenants" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Deployments/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Platform/ })).not.toBeInTheDocument();
+    // Without tenants the Inventory group is a plain link.
+    expect(screen.getByRole("link", { name: "Inventory" })).toHaveAttribute("href", "/inventory");
   });
 });
 
@@ -593,14 +650,17 @@ describe("tenant", () => {
   };
 
   it("elenca i tenant con tag e applicazioni e filtra per selettore", async () => {
+    const user = userEvent.setup();
     const { api, calls } = fakeApi(({ path, query }) => {
       if (path === "/api/v1/me") return { json: identity() };
       if (path === "/api/v1/approvals") return { json: { approvals: [] } };
       if (path === "/api/v1/tenants") return { json: query.get("selector") === "division=commerce" ? { tenants: [tenants.tenants[0]] } : tenants };
     });
     renderApp(api, "/tenants");
-    expect(await screen.findByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/tenants");
     const table = await screen.findByRole("table", { name: "Tenants" });
+    await user.click(await screen.findByRole("button", { name: /Inventory/ }));
+    expect(screen.getByRole("link", { name: /^Tenants/ })).toHaveAttribute("href", "/tenants");
+    await user.keyboard("{Escape}");
     expect(within(table).getByRole("link", { name: "payments" })).toHaveAttribute("href", "/tenants/payments");
     expect(within(table).getByText("division=commerce")).toBeInTheDocument();
     expect(within(table).getByText("criticality=high")).toBeInTheDocument();

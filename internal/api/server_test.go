@@ -66,6 +66,10 @@ func (m *mockService) Queues(context.Context) ([]engine.QueueInfo, error) {
 	return []engine.QueueInfo{{Name: "deployments", Kind: "deployments", WorkerConcurrency: 4, Enqueued: 2, Workers: []string{"w1"}}}, nil
 }
 
+func (m *mockService) Configuration(context.Context) (*engine.ConfigurationInfo, error) {
+	return &engine.ConfigurationInfo{Version: "v1", Files: []string{"/etc/manent/base.yml"}, Config: map[string]any{"app": map[string]any{"name": "manent"}}, Redacted: []string{"dbos.database_url"}}, nil
+}
+
 func (m *mockService) Workers(context.Context) ([]engine.WorkerInfo, error) {
 	return []engine.WorkerInfo{{ID: "w1", State: "alive", Tasks: []engine.WorkerTask{{ID: "dep-1", Kind: "deploy"}}}}, nil
 }
@@ -441,6 +445,10 @@ func TestOsservabilita(t *testing.T) {
 	w = do(r, http.MethodGet, "/api/v1/queues", "")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"queues":[{"name":"deployments","kind":"deployments","worker_concurrency":4`) {
 		t.Errorf("queues: %d %s", w.Code, w.Body)
+	}
+	w = do(r, http.MethodGet, "/api/v1/configuration", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"files":["/etc/manent/base.yml"],"config":{"app":{"name":"manent"}},"redacted":["dbos.database_url"]`) {
+		t.Errorf("configuration: %d %s", w.Code, w.Body)
 	}
 	w = do(r, http.MethodGet, "/api/v1/activity?application=app&environment=prod", "")
 	if w.Code != http.StatusOK || svc.op != "activity:app:prod" || !strings.Contains(w.Body.String(), `"last_step":"deploy"`) {

@@ -15,6 +15,26 @@ type PlatformService interface {
 	// Queues lists the DBOS queues of manent with their limits, the workflows they hold and the
 	// workers that listen to them.
 	Queues(ctx context.Context) ([]QueueInfo, error)
+	// Configuration returns the configuration of the process that serves the API, with the
+	// values that may be secrets redacted. Workers may use other files: their configuration is
+	// not reported.
+	Configuration(ctx context.Context) (*ConfigurationInfo, error)
+}
+
+// ConfigurationInfo is the effective configuration of the API process: the files read, in
+// order, merged with defaults and environment variables.
+type ConfigurationInfo struct {
+	// Version is the build version of the process.
+	Version string `json:"version"`
+	// Executor is the dbos.executor_id of the process.
+	Executor string `json:"executor"`
+	// Files are the configuration files read, in order (later files override earlier ones).
+	Files []string `json:"files"`
+	// Config is the configuration, keyed as in the YAML file.
+	Config map[string]any `json:"config"`
+	// Redacted lists the paths (dotted, [i] for list items) of the values replaced because they
+	// may be secrets.
+	Redacted []string `json:"redacted"`
 }
 
 // Worker states.

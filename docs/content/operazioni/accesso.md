@@ -134,7 +134,7 @@ All fields accept patterns with `*`. A binding applies if the identity matches o
 | `deployment.freeze-override` | Bypass a [freeze window](../guida/governance.md#finestre-di-freeze). |
 | `schedule.read` | Read recurring schedules. |
 | `schedule.write` | Create, update, pause, resume and delete schedules. Creating a schedule also requires `deployment.submit`. |
-| `platform.read` | See the [workers](../guida/cli.md#attivita-e-worker): hosts, versions, regions, heartbeat and running workflows. It is not tied to an application: any binding that grants it is enough. |
+| `platform.read` | See the [workers](../guida/cli.md#attivita-e-worker): hosts, versions, regions, heartbeat and running workflows; the queues and the configuration of the API process (secrets redacted). It is not tied to an application: any binding that grants it is enough. |
 | `freeze.write` | Create and delete [freeze windows at runtime](../guida/policy.md#freeze-a-runtime), on every application and environment of the window. |
 | `policy.read`, `policy.write`, `policy.approve` | Read, push (and evaluate, measure) and activate the revisions of the [governance policy](../guida/policy.md). Like `platform.read` they are not tied to an application. |
 

@@ -128,6 +128,7 @@ func NewRouterWith(svc engine.Service, authn auth.Authenticator, logger *slog.Lo
 	v1.POST("/policies/:revision/activate", s.activatePolicy(false))
 	v1.GET("/workers", s.workers)
 	v1.GET("/queues", s.queues)
+	v1.GET("/configuration", s.configuration)
 	v1.POST("/releases", s.submitRelease)
 	v1.GET("/releases", s.listReleases)
 	v1.GET("/releases/:id", s.releaseStatus)
@@ -417,6 +418,15 @@ func (s *Server) queues(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"queues": qs})
+}
+
+func (s *Server) configuration(c *gin.Context) {
+	cfg, err := s.svc.Configuration(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
 }
 
 func (s *Server) activity(c *gin.Context) {

@@ -134,7 +134,7 @@ Tutti i campi accettano pattern con `*`. Un binding si applica se l'identità co
 | `deployment.freeze-override` | Derogare a una [finestra di freeze](../guida/governance.md#finestre-di-freeze). |
 | `schedule.read` | Leggere le schedule ricorrenti. |
 | `schedule.write` | Creare, aggiornare, sospendere, riattivare ed eliminare le schedule. Creare una schedule richiede anche `deployment.submit`. |
-| `platform.read` | Vedere i [worker](../guida/cli.md#attivita-e-worker): host, versioni, region, heartbeat e workflow in esecuzione. Non dipende dall'applicazione: basta un binding qualsiasi che la conceda. |
+| `platform.read` | Vedere i [worker](../guida/cli.md#attivita-e-worker): host, versioni, region, heartbeat e workflow in esecuzione; le code e la configurazione del processo API (segreti nascosti). Non dipende dall'applicazione: basta un binding qualsiasi che la conceda. |
 | `freeze.write` | Creare ed eliminare [finestre di freeze a runtime](../guida/policy.md#freeze-a-runtime), su ogni applicazione e ambiente della finestra. |
 | `policy.read`, `policy.write`, `policy.approve` | Leggere, caricare (e valutare, misurare) e attivare le revisioni della [policy di governance](../guida/policy.md). Come `platform.read` non dipendono dall'applicazione. |
 

@@ -6,6 +6,7 @@ import { Link, useParams } from "react-router";
 import { ApiError, TERMINAL, unwrap, type ReleaseStatus } from "@/api/client";
 import { useApi, useMe } from "@/api/context";
 import { useToast } from "@/components/Toaster";
+import { distinct, FilterBar, matches, SearchFilter, SelectFilter, useClearParams, useParam } from "@/components/Filters";
 import { Badge, Button, Dialog, EmptyState, ErrorState, Loading, PageHeader, Section, StatusBadge } from "@/components/ui";
 import { useI18n } from "@/i18n/i18n";
 import type { MessageKey } from "@/i18n/en";
@@ -25,11 +26,20 @@ function progress(r: ReleaseStatus) {
 export function ReleasesPage() {
   const { t, locale } = useI18n();
   const api = useApi();
+  const [query, setQuery] = useParam("q");
+  const [state, setState] = useParam("state");
+  const clear = useClearParams("q", "state");
   const q = useQuery({
     queryKey: ["releases"],
     queryFn: async () => unwrap(await api.GET("/api/v1/releases", { params: { query: { limit: 50 } } })).releases,
     refetchInterval: REFRESH,
   });
+  // The text filter looks at the release and at its deploys (application, environment, version).
+  const rows = (q.data ?? []).filter(
+    (r) =>
+      (!state || r.state === state) &&
+      matches(query, r.id, r.requested_by, ...r.deploys.flatMap((d) => [d.name, d.tenant, d.application, d.artifact, d.environment, d.version])),
+  );
   return (
     <>
       <PageHeader
@@ -41,12 +51,33 @@ export function ReleasesPage() {
           </Button>
         }
       />
+      {q.data && q.data.length > 0 && (
+        <FilterBar
+          shown={rows.length}
+          total={q.data.length}
+          active={Boolean(query || state)}
+          onReset={clear}
+        >
+          <SearchFilter label={t("filters.search")} placeholder={t("releases.filter.placeholder")} value={query} onChange={setQuery} />
+          <SelectFilter
+            label={t("releases.col.state")}
+            value={state}
+            onChange={setState}
+            options={distinct(q.data.map((r) => r.state)).map((s) => {
+              const key = `state.${s}` as MessageKey;
+              return { value: s, label: t(key) === key ? s : t(key) };
+            })}
+          />
+        </FilterBar>
+      )}
       {q.isPending ? (
         <Loading />
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : q.data.length === 0 ? (
         <EmptyState>{t("releases.empty")}</EmptyState>
+      ) : rows.length === 0 ? (
+        <EmptyState>{t("filters.none")}</EmptyState>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[48rem] text-left text-sm">
@@ -62,7 +93,7 @@ export function ReleasesPage() {
               </tr>
             </thead>
             <tbody>
-              {q.data.map((r) => (
+              {rows.map((r) => (
                 <tr key={r.id} className="border-b border-border/40 last:border-0 hover:bg-raised/40">
                   <th scope="row" className={`${td} font-normal`}>
                     <Link to={`/releases/${encodeURIComponent(r.id)}`} className="font-mono font-medium text-fg underline-offset-4 hover:text-accent hover:underline">

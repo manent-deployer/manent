@@ -702,6 +702,7 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 			PartitionConcurrency: cfg.DBOS.EnvironmentConcurrency,
 		},
 	}
+	opts.Configuration = configuration(cfg, c.log)
 	opts.PluginQueues, opts.TypeQueues = pluginRouting(cfg)
 	opts.QueueRoutes = queueRoutes(cfg)
 	if r, ok := executors.(engine.TargetStateReader); ok {
@@ -711,6 +712,20 @@ func (c *components) engine(cfg *config.Config, client dbos.Client, executors en
 		opts.Notifications = c.chat
 	}
 	return engine.NewService(opts)
+}
+
+// configuration is the redacted snapshot of the process configuration shown by the API; nil
+// (Configuration answers 503) if it cannot be encoded.
+func configuration(cfg *config.Config, log *slog.Logger) *engine.ConfigurationInfo {
+	m, redacted, err := cfg.Redacted()
+	if err != nil {
+		log.Warn("configuration not available to the API", "error", err)
+		return nil
+	}
+	return &engine.ConfigurationInfo{
+		Version: version.Version, Executor: cfg.DBOS.ExecutorID,
+		Files: slices.Clone(cfg.Files), Config: m, Redacted: redacted,
+	}
 }
 
 // startGovernance loads the governance policy and keeps it up to date; the returned function

@@ -6,18 +6,31 @@ It shows only what the user is allowed to see and offers only the actions they a
 
 ## Views
 
+The top bar groups the views by purpose, so it stays short:
+
+| Menu | Views |
+|---|---|
+| **Deployments** | Deployments, Activity, Releases, Metrics |
+| **Approvals** | Approvals, with the number of decisions waiting for you |
+| **Inventory** | Inventory, Tenants (when there are tenants you can read) |
+| **Governance** | Calendar, Policy (with `policy.read`) |
+| **Platform** | Workers and queues, Configuration (with `platform.read`) |
+
+A menu with only one view you can open is a plain link; one with none is not shown.
+
 | View | What it shows | What you can do |
 |---|---|---|
 | **Deployments** | The most recent deploys, filterable by application, environment and state, with kind, wave progress, requester and duration. | Open a deploy. |
 | **Deployment detail** | Status, sha256, origin of a promotion or rollback, release, dependencies with their state, approvals with comments, waves (stages, regions, AZs, health gate), recorded steps, log. Status and log update live. | Approve or reject, cancel. |
-| **Activity** | What is happening now: running deploys with worker, last step and wave progress; deploys awaiting approval, waiting for dependencies, queued and scheduled. With `platform.read`, the workers with state, region, heartbeat and running workflows. Refreshed every 5 seconds. | Open a deploy. |
-| **Approvals** | Deploys waiting for a decision that you can take, before the start or between two waves. | Approve with a comment, reject (comment required). |
-| **Releases** | [Composite releases](catene.md#release-composte) with the progress of each deploy, its dependencies and the rollbacks of `onFailure: rollback`. | Open a release or a deploy, cancel a release. |
+| **Activity** | What is happening now: running deploys with worker, last step and wave progress; deploys awaiting approval, waiting for dependencies, queued and scheduled, filterable by text (application, environment, tenant, version, requester, worker) and by state. With `platform.read`, the workers with state, region, heartbeat and running workflows. Refreshed every 5 seconds. | Open a deploy. |
+| **Approvals** | Deploys waiting for a decision that you can take, before the start or between two waves, filterable by text. | Approve with a comment, reject (comment required). |
+| **Releases** | [Composite releases](catene.md#release-composte) with the progress of each deploy, its dependencies and the rollbacks of `onFailure: rollback`, filterable by state and by text (release, applications, environments and versions of its deploys). | Open a release or a deploy, cancel a release. |
 | **Tenants** | Shown when the [tenant registry](tenant.md) has tenants you can read: tags, owned applications, queue, filters by application and selector. The page of a tenant shows its applications with their tags and the release in service per application, artifact and environment. | Open the deploy in service or the deploy history of an application. |
 | **Inventory** | Live release per application and environment and artifact (with the owner [tenant](tenant.md)), last failure and drift. | Promote to another environment, roll back, always after a dry-run. |
 | **Calendar** | Active and upcoming freeze windows (also per region, hard, created at runtime with their author), recurring schedules. | With `freeze.write`, create an emergency freeze and close those created at runtime. Pause, resume and delete schedules. |
 | **Metrics** | DORA metrics over 7, 30 or 90 days, per application and environment, with the data also as a table. | |
-| **Platform** | With `platform.read`: the queues (deploys, approvals and waits, region passes) with their limits, the workflows waiting, running and scheduled, the oldest wait and the workers listening; the workers with their resources (CPU used and available, process memory against the container limit or the host memory, deploy slots busy, free space of the workdir, host load) and the queues they listen to. Refreshed every 5 seconds. | Open the deploys running on a worker. |
+| **Platform** | With `platform.read`: the queues (deploys, approvals and waits, region passes) with their limits, the workflows waiting, running and scheduled, the oldest wait and the workers listening; the workers with their resources (CPU used and available, process memory against the container limit or the host memory, deploy slots busy, free space of the workdir, host load) and the queues they listen to. Queues are filterable by text, type and "only with work"; workers by text (ID, host, queue, build, running application), state, region and "only busy". Refreshed every 5 seconds. | Open the deploys running on a worker. |
+| **Configuration** | With `platform.read`: the effective configuration of the server process that answers the page (`GET /api/v1/configuration`): version, executor, the [files](../operazioni/configurazione.md#layers) read in order, then every section after defaults and environment variables. Values that may be secrets are hidden and marked (passwords in URLs, keys such as `password`, `secret`, `token` that are not a `_ref` or `_file`, the hashes of static tokens, the `env` of external plugins). Workers may run with other files: their configuration is not shown. | Search by key or value, show the empty values, switch to JSON and copy it. |
 | **Policy** | With `policy.read`: engine, source and revision of the [governance policy](policy.md) in force, the revisions with state, author, approver and tests, the files of each revision. | With `policy.write` compute the impact on the last 7 days and, with `rbac.engine: opa`, simulate in **Access** the [permissions](permessi.md#simulation-and-impact) of an identity; with `policy.approve` approve a draft or go back to a previous revision. |
 
 Every view has its own URL with filters in the query string, so a link pasted in a chat opens exactly the same page.

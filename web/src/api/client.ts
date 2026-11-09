@@ -20,6 +20,7 @@ export type Activity = components["schemas"]["Activity"];
 export type Worker = components["schemas"]["Worker"];
 export type WorkerResources = components["schemas"]["WorkerResources"];
 export type Queue = components["schemas"]["Queue"];
+export type Configuration = components["schemas"]["Configuration"];
 export type TenantInfo = components["schemas"]["TenantInfo"];
 export type AfterState = components["schemas"]["AfterState"];
 export type ReleaseStatus = components["schemas"]["ReleaseStatus"];

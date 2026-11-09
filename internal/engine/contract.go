@@ -58,6 +58,7 @@ type (
 	WorkerInfo           = service.WorkerInfo
 	WorkerResources      = service.WorkerResources
 	QueueInfo            = service.QueueInfo
+	ConfigurationInfo    = service.ConfigurationInfo
 	WorkerTask           = service.WorkerTask
 	ActivityFilter       = service.ActivityFilter
 	Activity             = service.Activity

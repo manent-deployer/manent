@@ -583,6 +583,20 @@ paths:
                   queues: {type: array, items: {$ref: '#/components/schemas/Queue'}}
         '401': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
+  /api/v1/configuration:
+    get:
+      tags: [platform]
+      summary: Effective configuration of the API process, with values that may be secrets redacted (platform.read permission)
+      operationId: getConfiguration
+      responses:
+        '200':
+          description: Configuration
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Configuration'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
   /api/v1/activity:
     get:
       tags: [platform]
@@ -1049,6 +1063,16 @@ components:
         workdir_free_bytes: {type: integer, format: int64, description: Free space on the workdir file system}
         concurrency: {type: integer, description: Deploys run together by the worker (dbos.concurrency)}
         sampled_at: {type: string, format: date-time}
+    Configuration:
+      type: object
+      description: Configuration of the process that serves the API, after files, defaults and environment variables. Workers may use other files.
+      required: [version, executor, files, config, redacted]
+      properties:
+        version: {type: string, description: Build version of the process}
+        executor: {type: string, description: dbos.executor_id of the process}
+        files: {type: array, items: {type: string}, description: 'Configuration files read, in order (later ones override earlier ones)'}
+        config: {type: object, additionalProperties: true, description: The configuration, keyed as in the YAML file}
+        redacted: {type: array, items: {type: string}, description: 'Paths (dotted, [i] for list items) of the values replaced because they may be secrets'}
     Queue:
       type: object
       required: [name, kind, enqueued, running, delayed, workers]
