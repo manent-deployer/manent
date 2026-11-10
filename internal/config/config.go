@@ -509,6 +509,10 @@ type OIDCUI struct {
 	Scopes   []string `yaml:"scopes"`
 	// RedirectPath is the return path after login (default /auth/callback).
 	RedirectPath string `yaml:"redirect_path"`
+	// Audience, if set, is sent as the audience parameter of the authorization request: some
+	// identity providers (Ory Hydra, Auth0) put in the access token only the audience asked
+	// for. It must be auth.oidc.audience, the one the API verifies.
+	Audience string `yaml:"audience"`
 }
 
 // APIToken is a static token for automated systems: the configuration holds only its sha256.
@@ -1280,6 +1284,9 @@ func (c *Config) validateSecurity() []error {
 			}
 			if p := o.UI.RedirectPath; p != "" && (!strings.HasPrefix(p, "/") || strings.HasPrefix(p, "/api/")) {
 				errs = append(errs, errors.New("auth.oidc.ui.redirect_path must be an absolute path outside /api/"))
+			}
+			if a := o.UI.Audience; a != "" && a != o.Audience {
+				errs = append(errs, fmt.Errorf("auth.oidc.ui.audience %q differs from auth.oidc.audience %q: the API would reject the tokens of the interface; set it to %q", a, o.Audience, o.Audience))
 			}
 		}
 	default:

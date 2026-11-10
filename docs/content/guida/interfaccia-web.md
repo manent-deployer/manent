@@ -91,12 +91,13 @@ auth:
       client_id: manent-ui          # public client, no secret
       scopes: [openid, profile]     # default
       redirect_path: /auth/callback # default
+      # audience: manent            # only for providers that need it (Ory Hydra, Auth0)
 ```
 
 On the identity provider:
 
 1. register a **public** client `manent-ui` with PKCE (S256), redirect URI `https://<manent>/auth/callback` and post-logout URI `https://<manent>/`;
-2. make the access tokens of this client carry the audience of `auth.oidc.audience` and the groups claim (`groups_claim`): in Keycloak an *audience* mapper and a *group membership* mapper, in Entra ID a scope of the exposed API and group claims;
+2. make the access tokens of this client carry the audience of `auth.oidc.audience` and the groups claim (`groups_claim`): in Keycloak an *audience* mapper and a *group membership* mapper, in Entra ID a scope of the exposed API and group claims. Ory Hydra and Auth0 put in the access token only the audience the client asks for: set `auth.oidc.ui.audience` to the value of `auth.oidc.audience`, and the interface sends it as the `audience` parameter of the authorization request;
 3. allow the manent origin in CORS for the token endpoint (Keycloak: *Web origins*).
 
 The browser allows this sign-in only on HTTPS (or `localhost`), because PKCE needs the Web Crypto API: served over plain HTTP, the interface explains that it needs HTTPS.
@@ -111,6 +112,7 @@ Static tokens remain for automated systems and are not a way to sign in to the i
 | `auth.oidc.ui.client_id` | | Public OIDC client of the interface. |
 | `auth.oidc.ui.scopes` | `[openid, profile]` | Requested scopes; add `offline_access` if the identity provider issues refresh tokens only with it. |
 | `auth.oidc.ui.redirect_path` | `/auth/callback` | Return path after sign-in. |
+| `auth.oidc.ui.audience` | | Sent as the `audience` parameter of the authorization request, for the identity providers that put in the access token only the audience asked for (Ory Hydra, Auth0). It must be `auth.oidc.audience`. |
 
 The interface reads this configuration from `GET /ui/config.json` (no authentication, no secrets) before signing in.
 

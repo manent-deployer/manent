@@ -231,6 +231,7 @@ Vedi [Rollback](../guida/rollback.md).
 | `auth.oidc.ui.client_id` | | Client OIDC pubblico (Authorization Code + PKCE) dell'[interfaccia web](../guida/interfaccia-web.md). Senza `ui` l'interfaccia non può fare il login. I suoi token devono avere l'audience e il claim dei gruppi indicati sopra. |
 | `auth.oidc.ui.scopes` | `[openid, profile]` | Scope richiesti dall'interfaccia. |
 | `auth.oidc.ui.redirect_path` | `/auth/callback` | Percorso di ritorno dopo il login. |
+| `auth.oidc.ui.audience` | | Parametro `audience` della richiesta di autorizzazione (Ory Hydra, Auth0); deve essere `auth.oidc.audience`. |
 | `auth.tokens` | `[]` | Token statici per i sistemi automatici. |
 | `auth.tokens[].name` | | Nome dell'identità (`token:<nome>`). |
 | `auth.tokens[].sha256` | | SHA-256 del token, mai il token. |

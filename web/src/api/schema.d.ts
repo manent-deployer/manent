@@ -1597,6 +1597,8 @@ export interface components {
             client_id?: string;
             scopes?: string[];
             redirect_path?: string;
+            /** @description Sent as the audience parameter of the authorization request (auth.oidc.ui.audience) */
+            audience?: string;
             version: string;
         };
     };

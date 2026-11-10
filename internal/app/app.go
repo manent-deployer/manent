@@ -1148,6 +1148,7 @@ func NewUIConfig(cfg *config.Config) api.UIConfig {
 		ui.Scopes = []string{"openid", "profile"}
 	}
 	ui.RedirectPath = cmp.Or(o.UI.RedirectPath, "/auth/callback")
+	ui.Audience = o.UI.Audience
 	return ui
 }
 

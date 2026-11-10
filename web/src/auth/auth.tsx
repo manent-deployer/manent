@@ -1,4 +1,4 @@
-import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
+import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User, type UserManagerSettings } from "oidc-client-ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
@@ -28,15 +28,17 @@ interface ReturnState {
   returnTo: string;
 }
 
-function userManager(cfg: UIConfig): UserManager {
-  const origin = window.location.origin;
-  return new UserManager({
+/** oidcSettings are the settings of the OIDC client of the interface (exported for tests). */
+export function oidcSettings(cfg: UIConfig, origin: string): UserManagerSettings {
+  return {
     authority: cfg.issuer ?? "",
     client_id: cfg.client_id ?? "",
     redirect_uri: origin + (cfg.redirect_path ?? "/auth/callback"),
     post_logout_redirect_uri: origin + "/",
     response_type: "code",
     scope: (cfg.scopes ?? ["openid", "profile"]).join(" "),
+    // Some providers (Ory Hydra, Auth0) put in the access token only the audience asked for.
+    ...(cfg.audience ? { extraQueryParams: { audience: cfg.audience } } : {}),
     // Tokens stay only in memory: no localStorage or cookies, so no CSRF and no token readable by
     // other tabs. The redirect state (PKCE) lives in sessionStorage for the login only.
     userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
@@ -44,7 +46,11 @@ function userManager(cfg: UIConfig): UserManager {
     automaticSilentRenew: true,
     loadUserInfo: false,
     monitorSession: false,
-  });
+  };
+}
+
+function userManager(cfg: UIConfig): UserManager {
+  return new UserManager(oidcSettings(cfg, window.location.origin));
 }
 
 export function AuthProvider({ config, children }: { config: UIConfig; children: ReactNode }) {

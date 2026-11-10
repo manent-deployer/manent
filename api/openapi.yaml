@@ -1522,4 +1522,5 @@ components:
         client_id: {type: string}
         scopes: {type: array, items: {type: string}}
         redirect_path: {type: string}
+        audience: {type: string, description: Sent as the audience parameter of the authorization request (auth.oidc.ui.audience)}
         version: {type: string}

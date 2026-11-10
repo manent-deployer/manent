@@ -442,3 +442,19 @@ dbos:
 		}
 	}
 }
+
+func TestAudienceDellInterfaccia(t *testing.T) {
+	cfg := Default()
+	cfg.applyDefaults()
+	cfg.DBOS.ExecutorID = "x"
+	cfg.Auth.Mode = AuthModeEnabled
+	cfg.Auth.OIDC = &OIDC{Issuer: "http://127.0.0.1:4444", Audience: "manent", UsernameClaim: "sub", UI: &OIDCUI{ClientID: "ui", Audience: "manent"}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("audience equal to auth.oidc.audience rejected: %v", err)
+	}
+	cfg.Auth.OIDC.UI.Audience = "other"
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), `auth.oidc.ui.audience "other" differs from auth.oidc.audience "manent"`) {
+		t.Errorf("different audience: %v", err)
+	}
+}

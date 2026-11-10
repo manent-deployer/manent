@@ -1,5 +1,6 @@
 import { formatDuration, formatRelative, tenantLabel } from "@/lib/format";
 import { appMatches, can, glob } from "@/lib/permissions";
+import { oidcSettings } from "@/auth/auth";
 import { safeReturnPath } from "@/lib/returnPath";
 import { parseSSE } from "@/lib/sse";
 import { format } from "@/i18n/i18n";
@@ -76,5 +77,14 @@ describe("ritorno dopo il login", () => {
     for (const v of ["//evil.com", "/\\evil.com", "/%5Cevil.com", "/%2F/evil.com", "https://evil.com", "evil.com", "/\tx", "/%E0%A4%A", undefined, 42]) {
       expect(safeReturnPath(v, origin)).toBe("/");
     }
+  });
+});
+
+describe("client OIDC", () => {
+  const base = { auth_mode: "oidc" as const, version: "1", issuer: "http://127.0.0.1:4444", client_id: "ui" };
+  it("chiede l'audience solo se configurata", () => {
+    expect(oidcSettings({ ...base, audience: "manent" }, "http://localhost:8080").extraQueryParams).toEqual({ audience: "manent" });
+    expect(oidcSettings(base, "http://localhost:8080").extraQueryParams).toBeUndefined();
+    expect(oidcSettings(base, "http://localhost:8080").redirect_uri).toBe("http://localhost:8080/auth/callback");
   });
 });

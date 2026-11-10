@@ -91,12 +91,13 @@ auth:
       client_id: manent-ui          # client pubblico, senza segreto
       scopes: [openid, profile]     # default
       redirect_path: /auth/callback # default
+      # audience: manent            # solo per i provider che la richiedono (Ory Hydra, Auth0)
 ```
 
 Sull'identity provider:
 
 1. registrare un client **pubblico** `manent-ui` con PKCE (S256), redirect URI `https://<manent>/auth/callback` e post-logout URI `https://<manent>/`;
-2. fare in modo che gli access token di questo client abbiano l'audience di `auth.oidc.audience` e il claim dei gruppi (`groups_claim`): in Keycloak un mapper *audience* e uno *group membership*, in Entra ID uno scope dell'API esposta e i group claim;
+2. fare in modo che gli access token di questo client abbiano l'audience di `auth.oidc.audience` e il claim dei gruppi (`groups_claim`): in Keycloak un mapper *audience* e uno *group membership*, in Entra ID uno scope dell'API esposta e i group claim. Ory Hydra e Auth0 mettono nell'access token solo l'audience che il client chiede: impostare `auth.oidc.ui.audience` al valore di `auth.oidc.audience`, e l'interfaccia la invia come parametro `audience` della richiesta di autorizzazione;
 3. ammettere l'origine di manent nel CORS dell'endpoint dei token (Keycloak: *Web origins*).
 
 Il browser permette questo login solo su HTTPS (o su `localhost`), perché PKCE usa la Web Crypto API: servita in HTTP semplice, l'interfaccia spiega che serve HTTPS.
@@ -111,6 +112,7 @@ I token statici restano per i sistemi automatici e non sono un modo per entrare 
 | `auth.oidc.ui.client_id` | | Client OIDC pubblico dell'interfaccia. |
 | `auth.oidc.ui.scopes` | `[openid, profile]` | Scope richiesti; aggiungere `offline_access` se l'identity provider emette refresh token solo con quello. |
 | `auth.oidc.ui.redirect_path` | `/auth/callback` | Percorso di ritorno dopo il login. |
+| `auth.oidc.ui.audience` | | Inviata come parametro `audience` della richiesta di autorizzazione, per gli identity provider che mettono nell'access token solo l'audience richiesta (Ory Hydra, Auth0). Deve essere `auth.oidc.audience`. |
 
 L'interfaccia legge questa configurazione da `GET /ui/config.json` (senza autenticazione, senza segreti) prima del login.
 

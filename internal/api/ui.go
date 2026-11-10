@@ -25,7 +25,9 @@ type UIConfig struct {
 	ClientID     string   `json:"client_id,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
 	RedirectPath string   `json:"redirect_path,omitempty"`
-	Version      string   `json:"version"`
+	// Audience, if set, is sent as the audience parameter of the authorization request.
+	Audience string `json:"audience,omitempty"`
+	Version  string `json:"version"`
 }
 
 // Authentication modes of the web interface.
