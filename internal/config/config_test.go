@@ -458,3 +458,24 @@ func TestAudienceDellInterfaccia(t *testing.T) {
 		t.Errorf("different audience: %v", err)
 	}
 }
+
+func TestResourceDellInterfaccia(t *testing.T) {
+	cfg := Default()
+	cfg.applyDefaults()
+	cfg.DBOS.ExecutorID = "x"
+	cfg.Auth.Mode = AuthModeEnabled
+	cfg.Auth.OIDC = &OIDC{Issuer: "http://localhost:1411", Audience: "https://manent.lab", UsernameClaim: "sub", UI: &OIDCUI{ClientID: "ui", Resource: "https://manent.lab"}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("resource equal to auth.oidc.audience rejected: %v", err)
+	}
+	for resource, want := range map[string]string{
+		"manent":                    "must be an absolute URI",
+		"https://manent.lab#x":      "must be an absolute URI",
+		"https://other.example.com": `differs from auth.oidc.audience "https://manent.lab"`,
+	} {
+		cfg.Auth.OIDC.UI.Resource = resource
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("resource %q: %v", resource, err)
+		}
+	}
+}

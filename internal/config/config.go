@@ -9,6 +9,7 @@ import (
 	"io"
 	"maps"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -513,6 +514,10 @@ type OIDCUI struct {
 	// identity providers (Ory Hydra, Auth0) put in the access token only the audience asked
 	// for. It must be auth.oidc.audience, the one the API verifies.
 	Audience string `yaml:"audience"`
+	// Resource, if set, is sent as the resource parameter (RFC 8707) of the authorization
+	// request: providers such as Pocket ID set the audience of the access token from it. It
+	// must be an absolute URI and equal to auth.oidc.audience.
+	Resource string `yaml:"resource"`
 }
 
 // APIToken is a static token for automated systems: the configuration holds only its sha256.
@@ -1287,6 +1292,13 @@ func (c *Config) validateSecurity() []error {
 			}
 			if a := o.UI.Audience; a != "" && a != o.Audience {
 				errs = append(errs, fmt.Errorf("auth.oidc.ui.audience %q differs from auth.oidc.audience %q: the API would reject the tokens of the interface; set it to %q", a, o.Audience, o.Audience))
+			}
+			if r := o.UI.Resource; r != "" {
+				if u, err := url.Parse(r); err != nil || u.Scheme == "" || u.Host == "" || u.Fragment != "" {
+					errs = append(errs, fmt.Errorf("auth.oidc.ui.resource %q must be an absolute URI without fragment (RFC 8707), e.g. https://manent.example.com", r))
+				} else if r != o.Audience {
+					errs = append(errs, fmt.Errorf("auth.oidc.ui.resource %q differs from auth.oidc.audience %q: the provider would issue tokens for another audience; use the same URI in both", r, o.Audience))
+				}
 			}
 		}
 	default:

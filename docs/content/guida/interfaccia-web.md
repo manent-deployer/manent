@@ -92,15 +92,41 @@ auth:
       scopes: [openid, profile]     # default
       redirect_path: /auth/callback # default
       # audience: manent            # only for providers that need it (Ory Hydra, Auth0)
+      # resource: https://manent.example.com  # RFC 8707, for Pocket ID
 ```
 
 On the identity provider:
 
 1. register a **public** client `manent-ui` with PKCE (S256), redirect URI `https://<manent>/auth/callback` and post-logout URI `https://<manent>/`;
-2. make the access tokens of this client carry the audience of `auth.oidc.audience` and the groups claim (`groups_claim`): in Keycloak an *audience* mapper and a *group membership* mapper, in Entra ID a scope of the exposed API and group claims. Ory Hydra and Auth0 put in the access token only the audience the client asks for: set `auth.oidc.ui.audience` to the value of `auth.oidc.audience`, and the interface sends it as the `audience` parameter of the authorization request;
+2. make the access tokens of this client carry the audience of `auth.oidc.audience` and the groups claim (`groups_claim`): in Keycloak an *audience* mapper and a *group membership* mapper, in Entra ID a scope of the exposed API and group claims. Ory Hydra and Auth0 put in the access token only the audience the client asks for: set `auth.oidc.ui.audience` to the value of `auth.oidc.audience`, and the interface sends it as the `audience` parameter of the authorization request. Pocket ID sets the audience from the `resource` parameter of RFC 8707 instead: see [Pocket ID](#pocket-id);
 3. allow the manent origin in CORS for the token endpoint (Keycloak: *Web origins*).
 
 The browser allows this sign-in only on HTTPS (or `localhost`), because PKCE needs the Web Crypto API: served over plain HTTP, the interface explains that it needs HTTPS.
+
+### Pocket ID { #pocket-id }
+
+[Pocket ID](https://pocket-id.org) is a small identity provider with users and groups built in and sign-in with passkeys (HTTPS, or `http://localhost`). Its access tokens are JWTs whose audience is the client that asked for them, unless the request names a `resource` (RFC 8707). The interface and the pipelines are different clients, so both ask for the same resource:
+
+1. in **APIs** create an API with an identifier URI (e.g. `https://manent.example.com`) and give both clients access to it;
+2. in **OIDC clients** create `manent-ui` as a public client (PKCE) with callback `https://<manent>/auth/callback`, and one confidential client per pipeline;
+3. in **Claim mappings** create a policy that releases `groups` (scope `groups`) also in the access token, and assign it to `manent-ui`: the built-in policy releases groups only in the ID token and userinfo;
+4. in manent:
+
+```yaml title="manent.yml"
+auth:
+  mode: enabled
+  oidc:
+    issuer: https://id.example.com         # APP_URL of Pocket ID
+    audience: https://manent.example.com   # identifier of the API
+    username_claim: sub                    # user UUID; client-<id> for client_credentials
+    groups_claim: groups
+    ui:
+      client_id: <manent-ui>
+      scopes: [openid, profile, groups]
+      resource: https://manent.example.com
+```
+
+A pipeline gets its token with `grant_type=client_credentials`, its secret (or a [federated client credential](https://pocket-id.org/docs/guides/oidc-client-authentication)) and `resource=https://manent.example.com` from `POST <APP_URL>/api/oidc/token`. Its token has no groups: bind it with `subjects: ["oidc:client-<client id>"]`.
 
 Static tokens remain for automated systems and are not a way to sign in to the interface. With `auth.mode: none` (development only) the interface opens without sign-in and shows a permanent warning; with authentication enabled but no `auth.oidc.ui`, it explains that sign-in is not configured.
 
@@ -112,6 +138,7 @@ Static tokens remain for automated systems and are not a way to sign in to the i
 | `auth.oidc.ui.client_id` | | Public OIDC client of the interface. |
 | `auth.oidc.ui.scopes` | `[openid, profile]` | Requested scopes; add `offline_access` if the identity provider issues refresh tokens only with it. |
 | `auth.oidc.ui.redirect_path` | `/auth/callback` | Return path after sign-in. |
+| `auth.oidc.ui.resource` | | Sent as the `resource` parameter (RFC 8707) of the authorization request, for the identity providers that set the audience of the access token from it (Pocket ID). An absolute URI equal to `auth.oidc.audience`. |
 | `auth.oidc.ui.audience` | | Sent as the `audience` parameter of the authorization request, for the identity providers that put in the access token only the audience asked for (Ory Hydra, Auth0). It must be `auth.oidc.audience`. |
 
 The interface reads this configuration from `GET /ui/config.json` (no authentication, no secrets) before signing in.

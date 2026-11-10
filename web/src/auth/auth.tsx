@@ -37,8 +37,11 @@ export function oidcSettings(cfg: UIConfig, origin: string): UserManagerSettings
     post_logout_redirect_uri: origin + "/",
     response_type: "code",
     scope: (cfg.scopes ?? ["openid", "profile"]).join(" "),
-    // Some providers (Ory Hydra, Auth0) put in the access token only the audience asked for.
+    // Some providers put in the access token only the audience asked for: with the audience
+    // parameter (Ory Hydra, Auth0) or with the resource indicator of RFC 8707 (Pocket ID), which
+    // oidc-client-ts sends in the authorization and in the token request.
     ...(cfg.audience ? { extraQueryParams: { audience: cfg.audience } } : {}),
+    ...(cfg.resource ? { resource: cfg.resource } : {}),
     // Tokens stay only in memory: no localStorage or cookies, so no CSRF and no token readable by
     // other tabs. The redirect state (PKCE) lives in sessionStorage for the login only.
     userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),

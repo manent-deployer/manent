@@ -231,6 +231,7 @@ See [Rollback](../guida/rollback.md).
 | `auth.oidc.ui.client_id` | | Public OIDC client (Authorization Code + PKCE) of the [web interface](../guida/interfaccia-web.md). Without `ui` the interface cannot log in. Its tokens must have the audience and the groups claim above. |
 | `auth.oidc.ui.scopes` | `[openid, profile]` | Scopes requested by the interface. |
 | `auth.oidc.ui.redirect_path` | `/auth/callback` | Return path after the login. |
+| `auth.oidc.ui.resource` | | `resource` parameter (RFC 8707) of the authorization request (Pocket ID); absolute URI equal to `auth.oidc.audience`. |
 | `auth.oidc.ui.audience` | | `audience` parameter of the authorization request (Ory Hydra, Auth0); must be `auth.oidc.audience`. |
 | `auth.tokens` | `[]` | Static tokens for automated systems. |
 | `auth.tokens[].name` | | Name of the identity (`token:<name>`). |

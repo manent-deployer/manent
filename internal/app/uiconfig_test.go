@@ -17,4 +17,8 @@ func TestUIConfigAudience(t *testing.T) {
 	if ui := NewUIConfig(cfg); ui.Audience != "manent" || ui.ClientID != "ui" {
 		t.Errorf("ui config: %+v", ui)
 	}
+	cfg.Auth.OIDC.UI.Resource = "https://manent.lab"
+	if ui := NewUIConfig(cfg); ui.Resource != "https://manent.lab" {
+		t.Errorf("resource: %+v", ui)
+	}
 }

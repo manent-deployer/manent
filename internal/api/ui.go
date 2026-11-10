@@ -27,6 +27,8 @@ type UIConfig struct {
 	RedirectPath string   `json:"redirect_path,omitempty"`
 	// Audience, if set, is sent as the audience parameter of the authorization request.
 	Audience string `json:"audience,omitempty"`
+	// Resource, if set, is sent as the resource parameter (RFC 8707) of the authorization request.
+	Resource string `json:"resource,omitempty"`
 	Version  string `json:"version"`
 }
 

@@ -85,6 +85,9 @@ describe("client OIDC", () => {
   it("chiede l'audience solo se configurata", () => {
     expect(oidcSettings({ ...base, audience: "manent" }, "http://localhost:8080").extraQueryParams).toEqual({ audience: "manent" });
     expect(oidcSettings(base, "http://localhost:8080").extraQueryParams).toBeUndefined();
+    const withResource = oidcSettings({ ...base, resource: "https://manent.lab" }, "http://localhost:8080");
+    expect(withResource.resource).toBe("https://manent.lab");
+    expect(withResource.extraQueryParams).toBeUndefined();
     expect(oidcSettings(base, "http://localhost:8080").redirect_uri).toBe("http://localhost:8080/auth/callback");
   });
 });

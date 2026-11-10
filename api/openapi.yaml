@@ -1523,4 +1523,5 @@ components:
         scopes: {type: array, items: {type: string}}
         redirect_path: {type: string}
         audience: {type: string, description: Sent as the audience parameter of the authorization request (auth.oidc.ui.audience)}
+        resource: {type: string, description: Sent as the resource parameter (RFC 8707) of the authorization request (auth.oidc.ui.resource)}
         version: {type: string}

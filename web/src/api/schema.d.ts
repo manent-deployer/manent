@@ -1599,6 +1599,8 @@ export interface components {
             redirect_path?: string;
             /** @description Sent as the audience parameter of the authorization request (auth.oidc.ui.audience) */
             audience?: string;
+            /** @description Sent as the resource parameter (RFC 8707) of the authorization request (auth.oidc.ui.resource) */
+            resource?: string;
             version: string;
         };
     };
