@@ -75,8 +75,10 @@ export function AppRoutes() {
         <Route path="/tenants/:name" element={<TenantDetailPage />} />
         <Route path="/platform" element={<PlatformPage />} />
         <Route path="/configuration" element={<ConfigurationPage />} />
+        {/* Not /metrics: on the API port that is the Prometheus endpoint, so a reload of
+            the page would show the metrics text instead of the interface. */}
         <Route
-          path="/metrics"
+          path="/dora"
           element={
             <Suspense fallback={<Loading />}>
               <MetricsPage />

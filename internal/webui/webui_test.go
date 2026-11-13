@@ -51,6 +51,12 @@ func TestHandler(t *testing.T) {
 	if w = serve(h, http.MethodGet, "/assets/manca.js"); w.Code != http.StatusNotFound {
 		t.Errorf("un file inesistente è un 404, non la pagina: %d", w.Code)
 	}
+	// Un ID di deploy con la versione ha dei punti: è una pagina, anche ricaricata.
+	for _, p := range []string{"/deployments/shop-1.3.0", "/deployments/api-2.4.0-prod", "/releases/r.1"} {
+		if w = serve(h, http.MethodGet, p); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "manent") {
+			t.Errorf("%s: %d, attesa la pagina", p, w.Code)
+		}
+	}
 	if w = serve(h, http.MethodGet, "/../../etc/passwd"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "manent") {
 		t.Errorf("percorso fuori dalla build: %d", w.Code)
 	}

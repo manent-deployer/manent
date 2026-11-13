@@ -1,0 +1,13 @@
+# Configuration layer of the screenshots (demo/record/screenshots.sh), after demo/manent.yml:
+# a deploy waiting for an approval on the Activity page. The rule matches only the
+# billing-reports artifact, which no other deploy of the demo uses, so the history seed and the
+# GIF are not affected.
+governance:
+  rules:
+    - name: billing-reports-prod
+      applications: [billing]
+      environments: [prod]
+      artifacts: [billing-reports]
+      approvals:
+        required: 1
+        timeout: 72h

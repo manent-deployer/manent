@@ -1,0 +1,12 @@
+# billing-reports in prod (screenshots only): the hosts of billing, its own directory. The deploy
+# of the screenshots waits for an approval and never reaches them.
+plugin: remote-copy
+targets:
+  - {host: web-eu-1b, user: web-eu-1b, labels: {region: eu-west, az: eu-west-1b}}
+params:
+  dest_dir: apps/billing-reports
+  layout: releases
+  ssh_key_secret: deploy-key
+secrets:
+  - name: deploy-key
+    ref: file:/var/lib/manent/keys/id

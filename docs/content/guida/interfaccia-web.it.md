@@ -50,12 +50,12 @@ Da un ambiente demo con cinque applicazioni, tre ambienti e quattro settimane di
 
 <figure markdown="span">
   [![Rilascio a ondate](../assets/screenshots/deployment-waves.png){ loading=lazy }](../assets/screenshots/deployment-waves.png)
-  <figcaption><strong>Rilascio a ondate</strong>: approvazione, canary, poi una zona di disponibilità alla volta su due region.</figcaption>
+  <figcaption><strong>Rilascio a ondate</strong>: un canary in eu-west, poi una region alla volta, eu-west e us-east.</figcaption>
 </figure>
 
 <figure markdown="span">
   [![Rollback automatico](../assets/screenshots/deployment-rollback.png){ loading=lazy }](../assets/screenshots/deployment-rollback.png)
-  <figcaption><strong>Rollback automatico</strong>: un health check fallito in eu-central-1 riporta indietro tutte le ondate.</figcaption>
+  <figcaption><strong>Rollback automatico</strong>: l'health check del canary fallisce e manent riporta indietro il rilascio.</figcaption>
 </figure>
 
 <figure markdown="span">

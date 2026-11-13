@@ -55,8 +55,8 @@ The same server also serves a [web interface](#web-interface) for following depl
 
 | | |
 |---|---|
-| ![Deployments](docs/content/assets/screenshots/deployments.png)<br/>**Deployments**: every deploy, promotion and rollback, with state, requester and duration. | ![Wave rollout](docs/content/assets/screenshots/deployment-waves.png)<br/>**Wave rollout**: approval and canary, then one availability zone at a time across two regions. |
-| ![Automatic rollback](docs/content/assets/screenshots/deployment-rollback.png)<br/>**Automatic rollback**: a failed health check in eu-central-1 rolls every wave back. | ![Inventory](docs/content/assets/screenshots/inventory.png)<br/>**Inventory**: the release running in each application and environment, with promote and roll back. |
+| ![Deployments](docs/content/assets/screenshots/deployments.png)<br/>**Deployments**: every deploy, promotion and rollback, with state, requester and duration. | ![Wave rollout](docs/content/assets/screenshots/deployment-waves.png)<br/>**Wave rollout**: a canary in eu-west, then one region at a time, eu-west and us-east. |
+| ![Automatic rollback](docs/content/assets/screenshots/deployment-rollback.png)<br/>**Automatic rollback**: the health check of the canary fails and manent rolls the release back. | ![Inventory](docs/content/assets/screenshots/inventory.png)<br/>**Inventory**: the release running in each application and environment, with promote and roll back. |
 | ![Activity](docs/content/assets/screenshots/activity.png)<br/>**Activity**: running, waiting, queued and scheduled deploys and the workers running them. | ![Metrics](docs/content/assets/screenshots/metrics.png)<br/>**Metrics**: DORA metrics computed from the deployment history. |
 
 The full documentation is at [manent-deployer.github.io/manent](https://manent-deployer.github.io/manent/); its sources are in [`docs/`](docs) (`make docs` builds the site locally).

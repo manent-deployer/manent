@@ -28,6 +28,6 @@ docker exec -it manent-demo manent rollback -a shop -e prod
 | `deploys/` | The descriptors you submit: just application, environment and artifact. |
 | `entrypoint.sh` | Starts the identity provider (`test/usecases/oidc` with `-user`) and creates the hosts (`staging-1`, `web-eu-1a`, `web-eu-1b`, `web-us-1a`, `web-us-1b`): one loopback address, one SSH user and one HTTP server on port 8081 each. |
 | `artifacts.sh` | Builds the artifacts: a page and `/healthz` per version; `shop` 1.4.0 has no `/healthz`. |
-| `record/` | Regenerates the README GIF: `make-gif.sh` (needs agg, ffmpeg, Node with `web/node_modules`, Google Chrome). |
+| `record/` | Regenerates the README GIF with `make-gif.sh` (needs agg, ffmpeg, Node with `web/node_modules`, Google Chrome). `screenshots.sh` regenerates the screenshots of the web interface in English and Italian (`docs/content/assets/screenshots`; needs Node and Chrome). It adds the layer `shots/manent.yml` and runs a deploy waiting for an approval and a scheduled one, for the Activity page. |
 
 The demo signs anyone in as an administrator, its token is public and its data lives in the container: it is not a starting point for a real installation. See the [installation guide](https://manent-deployer.github.io/manent/operazioni/installazione/) for that.

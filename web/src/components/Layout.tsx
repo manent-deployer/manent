@@ -301,7 +301,7 @@ export function Layout({ children }: { children: ReactNode }) {
         { to: "/deployments", label: t("nav.deployments"), hint: t("nav.hint.deployments"), icon: Rocket },
         { to: "/activity", label: t("nav.activity"), hint: t("nav.hint.activity"), icon: ActivityIcon },
         { to: "/releases", label: t("nav.releases"), hint: t("nav.hint.releases"), icon: GitBranch },
-        { to: "/metrics", label: t("nav.metrics"), hint: t("nav.hint.metrics"), icon: BarChart3 },
+        { to: "/dora", label: t("nav.metrics"), hint: t("nav.hint.metrics"), icon: BarChart3 },
       ],
     },
     {

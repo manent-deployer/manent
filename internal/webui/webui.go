@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"io/fs"
+	"mime"
 	"net/http"
 	"net/url"
 	"path"
@@ -105,8 +106,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.ServeFileFS(w, r, h.files, name)
 			return
 		}
-		// A file with an extension that does not exist is a real 404, not an app page.
-		if path.Ext(name) != "" {
+		// A missing file of a known type (script, style, image...) is a real 404, not an app
+		// page. Other dots are part of a page: a deployment ID such as shop-1.3.0 ends in ".0".
+		if ext := path.Ext(name); ext != "" && mime.TypeByExtension(ext) != "" {
 			http.NotFound(w, r)
 			return
 		}

@@ -197,12 +197,12 @@ The server also serves a web interface, with the same permissions as the API: fo
 
 <figure markdown="span">
   [![Wave rollout](assets/screenshots/deployment-waves.png){ loading=lazy }](assets/screenshots/deployment-waves.png)
-  <figcaption><strong>Wave rollout</strong>: approval, canary, then one availability zone at a time across two regions.</figcaption>
+  <figcaption><strong>Wave rollout</strong>: a canary in eu-west, then one region at a time, eu-west and us-east.</figcaption>
 </figure>
 
 <figure markdown="span">
   [![Automatic rollback](assets/screenshots/deployment-rollback.png){ loading=lazy }](assets/screenshots/deployment-rollback.png)
-  <figcaption><strong>Automatic rollback</strong>: a failed health check in eu-central-1 rolls every wave back.</figcaption>
+  <figcaption><strong>Automatic rollback</strong>: the health check of the canary fails and manent rolls the release back.</figcaption>
 </figure>
 
 <figure markdown="span">
